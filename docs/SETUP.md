@@ -1,0 +1,272 @@
+# Setup guide
+
+For someone who has never run a Django project. Follow it top to bottom; skipping steps is what causes the errors in the last section.
+
+Roughly 20 minutes the first time, 2 minutes after that.
+
+---
+
+## 1. Install the three things you need
+
+### Python 3.11 or newer
+
+- **Windows** — <https://www.python.org/downloads/> → during install, **tick "Add Python to PATH"**. Missing this tick is the single most common cause of "python is not recognized".
+- **macOS** — `brew install python@3.12`
+- **Ubuntu** — `sudo apt install python3 python3-venv python3-pip`
+
+Check it:
+
+```bash
+python --version      # Windows
+python3 --version     # macOS / Linux
+```
+
+You need `3.11` or higher.
+
+### PostgreSQL 14 or newer
+
+- **Windows** — <https://www.postgresql.org/download/windows/>. **Write down the password** you set for the `postgres` user; you need it in step 3.
+- **macOS** — `brew install postgresql@16 && brew services start postgresql@16`
+- **Ubuntu** — `sudo apt install postgresql postgresql-contrib`
+
+Check it:
+
+```bash
+psql --version
+```
+
+### Git
+
+- **Windows** — <https://git-scm.com/download/win>
+- **macOS** — `brew install git` (or it arrives with Xcode tools)
+- **Ubuntu** — `sudo apt install git`
+
+---
+
+## 2. Get the code
+
+```bash
+git clone https://github.com/<your-team>/udm-doctrack.git
+cd udm-doctrack
+```
+
+Never downloaded from GitHub before? Read [GITHUB_GUIDE.md](GITHUB_GUIDE.md) first.
+
+---
+
+## 3. Create the database
+
+Open a terminal and start the PostgreSQL shell:
+
+```bash
+# Windows (use the SQL Shell / psql app from the Start menu)
+psql -U postgres
+
+# macOS / Linux
+sudo -u postgres psql
+```
+
+Then paste these four lines:
+
+```sql
+CREATE DATABASE udm_doctrack;
+CREATE USER udm WITH PASSWORD 'udmpass';
+GRANT ALL PRIVILEGES ON DATABASE udm_doctrack TO udm;
+ALTER DATABASE udm_doctrack OWNER TO udm;
+\q
+```
+
+> Use a real password on a real server. `udmpass` is for your laptop only.
+
+The owner line matters: it lets the app enable the search extensions itself in step 4.
+
+---
+
+## 4. Run the setup script
+
+**macOS / Linux**
+
+```bash
+bash scripts/setup.sh
+```
+
+**Windows PowerShell**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+The script does seven things:
+
+1. Creates a virtual environment in `.venv` (a private Python just for this project)
+2. Installs the dependencies
+3. Copies `.env.example` to `.env` and generates a fresh secret key
+4. Creates the database tables
+5. Enables the `pg_trgm` and `unaccent` search extensions
+6. Loads demo offices, users and sample documents
+7. Collects the static files
+
+If your database password is not `udmpass`, open `.env` and fix `POSTGRES_PASSWORD` before running the script again.
+
+---
+
+## 5. Start it
+
+```bash
+# macOS / Linux
+source .venv/bin/activate
+python manage.py runserver
+
+# Windows
+.\.venv\Scripts\Activate.ps1
+python manage.py runserver
+```
+
+Open <http://127.0.0.1:8000>.
+
+| Account | Password | Role |
+|---|---|---|
+| `admin` | `DocTrack2026!` | Administrator — sees everything |
+| `records` | `DocTrack2026!` | Records officer |
+| `med.staff` | `DocTrack2026!` | Regular user with a document waiting |
+
+**`(.venv)` must appear at the start of your terminal prompt.** If it doesn't, activate the environment again — most "module not found" errors are this and nothing else.
+
+---
+
+## 6. Doing this every day
+
+```bash
+cd udm-doctrack
+git pull                          # get your teammates' work
+source .venv/bin/activate         # Windows: .\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt   # only if requirements.txt changed
+python manage.py migrate          # only if models changed
+python manage.py runserver
+```
+
+Press `Ctrl+C` to stop the server.
+
+---
+
+## Optional: turn on OCR for scanned documents
+
+Without a key, digital PDFs and Word files still work perfectly — only scanned images are skipped.
+
+1. Register free at <https://ocr.space/ocrapi> (no card required)
+2. Put the key in `.env`:
+   ```
+   OCR_SPACE_API_KEY=your-key-here
+   ```
+3. Restart the server
+
+The free tier allows 25,000 pages a month, which is more than a capstone demo will ever use.
+
+---
+
+## Optional: background jobs
+
+Extraction runs immediately on upload, which is fine for a demo. For bulk imports, run the worker in a **second terminal**:
+
+```bash
+source .venv/bin/activate
+python manage.py qcluster
+```
+
+---
+
+## Errors people actually hit
+
+### `python: command not found` / `'python' is not recognized`
+
+Python is not on your PATH. On Windows, reinstall and tick "Add Python to PATH". On macOS/Linux, use `python3`.
+
+### `psycopg.OperationalError: connection refused`
+
+PostgreSQL is not running.
+
+```bash
+# macOS
+brew services start postgresql@16
+# Ubuntu
+sudo systemctl start postgresql
+# Windows: Services app → postgresql-x64-16 → Start
+```
+
+### `password authentication failed for user "udm"`
+
+The password in `.env` does not match the one you set in step 3. Fix `POSTGRES_PASSWORD` in `.env`.
+
+### `django.db.utils.ProgrammingError: relation "..." does not exist`
+
+Migrations were not applied:
+
+```bash
+python manage.py makemigrations accounts core tracking documents search
+python manage.py migrate
+```
+
+### `ModuleNotFoundError: No module named 'django'`
+
+The virtual environment is not active. Look for `(.venv)` in your prompt.
+
+```bash
+source .venv/bin/activate          # macOS / Linux
+.\.venv\Scripts\Activate.ps1       # Windows
+```
+
+### PowerShell: "running scripts is disabled on this system"
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+That lasts for the current window only, which is what you want.
+
+### `permission denied to create extension "pg_trgm"`
+
+Your database user is not the owner. Either run the `ALTER DATABASE ... OWNER TO udm;` line from step 3, or as the postgres superuser:
+
+```sql
+\c udm_doctrack
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+```
+
+Without it, search still works — you just lose misspelling tolerance.
+
+### `Port 8000 is already in use`
+
+Another server is still running. Use a different port:
+
+```bash
+python manage.py runserver 8001
+```
+
+### The page loads but has no styling
+
+```bash
+python manage.py collectstatic --noinput
+```
+
+Then hard-refresh: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac).
+
+### Search returns nothing even though documents exist
+
+Rebuild the index:
+
+```bash
+python manage.py reindex_documents
+```
+
+---
+
+## Starting over from scratch
+
+```sql
+DROP DATABASE udm_doctrack;
+CREATE DATABASE udm_doctrack;
+ALTER DATABASE udm_doctrack OWNER TO udm;
+```
+
+Then run the setup script again. Nothing outside the database is lost.

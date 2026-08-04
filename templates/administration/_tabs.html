@@ -1,0 +1,9 @@
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item"><a class="nav-link {% if tab == 'users' %}active{% endif %}" href="{% url 'accounts:user_list' %}">Users</a></li>
+  <li class="nav-item"><a class="nav-link {% if tab == 'offices' %}active{% endif %}" href="{% url 'accounts:office_list' %}">Offices</a></li>
+  <li class="nav-item"><a class="nav-link {% if slug == 'document-types' %}active{% endif %}" href="{% url 'core:masterdata_list' 'document-types' %}">Document types</a></li>
+  <li class="nav-item"><a class="nav-link {% if slug == 'tags' %}active{% endif %}" href="{% url 'core:masterdata_list' 'tags' %}">Tags</a></li>
+  <li class="nav-item"><a class="nav-link {% if slug == 'metadata-rules' %}active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-rules' %}">Metadata rules</a></li>
+  <li class="nav-item"><a class="nav-link {% if slug == 'metadata-fields' %}active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-fields' %}">Metadata fields</a></li>
+  <li class="nav-item"><a class="nav-link {% if tab == 'audit' %}active{% endif %}" href="{% url 'core:audit_log' %}">Audit log</a></li>
+</ul>

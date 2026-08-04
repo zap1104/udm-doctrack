@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Routing slip {{ record.tracking_number }}{% endblock %}
+{% block content %}
+<div class="no-print mb-3 d-flex gap-2">
+  <button class="btn btn-udm" onclick="window.print()">Print this slip</button>
+  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to record</a>
+</div>
+
+<div class="card-udm">
+  <div class="card-udm-body">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div>
+        <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#63718a;">Universidad de Manila</div>
+        <h1 style="font-size:22px;margin:2px 0;">Document routing slip</h1>
+        <div class="text-muted" style="font-size:13px;">Office of the Vice President for Administration</div>
+      </div>
+      <div class="text-end">
+        <div class="mono" style="font-size:15px;">{{ record.tracking_number }}</div>
+        {% include "partials/_status_pill.html" with status=record.display_status %}
+      </div>
+    </div>
+
+    <table class="table table-sm">
+      <tr><th style="width:200px;">Subject</th><td>{{ record.subject }}</td></tr>
+      <tr><th>Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+      <tr><th>Originating office</th><td>{{ record.originating_office.name }}</td></tr>
+      <tr><th>Prepared by</th><td>{{ record.created_by.display_name }}{% if record.created_by.position %} · {{ record.created_by.position }}{% endif %}</td></tr>
+      <tr><th>Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
+      <tr><th>Instructions</th><td>{{ record.instructions|linebreaksbr }}</td></tr>
+      <tr><th>Remarks</th><td>{{ record.remarks|linebreaksbr|default:"—" }}</td></tr>
+      <tr><th>Attachments</th><td>
+        {% for attachment in attachments %}{{ attachment.original_name }}{% if not forloop.last %}; {% endif %}{% empty %}None{% endfor %}
+      </td></tr>
+    </table>
+
+    <h2 style="font-size:16px;margin-top:22px;">Complete movement history</h2>
+    <table class="table table-sm table-bordered align-middle">
+      <thead>
+        <tr>
+          <th>#</th><th>Action</th><th>From</th><th>To</th><th>Sent</th><th>Received</th><th>Received by</th><th>Signature</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for step in steps %}
+          <tr>
+            <td>{{ step.sequence }}</td>
+            <td>{{ step.get_action_display }}</td>
+            <td>{{ step.from_office.code|default:"—" }}</td>
+            <td>{{ step.to_office.code }}</td>
+            <td>{{ step.sent_at|date:"d M Y g:i A" }}</td>
+            <td>{% if step.received_at %}{{ step.received_at|date:"d M Y g:i A" }}{% else %}<em>Pending</em>{% endif %}</td>
+            <td>{{ step.received_by.display_name|default:"—" }}</td>
+            <td style="width:120px;"></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="text-muted">Not routed yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="text-muted mt-4" style="font-size:12px;">
+      Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ printed_by.display_name }}.
+      This slip reprints the entire history; earlier steps are never removed or edited.
+    </p>
+  </div>
+</div>
+{% endblock %}

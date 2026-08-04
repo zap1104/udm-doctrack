@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}{{ config.label }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Administration</div><h1>{{ config.label }}</h1><p class="sub">{{ config.help }}</p></div>
+  <a class="btn btn-udm" href="{% url 'core:masterdata_create' slug %}">+ Add {{ config.singular }}</a>
+</div>
+{% include "administration/_tabs.html" %}
+
+<div class="card-udm mb-3"><div class="card-udm-body">
+  <form method="get" class="row g-2">
+    <div class="col-md-10"><input class="form-control" name="q" value="{{ query }}" placeholder="Search {{ config.label|lower }}…"></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Search</button></div>
+  </form>
+</div></div>
+
+<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+  <table class="table-udm">
+    <thead><tr>{% for name, label in config.columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr></thead>
+    <tbody>
+      {% for object in objects %}
+        <tr>
+          {% for name, label in config.columns %}
+            <td>{% if forloop.first %}<strong>{{ object|attr:name }}</strong>{% else %}{{ object|attr:name }}{% endif %}</td>
+          {% endfor %}
+          <td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{% url 'core:masterdata_edit' slug object.pk %}">Edit</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="{{ config.columns|length|add:1 }}" class="p-4 text-muted">Nothing here yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

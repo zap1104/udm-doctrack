@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Something broke · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="card-udm"><div class="card-udm-body empty-state">
+  <h3>The server hit an error</h3>
+  <p>Nothing was saved. Try the action again; if it keeps failing, send the tracking number to the system administrator.</p>
+  <a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to dashboard</a>
+</div></div>
+{% endblock %}

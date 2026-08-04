@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Review {{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 04 · step 2</div>
+    <h1>Review &amp; create</h1>
+    <div class="step-indicator mt-2">
+      <span class="step"><span class="num">1</span> Document and routing details</span>
+      <span>›</span>
+      <span class="step active"><span class="num">2</span> Review and create</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card-udm">
+      <div class="card-udm-head">
+        <h2>{{ record.subject }}</h2>
+        <span class="pill pill-draft">Draft</span>
+      </div>
+      <div class="card-udm-body">
+        <table class="table table-sm">
+          <tr><th class="text-muted fw-normal" style="width:190px;">Tracking number</th><td class="mono">{{ record.tracking_number }}</td></tr>
+          <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.name }}</td></tr>
+          <tr><th class="text-muted fw-normal">Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>
+          <tr><th class="text-muted fw-normal">Priority</th><td>{{ record.get_priority_display }}</td></tr>
+          <tr><th class="text-muted fw-normal">Receiving office(s)</th>
+            <td>{% for office in offices %}<span class="tag-chip">{{ office.name }}</span>{% empty %}<em class="text-danger">None selected</em>{% endfor %}</td></tr>
+          <tr><th class="text-muted fw-normal">Deadline</th><td>{% if due_days and due_days != "0" %}{{ due_days }} day(s) after routing{% else %}No deadline{% endif %}</td></tr>
+          <tr><th class="text-muted fw-normal">Instructions</th><td>{{ record.instructions|linebreaksbr }}</td></tr>
+          <tr><th class="text-muted fw-normal">Remarks</th><td>{{ record.remarks|linebreaksbr|default:"—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Attachments</th>
+            <td>{% for attachment in record.attachments.all %}<div>{{ attachment.original_name }}</div>{% empty %}—{% endfor %}</td></tr>
+        </table>
+
+        <form method="post" class="d-flex gap-2 mt-3">{% csrf_token %}
+          <button class="btn btn-udm" type="submit">Create &amp; route</button>
+          <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as draft</a>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="help-note">
+      Creating routes the document to the offices above and generates the routing slip.
+      The record stays <strong>In transit</strong> until a receiving office confirms receipt —
+      that is what makes custody provable.
+    </div>
+  </div>
+</div>
+{% endblock %}

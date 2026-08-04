@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Reports · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Reports</div><h1>Records overview</h1>
+  <p class="sub">Everything below respects your access — you only count what you are allowed to see.</p></div>
+  <a class="btn btn-udm-outline" href="{% url 'core:report_export' %}">Export CSV</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="stat-card navy"><div class="label">Tracking records</div><div class="value">{{ total_records }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card green"><div class="label">Archived documents</div><div class="value">{{ total_documents }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card gold"><div class="label">Awaiting receipt</div><div class="value">{{ awaiting_receipt }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card red"><div class="label">Overdue</div><div class="value">{{ overdue }}</div></div></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card-udm"><div class="card-udm-head"><h2>Records by status</h2></div>
+      <div class="card-udm-body p-0"><table class="table-udm">
+        <tbody>{% for row in by_status %}
+          <tr><td>{% include "partials/_status_pill.html" with status=row.status %}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
+        {% empty %}<tr><td class="p-4 text-muted">No records yet.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card-udm"><div class="card-udm-head"><h2>Busiest originating offices</h2></div>
+      <div class="card-udm-body p-0"><table class="table-udm">
+        <tbody>{% for row in by_office %}
+          <tr><td>{{ row.originating_office__name }}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
+        {% empty %}<tr><td class="p-4 text-muted">No records yet.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card-udm"><div class="card-udm-head"><h2>New records per month</h2></div>
+      <div class="card-udm-body">
+        {% for row in monthly %}
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span style="width:96px;font-size:13px;">{{ row.month|date:"M Y" }}</span>
+            <div class="relevance-bar" style="flex:1;height:9px;"><span style="width:{{ row.percent }}%"></span></div>
+            <strong style="width:34px;text-align:right;">{{ row.total }}</strong>
+          </div>
+        {% empty %}<p class="text-muted mb-0">No activity in the last 90 days.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card-udm"><div class="card-udm-head"><h2>Archive quality</h2></div>
+      <div class="card-udm-body">
+        <div class="d-flex justify-content-between py-1"><span>Documents without tags</span><strong>{{ untagged_documents }}</strong></div>
+        <div class="d-flex justify-content-between py-1"><span>Documents without extracted text</span><strong>{{ documents_without_text }}</strong></div>
+        <p class="form-text mt-2 mb-0">Both numbers should trend to zero — untagged records are the ones people cannot find.</p>
+        <h3 style="font-size:15px;margin-top:16px;">Most used searches</h3>
+        {% for row in top_searches %}
+          <div class="d-flex justify-content-between py-1" style="font-size:14px;"><span>{{ row.query }}</span><span class="text-muted">{{ row.total }}</span></div>
+        {% empty %}<p class="text-muted mb-0" style="font-size:14px;">No searches recorded yet.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

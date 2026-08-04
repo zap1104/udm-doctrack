@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Dashboard · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Dashboard</div>
+    <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
+    <p class="sub">{{ user.office_label }}</p>
+  </div>
+  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ Create New DTS</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
+      <div class="label">My inbox</div>
+      <div class="value">{{ inbox_count }}</div>
+      <div class="hint">{{ inbox_new_today }} arrived today · awaiting receipt</div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
+      <div class="label">In transit</div>
+      <div class="value">{{ in_transit_count }}</div>
+      <div class="hint">Sent by your office, not yet received</div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
+      <div class="label">Overdue</div>
+      <div class="value">{{ overdue_count }}</div>
+      <div class="hint">Past the action deadline</div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a class="stat-card green" href="{% url 'documents:repository' %}">
+      <div class="label">Completed</div>
+      <div class="value">{{ completed_count }}</div>
+      <div class="hint">This year · searchable in Documents</div>
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card-udm">
+      <div class="card-udm-head">
+        <h2>Documents requiring attention</h2>
+        <a href="{% url 'tracking:list' %}" class="small">Open tracking</a>
+      </div>
+      <div class="card-udm-body p-0">
+        {% if attention_records %}
+          <table class="table-udm">
+            <tbody>
+            {% for record in attention_records %}
+              <tr>
+                <td>
+                  <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
+                  <div style="font-size:14px;">{{ record.subject }}</div>
+                  <div class="text-muted" style="font-size:12.5px;">
+                    From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                  </div>
+                </td>
+                <td class="text-end">
+                  {% if record.can_confirm_now %}
+                    <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm receipt</a>
+                  {% else %}
+                    {% include "partials/_status_pill.html" with status=record.display_status %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty-state">
+            <h3>Nothing is waiting on you</h3>
+            <p>When a document is routed to {{ user.office.code|default:"your office" }}, it appears here until someone confirms receipt.</p>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:create' %}">Create a document</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card-udm mt-4">
+      <div class="card-udm-head"><h2>Recent document activity</h2></div>
+      <div class="card-udm-body p-0">
+        <table class="table-udm">
+          <tbody>
+          {% for record in recent_records %}
+            <tr>
+              <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+              <td>{{ record.subject|truncatechars:52 }}</td>
+              <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+            </tr>
+          {% empty %}
+            <tr><td class="text-muted p-4">No active records yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Office flow today</h2></div>
+      <div class="card-udm-body">
+        <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
+        <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
+        <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
+        <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
+          <span>Held by your office</span><strong>{{ custody_count }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-udm mt-4">
+      <div class="card-udm-head">
+        <h2>Newest in the archive</h2>
+        <a class="small" href="{% url 'search:index' %}">Search</a>
+      </div>
+      <div class="card-udm-body">
+        {% for document in recent_documents %}
+          <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
+            <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
+            <div class="text-muted" style="font-size:12.5px;">
+              {{ document.office.code }} · {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|date:"d M Y"|default:document.created_at|date:"d M Y" }}
+            </div>
+          </div>
+        {% empty %}
+          <p class="text-muted mb-0">Nothing archived yet. Completed records land here automatically.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

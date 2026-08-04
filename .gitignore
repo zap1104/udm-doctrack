@@ -1,0 +1,42 @@
+# --- Secrets — never commit these --------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.Python
+
+# --- Django ------------------------------------------------------------
+*.log
+db.sqlite3
+media/
+staticfiles/
+/static/vendor/*.map
+
+# --- Uploaded documents (real records must never reach GitHub) ---------
+uploads/
+documents/
+training_data*.jsonl
+
+# --- Testing / tooling -------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# --- Editors and OS ----------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

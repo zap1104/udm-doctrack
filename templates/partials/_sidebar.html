@@ -1,0 +1,35 @@
+{% load static %}
+<aside class="app-sidebar no-print">
+  <a class="brand" href="{% url 'core:dashboard' %}">
+    <span class="wordmark wordmark--light"><span class="udm">UDM</span> <span class="doctrack">Doc Track</span></span>
+  </a>
+
+  <nav aria-label="Main">
+    <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
+      <span class="dot"></span> Dashboard
+    </a>
+    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}">
+      <span class="dot"></span> Tracking
+    </a>
+    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}">
+      <span class="dot"></span> Documents
+    </a>
+    <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}">
+      <span class="dot"></span> Search
+    </a>
+    <a class="nav-item {% if nav_active == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}">
+      <span class="dot"></span> Reports
+    </a>
+    {% if user.is_system_admin %}
+      <a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}">
+        <span class="dot"></span> Administration
+      </a>
+    {% endif %}
+  </nav>
+
+  <div class="nav-section">Your office</div>
+  <div style="padding:0 12px;color:#cdd9e8;font-size:13px;">
+    <div style="font-weight:600;color:#fff;">{{ user.office.name|default:"No office assigned" }}</div>
+    <div>{{ user.get_role_display }}</div>
+  </div>
+</aside>

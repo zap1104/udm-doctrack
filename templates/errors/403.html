@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}No access · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="card-udm"><div class="card-udm-body empty-state">
+  <h3>You cannot open this record</h3>
+  <p>{{ reason|default:"This document has not been routed to your office and nobody has granted you access to it." }}</p>
+  <p class="text-muted" style="font-size:13.5px;">Ask the originating office to share it, or ask your records officer to grant access.</p>
+  <a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to dashboard</a>
+</div></div>
+{% endblock %}

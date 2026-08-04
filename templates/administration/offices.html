@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Offices · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Administration</div><h1>Offices</h1>
+  <p class="sub">Start with the offices under OVPA; peer VP groups can be added later without touching code.</p></div>
+  <a class="btn btn-udm" href="{% url 'accounts:office_create' %}">+ Add office</a>
+</div>
+{% include "administration/_tabs.html" with tab='offices' %}
+
+<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+  <table class="table-udm">
+    <thead><tr><th>Office</th><th>Code</th><th>Cluster</th><th>Head</th><th>Members</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for office in offices %}
+        <tr>
+          <td><strong>{{ office.name }}</strong></td>
+          <td class="mono">{{ office.code }}</td>
+          <td>{{ office.cluster }}</td>
+          <td>{{ office.head_name|default:"—" }}</td>
+          <td>{{ office.member_count }}</td>
+          <td>{% if office.is_active %}<span class="pill pill-received">Active</span>{% else %}<span class="pill pill-draft">Inactive</span>{% endif %}</td>
+          <td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{% url 'accounts:office_edit' office.pk %}">Edit</a></td>
+        </tr>
+      {% empty %}<tr><td colspan="7" class="p-4 text-muted">No offices yet. Run <code>manage.py seed_demo</code> or add them here.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Search · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 09</div>
+    <h1>Search documents</h1>
+    <p class="sub">Metadata first, then the words inside the file. You do not need the tracking number.</p>
+  </div>
+</div>
+
+<form method="get">
+  <div class="card-udm mb-4"><div class="card-udm-body">
+    <div class="row g-2">
+      <div class="col-md-10">{{ form.q }}</div>
+      <div class="col-md-2 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
+    </div>
+    <datalist id="search-suggestions"></datalist>
+  </div></div>
+
+  <div class="row g-4">
+    <div class="col-lg-3">
+      <div class="card-udm">
+        <div class="card-udm-head"><h2>Filters</h2></div>
+        <div class="card-udm-body">
+          {% include "partials/_field.html" with field=form.year %}
+          {% include "partials/_field.html" with field=form.office %}
+          {% include "partials/_field.html" with field=form.document_type %}
+          {% include "partials/_field.html" with field=form.tag %}
+          {% include "partials/_field.html" with field=form.source %}
+          <div class="row">
+            <div class="col-6">{% include "partials/_field.html" with field=form.date_from %}</div>
+            <div class="col-6">{% include "partials/_field.html" with field=form.date_to %}</div>
+          </div>
+
+          <label class="form-label" for="{{ form.min_relevance.id_for_label }}">
+            Minimum relevance: <span id="relevance-value">{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
+          </label>
+          {{ form.min_relevance }}
+          <div class="form-check mt-2">
+            {{ form.show_all }}
+            <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
+          </div>
+
+          <button class="btn btn-udm-outline w-100 mt-3" type="submit">Apply filters</button>
+          <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}">Clear</a>
+        </div>
+      </div>
+
+      <div class="help-note mt-3">
+        75% is a <strong>display filter</strong>, not a universal truth. The percentage means
+        “how well this record matches your words”, not “how accurate the system is”.
+      </div>
+    </div>
+
+    <div class="col-lg-9">
+      {% if has_searched %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
+            {% if response.total_matches > response.results|length %}
+              of {{ response.total_matches }} matched
+            {% endif %}
+            <span class="text-muted">· {{ response.duration_ms }} ms</span>
+          </div>
+          <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
+        </div>
+
+        {% if response.hidden_count %}
+          <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
+            {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
+            {{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}% threshold.
+            Tick “Include results below the threshold” to see them.
+          </div>
+        {% endif %}
+
+        <div class="card-udm">
+          <div class="card-udm-body p-0">
+            {% for result in results %}
+              <article class="result-item">
+                <div class="flex-grow-1" style="min-width:0;">
+                  <h3><a href="{{ result.document.get_absolute_url }}">{{ result.document.title }}</a></h3>
+                  <div class="meta">
+                    {{ result.document.office.code }} ·
+                    {{ result.document.document_type.name|default:"Unclassified" }} ·
+                    {{ result.document.document_date|date:"d M Y"|default:result.document.created_at|date:"d M Y" }}
+                    {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
+                  </div>
+                  {% if result.snippet_html %}
+                    <p class="mt-2 mb-1" style="font-size:14px;color:#41506a;">{{ result.snippet_html|safe }}</p>
+                  {% endif %}
+                  <div>
+                    {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
+                  </div>
+                  {% if result.matched_in %}
+                    <div class="text-muted mt-1" style="font-size:12.5px;">
+                      Matched in: {% for where in result.matched_in %}{{ where }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="relevance">
+                  <span class="score">{{ result.relevance }}%</span>
+                  {% relevance_bar result.relevance %}
+                  <span class="text-muted" style="font-size:11px;">relevance</span>
+                </div>
+              </article>
+            {% empty %}
+              <div class="empty-state">
+                <h3>No records matched “{{ response.query }}”</h3>
+                <p>Try fewer words, drop a filter, or lower the minimum relevance.
+                   Office codes (MED, HR, REC) and tags work well on their own.</p>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <p class="text-muted mt-3" style="font-size:12.5px;">
+          {{ response.explanation }}
+          {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
+        </p>
+      {% else %}
+        <div class="card-udm"><div class="card-udm-body empty-state">
+          <h3>Search the whole archive</h3>
+          <p>Try an office code, a subject word, a tag, a year, or a phrase in quotes.<br>
+             Example: <code>preventive maintenance MED</code> or <code>"work order"</code>.</p>
+        </div></div>
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  var slider = document.getElementById('{{ form.min_relevance.id_for_label }}');
+  var readout = document.getElementById('relevance-value');
+  if (slider && readout) {
+    slider.addEventListener('input', function () { readout.textContent = slider.value; });
+  }
+
+  // Lightweight autocomplete backed by tags and titles.
+  var box = document.getElementById('{{ form.q.id_for_label }}');
+  var list = document.getElementById('search-suggestions');
+  var timer = null;
+  if (box && list) {
+    box.addEventListener('input', function () {
+      window.clearTimeout(timer);
+      var value = box.value.trim();
+      if (value.length < 2) return;
+      timer = window.setTimeout(function () {
+        fetch('{% url "search:autocomplete" %}?q=' + encodeURIComponent(value))
+          .then(function (response) { return response.json(); })
+          .then(function (data) {
+            list.innerHTML = '';
+            (data.results || []).forEach(function (term) {
+              var option = document.createElement('option');
+              option.value = term;
+              list.appendChild(option);
+            });
+          })
+          .catch(function () { /* suggestions are optional */ });
+      }, 220);
+    });
+  }
+</script>
+{% endblock %}

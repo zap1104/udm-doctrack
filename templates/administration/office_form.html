@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{% if office %}Edit office{% else %}Add office{% endif %} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Administration</div>
+  <h1>{% if office %}{{ office.name }}{% else %}Add office{% endif %}</h1>
+</div></div>
+<div class="row"><div class="col-lg-7"><div class="card-udm"><div class="card-udm-body">
+  <form method="post" novalidate>{% csrf_token %}
+    {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
+    <button class="btn btn-udm" type="submit">Save office</button>
+    <a class="btn btn-udm-outline" href="{% url 'accounts:office_list' %}">Cancel</a>
+  </form>
+</div></div></div>
+<div class="col-lg-5"><div class="help-note">
+  The code appears inside every tracking number, so changing it later does not rewrite numbers already issued.
+</div></div></div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Audit log · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Administration</div><h1>Audit log</h1>
+  <p class="sub">Append-only. Sign-ins, routing, receipts, downloads and master-data changes all land here.</p>
+</div></div>
+{% include "administration/_tabs.html" with tab='audit' %}
+
+<div class="card-udm mb-3"><div class="card-udm-body">
+  <form method="get" class="row g-2">
+    <div class="col-md-7"><input class="form-control" name="q" value="{{ query }}" placeholder="Search the log…"></div>
+    <div class="col-md-3">
+      <select class="form-select" name="action">
+        <option value="">All actions</option>
+        {% for value, label in actions %}
+          <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+  </form>
+</div></div>
+
+<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+  <table class="table-udm">
+    <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Summary</th><th>IP</th></tr></thead>
+    <tbody>
+      {% for entry in entries %}
+        <tr>
+          <td style="white-space:nowrap;">{{ entry.created_at|date:"d M Y, g:i A" }}</td>
+          <td>{{ entry.actor_label }}</td>
+          <td><span class="pill pill-muted">{{ entry.get_action_display }}</span></td>
+          <td>{{ entry.summary }}</td>
+          <td class="text-muted" style="font-size:12.5px;">{{ entry.ip_address|default:"—" }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="5" class="p-4 text-muted">Nothing logged yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

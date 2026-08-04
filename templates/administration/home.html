@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Administration · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Screen 10</div><h1>Administration</h1>
+  <p class="sub">Accounts and controlled master data. There is no public registration anywhere in the system.</p>
+</div></div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2"><a class="stat-card navy" href="{% url 'accounts:user_list' %}"><div class="label">Users</div><div class="value">{{ user_count }}</div></a></div>
+  <div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'accounts:office_list' %}"><div class="label">Offices</div><div class="value">{{ office_count }}</div></a></div>
+  <div class="col-6 col-lg-2"><a class="stat-card gold" href="{% url 'core:masterdata_list' 'document-types' %}"><div class="label">Doc types</div><div class="value">{{ type_count }}</div></a></div>
+  <div class="col-6 col-lg-2"><a class="stat-card green" href="{% url 'core:masterdata_list' 'tags' %}"><div class="label">Tags</div><div class="value">{{ tag_count }}</div></a></div>
+  <div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'core:masterdata_list' 'metadata-rules' %}"><div class="label">Rules</div><div class="value">{{ rule_count }}</div></a></div>
+  <div class="col-6 col-lg-2"><a class="stat-card navy" href="{% url 'core:masterdata_list' 'metadata-fields' %}"><div class="label">Metadata fields</div><div class="value">{{ field_count }}</div></a></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card-udm"><div class="card-udm-head"><h2>What lives where</h2></div>
+      <div class="card-udm-body">
+        <p style="font-size:14px;">Master data drives filing, filters and the metadata recommendations. Change it here — no code edits, no redeploy.</p>
+        <ul style="font-size:14px;">
+          <li><strong>Document types</strong> — memorandum, letter, work order… also sets retention.</li>
+          <li><strong>Tags</strong> — the shared vocabulary used for filing and search.</li>
+          <li><strong>Metadata rules</strong> — "if the text contains X, propose tag/type/office Y".</li>
+          <li><strong>Metadata fields</strong> — extra fields that appear on every review screen.</li>
+        </ul>
+        <a class="btn btn-udm-outline" href="{% url 'core:audit_log' %}">Open audit log</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card-udm"><div class="card-udm-head"><h2>Latest activity</h2><a class="small" href="{% url 'core:audit_log' %}">All</a></div>
+      <div class="card-udm-body">
+        {% for entry in recent_audit %}
+          <div class="py-1 {% if not forloop.last %}border-bottom{% endif %}" style="font-size:13.5px;">
+            <div>{{ entry.summary }}</div>
+            <div class="text-muted" style="font-size:12px;">{{ entry.actor_label }} · {{ entry.created_at|date:"d M Y, g:i A" }}</div>
+          </div>
+        {% empty %}<p class="text-muted mb-0">Nothing logged yet.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

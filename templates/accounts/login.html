@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Sign in · {{ SITE_NAME }}{% endblock %}
+
+{% block body %}
+<div class="login-wrap">
+  <section class="login-art">
+    <div class="grid-lines" aria-hidden="true"></div>
+    <div>
+      <span class="wordmark wordmark--light"><span class="udm">UDM</span> <span class="doctrack">Doc Track</span></span>
+    </div>
+    <div>
+      <h1>Records move. Accountability stays.</h1>
+      <div class="rule"></div>
+      <p>Track active documents, confirm receipt with a real timestamp, and keep completed records searchable in one secure workspace for the offices under OVPA.</p>
+    </div>
+    <p style="font-size:13px;opacity:.7;margin:0;">Universidad de Manila · Office of the Vice President for Administration</p>
+  </section>
+
+  <section class="login-form">
+    <div class="inner">
+      <h2 style="font-size:26px;margin-bottom:6px;">Welcome back</h2>
+      <p class="text-muted" style="font-size:14.5px;">Sign in using the account created by the system administrator.</p>
+
+      {% include "partials/_messages.html" %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger" style="border-radius:10px;">
+          {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "partials/_field.html" with field=form.username %}
+        {% include "partials/_field.html" with field=form.password %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="btn btn-udm w-100 py-2">Sign in</button>
+      </form>
+
+      <p class="text-muted mt-4" style="font-size:12.5px;">
+        Account creation is managed by authorised administrators. There is no public registration.
+        Forgot your password? Ask the records administrator to set a new one.
+      </p>
+    </div>
+  </section>
+</div>
+{% endblock %}

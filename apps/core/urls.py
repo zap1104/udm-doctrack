@@ -1,0 +1,16 @@
+from django.urls import path
+
+from . import views
+
+app_name = "core"
+
+urlpatterns = [
+    path("", views.DashboardView.as_view(), name="dashboard"),
+    path("reports/", views.ReportsView.as_view(), name="reports"),
+    path("reports/export/", views.ReportExportView.as_view(), name="report_export"),
+    path("administration/", views.AdministrationHomeView.as_view(), name="administration"),
+    path("administration/audit-log/", views.AuditLogView.as_view(), name="audit_log"),
+    path("administration/<slug:slug>/", views.MasterDataListView.as_view(), name="masterdata_list"),
+    path("administration/<slug:slug>/new/", views.MasterDataEditView.as_view(), name="masterdata_create"),
+    path("administration/<slug:slug>/<int:pk>/", views.MasterDataEditView.as_view(), name="masterdata_edit"),
+]

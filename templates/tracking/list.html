@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Tracking · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 03</div>
+    <h1>Active document tracking</h1>
+    <p class="sub">Newest movement first. Completed records leave this queue and stay searchable in Documents.</p>
+  </div>
+  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ Create New DTS</a>
+</div>
+
+<div class="card-udm mb-3">
+  <div class="card-udm-body">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-5">{{ form.q }}</div>
+      <div class="col-6 col-md-2">{{ form.status }}</div>
+      <div class="col-6 col-md-2">{{ form.office }}</div>
+      <div class="col-8 col-md-2">{{ form.scope }}</div>
+      <div class="col-4 col-md-1 d-grid"><button class="btn btn-udm-outline" type="submit">Filter</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card-udm">
+  <div class="card-udm-head">
+    <h2>{{ total }} active record{{ total|pluralize }}</h2>
+    <a class="small" href="{% url 'core:report_export' %}">Export CSV</a>
+  </div>
+  <div class="card-udm-body p-0 table-responsive">
+    <table class="table-udm">
+      <thead>
+        <tr>
+          <th>Tracking number</th><th>Subject</th><th>Current office</th><th>Updated</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+            <td>
+              {{ record.subject|truncatechars:60 }}
+              <div class="text-muted" style="font-size:12.5px;">
+                {{ record.document_type.name|default:"No type" }} · from {{ record.originating_office.code }}
+              </div>
+            </td>
+            <td>{{ record.current_office.code|default:"—" }}</td>
+            <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
+            <td>{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+            <td class="text-end">
+              {% if record.can_confirm_now %}
+                <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm receipt</a>
+              {% else %}
+                <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="empty-state">
+              <h3>No active records match this view</h3>
+              <p>Clear the filters, or create a document to start a routing chain.</p>
+              <a class="btn btn-udm" href="{% url 'tracking:create' %}">Create New DTS</a>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% include "partials/_pagination.html" %}
+
+<div class="help-note mt-3">
+  <strong>Where is the document?</strong> “Current office” is whoever confirmed receipt last.
+  A record stays <em>In transit</em> until someone presses Confirm receipt — sent never means received.
+</div>
+{% endblock %}

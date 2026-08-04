@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}{{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 05</div>
+    <h1>{{ record.subject }}</h1>
+    <p class="sub">
+      <span class="mono">{{ record.tracking_number }}</span>
+      {% include "partials/_status_pill.html" with status=record.display_status %}
+      {% if record.priority == "URGENT" %}<span class="pill pill-overdue">Urgent</span>{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2 no-print">
+    <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    {% if archived_document %}
+      <a class="btn btn-udm-teal" href="{{ archived_document.get_absolute_url }}">Open archived record</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Document information</h2></div>
+      <div class="card-udm-body">
+        <table class="table table-sm mb-0">
+          <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.code }}</td></tr>
+          <tr><th class="text-muted fw-normal">Current office</th><td>{{ record.current_office.code|default:"—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Awaiting receipt" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>
+          <tr><th class="text-muted fw-normal">Deadline</th>
+              <td>{% if record.due_at %}{{ record.due_at|date:"d M Y, g:i A" }}{% if record.is_overdue %} <span class="pill pill-overdue">Overdue</span>{% endif %}{% else %}None{% endif %}</td></tr>
+          <tr><th class="text-muted fw-normal">Attachments</th><td>{{ attachments|length }} file{{ attachments|length|pluralize }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card-udm mt-4">
+      <div class="card-udm-head"><h2>Files</h2></div>
+      <div class="card-udm-body">
+        {% for attachment in attachments %}
+          <div class="file-chip mb-2">
+            <span class="ext">{{ attachment.extension|default:"FILE" }}</span>
+            <div class="flex-grow-1" style="min-width:0;">
+              <a href="{% url 'tracking:attachment_download' attachment.pk %}" style="font-size:14px;">{{ attachment.original_name }}</a>
+              <div class="text-muted" style="font-size:12px;">
+                {{ attachment.size|human_size }} · {{ attachment.uploaded_by.short_display|default:"—" }} · {{ attachment.created_at|date:"d M Y" }}
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          <p class="text-muted mb-0">No files attached.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if pending_offices %}
+      <div class="help-note mt-3">
+        Waiting for receipt from:
+        {% for office in pending_offices %}<strong>{{ office.code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card-udm">
+      <div class="card-udm-head">
+        <h2>Routing timeline</h2>
+        <span class="text-muted small">Append-only — nothing is ever overwritten</span>
+      </div>
+      <div class="card-udm-body">
+        <ul class="timeline">
+          {% for step in steps %}
+            <li class="{% if step.is_received %}is-done{% else %}is-pending{% endif %}">
+              <div class="t-title">
+                {{ step.get_action_display }}: {{ step.from_office.code|default:"—" }} → {{ step.to_office.code }}
+              </div>
+              <div class="t-meta">
+                Sent by {{ step.sent_by.display_name }} · {{ step.sent_at|date:"d M Y, g:i A" }}
+                {% if step.due_at %} · due {{ step.due_at|date:"d M, g:i A" }}{% endif %}
+              </div>
+              {% if step.instructions %}<div class="t-detail">{{ step.instructions }}</div>{% endif %}
+              {% if step.is_received %}
+                <div class="t-meta mt-1" style="color:#2e7d5b;">
+                  ✓ Receipt confirmed by {{ step.received_by.display_name }} ({{ step.to_office.code }})
+                  · {{ step.received_at|date:"d M Y, g:i A" }}
+                </div>
+                {% if step.receipt_note %}<div class="t-detail">{{ step.receipt_note }}</div>{% endif %}
+              {% else %}
+                <div class="t-meta mt-1" style="color:#8a6a12;">Awaiting receipt from {{ step.to_office.code }}</div>
+              {% endif %}
+            </li>
+          {% empty %}
+            <li class="is-muted">
+              <div class="t-title">Draft created</div>
+              <div class="t-meta">Not routed yet. Open the review step to send it.</div>
+            </li>
+          {% endfor %}
+        </ul>
+
+        <hr>
+        <h3 style="font-size:15px;">Activity log</h3>
+        <ul class="timeline">
+          {% for activity in activities %}
+            <li class="{% if activity.event == 'COMPLETED' or activity.event == 'ARCHIVED' %}is-done{% elif activity.event == 'REMARK' %}is-muted{% endif %}">
+              <div class="t-title">{{ activity.message }}</div>
+              <div class="t-meta">{{ activity.created_at|date:"d M Y, g:i A" }} · {{ activity.get_event_display }}</div>
+              {% if activity.detail %}<div class="t-detail">{{ activity.detail }}</div>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    {% if record.status == "DRAFT" and record.created_by_id == user.pk %}
+      <div class="card-udm mt-4"><div class="card-udm-body d-flex justify-content-between align-items-center">
+        <div><strong>This record is still a draft.</strong><div class="text-muted small">Nobody else can see it until it is routed.</div></div>
+        <a class="btn btn-udm" href="{% url 'tracking:review' record.pk %}">Continue to review</a>
+      </div></div>
+    {% endif %}
+
+    {% if can_confirm %}
+      <div class="card-udm mt-4 no-print">
+        <div class="card-udm-head"><h2>Confirm document receipt</h2></div>
+        <div class="card-udm-body">
+          <p class="text-muted" style="font-size:14px;">
+            This records that <strong>{{ user.office.name }}</strong> has taken custody of
+            <span class="mono">{{ record.tracking_number }}</span>. The server writes the exact date and time —
+            not a value you type.
+          </p>
+          <form method="post" action="{% url 'tracking:confirm_receipt' record.pk %}">
+            {% csrf_token %}
+            {% include "partials/_field.html" with field=receipt_form.note %}
+            <button class="btn btn-udm-gold" type="submit">Confirm receipt</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_act %}
+      <div class="card-udm mt-4 no-print">
+        <div class="card-udm-head"><h2>Act on this document</h2></div>
+        <div class="card-udm-body">
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-remark" type="button" role="tab">Add remark</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-route" type="button" role="tab">Forward or return</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-complete" type="button" role="tab">Complete</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-share" type="button" role="tab">Share access</button></li>
+          </ul>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-remark" role="tabpanel">
+              <form method="post" action="{% url 'tracking:add_remark' record.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% include "partials/_field.html" with field=remark_form.remark %}
+                {% include "partials/_field.html" with field=remark_form.attachments %}
+                <button class="btn btn-udm" type="submit">Save remark</button>
+              </form>
+            </div>
+
+            <div class="tab-pane fade" id="tab-route" role="tabpanel">
+              <form method="post" action="{% url 'tracking:route' record.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                  <label class="form-label">Action</label>
+                  {% for radio in route_form.action %}
+                    <div class="form-check">{{ radio.tag }} <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>
+                  {% endfor %}
+                </div>
+                {% include "partials/_field.html" with field=route_form.offices %}
+                {% include "partials/_field.html" with field=route_form.instructions %}
+                {% include "partials/_field.html" with field=route_form.due_days %}
+                {% include "partials/_field.html" with field=route_form.remark %}
+                {% include "partials/_field.html" with field=route_form.attachments %}
+                <button class="btn btn-udm" type="submit">Send document</button>
+              </form>
+            </div>
+
+            <div class="tab-pane fade" id="tab-complete" role="tabpanel">
+              <form method="post" action="{% url 'tracking:complete' record.pk %}">
+                {% csrf_token %}
+                {% include "partials/_field.html" with field=complete_form.note %}
+                <div class="form-check mb-3">
+                  {{ complete_form.archive_now }}
+                  <label class="form-check-label" for="{{ complete_form.archive_now.id_for_label }}">{{ complete_form.archive_now.label }}</label>
+                </div>
+                <button class="btn btn-udm-teal" type="submit">Mark completed</button>
+              </form>
+            </div>
+
+            <div class="tab-pane fade" id="tab-share" role="tabpanel">
+              <form method="post" action="{% url 'tracking:grant_access' record.pk %}">
+                {% csrf_token %}
+                {% include "partials/_field.html" with field=grant_form.office %}
+                {% include "partials/_field.html" with field=grant_form.user %}
+                {% include "partials/_field.html" with field=grant_form.reason %}
+                <button class="btn btn-udm-outline" type="submit">Grant access</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% elif not can_confirm and record.status != "COMPLETED" %}
+      <div class="help-note mt-4">
+        Your office is not holding this document right now, so the action panel is hidden.
+        You can still read the record and its history because it passed through {{ user.office.code|default:"your office" }}.
+      </div>
+    {% endif %}
+
+    {% if record.status == "COMPLETED" and not archived_document %}
+      <form method="post" action="{% url 'tracking:archive' record.pk %}" class="mt-4 no-print">{% csrf_token %}
+        <button class="btn btn-udm-teal" type="submit">Archive into Document Management</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

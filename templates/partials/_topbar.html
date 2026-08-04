@@ -1,0 +1,30 @@
+<header class="app-topbar no-print">
+  <span class="wordmark d-none d-md-inline-flex"><span class="udm">UDM</span> <span class="doctrack">Doc Track</span></span>
+
+  <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
+    <input type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search records…" aria-label="Search records">
+  </form>
+
+  <div class="ms-auto d-flex align-items-center gap-3">
+    <a class="btn btn-udm btn-sm d-none d-sm-inline-block" href="{% url 'tracking:create' %}">+ Create New DTS</a>
+    <div class="dropdown">
+      <button class="btn btn-link p-0 border-0 d-flex align-items-center gap-2 text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="avatar">{{ user.initials }}</span>
+        <span class="d-none d-md-inline" style="color:#16202c;font-size:14px;">{{ user.short_display }}</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text small text-muted">{{ user.office_label }}</span></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">My profile</a></li>
+        <li><a class="dropdown-item" href="{% url 'accounts:password_change' %}">Change password</a></li>
+        {% if user.is_superuser %}<li><a class="dropdown-item" href="/django-admin/">Django administration</a></li>{% endif %}
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}
+            <button type="submit" class="dropdown-item">Sign out</button>
+          </form>
+        </li>
+      </ul>
+    </div>
+  </div>
+</header>

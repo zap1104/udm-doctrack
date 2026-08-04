@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Users · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Administration</div><h1>User and office administration</h1>
+  <p class="sub">Every account gets an office and a role before its first sign-in.</p></div>
+  <a class="btn btn-udm" href="{% url 'accounts:user_create' %}">+ Add user</a>
+</div>
+{% include "administration/_tabs.html" with tab='users' %}
+
+<div class="card-udm mb-3"><div class="card-udm-body">
+  <form method="get" class="row g-2">
+    <div class="col-md-6"><input class="form-control" name="q" value="{{ query }}" placeholder="Search users…"></div>
+    <div class="col-md-4">
+      <select class="form-select" name="office">
+        <option value="">All offices</option>
+        {% for office in offices %}
+          <option value="{{ office.pk }}" {% if selected_office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+  </form>
+</div></div>
+
+<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+  <table class="table-udm">
+    <thead><tr><th>User</th><th>Office</th><th>Role</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for row in users %}
+        <tr>
+          <td><strong>{{ row.display_name }}</strong><div class="text-muted" style="font-size:12.5px;">{{ row.username }}{% if row.email %} · {{ row.email }}{% endif %}</div></td>
+          <td>{{ row.office.code|default:"—" }}</td>
+          <td>{{ row.get_role_display }}</td>
+          <td>
+            {% if row.is_active %}<span class="pill pill-received">Active</span>
+            {% else %}<span class="pill pill-overdue">Suspended</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-udm-outline btn-sm" href="{% url 'accounts:user_edit' row.pk %}">Edit</a>
+            <form method="post" action="{% url 'accounts:user_toggle' row.pk %}" class="d-inline">{% csrf_token %}
+              <button class="btn btn-link btn-sm">{% if row.is_active %}Suspend{% else %}Reactivate{% endif %}</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="5" class="p-4 text-muted">No accounts match this filter.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

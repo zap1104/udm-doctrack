@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: udm_doctrack
+          POSTGRES_USER: udm
+          POSTGRES_PASSWORD: udmpass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: test-key-not-used-anywhere-real
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      POSTGRES_DB: udm_doctrack
+      POSTGRES_USER: udm
+      POSTGRES_PASSWORD: udmpass
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      STORAGE_BACKEND: local
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Make migrations (fails if a model change was not committed)
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: pytest -q
