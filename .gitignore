@@ -23,7 +23,6 @@ staticfiles/
 
 # --- Uploaded documents (real records must never reach GitHub) ---------
 uploads/
-documents/
 training_data*.jsonl
 
 # --- Testing / tooling -------------------------------------------------
