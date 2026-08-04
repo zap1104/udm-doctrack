@@ -57,6 +57,22 @@ class UserQuerySet(models.QuerySet):
         return self.filter(office=office, is_active=True)
 
 
+class UserManagerFromQuerySet(UserManager.from_queryset(UserQuerySet)):
+    """UserManager (so create_user/create_superuser/get_by_natural_key work)
+    combined with UserQuerySet (for .in_office() and other query helpers).
+
+    This has to be a real, named class living at module level — not the
+    result of calling UserManager.from_queryset(UserQuerySet)() inline.
+    Django's makemigrations writes the default manager into the migration
+    file by dotted import path, and an anonymous class created inline has no
+    such path, which fails with:
+        ValueError: Could not find manager UserManagerFromUserQuerySet in
+        django.db.models.manager.
+    Naming it here gives migrations `apps.accounts.models.UserManagerFromQuerySet`
+    to import.
+    """
+
+
 class User(AbstractUser):
     """Custom user. `role` decides what the dashboard and menus show."""
 
@@ -68,19 +84,15 @@ class User(AbstractUser):
     office = models.ForeignKey(
         Office, null=True, blank=True, on_delete=models.PROTECT, related_name="members"
     )
-    role = models.CharField(
-        max_length=16, choices=Role.choices, default=Role.USER)
-    position = models.CharField(
-        max_length=120, blank=True, help_text="Job title shown on routing slips.")
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.USER)
+    position = models.CharField(max_length=120, blank=True, help_text="Job title shown on routing slips.")
     phone = models.CharField(max_length=32, blank=True)
     must_change_password = models.BooleanField(
         default=False, help_text="Force a password change on the next sign-in."
     )
     last_seen_at = models.DateTimeField(null=True, blank=True)
 
-    # Built on UserManager (not a plain Manager) so create_user(), create_superuser()
-    # and get_by_natural_key() — all required for sign-in — still work.
-    objects = UserManager.from_queryset(UserQuerySet)()
+    objects = UserManagerFromQuerySet()
 
     class Meta:
         ordering = ["first_name", "last_name", "username"]

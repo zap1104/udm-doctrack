@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,6 +22,7 @@ from .forms import (
     CreateRecordForm,
     GrantAccessForm,
     RemarkForm,
+    ReviewRouteForm,
     RouteForm,
     TrackingFilterForm,
 )
@@ -70,12 +71,18 @@ class RecordListView(AppLoginRequiredMixin, View):
                 records = records.filter(Q(originating_office=office) | Q(current_office=office))
             if scope == "inbox":
                 records = records.filter(
-                    routing_steps__to_office_id=request.user.office_id, routing_steps__received_at__isnull=True
+                    routing_steps__to_office_id=request.user.office_id,
+                    routing_steps__received_at__isnull=True,
+                    routing_steps__batch=F("current_batch"),
                 )
             elif scope == "custody":
                 records = records.filter(current_office_id=request.user.office_id)
             elif scope == "sent":
-                records = records.filter(routing_steps__from_office_id=request.user.office_id)
+                records = records.filter(
+                    routing_steps__from_office_id=request.user.office_id,
+                    routing_steps__received_at__isnull=True,
+                    routing_steps__batch=F("current_batch"),
+                )
             elif scope == "mine":
                 records = records.filter(created_by=request.user)
 
@@ -138,44 +145,75 @@ class RecordReviewView(OfficeAssignedMixin, View):
 
     template_name = "tracking/review.html"
 
-    def _offices(self, request, record):
+    def _remembered(self, request, record):
+        """Offices picked on step 1, in the order they were picked.
+
+        `pk__in` returns rows in database order, not selection order, and
+        route_record() treats the first office as the one taking custody — so
+        the list is re-sorted to match what the user actually chose.
+        """
         from apps.accounts.models import Office
 
         office_ids = request.session.get(f"draft_offices_{record.pk}", [])
-        return list(Office.objects.filter(pk__in=office_ids))
+        if not office_ids:
+            return []
+        found = {office.pk: office for office in Office.objects.filter(pk__in=office_ids)}
+        return [found[pk] for pk in office_ids if pk in found]
+
+    def _context(self, request, record, form, offices):
+        return {
+            "record": record,
+            "form": form,
+            "offices": offices,
+            "due_days": request.session.get(f"draft_due_{record.pk}", "3"),
+            "session_lost": not offices,
+        }
 
     def get(self, request, pk):
         record = _get_record(request, pk)
         if record.status != Status.DRAFT:
             return redirect(record.get_absolute_url())
-        return render(
-            request,
-            self.template_name,
-            {
-                "record": record,
-                "offices": self._offices(request, record),
+        offices = self._remembered(request, record)
+        form = ReviewRouteForm(
+            user=request.user,
+            initial={
+                "receiving_offices": [office.pk for office in offices],
                 "due_days": request.session.get(f"draft_due_{record.pk}", "3"),
             },
         )
+        return render(request, self.template_name, self._context(request, record, form, offices))
 
     def post(self, request, pk):
         record = _get_record(request, pk)
         if record.status != Status.DRAFT:
             return redirect(record.get_absolute_url())
-        offices = self._offices(request, record)
-        due_days = request.session.get(f"draft_due_{record.pk}", "3")
+
+        form = ReviewRouteForm(request.POST, user=request.user)
+        if not form.is_valid():
+            messages.error(request, "Choose at least one receiving office before sending.")
+            return render(
+                request, self.template_name, self._context(request, record, form, self._remembered(request, record))
+            )
+
+        # Keep the order the user picked; the first office takes custody.
+        picked = list(form.cleaned_data["receiving_offices"])
+        remembered_ids = request.session.get(f"draft_offices_{record.pk}", [])
+        if remembered_ids:
+            rank = {pk: index for index, pk in enumerate(remembered_ids)}
+            picked.sort(key=lambda office: rank.get(office.pk, len(rank)))
+
         try:
             services.route_record(
                 record,
-                offices,
+                picked,
                 user=request.user,
                 instructions=record.instructions,
                 action=RoutingStep.Action.SEND,
-                due_days=int(due_days or 0),
+                due_days=int(form.cleaned_data.get("due_days") or 0),
             )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect("tracking:review", pk=record.pk)
+            return render(request, self.template_name, self._context(request, record, form, picked))
 
         request.session.pop(f"draft_offices_{record.pk}", None)
         request.session.pop(f"draft_due_{record.pk}", None)

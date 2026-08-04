@@ -12,7 +12,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import F, Max
 from django.utils import timezone
 
 from apps.core.models import AuditLog
@@ -346,6 +346,7 @@ def inbox_for(user):
         .filter(
             routing_steps__to_office_id=user.office_id,
             routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
         )
         .exclude(status=Status.COMPLETED)
         .with_related()
@@ -363,7 +364,7 @@ def in_custody_for(user):
             status__in=[Status.RECEIVED, Status.IN_PROCESS],
             routing_steps__to_office_id=user.office_id,
             routing_steps__received_at__isnull=False,
-            routing_steps__batch__gt=0,
+            routing_steps__batch=F("current_batch"),
         )
         .filter(current_office_id=user.office_id)
         .with_related()
@@ -380,6 +381,7 @@ def in_transit_from(user):
         .filter(
             routing_steps__from_office_id=user.office_id,
             routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
         )
         .exclude(status=Status.COMPLETED)
         .with_related()

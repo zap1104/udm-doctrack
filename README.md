@@ -11,17 +11,17 @@ Two halves, one system:
 
 ## Get it running in five minutes
 
-You need **Python 3.11+**, **PostgreSQL 14+**, and **Git**.
+You need **Python 3.10–3.14**, **PostgreSQL 14+**, and **Git**.
 
 ```bash
 git clone https://github.com/<your-team>/udm-doctrack.git
 cd udm-doctrack
 
 # macOS / Linux
-bash scripts/setup.sh
+bash scripts/start.sh
 
 # Windows PowerShell
-powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 
 Then:
@@ -73,7 +73,7 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 
 | Layer | Choice | Why |
 |---|---|---|
-| Backend | Django 5 | Admin, auth, permissions and migrations included |
+| Backend | Django 5.2 LTS | Supports Python 3.10–3.14, security updates to 2028 |
 | Database | PostgreSQL 14+ | Handles the full-text search too — no Elasticsearch to run |
 | Frontend | Django templates + Bootstrap 5 + HTMX | No build step, no npm, no React |
 | Files | Local disk, Cloudflare R2, or Azure Blob | Set `STORAGE_BACKEND` in `.env` |
@@ -97,7 +97,7 @@ udm-doctrack/
 ├── templates/         All HTML, grouped by app
 ├── static/            CSS, JS, images
 ├── docs/              Setup, Git workflow, checklist, design notes
-├── scripts/           setup.sh / setup.ps1
+├── scripts/           start.sh / start.ps1 (guided setup)
 └── tests/             The rules that must never break
 ```
 
@@ -120,6 +120,8 @@ Rule of thumb: **views never change data directly.** They call `services.py`. Th
 ```bash
 make run              # start the server
 make test             # run the tests
+make selfcheck        # exercise the whole workflow, then roll back
+make fixlogin         # repair sign-in problems
 make migrations       # after changing a model
 make migrate          # apply migrations
 make seed             # reload demo data
@@ -140,6 +142,8 @@ No `make` on Windows? Every command is just `python manage.py <thing>` — see t
 - **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)** — the relevance formula, written out
 - **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — how the AI phase plugs in later
 - **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — a ten-minute walkthrough for the defence
+- **[docs/APPLYING_UPDATES.md](docs/APPLYING_UPDATES.md)** — updating an existing checkout
+- **[docs/BUGFIX_LOG.md](docs/BUGFIX_LOG.md)** — every bug found and fixed, with the lesson
 
 ---
 

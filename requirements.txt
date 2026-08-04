@@ -1,28 +1,38 @@
 # UDM DocTrack — Python dependencies
 # Install with:  pip install -r requirements.txt
+#
+# Versions use RANGES, not exact pins. An exact pin (==) breaks the moment a
+# teammate's Python version has no matching wheel — that is exactly what
+# happened with psycopg==3.2.3 on Python 3.14. Ranges let pip pick a build that
+# works on each machine while still refusing an untested major version.
 
 # --- Core ------------------------------------------------------------------
-Django==5.0.9
-psycopg[binary]==3.2.3          # PostgreSQL driver
-python-dotenv==1.0.1            # reads the .env file
-whitenoise==6.7.0               # serves static files in production
+# Django 5.2 LTS: supports Python 3.10 through 3.14, so the whole team can run
+# it whatever Python they installed. Security updates until at least 2028.
+Django>=5.2.8,<6.0
+psycopg[binary]>=3.2.10,<3.4     # PostgreSQL driver
+python-dotenv>=1.0.1,<2.0        # reads the .env file
+whitenoise>=6.7.0,<7.0           # serves static files in production
 
 # --- Security --------------------------------------------------------------
-argon2-cffi==23.1.0             # password hashing (stronger than the default)
-django-axes==6.5.1              # locks accounts after repeated failed sign-ins
-django-csp==3.8                 # Content-Security-Policy headers
+argon2-cffi>=23.1.0,<26.0        # password hashing (stronger than the default)
+django-axes>=6.5.1,<7.0          # locks accounts after repeated failed sign-ins
+# Pinned below 4.0 deliberately: django-csp 4.x replaced every CSP_* setting
+# with a single CONTENT_SECURITY_POLICY dict. Upgrading without rewriting
+# config/settings.py would silently stop sending CSP headers.
+django-csp>=3.8,<4.0             # Content-Security-Policy headers
 
 # --- Background jobs (no Redis needed) -------------------------------------
-django-q2==1.7.2
+django-q2>=1.7.2,<2.0
 
 # --- Text extraction -------------------------------------------------------
-pypdf==5.0.1                    # text layer of digital PDFs
-python-docx==1.1.2              # .docx files
-openpyxl==3.1.5                 # .xlsx files
+pypdf>=5.0.1,<7.0                # text layer of digital PDFs
+python-docx>=1.1.2,<2.0          # .docx files
+openpyxl>=3.1.5,<4.0             # .xlsx files
 
 # --- File storage (only needed when STORAGE_BACKEND is not "local") --------
-django-storages[s3]==1.14.4     # Cloudflare R2 / any S3-compatible bucket
-# django-storages[azure]==1.14.4  # uncomment instead if you use Azure Blob
+django-storages[s3]>=1.14.4,<2.0 # Cloudflare R2 / any S3-compatible bucket
+# django-storages[azure]>=1.14.4,<2.0  # uncomment instead if you use Azure Blob
 
 # --- Production server -----------------------------------------------------
-gunicorn==23.0.0
+gunicorn>=23.0.0,<24.0

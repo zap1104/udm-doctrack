@@ -30,7 +30,7 @@ Point at the dashboard cards.
 
 Click **+ Create New DTS**.
 
-- Subject: `Request for repair of clinic air-conditioning unit`
+- Subject: `Request for repair of registrar air-conditioning unit`
 - Type: Work Order
 - Point at the locked origin office: *"This comes from my account. You cannot route a document as another office."*
 - Receiving offices: pick **SUP** and **MED**
@@ -99,7 +99,7 @@ Save it.
 
 ## 6. Search (2 minutes)
 
-Go to **Search**. Type `clinic supplies`.
+Go to **Search**. Type `electrical supplies`.
 
 > "Every result shows a relevance percentage and — this line here — *why* it matched. Matched in: Title, Tags."
 

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Documents · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 07</div>
+    <h1>Document management</h1>
+    <p class="sub">Completed records, historical uploads and smart filing. Active work stays in Tracking.</p>
+  </div>
+  <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload / scan</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-3">
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Smart folders</h2></div>
+      <div class="card-udm-body">
+        <a class="smart-folder {% if not selected_office %}active{% endif %}" href="{% url 'documents:repository' %}">
+          <span>All documents</span><span class="count">{{ all_count }}</span>
+        </a>
+        {% for folder in smart_folders %}
+          <a class="smart-folder {% if selected_office.code == folder.office__code %}active{% endif %}"
+             href="?office={{ folder.office__code }}">
+            <span>{{ folder.office__name|truncatechars:22 }}</span><span class="count">{{ folder.total }}</span>
+          </a>
+        {% endfor %}
+        <p class="form-text mt-3 mb-0">
+          Folders are views over metadata (office · type · year). One file, many folders — nothing is duplicated on disk.
+        </p>
+      </div>
+    </div>
+
+    <div class="card-udm mt-4">
+      <div class="card-udm-head"><h2>Popular tags</h2></div>
+      <div class="card-udm-body">
+        {% for tag in popular_tags %}
+          <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }} <span class="text-muted">{{ tag.usage_count }}</span></a>
+        {% empty %}
+          <p class="text-muted mb-0" style="font-size:13.5px;">Tags appear here once documents are filed.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    <div class="card-udm mb-3"><div class="card-udm-body">
+      <form method="get" class="row g-2 align-items-center">
+        {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.code }}">{% endif %}
+        <div class="col-md-5">{{ form.q }}</div>
+        <div class="col-4 col-md-2">{{ form.year }}</div>
+        <div class="col-4 col-md-2">{{ form.document_type }}</div>
+        <div class="col-4 col-md-2">{{ form.tag }}</div>
+        <div class="col-12 col-md-1 d-grid"><button class="btn btn-udm-outline" type="submit">Filter</button></div>
+      </form>
+    </div></div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="text-muted" style="font-size:13.5px;">
+        {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
+      </span>
+      <a class="small" href="{% url 'search:index' %}">Need relevance ranking? Use Search →</a>
+    </div>
+
+    <div class="row g-3">
+      {% for document in documents %}
+        <div class="col-md-6 col-xl-4">
+          <a class="doc-tile" href="{{ document.get_absolute_url }}">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="pill pill-muted">{{ document.document_type.name|default:"Unclassified"|truncatechars:18 }}</span>
+              <span class="pill {% if document.source == 'DTS' %}pill-completed{% else %}pill-draft{% endif %}">
+                {% if document.source == 'DTS' %}Archived{% else %}Imported{% endif %}
+              </span>
+            </div>
+            <h3>{{ document.title|truncatechars:64 }}</h3>
+            <div class="meta">
+              {{ document.office.code }} · {{ document.document_date|date:"d M Y"|default:document.created_at|date:"d M Y" }}
+              {% if document.reference_number %}<br><span class="mono">{{ document.reference_number }}</span>{% endif %}
+            </div>
+            <div>
+              {% for tag in document.tags.all|slice:":3" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
+            </div>
+            {% if not document.has_text %}
+              <div class="text-muted" style="font-size:12px;">No extracted text — searchable by metadata only</div>
+            {% endif %}
+          </a>
+        </div>
+      {% empty %}
+        <div class="col-12">
+          <div class="card-udm"><div class="card-udm-body empty-state">
+            <h3>Nothing filed here yet</h3>
+            <p>Complete a tracking record, or upload a historical document to start the archive.</p>
+            <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload / scan a document</a>
+          </div></div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% include "partials/_pagination.html" %}
+  </div>
+</div>
+{% endblock %}

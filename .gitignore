@@ -22,6 +22,10 @@ staticfiles/
 /static/vendor/*.map
 
 # --- Uploaded documents (real records must never reach GitHub) ---------
+# MEDIA_ROOT already resolves to media/ (see line above), which covers every
+# uploaded file. Do NOT add a bare "documents/" pattern here — it silently
+# matches apps/documents/ too (git treats unanchored names as "any depth"),
+# which once deleted the entire Documents app from every commit.
 uploads/
 training_data*.jsonl
 

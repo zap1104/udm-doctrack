@@ -13,7 +13,7 @@ from apps.tracking.services import confirm_receipt, create_draft_record, route_r
 @pytest.fixture
 def routed_record(users, offices, memo_type):
     record = create_draft_record(
-        user=users["med"], subject="Request for clinic supplies",
+        user=users["med"], subject="Request for electrical supplies",
         instructions="Please act within three days.", document_type=memo_type,
     )
     route_record(record, [offices["SUP"]], user=users["med"], instructions="For action.")

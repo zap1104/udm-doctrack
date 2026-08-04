@@ -64,6 +64,39 @@ class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
         return subject
 
 
+class ReviewRouteForm(BootstrapFormMixin, forms.Form):
+    """Step 2 of Create New DTS.
+
+    The receiving offices were chosen on step 1 and remembered in the session,
+    but a session can be lost (browser closed, cookies cleared, a draft opened
+    days later). Without this form the draft becomes impossible to route, so
+    step 2 always shows a real, editable field pre-filled with the earlier
+    choice rather than trusting the session blindly.
+    """
+
+    receiving_offices = forms.ModelMultipleChoiceField(
+        queryset=Office.active.all(),
+        label="Receiving office(s)",
+        help_text="The first office listed takes custody; the others receive a copy for action.",
+        widget=forms.SelectMultiple(
+            attrs={"size": 8, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
+        ),
+    )
+    due_days = forms.ChoiceField(choices=DUE_CHOICES, initial="3", label="Action deadline", required=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        if user is not None and user.office_id:
+            self.fields["receiving_offices"].queryset = Office.active.exclude(pk=user.office_id)
+
+    def clean_receiving_offices(self):
+        offices = self.cleaned_data["receiving_offices"]
+        if not offices:
+            raise forms.ValidationError("Choose at least one office to send this to.")
+        return offices
+
+
 class RouteForm(BootstrapFormMixin, forms.Form):
     """Forward or return a document that this office currently holds."""
 

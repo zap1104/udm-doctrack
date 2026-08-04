@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Edit metadata · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Documents</div>
+  <h1>Edit metadata</h1>
+  <p class="sub">{{ document.title }}</p>
+</div></div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="row g-4">
+    <div class="col-lg-8"><div class="card-udm"><div class="card-udm-body">
+      {% include "partials/_field.html" with field=form.title %}
+      {% include "partials/_field.html" with field=form.description %}
+      <div class="row">
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.office %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.document_type %}</div>
+        <div class="col-md-4">{% include "partials/_field.html" with field=form.document_date %}</div>
+        <div class="col-md-4">{% include "partials/_field.html" with field=form.year %}</div>
+        <div class="col-md-4">{% include "partials/_field.html" with field=form.reference_number %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.author_name %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.recipient_name %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.signatory %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.access_level %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.retention_until %}</div>
+      </div>
+      {% include "partials/_field.html" with field=form.tags %}
+
+      {% for definition, field in form.metadata_fields %}
+        {% include "partials/_field.html" with field=field %}
+      {% endfor %}
+
+      <button class="btn btn-udm" type="submit">Save and re-index</button>
+      <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">Cancel</a>
+    </div></div></div>
+
+    <div class="col-lg-4">
+      <div class="help-note">
+        Saving rebuilds this record's search index straight away, so corrections show up in Search immediately.
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

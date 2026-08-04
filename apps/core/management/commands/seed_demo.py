@@ -31,9 +31,8 @@ User = get_user_model()
 DEMO_PASSWORD = "DocTrack2026!"
 
 OFFICES = [
-    ("OVPA", "Office of the Vice President for Administration",
-     "OVPA", "Atty. R. Bautista"),
-    ("MED", "Medical and Dental Services", "OVPA", "Dr. L. Fernandez"),
+    ("OVPA", "Office of the Vice President for Administration", "OVPA", "Atty. R. Bautista"),
+    ("MED", "Mechanical and Engineering Department", "OVPA", "Engr. L. Fernandez"),
     ("SEC", "Security Services Office", "OVPA", "Mr. A. Dela Cruz"),
     ("SUP", "Supply and Property Management", "OVPA", "Ms. G. Ramos"),
     ("HR", "Human Resource Management Office", "OVPA", "Ms. C. Villanueva"),
@@ -56,71 +55,49 @@ DOCUMENT_TYPES = [
 ]
 
 TAGS = [
-    ("urgent", "priority"), ("for signature",
-                             "action"), ("for information", "action"),
+    ("urgent", "priority"), ("for signature", "action"), ("for information", "action"),
     ("budget", "subject"), ("maintenance", "subject"), ("personnel", "subject"),
-    ("procurement", "subject"), ("medical", "subject"), ("security", "subject"),
+    ("procurement", "subject"), ("engineering", "subject"), ("security", "subject"),
     ("training", "subject"), ("inventory", "subject"), ("payroll", "subject"),
     ("clearance", "subject"), ("incident report", "subject"), ("2026", "year"),
 ]
 
 TAG_RULES = [
-    ("Urgent wording", "urgent", "CONTAINS",
-     "FULL_TEXT", "urgent", None, 0.85, 10),
-    ("Signature request", "for signature", "CONTAINS",
-     "FULL_TEXT", "for signature", None, 0.9, 10),
-    ("Work order form", "maintenance", "CONTAINS",
-     "TITLE", "work order", "WO", 0.9, 20),
-    ("Purchase request", "procurement", "CONTAINS",
-     "FULL_TEXT", "purchase request", "PR", 0.88, 20),
-    ("Memorandum header", "for information", "CONTAINS",
-     "FIRST_PAGE", "memorandum", "MEMO", 0.8, 30),
-    ("Medical referral", "medical", "ANY_WORD", "FULL_TEXT",
-     "clinic infirmary medical dental", None, 0.75, 40),
-    ("Security incident", "incident report", "ALL_WORDS",
-     "FULL_TEXT", "incident report", "REPORT", 0.82, 40),
-    ("Training activity", "training", "ANY_WORD",
-     "FULL_TEXT", "seminar training workshop", None, 0.7, 50),
-    ("Payroll matter", "payroll", "ANY_WORD", "FULL_TEXT",
-     "payroll salary honorarium", None, 0.78, 50),
+    ("Urgent wording", "urgent", "CONTAINS", "FULL_TEXT", "urgent", None, 0.85, 10),
+    ("Signature request", "for signature", "CONTAINS", "FULL_TEXT", "for signature", None, 0.9, 10),
+    ("Work order form", "maintenance", "CONTAINS", "TITLE", "work order", "WO", 0.9, 20),
+    ("Purchase request", "procurement", "CONTAINS", "FULL_TEXT", "purchase request", "PR", 0.88, 20),
+    ("Memorandum header", "for information", "CONTAINS", "FIRST_PAGE", "memorandum", "MEMO", 0.8, 30),
+    ("Engineering works", "engineering", "ANY_WORD", "FULL_TEXT", "electrical mechanical plumbing aircon generator", None, 0.75, 40),
+    ("Security incident", "incident report", "ALL_WORDS", "FULL_TEXT", "incident report", "REPORT", 0.82, 40),
+    ("Training activity", "training", "ANY_WORD", "FULL_TEXT", "seminar training workshop", None, 0.7, 50),
+    ("Payroll matter", "payroll", "ANY_WORD", "FULL_TEXT", "payroll salary honorarium", None, 0.78, 50),
 ]
 
 METADATA_FIELDS = [
-    ("control_no", "Control number", "TEXT", "",
-     "Office's own reference, if different from the tracking number.", True, True, 10),
-    ("fund_source", "Fund source", "CHOICE", "General Fund,Trust Fund,Special Education Fund,STF",
-     "Needed for anything with a peso value.", True, False, 20),
-    ("amount", "Amount (PHP)", "NUMBER", "",
-     "Leave blank when the document has no monetary value.", True, False, 30),
-    ("period_covered", "Period covered", "TEXT", "",
-     "For reports and payroll, e.g. 'January–June 2026'.", True, False, 40),
-    ("physical_location", "Physical file location", "TEXT", "",
-     "Cabinet, drawer or box where the paper copy sits.", False, True, 50),
-    ("confidential", "Contains personal data", "BOOLEAN", "",
-     "Tick for anything covered by the Data Privacy Act.", False, True, 60),
+    ("control_no", "Control number", "TEXT", "", "Office's own reference, if different from the tracking number.", True, True, 10),
+    ("fund_source", "Fund source", "CHOICE", "General Fund,Trust Fund,Special Education Fund,STF", "Needed for anything with a peso value.", True, False, 20),
+    ("amount", "Amount (PHP)", "NUMBER", "", "Leave blank when the document has no monetary value.", True, False, 30),
+    ("period_covered", "Period covered", "TEXT", "", "For reports and payroll, e.g. 'January–June 2026'.", True, False, 40),
+    ("physical_location", "Physical file location", "TEXT", "", "Cabinet, drawer or box where the paper copy sits.", False, True, 50),
+    ("confidential", "Contains personal data", "BOOLEAN", "", "Tick for anything covered by the Data Privacy Act.", False, True, 60),
 ]
 
 USERS = [
-    ("admin", "System", "Administrator", "REC",
-     "ADMIN", "Records Officer IV", True),
-    ("records", "Maricel", "Lorenzo", "REC",
-     "SECRETARY", "Records Officer III", False),
-    ("ovpa.sec", "Angeline", "Reyes", "OVPA",
-     "SECRETARY", "Executive Assistant", False),
-    ("med.staff", "Liza", "Fernandez", "MED",
-     "USER", "University Physician", False),
-    ("hr.staff", "Carmela", "Villanueva", "HR",
-     "USER", "HR Management Officer II", False),
+    ("admin", "System", "Administrator", "REC", "ADMIN", "Records Officer IV", True),
+    ("records", "Maricel", "Lorenzo", "REC", "SECRETARY", "Records Officer III", False),
+    ("ovpa.sec", "Angeline", "Reyes", "OVPA", "SECRETARY", "Executive Assistant", False),
+    ("med.staff", "Liza", "Fernandez", "MED", "USER", "Engineer II", False),
+    ("hr.staff", "Carmela", "Villanueva", "HR", "USER", "HR Management Officer II", False),
     ("supply.staff", "Grace", "Ramos", "SUP", "USER", "Supply Officer II", False),
-    ("proc.staff", "Teresa", "Aquino", "PROC",
-     "USER", "Procurement Officer", False),
+    ("proc.staff", "Teresa", "Aquino", "PROC", "USER", "Procurement Officer", False),
     ("sec.staff", "Alberto", "Dela Cruz", "SEC", "USER", "Security Head", False),
     ("pay.staff", "Jomar", "Santos", "PAY", "USER", "Payroll Clerk", False),
     ("lnd.staff", "Paolo", "Mercado", "LND", "USER", "Training Specialist", False),
 ]
 
 SAMPLE_RECORDS = [
-    ("MED", ["SUP", "PROC"], "MEMO", "Request for replenishment of clinic medicines and supplies",
+    ("MED", ["SUP", "PROC"], "MEMO", "Request for replenishment of electrical and plumbing supplies",
      "Please act within three days. Attach the current inventory count.", "URGENT"),
     ("SEC", ["OVPA"], "REPORT", "Incident report — gate 2 CCTV outage, 28 July 2026",
      "For information and appropriate instruction.", "HIGH"),
@@ -130,7 +107,7 @@ SAMPLE_RECORDS = [
      "For canvass and approval. Fund source: General Fund.", "NORMAL"),
     ("LND", ["HR", "OVPA"], "NOTICE", "Notice of in-service training for administrative staff",
      "Please confirm the list of participants per office.", "NORMAL"),
-    ("SUP", ["MED"], "WO", "Work order — repair of air-conditioning unit at the clinic",
+    ("SUP", ["MED"], "WO", "Work order — repair of air-conditioning unit at the registrar office",
      "Scheduled inspection on Thursday. Coordinate with maintenance.", "HIGH"),
     ("PAY", ["OVPA"], "VOUCHER", "Disbursement voucher for honoraria of part-time lecturers",
      "For review and signature.", "NORMAL"),
@@ -148,9 +125,9 @@ ARCHIVE_DOCUMENTS = [
     ("PROC", "PR", "Purchase request — laboratory consumables 2025", 2025,
      "Consolidated request for the second semester of academic year 2025.",
      ["procurement", "budget"]),
-    ("MED", "REPORT", "Annual medical examination report 2025", 2025,
-     "Summary of the annual physical examination of employees.",
-     ["medical", "personnel"]),
+    ("MED", "REPORT", "Annual preventive maintenance report 2025", 2025,
+     "Summary of scheduled maintenance carried out on campus facilities.",
+     ["engineering", "maintenance"]),
     ("SEC", "REPORT", "Security incident log — first semester 2025", 2025,
      "Consolidated log of incidents recorded at all gates.",
      ["security", "incident report"]),
@@ -161,30 +138,54 @@ class Command(BaseCommand):
     help = "Create demo offices, users, master data and sample records."
 
     def add_arguments(self, parser):
-        parser.add_argument("--wipe", action="store_true",
-                            help="Delete existing records first (scratch DBs only).")
-        parser.add_argument("--password", default=DEMO_PASSWORD,
-                            help="Password for every demo account.")
+        parser.add_argument("--wipe", action="store_true", help="Delete existing records first (scratch DBs only).")
+        parser.add_argument("--password", default=DEMO_PASSWORD, help="Password for every demo account.")
 
-    @transaction.atomic
     def handle(self, *args, **options):
         password = options["password"]
 
         if options["wipe"]:
-            self.stdout.write(self.style.WARNING(
-                "Wiping tracking records and documents…"))
-            Document.objects.all().delete()
-            RoutingStep.objects.all().delete()
-            TrackingRecord.objects.all().delete()
+            self.stdout.write(self.style.WARNING("Wiping tracking records and documents…"))
+            with transaction.atomic():
+                Document.objects.all().delete()
+                RoutingStep.objects.all().delete()
+                TrackingRecord.objects.all().delete()
 
-        offices = self._offices()
-        types = self._document_types()
-        tags = self._tags()
-        self._tag_rules(tags, types, offices)
-        self._metadata_fields()
-        users = self._users(offices, password)
-        self._records(offices, types, users)
-        self._archive(offices, types, tags, users)
+        # Each phase commits on its own.
+        #
+        # This used to be one @transaction.atomic block wrapping everything,
+        # which meant a failure while building the *sample records* rolled back
+        # the *user accounts* created moments earlier — so the visible symptom
+        # was "login details not working", several steps away from the real
+        # cause. Accounts and master data must survive a later failure.
+        with transaction.atomic():
+            offices = self._offices()
+            types = self._document_types()
+            tags = self._tags()
+            self._tag_rules(tags, types, offices)
+            self._metadata_fields()
+
+        with transaction.atomic():
+            users = self._users(offices, password)
+
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS("Accounts and master data are saved — you can sign in now."))
+
+        # Sample records are demo garnish. If they fail, say so loudly but do
+        # not take the working accounts down with them.
+        try:
+            with transaction.atomic():
+                self._records(offices, types, users)
+            with transaction.atomic():
+                self._archive(offices, types, tags, users)
+        except Exception as exc:
+            self.stderr.write("")
+            self.stderr.write(self.style.ERROR(f"Sample records could not be created: {exc}"))
+            self.stderr.write(
+                "Your accounts and master data are fine — sign in and create a document by hand."
+            )
+            if options.get("traceback"):
+                raise
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
@@ -195,12 +196,9 @@ class Command(BaseCommand):
         self.stdout.write(f"  Regular user   : med.staff / {password}")
         self.stdout.write("")
         self.stdout.write("  Try this for the walkthrough:")
-        self.stdout.write(
-            "   1. Sign in as med.staff — one document is waiting for receipt.")
-        self.stdout.write(
-            "   2. Confirm receipt, add a remark, then forward it to SUP.")
-        self.stdout.write(
-            "   3. Sign in as admin and search for 'clinic supplies'.")
+        self.stdout.write("   1. Sign in as med.staff — one document is waiting for receipt.")
+        self.stdout.write("   2. Confirm receipt, add a remark, then forward it to SUP.")
+        self.stdout.write("   3. Sign in as admin and search for 'electrical supplies'.")
 
     # -- master data -------------------------------------------------------
     def _offices(self):
@@ -209,8 +207,7 @@ class Command(BaseCommand):
         for code, name, cluster, head in OFFICES:
             office, _ = Office.objects.update_or_create(
                 code=code,
-                defaults={"name": name, "cluster": cluster,
-                          "head_name": head, "is_active": True},
+                defaults={"name": name, "cluster": cluster, "head_name": head, "is_active": True},
             )
             offices[code] = office
             if code == "OVPA":
@@ -340,8 +337,7 @@ class Command(BaseCommand):
             )
 
             # Backdate so the dashboard is not a wall of "just now".
-            age = timedelta(days=len(SAMPLE_RECORDS) - index,
-                            hours=random.randint(1, 6))
+            age = timedelta(days=len(SAMPLE_RECORDS) - index, hours=random.randint(1, 6))
             TrackingRecord.objects.filter(pk=record.pk).update(
                 created_at=now - age, last_movement_at=now - age
             )
@@ -352,24 +348,20 @@ class Command(BaseCommand):
                 step = record.routing_steps.order_by("sequence").first()
                 receiver = by_office.get(step.to_office.code) if step else None
                 if receiver:
-                    tracking_services.confirm_receipt(
-                        record, user=receiver, note="Received at the office.")
+                    tracking_services.confirm_receipt(record, user=receiver, note="Received at the office.")
                     if index % 3 == 2:
                         tracking_services.add_remark(
                             record, user=receiver, remark="Noted and endorsed to the concerned staff."
                         )
                     if index >= 6:
-                        tracking_services.complete_record(
-                            record, user=receiver, note="Action completed and filed.")
+                        tracking_services.complete_record(record, user=receiver, note="Action completed and filed.")
                         archive_tracking_record(record, user=receiver)
             created += 1
 
         # One deliberately overdue item so the red card on the dashboard is real.
-        overdue = TrackingRecord.objects.filter(
-            status="IN_TRANSIT").order_by("created_at").first()
+        overdue = TrackingRecord.objects.filter(status="IN_TRANSIT").order_by("created_at").first()
         if overdue:
-            TrackingRecord.objects.filter(pk=overdue.pk).update(
-                due_at=now - timedelta(days=2))
+            TrackingRecord.objects.filter(pk=overdue.pk).update(due_at=now - timedelta(days=2))
 
         self.stdout.write(f"Tracking records: {created}")
 
@@ -389,8 +381,7 @@ class Command(BaseCommand):
                 ocr_status="SKIPPED",
                 ocr_text=f"{title}. {description}",
             )
-            document.tags.set([tags[name]
-                              for name in tag_names if name in tags])
+            document.tags.set([tags[name] for name in tag_names if name in tags])
             document.rebuild_index()
             created += 1
         self.stdout.write(f"Archived documents: {created}")

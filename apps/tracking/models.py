@@ -102,6 +102,15 @@ class TrackingRecordQuerySet(models.QuerySet):
         )
 
 
+class TrackingRecordManager(models.Manager.from_queryset(TrackingRecordQuerySet)):
+    """Named at module level so Django's makemigrations can import it by dotted
+    path (apps.tracking.models.TrackingRecordManager). An inline
+    `models.Manager.from_queryset(TrackingRecordQuerySet)()` has no importable
+    name and fails migration serialization with:
+        ValueError: Could not find manager ManagerFromTrackingRecordQuerySet
+    """
+
+
 class TrackingRecord(TimeStampedModel):
     """One document moving through the offices."""
 
@@ -156,7 +165,7 @@ class TrackingRecord(TimeStampedModel):
     is_archived = models.BooleanField(default=False, db_index=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 
-    objects = models.Manager.from_queryset(TrackingRecordQuerySet)()
+    objects = TrackingRecordManager()
 
     class Meta:
         ordering = ["-last_movement_at", "-created_at"]

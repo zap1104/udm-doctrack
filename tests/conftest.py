@@ -16,7 +16,7 @@ def offices(db):
     return {
         code: Office.objects.create(code=code, name=name, cluster="OVPA")
         for code, name in [
-            ("MED", "Medical and Dental Services"),
+            ("MED", "Mechanical and Engineering Department"),
             ("SUP", "Supply and Property Management"),
             ("HR", "Human Resource Management Office"),
             ("REC", "Records Management Office"),
@@ -50,4 +50,5 @@ def memo_type(db):
 
 @pytest.fixture
 def tag_urgent(db):
-    return Tag.get_or_create_by_name("urgent", category="priority")
+    tag, _created = Tag.get_or_create_by_name("urgent", category="priority")
+    return tag

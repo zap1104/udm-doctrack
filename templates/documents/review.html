@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}Review extracted details · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Screen 08 · step 2</div>
+    <h1>Review extracted document details</h1>
+    <div class="step-indicator mt-2">
+      <span class="step"><span class="num">1</span> Choose the file</span>
+      <span>›</span>
+      <span class="step active"><span class="num">2</span> Review extracted details</span>
+    </div>
+  </div>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card-udm">
+        <div class="card-udm-head">
+          <h2>What the system read</h2>
+          <span class="pill {% if document.ocr_status == 'DONE' %}pill-received{% else %}pill-draft{% endif %}">
+            {{ document.get_ocr_status_display }}
+          </span>
+        </div>
+        <div class="card-udm-body">
+          <div class="text-muted mb-2" style="font-size:12.5px;">
+            Engine: {{ document.ocr_engine|default:"none" }}
+            {% if document.page_count %}· {{ document.page_count }} page{{ document.page_count|pluralize }}{% endif %}
+            · {{ text_preview|length }} characters shown
+          </div>
+          <div class="text-preview">{{ text_preview|default:"No text could be read from this file. Fill in the details by hand — the record is still fully searchable by metadata and tags." }}</div>
+          {% if suggestion.notes %}
+            <ul class="form-text mt-2 mb-0 ps-3">
+              {% for note in suggestion.notes %}<li>{{ note }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card-udm">
+        <div class="card-udm-head"><h2>Suggested details — edit anything</h2></div>
+        <div class="card-udm-body">
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.title.id_for_label }}">
+              Suggested title <span class="required-mark">*</span>
+              {% with confidence|dict_get:"title" as score %}
+                {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
+              {% endwith %}
+            </label>
+            {{ form.title }}
+            {% for error in form.title.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+          </div>
+
+          {% include "partials/_field.html" with field=form.description %}
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.document_type.id_for_label }}">
+                  Document type
+                  {% with confidence|dict_get:"document_type" as score %}
+                    {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
+                  {% endwith %}
+                </label>
+                {{ form.document_type }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.office.id_for_label }}">
+                  Originating office
+                  {% with confidence|dict_get:"office" as score %}
+                    {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
+                  {% endwith %}
+                </label>
+                {{ form.office }}
+              </div>
+            </div>
+            <div class="col-md-4">{% include "partials/_field.html" with field=form.document_date %}</div>
+            <div class="col-md-4">{% include "partials/_field.html" with field=form.year %}</div>
+            <div class="col-md-4">{% include "partials/_field.html" with field=form.reference_number %}</div>
+            <div class="col-md-6">{% include "partials/_field.html" with field=form.author_name %}</div>
+            <div class="col-md-6">{% include "partials/_field.html" with field=form.recipient_name %}</div>
+            <div class="col-md-6">{% include "partials/_field.html" with field=form.signatory %}</div>
+            <div class="col-md-6">{% include "partials/_field.html" with field=form.access_level %}</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.tags.id_for_label }}">Suggested tags</label>
+            {{ form.tags }}
+            <div class="form-text">{{ form.tags.help_text }}</div>
+            <datalist id="tag-options">
+              {% for tag in all_tags %}<option value="{{ tag.name }}"></option>{% endfor %}
+            </datalist>
+            <div class="mt-2">
+              {% for tag in suggestion.tags %}
+                <button type="button" class="tag-chip suggested js-add-tag" data-tag="{{ tag }}">+ {{ tag }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          {% if form.metadata_fields %}
+            <hr>
+            <h3 style="font-size:15px;">Office metadata fields</h3>
+            <p class="form-text mb-3">Administrators define these fields. Filling them makes search far more precise.</p>
+            <div class="row">
+              {% for definition, field in form.metadata_fields %}
+                <div class="col-md-6">{% include "partials/_field.html" with field=field %}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="help-note mb-3">
+            Recommendations come from the extracted text and configured rules — they are proposals, not facts.
+            Review before saving; what you keep is stored as a training example for the future AI engine.
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-udm" type="submit">Save to repository</button>
+            <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Back</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Suggested-tag chips append to the comma separated tag box.
+  document.querySelectorAll('.js-add-tag').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var box = document.getElementById('{{ form.tags.id_for_label }}');
+      if (!box) return;
+      var existing = box.value.split(',').map(function (item) { return item.trim().toLowerCase(); }).filter(Boolean);
+      var value = chip.dataset.tag.toLowerCase();
+      if (existing.indexOf(value) === -1) {
+        existing.push(value);
+        box.value = existing.join(', ');
+      }
+      chip.classList.add('d-none');
+    });
+  });
+</script>
+{% endblock %}

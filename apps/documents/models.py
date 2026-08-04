@@ -75,6 +75,13 @@ class DocumentQuerySet(models.QuerySet):
         )
 
 
+class DocumentManager(models.Manager.from_queryset(DocumentQuerySet)):
+    """Named at module level so Django's makemigrations can import it by dotted
+    path (apps.documents.models.DocumentManager). See TrackingRecordManager in
+    apps/tracking/models.py for why the inline form fails.
+    """
+
+
 class Document(TimeStampedModel):
     """One archived or imported document with rich, searchable metadata."""
 
@@ -129,7 +136,7 @@ class Document(TimeStampedModel):
     )
     is_active = models.BooleanField(default=True)
 
-    objects = models.Manager.from_queryset(DocumentQuerySet)()
+    objects = DocumentManager()
 
     class Meta:
         ordering = ["-document_date", "-created_at"]

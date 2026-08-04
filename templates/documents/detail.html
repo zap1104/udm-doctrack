@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}{{ document.title }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Archived record</div>
+    <h1>{{ document.title }}</h1>
+    <p class="sub">
+      {{ document.office.name }} · {{ document.document_type.name|default:"Unclassified" }}
+      · {{ document.document_date|date:"d M Y"|default:document.created_at|date:"d M Y" }}
+      {% if document.reference_number %}· <span class="mono">{{ document.reference_number }}</span>{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit metadata</a>{% endif %}
+    {% if document.primary_file %}
+      <a class="btn btn-udm" href="{% url 'documents:file_download' document.primary_file.pk %}">Download</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Metadata</h2>
+        <span class="pill pill-muted">{{ document.get_access_level_display }}</span>
+      </div>
+      <div class="card-udm-body">
+        <div class="row">
+          <div class="col-md-6"><table class="table table-sm">
+            <tr><th class="text-muted fw-normal">Owning office</th><td>{{ document.office.name }}</td></tr>
+            <tr><th class="text-muted fw-normal">Document type</th><td>{{ document.document_type.name|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">Document date</th><td>{{ document.document_date|date:"d M Y"|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">Year</th><td>{{ document.year }}</td></tr>
+          </table></div>
+          <div class="col-md-6"><table class="table table-sm">
+            <tr><th class="text-muted fw-normal">From / author</th><td>{{ document.author_name|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">To / recipient</th><td>{{ document.recipient_name|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">Signatory</th><td>{{ document.signatory|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">Filed by</th><td>{{ document.uploaded_by.display_name|default:"—" }}</td></tr>
+          </table></div>
+        </div>
+
+        {% if metadata_values %}
+          <h3 style="font-size:15px;margin-top:6px;">Office fields</h3>
+          <table class="table table-sm">
+            {% for value in metadata_values %}
+              <tr><th class="text-muted fw-normal" style="width:220px;">{{ value.field.label }}</th><td>{{ value.value }}</td></tr>
+            {% endfor %}
+          </table>
+        {% endif %}
+
+        <h3 style="font-size:15px;">Tags</h3>
+        <div>
+          {% for tag in document.tags.all %}
+            <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }}</a>
+          {% empty %}
+            <span class="text-muted">No tags yet — add some so this record is easy to find.</span>
+          {% endfor %}
+        </div>
+
+        {% if document.description %}
+          <h3 style="font-size:15px;margin-top:16px;">Abstract</h3>
+          <p style="font-size:14.5px;">{{ document.description|linebreaksbr }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card-udm mt-4">
+      <div class="card-udm-head">
+        <h2>Extracted text</h2>
+        <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}</span>
+      </div>
+      <div class="card-udm-body">
+        {% if document.has_text %}
+          <div class="text-preview">{{ document.ocr_text|truncatechars:6000 }}</div>
+        {% else %}
+          <p class="text-muted mb-2">No text was extracted, so this record is searchable by metadata and tags only.</p>
+        {% endif %}
+        {% if can_edit %}
+          <form method="post" action="{% url 'documents:re_extract' document.pk %}" class="mt-2">{% csrf_token %}
+            <button class="btn btn-udm-outline btn-sm" type="submit">Run text extraction again</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Files</h2></div>
+      <div class="card-udm-body">
+        {% for file in files %}
+          <div class="file-chip mb-2">
+            <span class="ext">{{ file.extension|default:"FILE" }}</span>
+            <div class="flex-grow-1" style="min-width:0;">
+              <a href="{% url 'documents:file_download' file.pk %}" style="font-size:14px;">{{ file.original_name }}</a>
+              <div class="text-muted" style="font-size:12px;">{{ file.size|human_size }}{% if file.page_count %} · {{ file.page_count }} page{{ file.page_count|pluralize }}{% endif %}</div>
+            </div>
+          </div>
+        {% empty %}<p class="text-muted mb-0">No files attached.</p>{% endfor %}
+
+        {% if can_edit %}
+          <form method="post" action="{% url 'documents:add_files' document.pk %}" enctype="multipart/form-data" class="mt-3">
+            {% csrf_token %}
+            {{ add_files_form.files }}
+            <button class="btn btn-udm-outline btn-sm mt-2" type="submit">Add files</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if document.tracking_record %}
+      <div class="card-udm mt-4">
+        <div class="card-udm-head"><h2>Origin</h2></div>
+        <div class="card-udm-body">
+          <p style="font-size:14px;">Archived from tracking record</p>
+          <a class="mono" href="{{ document.tracking_record.get_absolute_url }}">{{ document.tracking_record.tracking_number }}</a>
+          <div class="text-muted" style="font-size:12.5px;">
+            Completed {{ document.tracking_record.completed_at|date:"d M Y, g:i A" }}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if suggestion %}
+      <div class="card-udm mt-4">
+        <div class="card-udm-head"><h2>Suggestion audit</h2></div>
+        <div class="card-udm-body" style="font-size:13.5px;">
+          <div>Engine: <strong>{{ suggestion.engine }} v{{ suggestion.engine_version }}</strong></div>
+          <div>Reviewed by: {{ suggestion.reviewed_by.display_name|default:"not reviewed yet" }}</div>
+          <div>Edited by the user: {{ suggestion.was_edited|yesno:"yes,no" }}</div>
+          <p class="form-text mb-0 mt-2">Kept as a labelled example for training the metadata model later.</p>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if related %}
+      <div class="card-udm mt-4">
+        <div class="card-udm-head"><h2>Same office</h2></div>
+        <div class="card-udm-body">
+          {% for item in related %}
+            <div class="py-1"><a href="{{ item.get_absolute_url }}">{{ item.title|truncatechars:44 }}</a></div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

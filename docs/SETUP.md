@@ -87,24 +87,34 @@ The owner line matters: it lets the app enable the search extensions itself in s
 **macOS / Linux**
 
 ```bash
-bash scripts/setup.sh
+bash scripts/start.sh
 ```
 
 **Windows PowerShell**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 
-The script does seven things:
+This is a *guided* script: it checks each prerequisite, tells you plainly what
+is missing, and stops rather than carrying on and leaving you with a half-built
+system. It asks before changing anything, and it is safe to run repeatedly.
 
-1. Creates a virtual environment in `.venv` (a private Python just for this project)
-2. Installs the dependencies
-3. Copies `.env.example` to `.env` and generates a fresh secret key
-4. Creates the database tables
-5. Enables the `pg_trgm` and `unaccent` search extensions
-6. Loads demo offices, users and sample documents
-7. Collects the static files
+It does nine things:
+
+1. Checks Python, PostgreSQL, whether the database server is actually *running*, and Git
+2. Creates a virtual environment in `.venv` (a private Python just for this project)
+3. Installs the dependencies
+4. Copies `.env.example` to `.env` and generates a fresh secret key
+5. **Tests the database connection**, and offers to create the database and user if it fails
+6. Creates the database tables
+7. Enables the `pg_trgm` and `unaccent` search extensions
+8. Loads demo data, then *verifies the admin account actually works*
+9. Collects static files, runs Django's system check, clears any login lockouts
+
+Step 5 is the important one. The older `setup.sh` / `setup.ps1` scripts run the
+same steps without checking, so if PostgreSQL was not running they would appear
+to succeed while leaving the database empty.
 
 If your database password is not `udmpass`, open `.env` and fix `POSTGRES_PASSWORD` before running the script again.
 

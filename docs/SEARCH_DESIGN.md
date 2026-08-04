@@ -92,7 +92,7 @@ SEARCH_RANK_SATURATION_K=0.06
 
 They must sum to 1.0.
 
-**Worked example.** Searching `preventive maintenance` against *"Preventive maintenance of clinic equipment"* (tagged `maintenance`, MED office):
+**Worked example.** Searching `preventive maintenance` against *"Preventive maintenance of campus equipment"* (tagged `maintenance`, MED — Mechanical & Engineering):
 
 ```
 text  = 0.34 / (0.34 + 0.06) = 0.85    →  0.55 × 0.85 = 0.4675

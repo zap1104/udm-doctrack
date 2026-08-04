@@ -102,6 +102,7 @@ class Suggestion:
             "tags": self.tags,
             "metadata": self.metadata,
             "confidence": self.confidence,
+            "notes": self.notes,
             "engine": self.engine,
             "engine_version": self.engine_version,
         }
