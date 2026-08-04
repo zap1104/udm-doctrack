@@ -5,7 +5,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from django.views.generic import TemplateView, View
 
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin

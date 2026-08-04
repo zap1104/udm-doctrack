@@ -435,11 +435,11 @@ class RecordAccessGrant(models.Model):
         verbose_name = "record access grant"
         unique_together = ("record", "office", "user")
 
+    def __str__(self) -> str:
+        return f"{self.record_id} → {self.office or self.user}"
+
     def clean(self):
         from django.core.exceptions import ValidationError
 
         if self.office_id is None and self.user_id is None:
             raise ValidationError("Choose an office or a user to grant access to.")
-
-    def __str__(self) -> str:
-        return f"{self.record_id} → {self.office or self.user}"

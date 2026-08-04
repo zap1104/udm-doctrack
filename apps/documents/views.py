@@ -15,7 +15,7 @@ from apps.core.utils import log_action
 
 from . import services
 from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
-from .models import Document, DocumentFile, Source
+from .models import Document, DocumentFile
 from .suggestions import Suggestion
 
 PAGE_SIZE = 24

@@ -21,8 +21,8 @@ from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 from .models import (
     ACTIVE_STATUSES,
     Attachment,
-    RecordActivity,
     RecordAccessGrant,
+    RecordActivity,
     RoutingStep,
     Status,
     TrackingNumberSequence,
