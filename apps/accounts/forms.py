@@ -11,12 +11,14 @@ from .models import Office, User
 class SignInForm(BootstrapFormMixin, AuthenticationForm):
     username = forms.CharField(
         label="Username",
-        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Enter username", "autocomplete": "username"}),
+        widget=forms.TextInput(attrs={
+                               "autofocus": True, "placeholder": "Enter username", "autocomplete": "username"}),
     )
     password = forms.CharField(
         label="Password",
         strip=False,
-        widget=forms.PasswordInput(attrs={"placeholder": "••••••••••••", "autocomplete": "current-password"}),
+        widget=forms.PasswordInput(
+            attrs={"placeholder": "Enter password", "autocomplete": "current-password"}),
     )
 
     error_messages = {
@@ -34,7 +36,8 @@ class AdminUserCreateForm(BootstrapFormMixin, UserCreationForm):
 
     class Meta:
         model = User
-        fields = ("username", "first_name", "last_name", "email", "office", "role", "position", "phone")
+        fields = ("username", "first_name", "last_name",
+                  "email", "office", "role", "position", "phone")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,7 +50,8 @@ class AdminUserCreateForm(BootstrapFormMixin, UserCreationForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.must_change_password = self.cleaned_data.get("must_change_password", True)
+        user.must_change_password = self.cleaned_data.get(
+            "must_change_password", True)
         if commit:
             user.save()
         return user
@@ -77,7 +81,8 @@ class OfficeForm(BootstrapFormMixin, forms.ModelForm):
             "code", "name", "short_name", "cluster", "parent", "head_name", "email", "location",
             "sort_order", "is_active",
         )
-        help_texts = {"code": "Appears inside every tracking number, so keep it short and stable."}
+        help_texts = {
+            "code": "Appears inside every tracking number, so keep it short and stable."}
 
     def clean_code(self):
         return self.cleaned_data["code"].strip().upper()
