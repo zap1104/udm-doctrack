@@ -170,20 +170,22 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
         )
 
     record.current_batch = batch
-    record.current_office = offices[0]
-    record.current_holder = None
     record.due_at = due_at
     record.last_movement_at = timezone.now()
-    record.status = {
-        RoutingStep.Action.FORWARD: Status.FORWARDED,
-        RoutingStep.Action.RETURN: Status.RETURNED,
-    }.get(action, Status.IN_TRANSIT)
-    record.save(
-        update_fields=[
-            "current_batch", "current_office", "current_holder", "due_at",
-            "last_movement_at", "status", "updated_at",
-        ]
-    )
+    if record.status == Status.DRAFT:
+        # recalculate_status() deliberately does nothing for DRAFT/COMPLETED
+        # records (see its docstring) so that calling it elsewhere can never
+        # accidentally pull a draft out of editing. That guard would also
+        # skip the very first routing of a record — which is exactly the
+        # transition out of DRAFT we need it to compute — so it is cleared
+        # here first. The value is a placeholder; recalculate_status()
+        # immediately below computes the real one from the routing steps.
+        record.status = Status.IN_TRANSIT
+    record.save(update_fields=["current_batch", "due_at", "last_movement_at", "status", "updated_at"])
+    # recalculate_status() is the single source of truth for status,
+    # current_office and current_holder — computing them again here
+    # previously duplicated that logic and had drifted out of sync with it.
+    record.recalculate_status()
 
     office_labels = ", ".join(office.code for office in offices)
     verb = {"SEND": "Routed", "FORWARD": "Forwarded", "RETURN": "Returned"}[action]

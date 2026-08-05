@@ -268,7 +268,13 @@ class TrackingRecord(TimeStampedModel):
                     RoutingStep.Action.FORWARD: Status.FORWARDED,
                     RoutingStep.Action.RETURN: Status.RETURNED,
                 }.get(action, Status.IN_TRANSIT)
-                self.current_office = steps[0].to_office
+                # Nothing has been received in this batch yet, so the document
+                # has not actually left where it last had confirmed custody —
+                # `from_office` (the originating office on a first send, or the
+                # office that forwarded it). Showing `to_office` here would
+                # display the destination before anyone confirmed receiving it,
+                # contradicting "sent is not received" the moment it's sent.
+                self.current_office = steps[0].from_office
                 self.current_holder = None
             else:
                 latest = max(received, key=lambda step: step.received_at)

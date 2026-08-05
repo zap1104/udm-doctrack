@@ -224,14 +224,12 @@ def search_documents(
 
     results.sort(key=lambda item: (-item.relevance, -(item.document.document_date.toordinal() if item.document.document_date else 0)))
     total = len(results)
-    visible = [item for item in results if item.relevance >= min_relevance]
-    hidden = total - len(visible)
-    if show_below_threshold or not visible:
-        visible = results
+    visible = results if show_below_threshold else [item for item in results if item.relevance >= min_relevance]
+    hidden = 0 if show_below_threshold else total - len(visible)
 
     response = SearchResponse(
         results=visible[:limit],
-        hidden_count=hidden if not show_below_threshold else 0,
+        hidden_count=hidden,
         total_matches=total,
         query=raw_query,
         used_fuzzy=use_fuzzy,

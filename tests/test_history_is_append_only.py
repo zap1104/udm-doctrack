@@ -41,6 +41,10 @@ def test_remarks_accumulate_rather_than_replace(users, offices, memo_type):
     add_remark(record, user=users["sup"], remark="Scheduled for inspection.")
     add_remark(record, user=users["sup"], remark="Inspection done, awaiting parts.")
 
-    messages = list(record.activities.order_by("created_at").values_list("message", flat=True))
-    assert any("Scheduled for inspection" in message for message in messages)
-    assert any("awaiting parts" in message for message in messages)
+    activities = list(record.activities.order_by("created_at").values_list("message", "detail"))
+    # add_remark() stores a short summary in `message` and the actual remark
+    # text in `detail` — the timeline template renders them as separate lines
+    # (see templates/tracking/detail.html), so the test checks the same field.
+    details = [detail for _message, detail in activities]
+    assert any("Scheduled for inspection" in detail for detail in details)
+    assert any("awaiting parts" in detail for detail in details)
