@@ -36,6 +36,9 @@ htmlcov/
 .ruff_cache/
 .mypy_cache/
 
+# --- Claude Code ---------------------------------------------------------
+CLAUDE.md
+
 # --- Editors and OS ----------------------------------------------------
 .vscode/
 .idea/
