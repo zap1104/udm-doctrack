@@ -13,7 +13,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import override_settings
+from django.test import Client, override_settings
 from django.utils import timezone
 
 from apps.accounts.axes_hooks import (
@@ -28,6 +28,27 @@ from apps.accounts.models import LoginLockout
 User = get_user_model()
 
 USERNAME = LoginLockout.Kind.USERNAME
+
+
+class HttpsClient(Client):
+    """Test client that always speaks HTTPS.
+
+    CI runs with ``DJANGO_DEBUG=False``, which switches on
+    ``SECURE_SSL_REDIRECT``: over plain http every request is answered with a
+    301 and never reaches the view, and ``SESSION_COOKIE_SECURE`` would stop
+    the session cookie coming back besides. The deployed app is served over
+    HTTPS, so driving it this way is also the faithful thing to do.
+    """
+
+    def generic(self, method, path, *args, **kwargs):
+        kwargs["secure"] = True
+        return super().generic(method, path, *args, **kwargs)
+
+
+@pytest.fixture
+def client():
+    """Replaces pytest-django's client with the HTTPS one above."""
+    return HttpsClient()
 
 
 @override_settings(AXES_COOLOFF_BASE_MINUTES=15, AXES_COOLOFF_MAX_MINUTES=24 * 60)
@@ -128,8 +149,6 @@ def test_locked_out_user_is_redirected_to_a_reloadable_page_with_a_countdown(cli
 @override_settings(AXES_FAILURE_LIMIT=3, AXES_COOLOFF_BASE_MINUTES=15)
 def test_retrying_while_locked_does_not_push_the_deadline_back(client, db):
     """The reported bug: any retry made the countdown jump back up to full."""
-    from django.test import Client
-
     User.objects.create_user(username="mallory", password="RealPass123!")
     ip = "198.51.100.10"
 
@@ -148,7 +167,7 @@ def test_retrying_while_locked_does_not_push_the_deadline_back(client, db):
     assert after_correct <= first, "a correct-password retry while locked pushed the deadline out"
 
     # Same username, checked from a different computer entirely.
-    other_device = Client()
+    other_device = HttpsClient()
     other_device.post("/accounts/login/", {"username": "mallory", "password": "nope"}, REMOTE_ADDR="203.0.113.9")
     from_elsewhere = int(
         other_device.get("/accounts/locked/", REMOTE_ADDR="203.0.113.9").context["cooloff_seconds_remaining"]
