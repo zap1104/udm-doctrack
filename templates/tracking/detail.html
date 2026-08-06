@@ -5,7 +5,7 @@
 
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 05</div>
+    <div class="eyebrow">Tracking Record</div>
     <h1>{{ record.subject }}</h1>
     <p class="sub">
       <span class="mono">{{ record.tracking_number }}</span>
@@ -29,12 +29,12 @@
         <table class="table table-sm mb-0">
           <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.code }}</td></tr>
           <tr><th class="text-muted fw-normal">Current office</th><td>{{ record.current_office.code|default:"—" }}</td></tr>
-          <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Awaiting receipt" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Pending Receipt" }}</td></tr>
           <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
           <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
           <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>
           <tr><th class="text-muted fw-normal">Deadline</th>
-              <td>{% if record.due_at %}{{ record.due_at|date:"d M Y, g:i A" }}{% if record.is_overdue %} <span class="pill pill-overdue">Overdue</span>{% endif %}{% else %}None{% endif %}</td></tr>
+              <td>{% if record.due_at %}{{ record.due_at|date:"d M Y" }}{% if record.is_overdue %} <span class="pill pill-overdue">Overdue</span>{% endif %}{% else %}None{% endif %}</td></tr>
           <tr><th class="text-muted fw-normal">Attachments</th><td>{{ attachments|length }} file{{ attachments|length|pluralize }}</td></tr>
         </table>
       </div>
@@ -126,7 +126,7 @@
 
     {% if can_confirm %}
       <div class="card-udm mt-4 no-print">
-        <div class="card-udm-head"><h2>Confirm document receipt</h2></div>
+        <div class="card-udm-head"><h2>Confirm Document Receipt</h2></div>
         <div class="card-udm-body">
           <p class="text-muted" style="font-size:14px;">
             This records that <strong>{{ user.office.name }}</strong> has taken custody of
@@ -136,7 +136,7 @@
           <form method="post" action="{% url 'tracking:confirm_receipt' record.pk %}">
             {% csrf_token %}
             {% include "partials/_field.html" with field=receipt_form.note %}
-            <button class="btn btn-udm-gold" type="submit">Confirm receipt</button>
+            <button class="btn btn-udm-gold" type="submit">Confirm Receipt</button>
           </form>
         </div>
       </div>
@@ -167,17 +167,36 @@
               <form method="post" action="{% url 'tracking:route' record.pk %}" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="mb-3">
-                  <label class="form-label">Action</label>
+                  <label class="form-label">Requested Action</label>
                   {% for radio in route_form.action %}
                     <div class="form-check">{{ radio.tag }} <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>
                   {% endfor %}
                 </div>
                 {% include "partials/_field.html" with field=route_form.offices %}
-                {% include "partials/_field.html" with field=route_form.instructions %}
-                {% include "partials/_field.html" with field=route_form.due_days %}
-                {% include "partials/_field.html" with field=route_form.remark %}
+                <div
+                  class="mb-3 phase2-combined-notes"
+                  data-combined-notes
+                  data-instructions-id="{{ route_form.instructions.id_for_label }}"
+                  data-remarks-id="{{ route_form.remark.id_for_label }}"
+                >
+                  <label class="form-label" for="{{ route_form.instructions.id_for_label }}">Instructions / Remarks</label>
+                  {{ route_form.instructions }}
+                  {% for error in route_form.instructions.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                  <div class="phase2-backend-field mt-3">
+                    {% include "partials/_field.html" with field=route_form.remark %}
+                  </div>
+                </div>
+                <div class="phase2-date-proxy mb-3" data-due-date-proxy data-due-days-id="{{ route_form.due_days.id_for_label }}">
+                  <div class="phase2-date-ui">
+                    <label class="form-label" for="phase2-route-due-date">Deadline</label>
+                    <input id="phase2-route-due-date" type="date" class="form-control" data-due-date-input>
+                  </div>
+                  <div class="phase2-backend-field">
+                    {% include "partials/_field.html" with field=route_form.due_days %}
+                  </div>
+                </div>
                 {% include "partials/_field.html" with field=route_form.attachments %}
-                <button class="btn btn-udm" type="submit">Send document</button>
+                <button class="btn btn-udm" type="submit">Send Document</button>
               </form>
             </div>
 
@@ -185,11 +204,7 @@
               <form method="post" action="{% url 'tracking:complete' record.pk %}">
                 {% csrf_token %}
                 {% include "partials/_field.html" with field=complete_form.note %}
-                <div class="form-check mb-3">
-                  {{ complete_form.archive_now }}
-                  <label class="form-check-label" for="{{ complete_form.archive_now.id_for_label }}">{{ complete_form.archive_now.label }}</label>
-                </div>
-                <button class="btn btn-udm-teal" type="submit">Mark completed</button>
+                <button class="btn btn-udm-teal" type="submit">Mark as Completed</button>
               </form>
             </div>
 

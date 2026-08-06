@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Documents · {{ SITE_NAME }}{% endblock %}
+{% block title %}Document Management · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 07</div>
-    <h1>Document management</h1>
-    <p class="sub">Completed records, historical uploads and smart filing. Active work stays in Tracking.</p>
+    <div class="eyebrow">Document Management</div>
+    <h1>Office Document Repository</h1>
+    <p class="sub">Completed records, archived documents, and historical office uploads. Active work remains in Tracking.</p>
   </div>
-  <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload / scan</a>
+  <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
 </div>
 
 <div class="row g-4">
   <div class="col-lg-3">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Smart folders</h2></div>
+      <div class="card-udm-head"><h2>Office Folders</h2></div>
       <div class="card-udm-body">
         <a class="smart-folder {% if not selected_office %}active{% endif %}" href="{% url 'documents:repository' %}">
           <span>All documents</span><span class="count">{{ all_count }}</span>
@@ -32,7 +32,7 @@
     </div>
 
     <div class="card-udm mt-4">
-      <div class="card-udm-head"><h2>Popular tags</h2></div>
+      <div class="card-udm-head"><h2>Popular Tags</h2></div>
       <div class="card-udm-body">
         {% for tag in popular_tags %}
           <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }} <span class="text-muted">{{ tag.usage_count }}</span></a>
@@ -51,7 +51,27 @@
         <div class="col-4 col-md-2">{{ form.year }}</div>
         <div class="col-4 col-md-2">{{ form.document_type }}</div>
         <div class="col-4 col-md-2">{{ form.tag }}</div>
-        <div class="col-12 col-md-1 d-grid"><button class="btn btn-udm-outline" type="submit">Filter</button></div>
+        <div class="col-6 col-md-2">
+          <select class="form-select" name="month" aria-label="Month filter">
+            <option value="">All months</option>
+            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select class="form-select" name="record_status" aria-label="Record status filter">
+            <option value="">All repository records</option>
+            <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
+            <option value="imported">Historical upload</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+          <button class="btn btn-udm-outline" type="submit">Filter</button>
+          <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Clear</a>
+        </div>
       </form>
     </div></div>
 
@@ -59,7 +79,7 @@
       <span class="text-muted" style="font-size:13.5px;">
         {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
       </span>
-      <a class="small" href="{% url 'search:index' %}">Need relevance ranking? Use Search →</a>
+      <a class="small" href="{% url 'search:index' %}">Advanced relevance search →</a>
     </div>
 
     <div class="row g-3">
@@ -69,7 +89,7 @@
             <div class="d-flex justify-content-between align-items-start">
               <span class="pill pill-muted">{{ document.document_type.name|default:"Unclassified"|truncatechars:18 }}</span>
               <span class="pill {% if document.source == 'DTS' %}pill-completed{% else %}pill-draft{% endif %}">
-                {% if document.source == 'DTS' %}Archived{% else %}Imported{% endif %}
+                {% if document.source == 'DTS' %}Completed{% else %}Historical{% endif %}
               </span>
             </div>
             <h3>{{ document.title|truncatechars:64 }}</h3>
@@ -88,9 +108,9 @@
       {% empty %}
         <div class="col-12">
           <div class="card-udm"><div class="card-udm-body empty-state">
-            <h3>Nothing filed here yet</h3>
-            <p>Complete a tracking record, or upload a historical document to start the archive.</p>
-            <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload / scan a document</a>
+            <h3>No documents match this view</h3>
+            <p>Clear the filters or upload a historical office document.</p>
+            <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
           </div></div>
         </div>
       {% endfor %}

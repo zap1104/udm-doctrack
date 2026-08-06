@@ -1,9 +1,10 @@
 {% if messages %}
-  <div class="mb-3">
+  <div class="message-stack" aria-live="polite" aria-atomic="true">
     {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert" style="border-radius:10px;">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show app-alert" role="alert">
+        <span class="app-alert-icon" aria-hidden="true"></span>
+        <div>{{ message }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close message"></button>
       </div>
     {% endfor %}
   </div>

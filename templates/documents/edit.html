@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Edit metadata · {{ SITE_NAME }}{% endblock %}
+{% block title %}Edit Metadata · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head"><div>
-  <div class="eyebrow">Documents</div>
-  <h1>Edit metadata</h1>
+  <div class="eyebrow">Document Management</div>
+  <h1>Edit Document Metadata</h1>
   <p class="sub">{{ document.title }}</p>
 </div></div>
 
@@ -31,13 +31,13 @@
         {% include "partials/_field.html" with field=field %}
       {% endfor %}
 
-      <button class="btn btn-udm" type="submit">Save and re-index</button>
+      <button class="btn btn-udm" type="submit">Save and Re-index</button>
       <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">Cancel</a>
     </div></div></div>
 
     <div class="col-lg-4">
       <div class="help-note">
-        Saving rebuilds this record's search index straight away, so corrections show up in Search immediately.
+        Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters.
       </div>
     </div>
   </div>

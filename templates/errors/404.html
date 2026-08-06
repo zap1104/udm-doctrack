@@ -1,10 +1,1 @@
-{% extends "base.html" %}
-{% block title %}Not found · {{ SITE_NAME }}{% endblock %}
-{% block content %}
-<div class="card-udm"><div class="card-udm-body empty-state">
-  <h3>That page does not exist</h3>
-  <p>The link may be outdated, or the record was renamed.</p>
-  <a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to dashboard</a>
-  <a class="btn btn-udm-outline" href="{% url 'search:index' %}">Search the archive</a>
-</div></div>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Page Not Found · {{ SITE_NAME }}{% endblock %}{% block content %}<div class="error-page"><div class="error-code">404</div><h1>That Page Does Not Exist</h1><p>The link may be outdated, the address may be incorrect, or the record may no longer be available at this location.</p><div class="d-flex flex-wrap justify-content-center gap-2"><a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to Dashboard</a><a class="btn btn-udm-outline" href="{% url 'search:index' %}">Search Records</a></div></div>{% endblock %}

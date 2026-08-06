@@ -3,72 +3,135 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 04</div>
+    <div class="eyebrow">Tracking</div>
     <h1>Create New DTS</h1>
     <div class="step-indicator mt-2">
-      <span class="step active"><span class="num">1</span> Document and routing details</span>
-      <span>›</span>
-      <span class="step"><span class="num">2</span> Review and create</span>
+      <span class="step active"><span class="num">1</span> Document and Routing Details</span>
+      <span aria-hidden="true">›</span>
+      <span class="step"><span class="num">2</span> Review</span>
     </div>
   </div>
 </div>
 
-<form method="post" enctype="multipart/form-data" novalidate>
+<form method="post" enctype="multipart/form-data" novalidate class="phase2-dts-form" data-combined-notes-form>
   {% csrf_token %}
   <div class="row g-4">
     <div class="col-lg-8">
-      <div class="card-udm"><div class="card-udm-body">
-        {% include "partials/_field.html" with field=form.subject %}
-        <div class="row">
-          <div class="col-md-6">{% include "partials/_field.html" with field=form.document_type %}</div>
-          <div class="col-md-6">{% include "partials/_field.html" with field=form.classification %}</div>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Originating office</label>
-          <input class="form-control" value="{{ user.office.name|default:'No office assigned' }}" readonly disabled>
-          <div class="form-text">Locked to your account so nobody can route a document as another office.</div>
-        </div>
-
-        {% include "partials/_field.html" with field=form.receiving_offices %}
-        {% include "partials/_field.html" with field=form.instructions %}
-        {% include "partials/_field.html" with field=form.remarks %}
-
-        <div class="row">
-          <div class="col-md-6">{% include "partials/_field.html" with field=form.priority %}</div>
-          <div class="col-md-6">{% include "partials/_field.html" with field=form.due_days %}</div>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label" for="{{ form.attachments.id_for_label }}">Attachments</label>
-          <div style="border:2px dashed #cfd8e6;border-radius:10px;padding:18px;background:#fff;">
-            {{ form.attachments }}
-            <div class="form-text mt-2">{{ form.attachments.help_text }}</div>
+      <div class="card-udm">
+        <div class="card-udm-head">
+          <div>
+            <h2>Document and Routing Details</h2>
+            <div class="phase2-card-caption">Complete the required information before review.</div>
           </div>
-          {% for error in form.attachments.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+          <span class="phase2-required-note"><span class="required-mark">*</span> Required fields</span>
         </div>
+        <div class="card-udm-body">
+          <section class="phase2-form-section" aria-labelledby="document-details-heading">
+            <h3 id="document-details-heading" class="phase2-section-title">Document details</h3>
+            {% include "partials/_field.html" with field=form.subject %}
+            <div class="row">
+              <div class="col-md-6">{% include "partials/_field.html" with field=form.document_type %}</div>
+              <div class="col-md-6">{% include "partials/_field.html" with field=form.classification %}</div>
+            </div>
 
-        <div class="d-flex gap-2">
-          <button class="btn btn-udm" type="submit">Review &amp; create</button>
-          <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Cancel</a>
+            <div class="mb-3">
+              <label class="form-label">Originating office</label>
+              <input class="form-control" value="{{ user.office.name|default:'No office assigned' }}" readonly disabled>
+              <div class="form-text">Automatically taken from the signed-in account.</div>
+            </div>
+          </section>
+
+          <section class="phase2-form-section" aria-labelledby="routing-details-heading">
+            <h3 id="routing-details-heading" class="phase2-section-title">Routing details</h3>
+            <div class="phase2-field-guide">
+              <strong>Primary receiver:</strong> the first selected office takes custody. Additional offices receive a copy for action.
+            </div>
+            {% include "partials/_field.html" with field=form.receiving_offices %}
+
+            <div class="mb-3">
+              <label class="form-label" for="phase2-requested-action">Requested action</label>
+              <select id="phase2-requested-action" class="form-select" data-requested-action-select>
+                <option value="">Select the requested action</option>
+                <option value="2">2 · Appropriate Action</option>
+                <option value="3">3 · Comment / Recommendation</option>
+                <option value="4">4 · Study / Inquiry</option>
+                <option value="5">5 · Reply Direct to Writer</option>
+                <option value="6">6 · For Signature</option>
+                <option value="7">7 · Rewrite / Redraft / Retype</option>
+                <option value="8">8 · Notation to Return</option>
+                <option value="9">9 · Notation to Forward</option>
+                <option value="10">10 · Re-route</option>
+                <option value="11">11 · File</option>
+              </select>
+              <div class="form-text">Frontend preview only. Your backend teammate still needs to store this value.</div>
+            </div>
+
+            <div
+              class="mb-3 phase2-combined-notes"
+              data-combined-notes
+              data-instructions-id="{{ form.instructions.id_for_label }}"
+              data-remarks-id="{{ form.remarks.id_for_label }}"
+            >
+              <label class="form-label" for="{{ form.instructions.id_for_label }}">Instructions / Remarks</label>
+              {{ form.instructions }}
+              {% if form.instructions.help_text %}<div class="form-text">{{ form.instructions.help_text }}</div>{% endif %}
+              {% for error in form.instructions.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+              <div class="phase2-backend-field mt-3">
+                {% include "partials/_field.html" with field=form.remarks %}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">{% include "partials/_field.html" with field=form.priority %}</div>
+              <div class="col-md-6">
+                <div class="phase2-date-proxy" data-due-date-proxy data-due-days-id="{{ form.due_days.id_for_label }}">
+                  <div class="phase2-date-ui">
+                    <label class="form-label" for="phase2-due-date">Deadline</label>
+                    <input id="phase2-due-date" type="date" class="form-control" data-due-date-input>
+                    <div class="form-text">Choose a date. The existing backend will receive the equivalent number of days.</div>
+                  </div>
+                  <div class="phase2-backend-field">
+                    {% include "partials/_field.html" with field=form.due_days %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="phase2-form-section phase2-form-section--last" aria-labelledby="attachments-heading">
+            <h3 id="attachments-heading" class="phase2-section-title">Attachments</h3>
+            <div class="phase2-upload-box">
+              {{ form.attachments }}
+              <div class="form-text mt-2">{{ form.attachments.help_text }}</div>
+            </div>
+            {% for error in form.attachments.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+          </section>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button class="btn btn-udm" type="submit">Review</button>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Cancel</a>
+          </div>
         </div>
-      </div></div>
+      </div>
     </div>
 
     <div class="col-lg-4">
-      <div class="card-udm"><div class="card-udm-body">
-        <h2 style="font-size:15px;">Why this screen looks like this</h2>
-        <ol class="ps-3 mb-0" style="font-size:13.5px;color:#4a5771;">
-          <li class="mb-2"><strong>Origin office is locked.</strong> It comes from your account, not a dropdown.</li>
-          <li class="mb-2"><strong>Several receivers allowed.</strong> The first office you pick takes custody; the rest get a copy for action.</li>
-          <li class="mb-2"><strong>Review before creation.</strong> The tracking number is issued on step 1 and the record is only routed after you confirm.</li>
-        </ol>
-      </div></div>
+      <div class="card-udm phase2-sticky-card">
+        <div class="card-udm-head"><h2>Before You Continue</h2></div>
+        <div class="card-udm-body">
+          <ol class="phase2-checklist">
+            <li><strong>Originating office is fixed.</strong> It comes from the signed-in account.</li>
+            <li><strong>Choose the destination carefully.</strong> The first office selected is treated as the primary receiver.</li>
+            <li><strong>Use the calendar for the deadline.</strong> The interface converts the chosen date for the current backend.</li>
+            <li><strong>Review before sending.</strong> Sending does not mean the document has been received.</li>
+          </ol>
+        </div>
+      </div>
 
       <div class="help-note mt-3">
-        Numbers look like<br>
+        Tracking numbers currently follow this format:<br>
         <span class="mono">UDM-OVPA-{{ user.office.code|default:"OFFICE" }}-YYYY-MM-0001</span><br>
-        and never change once issued.
+        The final numbering format remains subject to approval.
       </div>
     </div>
   </div>

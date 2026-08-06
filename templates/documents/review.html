@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Review extracted details · {{ SITE_NAME }}{% endblock %}
+{% block title %}Review Extracted Details · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 08 · step 2</div>
-    <h1>Review extracted document details</h1>
+    <div class="eyebrow">Document Management · Step 2</div>
+    <h1>Review Extracted Document Details</h1>
     <div class="step-indicator mt-2">
-      <span class="step"><span class="num">1</span> Choose the file</span>
+      <span class="step"><span class="num">1</span> Choose File</span>
       <span>›</span>
-      <span class="step active"><span class="num">2</span> Review extracted details</span>
+      <span class="step active"><span class="num">2</span> Review Extracted Details</span>
     </div>
   </div>
 </div>
@@ -20,7 +20,7 @@
     <div class="col-lg-5">
       <div class="card-udm">
         <div class="card-udm-head">
-          <h2>What the system read</h2>
+          <h2>Extracted Text</h2>
           <span class="pill {% if document.ocr_status == 'DONE' %}pill-received{% else %}pill-draft{% endif %}">
             {{ document.get_ocr_status_display }}
           </span>
@@ -43,12 +43,12 @@
 
     <div class="col-lg-7">
       <div class="card-udm">
-        <div class="card-udm-head"><h2>Suggested details — edit anything</h2></div>
+        <div class="card-udm-head"><h2>Review Suggested Metadata</h2></div>
         <div class="card-udm-body">
 
           <div class="mb-3">
             <label class="form-label" for="{{ form.title.id_for_label }}">
-              Suggested title <span class="required-mark">*</span>
+              Title <span class="required-mark">*</span>
               {% with confidence|dict_get:"title" as score %}
                 {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
               {% endwith %}
@@ -74,7 +74,7 @@
             <div class="col-md-6">
               <div class="mb-3">
                 <label class="form-label" for="{{ form.office.id_for_label }}">
-                  Originating office
+                  Owning office
                   {% with confidence|dict_get:"office" as score %}
                     {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
                   {% endwith %}
@@ -92,7 +92,7 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label" for="{{ form.tags.id_for_label }}">Suggested tags</label>
+            <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
             {{ form.tags }}
             <div class="form-text">{{ form.tags.help_text }}</div>
             <datalist id="tag-options">
@@ -117,12 +117,11 @@
           {% endif %}
 
           <div class="help-note mb-3">
-            Recommendations come from the extracted text and configured rules — they are proposals, not facts.
-            Review before saving; what you keep is stored as a training example for the future AI engine.
+            Recommendations are editable proposals based on extracted text and configured rules. Review every value before saving.
           </div>
 
           <div class="d-flex gap-2">
-            <button class="btn btn-udm" type="submit">Save to repository</button>
+            <button class="btn btn-udm" type="submit">Save to Document Management</button>
             <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Back</a>
           </div>
         </div>

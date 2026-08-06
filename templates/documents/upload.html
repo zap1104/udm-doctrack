@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Upload or scan · {{ SITE_NAME }}{% endblock %}
+{% block title %}Upload Document · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 08 · step 1</div>
-    <h1>Upload or scan a document</h1>
+    <div class="eyebrow">Document Management · Step 1</div>
+    <h1>Upload or Scan a Document</h1>
     <div class="step-indicator mt-2">
-      <span class="step active"><span class="num">1</span> Choose the file</span>
+      <span class="step active"><span class="num">1</span> Choose File</span>
       <span>›</span>
-      <span class="step"><span class="num">2</span> Review extracted details</span>
+      <span class="step"><span class="num">2</span> Review Extracted Details</span>
     </div>
   </div>
 </div>
@@ -28,7 +28,7 @@
         </div>
         {% include "partials/_field.html" with field=form.office %}
         {% include "partials/_field.html" with field=form.source %}
-        <button class="btn btn-udm" type="submit">Read the file and continue</button>
+        <button class="btn btn-udm" type="submit">Read File and Continue</button>
         <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Cancel</a>
       </form>
     </div></div>
@@ -36,11 +36,11 @@
 
   <div class="col-lg-5">
     <div class="card-udm"><div class="card-udm-body">
-      <h2 style="font-size:15px;">What happens next</h2>
+      <h2 style="font-size:15px;">What Happens Next</h2>
       <ol class="ps-3" style="font-size:13.5px;color:#4a5771;">
-        <li class="mb-2">The text inside the file is read. Digital PDFs and Word files are instant and free.</li>
-        <li class="mb-2">A scanned page with no text layer goes to OCR when a provider key is configured.</li>
-        <li class="mb-2">Rules propose a title, type, office, date and tags.</li>
+        <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
+        <li class="mb-2">Scanned pages use OCR when a provider is configured.</li>
+        <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>
         <li class="mb-0"><strong>You review and correct everything</strong> before it is saved. The system suggests; you decide.</li>
       </ol>
     </div></div>
