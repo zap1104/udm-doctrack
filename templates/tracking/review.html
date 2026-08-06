@@ -3,12 +3,12 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 04 · step 2</div>
-    <h1>Review &amp; create</h1>
+    <div class="eyebrow">Tracking · Step 2</div>
+    <h1>Review Document</h1>
     <div class="step-indicator mt-2">
-      <span class="step"><span class="num">1</span> Document and routing details</span>
-      <span>›</span>
-      <span class="step active"><span class="num">2</span> Review and create</span>
+      <span class="step"><span class="num">1</span> Document and Routing Details</span>
+      <span aria-hidden="true">›</span>
+      <span class="step active"><span class="num">2</span> Review</span>
     </div>
   </div>
 </div>
@@ -17,68 +17,106 @@
   <div class="col-lg-8">
     <div class="card-udm">
       <div class="card-udm-head">
-        <h2>{{ record.subject }}</h2>
+        <div>
+          <h2>{{ record.subject }}</h2>
+          <div class="phase2-card-caption mono">{{ record.tracking_number }}</div>
+        </div>
         <span class="pill pill-draft">Draft</span>
       </div>
       <div class="card-udm-body">
-        <table class="table table-sm">
-          <tr><th class="text-muted fw-normal" style="width:190px;">Tracking number</th><td class="mono">{{ record.tracking_number }}</td></tr>
-          <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.name }}</td></tr>
-          <tr><th class="text-muted fw-normal">Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
-          <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>
-          <tr><th class="text-muted fw-normal">Priority</th><td>{{ record.get_priority_display }}</td></tr>
-          <tr><th class="text-muted fw-normal">Receiving office(s)</th>
-            <td>
-              {% for office in offices %}
-                <span class="tag-chip">{% if forloop.first %}1st receiver: {% endif %}{{ office.name }}</span>
-              {% empty %}
-                <em class="text-danger">Not set — choose below before sending.</em>
-              {% endfor %}
-            </td></tr>
-          <tr><th class="text-muted fw-normal">Deadline</th><td>{% if due_days and due_days != "0" %}{{ due_days }} day(s) after routing{% else %}No deadline{% endif %}</td></tr>
-          <tr><th class="text-muted fw-normal">Instructions</th><td>{{ record.instructions|linebreaksbr }}</td></tr>
-          <tr><th class="text-muted fw-normal">Remarks</th><td>{{ record.remarks|linebreaksbr|default:"—" }}</td></tr>
-          <tr><th class="text-muted fw-normal">Attachments</th>
-            <td>{% for attachment in record.attachments.all %}<div>{{ attachment.original_name }}</div>{% empty %}—{% endfor %}</td></tr>
-        </table>
+        <div class="table-responsive">
+          <table class="table phase2-review-table align-middle">
+            <tbody>
+              <tr><th>Originating office</th><td>{{ record.originating_office.name }}</td></tr>
+              <tr><th>Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+              <tr><th>Classification</th><td>{{ record.get_classification_display }}</td></tr>
+              <tr><th>Priority</th><td>{{ record.get_priority_display }}</td></tr>
+              <tr>
+                <th>Receiving office(s)</th>
+                <td>
+                  {% for office in offices %}
+                    <span class="tag-chip">{% if forloop.first %}Primary Receiver: {% endif %}{{ office.name }}</span>
+                  {% empty %}
+                    <em class="text-danger">Not set — choose below before sending.</em>
+                  {% endfor %}
+                </td>
+              </tr>
+              <tr>
+                <th>Requested action</th>
+                <td><span data-requested-action-review>Not selected</span> <span class="phase2-preview-badge">Frontend preview</span></td>
+              </tr>
+              <tr>
+                <th>Deadline</th>
+                <td>
+                  {% if due_days and due_days != "0" %}
+                    <span data-due-date-display data-due-days="{{ due_days }}">{{ due_days }} day(s) after sending</span>
+                  {% else %}
+                    No deadline
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>Instructions / Remarks</th>
+                <td>
+                  {% if record.instructions %}{{ record.instructions|linebreaksbr }}{% elif record.remarks %}{{ record.remarks|linebreaksbr }}{% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>Attachments</th>
+                <td>{% for attachment in record.attachments.all %}<div>{{ attachment.original_name }}</div>{% empty %}—{% endfor %}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <form method="post" class="mt-3" novalidate>
+        <form method="post" class="mt-3 phase2-review-form" novalidate>
           {% csrf_token %}
 
           {% if session_lost %}
-            <div class="alert alert-warning" style="border-radius:10px;">
+            <div class="alert alert-warning phase2-alert">
               <strong>Pick the receiving office(s) again.</strong>
-              This draft was started in an earlier session, so the earlier choice was not kept.
-              Nothing else was lost — the tracking number and details are intact.
+              This draft was started in an earlier session, so the earlier choice was not retained.
+              The tracking number and document information remain available.
             </div>
           {% endif %}
 
           <div {% if not session_lost %}class="collapse" id="editRouting"{% endif %}>
-            {% include "partials/_field.html" with field=form.receiving_offices %}
-            {% include "partials/_field.html" with field=form.due_days %}
+            <div class="phase2-inline-editor">
+              {% include "partials/_field.html" with field=form.receiving_offices %}
+              <div class="phase2-date-proxy" data-due-date-proxy data-due-days-id="{{ form.due_days.id_for_label }}">
+                <div class="phase2-date-ui">
+                  <label class="form-label" for="phase2-review-due-date">Deadline</label>
+                  <input id="phase2-review-due-date" type="date" class="form-control" data-due-date-input>
+                </div>
+                <div class="phase2-backend-field">
+                  {% include "partials/_field.html" with field=form.due_days %}
+                </div>
+              </div>
+            </div>
           </div>
 
           {% if not session_lost %}
-            <p class="mb-2">
-              <a class="small" data-bs-toggle="collapse" href="#editRouting" role="button">
-                Change the receiving offices or deadline
+            <p class="mb-3">
+              <a class="small" data-bs-toggle="collapse" href="#editRouting" role="button" aria-controls="editRouting">
+                Change receiving offices or deadline
               </a>
             </p>
           {% endif %}
 
-          <div class="d-flex gap-2">
-            <button class="btn btn-udm" type="submit">Create &amp; route</button>
-            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as draft</a>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-udm-outline" type="button" data-back-to-edit>Back to Edit</button>
+            <button class="btn btn-udm" type="submit">Send Document</button>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as Draft</a>
           </div>
         </form>
       </div>
     </div>
   </div>
+
   <div class="col-lg-4">
-    <div class="help-note">
-      Creating routes the document to the offices above and generates the routing slip.
-      The record stays <strong>In transit</strong> until a receiving office confirms receipt —
-      that is what makes custody provable.
+    <div class="help-note phase2-sticky-card">
+      Selecting <strong>Send Document</strong> routes the record to the selected office(s) and generates the routing slip.
+      The record remains <strong>In Transit</strong> until the receiving office confirms receipt.
     </div>
   </div>
 </div>

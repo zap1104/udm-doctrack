@@ -1,68 +1,157 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Routing slip {{ record.tracking_number }}{% endblock %}
+{% block title %}Routing Slip {{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block extra_head %}
+  <meta name="robots" content="noindex, nofollow">
+{% endblock %}
 {% block content %}
-<div class="no-print mb-3 d-flex gap-2">
-  <button class="btn btn-udm" onclick="window.print()">Print this slip</button>
-  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to record</a>
+<div class="routing-slip-actions no-print">
+  <button class="btn btn-udm" type="button" onclick="window.print()">Print Routing Slip</button>
+  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to Record</a>
 </div>
 
-<div class="card-udm">
-  <div class="card-udm-body">
-    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
-      <div>
-        <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#63718a;">Universidad de Manila</div>
-        <h1 style="font-size:22px;margin:2px 0;">Document routing slip</h1>
-        <div class="text-muted" style="font-size:13px;">Office of the Vice President for Administration</div>
-      </div>
-      <div class="text-end">
-        <div class="mono" style="font-size:15px;">{{ record.tracking_number }}</div>
-        {% include "partials/_status_pill.html" with status=record.display_status %}
-      </div>
+<article class="routing-slip" aria-labelledby="routing-slip-title">
+  <header class="routing-slip-header">
+    <div class="routing-slip-heading">
+      <div class="routing-slip-school">Universidad de Manila</div>
+      <h1 id="routing-slip-title">Document Routing Slip</h1>
+      <div class="routing-slip-office">Office of the Vice President for Administration</div>
     </div>
 
-    <table class="table table-sm">
-      <tr><th style="width:200px;">Subject</th><td>{{ record.subject }}</td></tr>
-      <tr><th>Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
-      <tr><th>Originating office</th><td>{{ record.originating_office.name }}</td></tr>
-      <tr><th>Prepared by</th><td>{{ record.created_by.display_name }}{% if record.created_by.position %} · {{ record.created_by.position }}{% endif %}</td></tr>
-      <tr><th>Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
-      <tr><th>Instructions</th><td>{{ record.instructions|linebreaksbr }}</td></tr>
-      <tr><th>Remarks</th><td>{{ record.remarks|linebreaksbr|default:"—" }}</td></tr>
-      <tr><th>Attachments</th><td>
-        {% for attachment in attachments %}{{ attachment.original_name }}{% if not forloop.last %}; {% endif %}{% empty %}None{% endfor %}
-      </td></tr>
-    </table>
+    <div class="routing-slip-identity">
+      <div class="routing-slip-qr" aria-label="QR code placeholder">
+        <div class="routing-slip-qr-pattern" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <small>QR placeholder</small>
+      </div>
+      <div class="routing-slip-control">
+        <span>Control No.</span>
+        <strong>________________</strong>
+      </div>
+    </div>
+  </header>
 
-    <h2 style="font-size:16px;margin-top:22px;">Complete movement history</h2>
-    <table class="table table-sm table-bordered align-middle">
-      <thead>
-        <tr>
-          <th>#</th><th>Action</th><th>From</th><th>To</th><th>Sent</th><th>Received</th><th>Received by</th><th>Signature</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for step in steps %}
+  <section class="routing-slip-number-block" aria-label="Tracking information">
+    <div class="routing-slip-number-label">Tracking Number</div>
+    <div class="routing-slip-number mono">{{ record.tracking_number }}</div>
+    <div class="routing-slip-status">{% include "partials/_status_pill.html" with status=record.display_status %}</div>
+  </section>
+
+  <section class="routing-slip-summary" aria-label="Document summary">
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Originating Unit</div>
+      <div class="routing-slip-summary-value">{{ record.originating_office.name }}</div>
+    </div>
+    <div class="routing-slip-summary-row routing-slip-summary-row--subject">
+      <div class="routing-slip-summary-label">Subject</div>
+      <div class="routing-slip-summary-value">{{ record.subject }}</div>
+    </div>
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Prepared By</div>
+      <div class="routing-slip-summary-value">
+        {{ record.created_by.display_name }}{% if record.created_by.position %} · {{ record.created_by.position }}{% endif %}
+      </div>
+    </div>
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Document Type</div>
+      <div class="routing-slip-summary-value">{{ record.document_type.name|default:"Not specified" }}</div>
+    </div>
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Instructions / Remarks</div>
+      <div class="routing-slip-summary-value routing-slip-notes">
+        {% if record.instructions %}{{ record.instructions|linebreaksbr }}{% elif record.remarks %}{{ record.remarks|linebreaksbr }}{% else %}—{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="routing-slip-privacy" aria-label="Privacy notice">
+    <strong>Privacy Notice:</strong>
+    The exact university-approved privacy statement must be inserted here before final deployment.
+    This placeholder is intentionally not presented as approved legal wording.
+  </section>
+
+  <section class="routing-slip-history" aria-labelledby="movement-history-title">
+    <div class="routing-slip-section-head">
+      <h2 id="movement-history-title">Movement History</h2>
+      <span>Complete append-only routing record</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="routing-slip-table">
+        <thead>
           <tr>
-            <td>{{ step.sequence }}</td>
-            <td>{{ step.get_action_display }}</td>
-            <td>{{ step.from_office.code|default:"—" }}</td>
-            <td>{{ step.to_office.code }}</td>
-            <td>{{ step.sent_at|date:"d M Y g:i A" }}</td>
-            <td>{% if step.received_at %}{{ step.received_at|date:"d M Y g:i A" }}{% else %}<em>Pending</em>{% endif %}</td>
-            <td>{{ step.received_by.display_name|default:"—" }}</td>
-            <td style="width:120px;"></td>
+            <th class="routing-slip-col-date">Date</th>
+            <th class="routing-slip-col-office">From</th>
+            <th class="routing-slip-col-office">For / To</th>
+            <th class="routing-slip-col-signature">Sender / Signature</th>
+            <th>Remarks</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="8" class="text-muted">Not routed yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for step in steps %}
+            <tr>
+              <td>
+                <strong>Sent:</strong> {{ step.sent_at|date:"d M Y" }}<br>
+                <span class="routing-slip-time">{{ step.sent_at|date:"g:i A" }}</span>
+                {% if step.received_at %}
+                  <br><strong>Received:</strong> {{ step.received_at|date:"d M Y" }}<br>
+                  <span class="routing-slip-time">{{ step.received_at|date:"g:i A" }}</span>
+                {% else %}
+                  <br><em>Pending Receipt</em>
+                {% endif %}
+              </td>
+              <td>
+                <strong>{{ step.from_office.code|default:"—" }}</strong>
+                {% if step.sent_by %}<br><span class="routing-slip-person">{{ step.sent_by.display_name }}</span>{% endif %}
+              </td>
+              <td>
+                <strong>{{ step.to_office.code }}</strong>
+                {% if step.received_by %}<br><span class="routing-slip-person">Received by {{ step.received_by.display_name }}</span>{% endif %}
+              </td>
+              <td>
+                <span class="routing-slip-sender-name">{{ step.sent_by.display_name|default:"—" }}</span>
+                <span class="routing-slip-signature-line" aria-hidden="true"></span>
+              </td>
+              <td>
+                {% if step.instructions %}<div>{{ step.instructions|linebreaksbr }}</div>{% endif %}
+                {% if step.receipt_note %}<div class="routing-slip-receipt-note"><strong>Receipt note:</strong> {{ step.receipt_note|linebreaksbr }}</div>{% endif %}
+                {% if not step.instructions and not step.receipt_note %}—{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="routing-slip-empty">Not routed yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-    <p class="text-muted mt-4" style="font-size:12px;">
+  <section class="routing-slip-attachments" aria-labelledby="attachments-title">
+    <div class="routing-slip-section-head">
+      <h2 id="attachments-title">Attachments</h2>
+      <span>{{ attachments|length }} file{{ attachments|length|pluralize }}</span>
+    </div>
+    {% if attachments %}
+      <ol>
+        {% for attachment in attachments %}
+          <li>{{ attachment.original_name }}</li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p>None</p>
+    {% endif %}
+  </section>
+
+  <footer class="routing-slip-footer">
+    <div>
       Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ printed_by.display_name }}.
-      This slip reprints the entire history; earlier steps are never removed or edited.
-    </p>
-  </div>
-</div>
+      Earlier routing events are never removed or overwritten.
+    </div>
+    <div class="routing-slip-page-number">Official printed copy</div>
+  </footer>
+</article>
 {% endblock %}

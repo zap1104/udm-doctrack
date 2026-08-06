@@ -1,48 +1,23 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Sign in · {{ SITE_NAME }}{% endblock %}
-
+{% block title %}Sign In · {{ SITE_NAME }}{% endblock %}
 {% block body %}
 <div class="login-wrap">
-  <section class="login-art">
+  <section class="login-art" aria-labelledby="login-brand-heading">
     <div class="grid-lines" aria-hidden="true"></div>
-    <div>
-      <span class="wordmark wordmark--light"><span class="udm">UDM</span> <span class="doctrack">Doc Track</span></span>
-    </div>
-    <div>
-      <h1>Records move. Accountability stays.</h1>
-      <div class="rule"></div>
-      <p>Track active documents, confirm receipt with a real timestamp, and keep completed records searchable in one secure workspace for the offices under OVPA.</p>
-    </div>
-    <p style="font-size:13px;opacity:.7;margin:0;">Universidad de Manila · Office of the Vice President for Administration</p>
+    <a class="login-brand" href="{% url 'accounts:login' %}" aria-label="{{ SITE_NAME }} sign in"><img src="{% static 'img/favicon.svg' %}" alt=""><span class="wordmark wordmark--light"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span></a>
+    <div><h1 id="login-brand-heading">Records move. Accountability stays.</h1><div class="rule"></div><p>Track active documents, confirm receipt with a recorded timestamp, and keep completed records searchable in one secure workspace for offices under OVPA.</p></div>
+    <p class="login-institution">Universidad de Manila · Office of the Vice President for Administration</p>
   </section>
-
-  <section class="login-form">
+  <main class="login-form" id="main-content">
     <div class="inner">
-      <h2 style="font-size:26px;margin-bottom:6px;">Welcome back</h2>
-      <p class="text-muted" style="font-size:14.5px;">Sign in using the account created by the system administrator.</p>
-
+      <div class="login-form-heading"><span class="eyebrow">Secure Access</span><h2>Welcome Back</h2><p>Sign in using the account created by the system administrator.</p></div>
       {% include "partials/_messages.html" %}
-
-      {% if form.non_field_errors %}
-        <div class="alert alert-danger" style="border-radius:10px;">
-          {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-        </div>
-      {% endif %}
-
-      <form method="post" novalidate>
-        {% csrf_token %}
-        {% include "partials/_field.html" with field=form.username %}
-        {% include "partials/_field.html" with field=form.password %}
-        <input type="hidden" name="next" value="{{ next }}">
-        <button type="submit" class="btn btn-udm w-100 py-2">Sign in</button>
-      </form>
-
-      <p class="text-muted mt-4" style="font-size:12.5px;">
-        Account creation is managed by authorised administrators. There is no public registration.
-        Forgot your password? Ask the records administrator to set a new one.
-      </p>
+      {% if form.non_field_errors %}<div class="alert alert-danger app-alert" role="alert"><span class="app-alert-icon" aria-hidden="true"></span><div>{% for error in form.non_field_errors %}{{ error }}{% endfor %}</div></div>{% endif %}
+      <form method="post" novalidate>{% csrf_token %}{% include "partials/_field.html" with field=form.username %}{% include "partials/_field.html" with field=form.password %}<input type="hidden" name="next" value="{{ next }}"><button type="submit" class="btn btn-udm w-100 py-2">Sign In</button></form>
+      <div class="login-security-note"><strong>Account security</strong><span>Five failed sign-in attempts trigger a temporary lockout. Contact the records administrator if a password reset is needed.</span></div>
+      <p class="login-account-note">Accounts are managed by authorized administrators. Public registration is not available.</p>
     </div>
-  </section>
+  </main>
 </div>
 {% endblock %}

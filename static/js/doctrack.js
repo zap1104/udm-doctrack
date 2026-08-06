@@ -39,7 +39,7 @@
       chosen.forEach(function (label, index) {
         var chip = document.createElement("span");
         chip.className = "tag-chip";
-        chip.textContent = (index === 0 ? "1st receiver: " : "") + label;
+        chip.textContent = (index === 0 ? "Primary Receiver: " : "Additional: ") + label;
         summary.appendChild(chip);
       });
     }
@@ -132,7 +132,7 @@
     form.addEventListener("submit", function (event) {
       var ok = window.confirm(
         "Mark this document as completed?\n\n" +
-        "It leaves the active tracking queue and moves to the searchable archive."
+        "It leaves the active tracking queue and becomes available in Document Management."
       );
       if (!ok) event.preventDefault();
     });
@@ -142,8 +142,9 @@
      4. Stop double submissions — a second click must not create a second record.
   ---------------------------------------------------------------------- */
   document.querySelectorAll("form").forEach(function (form) {
-    form.addEventListener("submit", function () {
+    form.addEventListener("submit", function (event) {
       window.setTimeout(function () {
+        if (event.defaultPrevented) return;
         form.querySelectorAll('button[type="submit"]').forEach(function (button) {
           button.disabled = true;
           if (!button.dataset.originalText) {
@@ -156,7 +157,145 @@
   });
 
   /* ----------------------------------------------------------------------
-     5. Keyboard shortcut: "/" focuses the top search box.
+     5. Phase 2 form helpers.
+     These keep the existing backend field names while presenting the new UI.
+  ---------------------------------------------------------------------- */
+  document.documentElement.classList.add("phase2-js");
+
+  function localDateValue(date) {
+    var year = date.getFullYear();
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    return year + "-" + month + "-" + day;
+  }
+
+  function startOfToday() {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  document.querySelectorAll("[data-due-date-proxy]").forEach(function (wrapper) {
+    var dateInput = wrapper.querySelector("[data-due-date-input]");
+    var dueDaysInput = document.getElementById(wrapper.dataset.dueDaysId);
+    if (!dateInput || !dueDaysInput) return;
+
+    var today = startOfToday();
+    dateInput.min = localDateValue(today);
+
+    var initialDays = parseInt(dueDaysInput.value || "0", 10);
+    if (initialDays > 0) {
+      var initialDate = new Date(today);
+      initialDate.setDate(initialDate.getDate() + initialDays);
+      dateInput.value = localDateValue(initialDate);
+    }
+
+    function syncDueDays() {
+      if (!dateInput.value) {
+        dueDaysInput.value = "0";
+        return;
+      }
+      var selected = new Date(dateInput.value + "T00:00:00");
+      var difference = Math.ceil((selected - today) / 86400000);
+      dueDaysInput.value = String(Math.max(0, difference));
+    }
+
+    dateInput.addEventListener("change", syncDueDays);
+    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncDueDays);
+  });
+
+  document.querySelectorAll("[data-combined-notes]").forEach(function (wrapper) {
+    var instructions = document.getElementById(wrapper.dataset.instructionsId);
+    var remarks = document.getElementById(wrapper.dataset.remarksId);
+    if (!instructions || !remarks) return;
+
+    if (!instructions.value && remarks.value) instructions.value = remarks.value;
+
+    function syncNotes() {
+      remarks.value = instructions.value;
+    }
+
+    instructions.addEventListener("input", syncNotes);
+    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncNotes);
+  });
+
+  var actionSelect = document.querySelector("[data-requested-action-select]");
+  if (actionSelect) {
+    var storedAction = window.sessionStorage.getItem("doctrackRequestedAction");
+    if (storedAction) actionSelect.value = storedAction;
+    actionSelect.addEventListener("change", function () {
+      window.sessionStorage.setItem("doctrackRequestedAction", actionSelect.value);
+      var label = actionSelect.options[actionSelect.selectedIndex].text;
+      window.sessionStorage.setItem("doctrackRequestedActionLabel", label);
+    });
+  }
+
+  document.querySelectorAll("[data-requested-action-review]").forEach(function (target) {
+    var label = window.sessionStorage.getItem("doctrackRequestedActionLabel");
+    if (label) target.textContent = label;
+  });
+
+  document.querySelectorAll("[data-due-date-display]").forEach(function (target) {
+    var days = parseInt(target.dataset.dueDays || "0", 10);
+    if (days <= 0) return;
+    var dueDate = startOfToday();
+    dueDate.setDate(dueDate.getDate() + days);
+    target.textContent = dueDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+  });
+
+  document.querySelectorAll("[data-back-to-edit]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      window.history.back();
+    });
+  });
+
+
+  /* ----------------------------------------------------------------------
+     Phase 6 mobile navigation and shared accessibility helpers.
+  ---------------------------------------------------------------------- */
+  var sidebarToggle = document.querySelector("[data-sidebar-toggle]");
+  var sidebar = document.getElementById("main-sidebar");
+  var sidebarClosers = document.querySelectorAll("[data-sidebar-close]");
+
+  function setSidebarOpen(open) {
+    document.body.classList.toggle("sidebar-open", open);
+    if (sidebarToggle) sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open && sidebar) {
+      var firstLink = sidebar.querySelector("a, button");
+      if (firstLink) window.setTimeout(function () { firstLink.focus(); }, 0);
+    }
+  }
+
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener("click", function () { setSidebarOpen(true); });
+    sidebarClosers.forEach(function (closer) {
+      closer.addEventListener("click", function () { setSidebarOpen(false); });
+    });
+    sidebar.querySelectorAll("a").forEach(function (link) {
+      link.addEventListener("click", function () {
+        if (window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
+      });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+        setSidebarOpen(false);
+        sidebarToggle.focus();
+      }
+    });
+    window.addEventListener("resize", function () {
+      if (!window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
+    });
+  }
+
+  document.querySelectorAll(".form-field--error input, .form-field--error select, .form-field--error textarea").forEach(function (field) {
+    field.setAttribute("aria-invalid", "true");
+  });
+
+  /* ----------------------------------------------------------------------
+     6. Keyboard shortcut: "/" focuses the top search box.
   ---------------------------------------------------------------------- */
   document.addEventListener("keydown", function (event) {
     if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
