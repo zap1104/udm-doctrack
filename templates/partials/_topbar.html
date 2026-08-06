@@ -22,9 +22,7 @@
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
-    {% if nav_active == "tracking" and request.resolver_match.url_name != "create" %}
-      <a class="btn btn-udm btn-sm d-none d-sm-inline-block" href="{% url 'tracking:create' %}">+ Create New DTS</a>
-    {% endif %}
+   
     <div class="dropdown">
       <button type="button" class="topbar-account-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu">
         <span class="avatar">{{ user.initials }}</span>
