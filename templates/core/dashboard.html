@@ -14,14 +14,14 @@
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
-      <div class="label">My inbox</div>
+      <div class="label">Incoming</div>
       <div class="value">{{ inbox_count }}</div>
-      <div class="hint">{{ inbox_new_today }} arrived today · awaiting receipt</div>
+      <div class="hint">{{ inbox_new_today }} arrived today · pending receipt</div>
     </a>
   </div>
   <div class="col-6 col-lg-3">
     <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
-      <div class="label">In transit</div>
+      <div class="label">In Transit</div>
       <div class="value">{{ in_transit_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
@@ -37,7 +37,7 @@
     <a class="stat-card green" href="{% url 'documents:repository' %}">
       <div class="label">Completed</div>
       <div class="value">{{ completed_count }}</div>
-      <div class="hint">This year · searchable in Documents</div>
+      <div class="hint">This year · available in Document Management</div>
     </a>
   </div>
 </div>
@@ -46,12 +46,12 @@
   <div class="col-lg-8">
     <div class="card-udm">
       <div class="card-udm-head">
-        <h2>Documents requiring attention</h2>
-        <a href="{% url 'tracking:list' %}" class="small">Open tracking</a>
+        <h2>Pending Receipt</h2>
+        <a href="{% url 'tracking:list' %}?scope=inbox" class="small">Open incoming</a>
       </div>
       <div class="card-udm-body p-0">
         {% if attention_records %}
-          <table class="table-udm">
+          <div class="table-responsive"><table class="table-udm">
             <tbody>
             {% for record in attention_records %}
               <tr>
@@ -64,7 +64,7 @@
                 </td>
                 <td class="text-end">
                   {% if record.can_confirm_now %}
-                    <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm receipt</a>
+                    <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm Receipt</a>
                   {% else %}
                     {% include "partials/_status_pill.html" with status=record.display_status %}
                   {% endif %}
@@ -72,19 +72,19 @@
               </tr>
             {% endfor %}
             </tbody>
-          </table>
+          </table></div>
         {% else %}
           <div class="empty-state">
-            <h3>Nothing is waiting on you</h3>
-            <p>When a document is routed to {{ user.office.code|default:"your office" }}, it appears here until someone confirms receipt.</p>
-            <a class="btn btn-udm-outline" href="{% url 'tracking:create' %}">Create a document</a>
+            <h3>No incoming documents are waiting</h3>
+            <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
           </div>
         {% endif %}
       </div>
     </div>
 
     <div class="card-udm mt-4">
-      <div class="card-udm-head"><h2>Recent document activity</h2></div>
+      <div class="card-udm-head"><h2>Recent Tracking Activity</h2></div>
       <div class="card-udm-body p-0">
         <table class="table-udm">
           <tbody>
@@ -105,7 +105,7 @@
 
   <div class="col-lg-4">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Office flow today</h2></div>
+      <div class="card-udm-head"><h2>Office Flow Today</h2></div>
       <div class="card-udm-body">
         <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
         <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
@@ -118,7 +118,7 @@
 
     <div class="card-udm mt-4">
       <div class="card-udm-head">
-        <h2>Newest in the archive</h2>
+        <h2>Newest in Document Management</h2>
         <a class="small" href="{% url 'search:index' %}">Search</a>
       </div>
       <div class="card-udm-body">
@@ -130,7 +130,7 @@
             </div>
           </div>
         {% empty %}
-          <p class="text-muted mb-0">Nothing archived yet. Completed records land here automatically.</p>
+          <p class="text-muted mb-0">No completed or archived records are available yet.</p>
         {% endfor %}
       </div>
     </div>

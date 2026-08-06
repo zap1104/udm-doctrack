@@ -4,13 +4,23 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Screen 03</div>
-    <h1>Active document tracking</h1>
-    <p class="sub">Newest movement first. Completed records leave this queue and stay searchable in Documents.</p>
+    <div class="eyebrow">Tracking</div>
+    <h1>Active Document Tracking</h1>
+    <p class="sub">Current documents only. Completed records remain available in Document Management.</p>
   </div>
   <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ Create New DTS</a>
 </div>
-
+<nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
+  <div class="tracking-queue-list">
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}">All Active</a>
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=inbox">Pending Receipt</a>
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
+    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
+    <a class="tracking-queue-link tracking-queue-link--alert" href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
+  </div>
+</nav>
 <div class="card-udm mb-3">
   <div class="card-udm-body">
     <form method="get" class="row g-2 align-items-center">
@@ -47,10 +57,13 @@
             </td>
             <td>{{ record.current_office.code|default:"—" }}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
-            <td>{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+            <td>
+              {% include "partials/_status_pill.html" with status=record.display_status %}
+              {% if record.is_overdue %}<span class="pill pill-overdue ms-1">Overdue</span>{% endif %}
+            </td>
             <td class="text-end">
               {% if record.can_confirm_now %}
-                <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm receipt</a>
+                <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm Receipt</a>
               {% else %}
                 <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
               {% endif %}
@@ -72,7 +85,7 @@
 {% include "partials/_pagination.html" %}
 
 <div class="help-note mt-3">
-  <strong>Where is the document?</strong> “Current office” is whoever confirmed receipt last.
-  A record stays <em>In transit</em> until someone presses Confirm receipt — sent never means received.
+  <strong>Where is the document?</strong> Current Office shows the office that most recently confirmed custody.
+  A document remains <em>In Transit</em> until the destination confirms receipt.
 </div>
 {% endblock %}

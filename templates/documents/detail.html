@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Archived record</div>
+    <div class="eyebrow">Document Management</div>
     <h1>{{ document.title }}</h1>
     <p class="sub">
       {{ document.office.name }} · {{ document.document_type.name|default:"Unclassified" }}
@@ -13,17 +13,26 @@
     </p>
   </div>
   <div class="d-flex gap-2">
-    {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit metadata</a>{% endif %}
+    {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit Metadata</a>{% endif %}
     {% if document.primary_file %}
       <a class="btn btn-udm" href="{% url 'documents:file_download' document.primary_file.pk %}">Download</a>
     {% endif %}
   </div>
 </div>
 
+<div class="card-udm mb-4">
+  <div class="card-udm-body d-flex flex-wrap gap-4 align-items-center">
+    <div><span class="text-muted small d-block">Repository source</span><strong>{% if document.source == "DTS" %}Completed DTS record{% else %}Historical office upload{% endif %}</strong></div>
+    <div><span class="text-muted small d-block">Owning office</span><strong>{{ document.office.code }}</strong></div>
+    <div><span class="text-muted small d-block">Access</span><strong>{{ document.get_access_level_display }}</strong></div>
+    {% if document.tracking_record %}<div class="ms-lg-auto"><a href="{{ document.tracking_record.get_absolute_url }}">Open DTS history</a></div>{% endif %}
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-8">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Metadata</h2>
+      <div class="card-udm-head"><h2>Document Metadata</h2>
         <span class="pill pill-muted">{{ document.get_access_level_display }}</span>
       </div>
       <div class="card-udm-body">
@@ -56,7 +65,7 @@
           {% for tag in document.tags.all %}
             <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }}</a>
           {% empty %}
-            <span class="text-muted">No tags yet — add some so this record is easy to find.</span>
+            <span class="text-muted">No tags are assigned. Add tags to improve search and organization.</span>
           {% endfor %}
         </div>
 
@@ -69,14 +78,14 @@
 
     <div class="card-udm mt-4">
       <div class="card-udm-head">
-        <h2>Extracted text</h2>
+        <h2>Extracted Text</h2>
         <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}</span>
       </div>
       <div class="card-udm-body">
         {% if document.has_text %}
           <div class="text-preview">{{ document.ocr_text|truncatechars:6000 }}</div>
         {% else %}
-          <p class="text-muted mb-2">No text was extracted, so this record is searchable by metadata and tags only.</p>
+          <p class="text-muted mb-2">No text was extracted. This record remains searchable by metadata and tags.</p>
         {% endif %}
         {% if can_edit %}
           <form method="post" action="{% url 'documents:re_extract' document.pk %}" class="mt-2">{% csrf_token %}

@@ -1,8 +1,11 @@
-{% load static %}<!doctype html>
+{% load static %}
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0b315a">
   <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
   <meta name="description" content="{{ SITE_LONG_NAME }}">
   {% if USE_LOCAL_VENDOR %}
@@ -15,33 +18,35 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body data-max-upload-mb="{{ MAX_UPLOAD_MB }}">
-{% block body %}
-<div class="app-shell">
-  {% include "partials/_sidebar.html" %}
-
-  <div class="app-main">
-    {% include "partials/_topbar.html" %}
-
-    <main class="app-content">
-      {% include "partials/_messages.html" %}
-      {% block content %}{% endblock %}
-    </main>
-
-    <footer class="no-print" style="padding:18px 26px;color:#63718a;font-size:12.5px;border-top:1px solid #dfe5ec;background:#fff;">
-      {{ SITE_LONG_NAME }} · Offices under OVPA · Records move, accountability stays.
-    </footer>
-  </div>
-</div>
-{% endblock %}
-
-{% if USE_LOCAL_VENDOR %}
-  <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
-  <script src="{% static 'vendor/htmx.min.js' %}"></script>
-{% else %}
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
-{% endif %}
-<script src="{% static 'js/doctrack.js' %}"></script>
-{% block extra_scripts %}{% endblock %}
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  {% block body %}
+    <div class="app-shell">
+      {% include "partials/_sidebar.html" %}
+      <button class="sidebar-backdrop no-print" type="button" data-sidebar-close aria-label="Close navigation" tabindex="-1"></button>
+      <div class="app-main">
+        {% include "partials/_topbar.html" %}
+        <main id="main-content" class="app-content" tabindex="-1">
+          {% include "partials/_messages.html" %}
+          {% block content %}{% endblock %}
+        </main>
+        <footer class="app-footer no-print">
+          <span>{{ SITE_LONG_NAME }}</span>
+          <span aria-hidden="true">·</span>
+          <span>Offices under OVPA</span>
+          <span aria-hidden="true">·</span>
+          <span>Records move, accountability stays.</span>
+        </footer>
+      </div>
+    </div>
+  {% endblock %}
+  {% if USE_LOCAL_VENDOR %}
+    <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'vendor/htmx.min.js' %}"></script>
+  {% else %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  {% endif %}
+  <script src="{% static 'js/doctrack.js' %}"></script>
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

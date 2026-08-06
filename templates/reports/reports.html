@@ -2,66 +2,269 @@
 {% load doctrack %}
 {% block title %}Reports · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div><div class="eyebrow">Reports</div><h1>Records overview</h1>
-  <p class="sub">Everything below respects your access — you only count what you are allowed to see.</p></div>
-  <a class="btn btn-udm-outline" href="{% url 'core:report_export' %}">Export CSV</a>
+<div class="page-head reports-page-head">
+  <div>
+    <div class="eyebrow">Reports and Analytics</div>
+    <h1>Records Overview</h1>
+    <p class="sub">All totals respect the signed-in user’s document and office permissions.</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2 no-print">
+    <button class="btn btn-udm-outline" type="button" onclick="window.print()">Print Report</button>
+    <a class="btn btn-udm" href="{% url 'core:report_export' %}">Export CSV</a>
+  </div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3"><div class="stat-card navy"><div class="label">Tracking records</div><div class="value">{{ total_records }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="stat-card green"><div class="label">Archived documents</div><div class="value">{{ total_documents }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="stat-card gold"><div class="label">Awaiting receipt</div><div class="value">{{ awaiting_receipt }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="stat-card red"><div class="label">Overdue</div><div class="value">{{ overdue }}</div></div></div>
+<section class="card-udm mb-4 no-print" aria-labelledby="report-filters-title">
+  <div class="card-udm-head">
+    <div>
+      <h2 id="report-filters-title">Report Filters</h2>
+      <div class="report-caption">Frontend-ready controls. Backend query handling may still be required.</div>
+    </div>
+  </div>
+  <div class="card-udm-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-6 col-lg-3">
+        <label class="form-label" for="report-office">Office</label>
+        <select class="form-select" id="report-office" name="office">
+          <option value="">All authorized offices</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="report-month">Month</label>
+        <select class="form-select" id="report-month" name="month">
+          <option value="">All months</option>
+          <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+          <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+          <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="report-year">Year</label>
+        <input class="form-control" id="report-year" name="year" type="number" min="2000" max="2100" placeholder="All years">
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="report-status">Status</label>
+        <select class="form-select" id="report-status" name="status">
+          <option value="">All statuses</option>
+          <option value="IN_TRANSIT">In Transit</option>
+          <option value="RECEIVED">Received</option>
+          <option value="IN_PROCESS">In Process</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="OVERDUE">Overdue</option>
+        </select>
+      </div>
+      <div class="col-sm-8 col-lg-2">
+        <label class="form-label" for="report-document-type">Document Type</label>
+        <select class="form-select" id="report-document-type" name="document_type">
+          <option value="">All types</option>
+        </select>
+      </div>
+      <div class="col-sm-4 col-lg-1 d-grid">
+        <button class="btn btn-udm-outline" type="submit">Apply</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<div class="report-print-header">
+  <div>
+    <strong>{{ SITE_NAME }} · Reports and Analytics</strong>
+    <span>Generated for {{ user.office_label }} by {{ user.display_name|default:user.username }}</span>
+  </div>
+  <span>Printed report</span>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-6">
-    <div class="card-udm"><div class="card-udm-head"><h2>Records by status</h2></div>
-      <div class="card-udm-body p-0"><table class="table-udm">
-        <tbody>{% for row in by_status %}
-          <tr><td>{% include "partials/_status_pill.html" with status=row.status %}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
-        {% empty %}<tr><td class="p-4 text-muted">No records yet.</td></tr>{% endfor %}</tbody>
-      </table></div>
+<div class="reports-tabs no-print" role="tablist" aria-label="Report categories">
+  <button class="reports-tab active" type="button" data-report-tab="tracking" aria-selected="true">Tracking Reports</button>
+  <button class="reports-tab" type="button" data-report-tab="documents" aria-selected="false">Document Management Reports</button>
+</div>
+
+<section class="report-panel active" data-report-panel="tracking" aria-labelledby="tracking-reports-heading">
+  <div class="report-section-head">
+    <div>
+      <h2 id="tracking-reports-heading">Tracking Reports</h2>
+      <p>Active routing, receipt, completion, and overdue activity.</p>
     </div>
   </div>
 
-  <div class="col-lg-6">
-    <div class="card-udm"><div class="card-udm-head"><h2>Busiest originating offices</h2></div>
-      <div class="card-udm-body p-0"><table class="table-udm">
-        <tbody>{% for row in by_office %}
-          <tr><td>{{ row.originating_office__name }}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
-        {% empty %}<tr><td class="p-4 text-muted">No records yet.</td></tr>{% endfor %}</tbody>
-      </table></div>
-    </div>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><a class="stat-card navy" href="{% url 'tracking:list' %}"><div class="label">Tracked Documents</div><div class="value">{{ total_records }}</div><div class="hint">Accessible active and completed records</div></a></div>
+    <div class="col-6 col-lg-3"><a class="stat-card gold" href="{% url 'tracking:list' %}?scope=inbox"><div class="label">Pending Receipt</div><div class="value">{{ awaiting_receipt }}</div><div class="hint">In Transit and awaiting acknowledgement</div></a></div>
+    <div class="col-6 col-lg-3"><a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE"><div class="label">Overdue</div><div class="value">{{ overdue }}</div><div class="hint">Past deadline and not completed</div></a></div>
+    <div class="col-6 col-lg-3"><a class="stat-card green" href="{% url 'documents:repository' %}"><div class="label">Completed / Filed</div><div class="value">{{ total_documents }}</div><div class="hint">Available in Document Management</div></a></div>
   </div>
 
-  <div class="col-lg-6">
-    <div class="card-udm"><div class="card-udm-head"><h2>New records per month</h2></div>
-      <div class="card-udm-body">
-        {% for row in monthly %}
-          <div class="d-flex align-items-center gap-2 mb-2">
-            <span style="width:96px;font-size:13px;">{{ row.month|date:"M Y" }}</span>
-            <div class="relevance-bar" style="flex:1;height:9px;"><span style="width:{{ row.percent }}%"></span></div>
-            <strong style="width:34px;text-align:right;">{{ row.total }}</strong>
+  <div class="row g-4">
+    <div class="col-xl-7">
+      <div class="card-udm h-100">
+        <div class="card-udm-head">
+          <div><h2>Transferred vs Received by Office</h2><div class="report-caption">Current backend exposes originating totals only; received totals require a report dataset.</div></div>
+        </div>
+        <div class="card-udm-body">
+          {% for row in by_office %}
+            <div class="report-office-row">
+              <div class="report-office-label">{{ row.originating_office__name|default:"Unknown office" }}</div>
+              <div class="report-series">
+                <div class="report-series-item"><span>Transferred</span><div class="report-bar"><i style="width:{% widthratio row.total total_records 100 %}%"></i></div><strong>{{ row.total }}</strong></div>
+                <div class="report-series-item report-series-item--placeholder"><span>Received</span><div class="report-bar"><i style="width:0%"></i></div><strong>—</strong></div>
+              </div>
+            </div>
+          {% empty %}
+            <div class="report-empty">No office activity is available yet.</div>
+          {% endfor %}
+          <div class="report-data-note">Backend TODO: provide received totals by destination office for the second series.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-5">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Records by Status</h2></div>
+        <div class="card-udm-body p-0">
+          <table class="table-udm">
+            <tbody>
+              {% for row in by_status %}
+                <tr><td>{% include "partials/_status_pill.html" with status=row.status %}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
+              {% empty %}
+                <tr><td class="p-4 text-muted">No records yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Monthly Tracking Activity</h2></div>
+        <div class="card-udm-body">
+          <div class="report-monthly-chart">
+            {% for row in monthly %}
+              <div class="report-month-item">
+                <div class="report-month-label">{{ row.month|date:"M Y" }}</div>
+                <div class="report-month-bar"><span style="width:{{ row.percent }}%"></span></div>
+                <strong>{{ row.total }}</strong>
+              </div>
+            {% empty %}
+              <div class="report-empty">No activity in the current reporting period.</div>
+            {% endfor %}
           </div>
-        {% empty %}<p class="text-muted mb-0">No activity in the last 90 days.</p>{% endfor %}
+        </div>
       </div>
+    </div>
+
+    <div class="col-xl-5">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Turnaround Metrics</h2></div>
+        <div class="card-udm-body">
+          <div class="report-metric"><span>Average receipt time</span><strong>Backend data required</strong></div>
+          <div class="report-metric"><span>Average processing time</span><strong>Backend data required</strong></div>
+          <div class="report-metric"><span>Incoming documents</span><strong>{{ awaiting_receipt }}</strong></div>
+          <p class="form-text mt-3 mb-0">Receipt and processing averages must be calculated from sent, received, and completed timestamps.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="report-panel" data-report-panel="documents" aria-labelledby="document-reports-heading">
+  <div class="report-section-head">
+    <div>
+      <h2 id="document-reports-heading">Document Management Reports</h2>
+      <p>Repository volume, archive quality, metadata completeness, and search activity.</p>
     </div>
   </div>
 
-  <div class="col-lg-6">
-    <div class="card-udm"><div class="card-udm-head"><h2>Archive quality</h2></div>
-      <div class="card-udm-body">
-        <div class="d-flex justify-content-between py-1"><span>Documents without tags</span><strong>{{ untagged_documents }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Documents without extracted text</span><strong>{{ documents_without_text }}</strong></div>
-        <p class="form-text mt-2 mb-0">Both numbers should trend to zero — untagged records are the ones people cannot find.</p>
-        <h3 style="font-size:15px;margin-top:16px;">Most used searches</h3>
-        {% for row in top_searches %}
-          <div class="d-flex justify-content-between py-1" style="font-size:14px;"><span>{{ row.query }}</span><span class="text-muted">{{ row.total }}</span></div>
-        {% empty %}<p class="text-muted mb-0" style="font-size:14px;">No searches recorded yet.</p>{% endfor %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="stat-card green"><div class="label">Repository Documents</div><div class="value">{{ total_documents }}</div><div class="hint">Completed, archived, and historical records</div></div></div>
+    <div class="col-6 col-lg-3"><div class="stat-card gold"><div class="label">Without Tags</div><div class="value">{{ untagged_documents }}</div><div class="hint">Metadata cleanup required</div></div></div>
+    <div class="col-6 col-lg-3"><div class="stat-card navy"><div class="label">Without Extracted Text</div><div class="value">{{ documents_without_text }}</div><div class="hint">Searchable by metadata only</div></div></div>
+    <div class="col-6 col-lg-3"><div class="stat-card"><div class="label">Office Coverage</div><div class="value">{{ by_office|length }}</div><div class="hint">Offices represented in current data</div></div></div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Documents by Office</h2></div>
+        <div class="card-udm-body p-0">
+          <table class="table-udm">
+            <tbody>
+              {% for row in by_office %}
+                <tr><td>{{ row.originating_office__name|default:"Unknown office" }}</td><td class="text-end fw-bold">{{ row.total }}</td></tr>
+              {% empty %}
+                <tr><td class="p-4 text-muted">No office totals are available.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div class="report-data-note m-3">Current values are based on tracking origins. Backend TODO: provide repository totals grouped by owning office.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Archive Quality</h2></div>
+        <div class="card-udm-body">
+          <div class="report-quality-row"><span>Documents with tags</span><strong>{{ total_documents|add:"-"|default:total_documents }}</strong></div>
+          <div class="report-quality-row"><span>Documents without tags</span><strong>{{ untagged_documents }}</strong></div>
+          <div class="report-quality-row"><span>Documents without extracted text</span><strong>{{ documents_without_text }}</strong></div>
+          <p class="form-text mt-3 mb-0">Lower incomplete-metadata totals improve search quality and repository organization.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Monthly Repository Totals</h2></div>
+        <div class="card-udm-body">
+          <div class="report-placeholder-chart">
+            <span>Repository monthly dataset required</span>
+            <div><i style="height:42%"></i><i style="height:68%"></i><i style="height:51%"></i><i style="height:78%"></i><i style="height:60%"></i><i style="height:88%"></i></div>
+          </div>
+          <p class="form-text mt-3 mb-0">Backend TODO: provide monthly repository totals by upload or document date.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card-udm h-100">
+        <div class="card-udm-head"><h2>Most Used Searches</h2></div>
+        <div class="card-udm-body">
+          {% for row in top_searches %}
+            <div class="report-search-row"><span>{{ row.query }}</span><strong>{{ row.total }}</strong></div>
+          {% empty %}
+            <div class="report-empty">No searches have been recorded.</div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>
-</div>
+</section>
+
+<footer class="report-print-footer">
+  <span>{{ SITE_LONG_NAME }}</span>
+  <span>Generated by {{ user.display_name|default:user.username }}</span>
+</footer>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('[data-report-tab]');
+    var panels = document.querySelectorAll('[data-report-panel]');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var target = tab.dataset.reportTab;
+        tabs.forEach(function (item) {
+          var active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panels.forEach(function (panel) {
+          panel.classList.toggle('active', panel.dataset.reportPanel === target);
+        });
+      });
+    });
+  })();
+</script>
 {% endblock %}

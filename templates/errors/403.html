@@ -1,10 +1,1 @@
-{% extends "base.html" %}
-{% block title %}No access · {{ SITE_NAME }}{% endblock %}
-{% block content %}
-<div class="card-udm"><div class="card-udm-body empty-state">
-  <h3>You cannot open this record</h3>
-  <p>{{ reason|default:"This document has not been routed to your office and nobody has granted you access to it." }}</p>
-  <p class="text-muted" style="font-size:13.5px;">Ask the originating office to share it, or ask your records officer to grant access.</p>
-  <a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to dashboard</a>
-</div></div>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Access Denied · {{ SITE_NAME }}{% endblock %}{% block content %}<div class="error-page"><div class="error-code">403</div><h1>You Cannot Open This Record</h1><p>{{ reason|default:"This document has not been routed to your office and no access grant is available." }}</p><p class="text-muted">Ask the originating office or an authorized records officer to share the document.</p><div class="d-flex flex-wrap justify-content-center gap-2"><a class="btn btn-udm" href="{% url 'core:dashboard' %}">Back to Dashboard</a><a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Open Tracking</a></div></div>{% endblock %}
