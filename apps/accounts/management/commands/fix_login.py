@@ -15,6 +15,8 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from apps.accounts.models import LoginLockout
+
 User = get_user_model()
 
 DEMO_PASSWORD = "DocTrack2026!"
@@ -116,8 +118,6 @@ class Command(BaseCommand):
         # -- 3b. Progressive lockout escalation --------------------------------
         # Clearing the attempts above unlocks the account now, but the recorded
         # escalation would still make the *next* lockout a long one.
-        from apps.accounts.models import LoginLockout
-
         escalations = LoginLockout.objects.all()
         if options["user"]:
             escalations = escalations.filter(

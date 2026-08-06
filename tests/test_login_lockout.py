@@ -173,13 +173,25 @@ def test_lockout_page_sends_you_back_to_login_once_it_expires(client, db):
     assert SESSION_USERNAME_KEY not in client.session
 
 
+def sign_in(client, username="mallory", password="RealPass123!", **extra):
+    """Sign in through the real view.
+
+    Not ``client.login()``: that calls ``authenticate()`` with no request, and
+    the axes backend raises ``AxesBackendRequestParameterRequired`` (a
+    ValueError, which ``authenticate()`` does not swallow) when the request is
+    missing. Going through the view is also what exercises our signal handlers.
+    """
+    return client.post("/accounts/login/", {"username": username, "password": password}, **extra)
+
+
 @override_settings(AXES_FAILURE_LIMIT=3, AXES_ESCALATION_RESET_ON_LOGIN=True)
 def test_full_sign_in_forgives_the_escalation_when_that_is_enabled(client, db):
     User.objects.create_user(username="mallory", password="RealPass123!")
     _record_lockout(USERNAME, "mallory", timezone.now() - timedelta(days=1))
     assert current_stage("mallory", None) == 1
 
-    assert client.login(username="mallory", password="RealPass123!")
+    sign_in(client)
+    assert client.session.get("_auth_user_id"), "the sign-in did not go through"
     assert current_stage("mallory", None) == 0
 
 
@@ -189,7 +201,8 @@ def test_by_default_signing_in_does_not_forgive_the_escalation(client, db):
     User.objects.create_user(username="mallory", password="RealPass123!")
     _record_lockout(USERNAME, "mallory", timezone.now() - timedelta(days=1))
 
-    assert client.login(username="mallory", password="RealPass123!")
+    sign_in(client)
+    assert client.session.get("_auth_user_id"), "the sign-in did not go through"
     assert current_stage("mallory", None) == 1
 
     _record_lockout(USERNAME, "mallory", timezone.now())

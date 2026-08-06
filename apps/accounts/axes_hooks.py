@@ -52,6 +52,7 @@ from axes.signals import user_locked_out
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
 from django.core.cache import cache
+from django.db import router, transaction
 from django.db.models import Q
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
@@ -137,8 +138,8 @@ def current_stage(username: str | None, ip_address: str | None) -> int:
     return max((record["stage"] for record in _live_records(username, ip_address)), default=0)
 
 
-@receiver(post_save, sender=LoginLockout)
-@receiver(post_delete, sender=LoginLockout)
+@receiver(post_save, sender=LoginLockout, dispatch_uid="doctrack_lockout_cache_save")
+@receiver(post_delete, sender=LoginLockout, dispatch_uid="doctrack_lockout_cache_delete")
 def _invalidate_cached_record(sender, instance, **kwargs):
     """Keep the cache honest no matter who writes.
 
@@ -185,28 +186,35 @@ def _record_lockout(kind: str, key: str, attempt_time) -> None:
     itself is told not to (``AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT =
     False``), but it still re-fires the signal that gets us here on every such
     retry, so this has to refuse to extend it independently too.
+
+    The row is locked for the read-modify-write. Failed sign-ins arrive
+    concurrently by their nature — a script hitting the form, or simply the
+    several workers in render.yaml — and without this two of them can both
+    read the same stage and each add one, doubling the wait twice over for a
+    single lockout.
     """
-    row, _created = LoginLockout.objects.get_or_create(kind=kind, key=key)
+    with transaction.atomic(using=router.db_for_write(LoginLockout)):
+        row, _created = LoginLockout.objects.select_for_update().get_or_create(kind=kind, key=key)
 
-    still_locked = row.locked_until is not None and attempt_time < row.locked_until
-    if still_locked:
+        still_locked = row.locked_until is not None and attempt_time < row.locked_until
+        if still_locked:
+            row.last_lockout_at = attempt_time
+            row.save(update_fields=["last_lockout_at", "updated_at"])
+            return
+
+        if row.last_lockout_at is not None and row.last_lockout_at < _decay_cutoff():
+            stage = 1  # quiet for long enough that the history is forgiven
+        else:
+            stage = row.stage + 1
+            log.warning("AXES: %s %r reached lockout stage %d", kind, key, stage)
+
+        row.stage = stage
         row.last_lockout_at = attempt_time
-        row.save(update_fields=["last_lockout_at", "updated_at"])
-        return
-
-    if row.last_lockout_at is not None and row.last_lockout_at < _decay_cutoff():
-        stage = 1  # quiet for long enough that the history is forgiven
-    else:
-        stage = row.stage + 1
-        log.warning("AXES: %s %r reached lockout stage %d", kind, key, stage)
-
-    row.stage = stage
-    row.last_lockout_at = attempt_time
-    row.locked_until = attempt_time + cooloff_for_stage(stage)
-    row.save(update_fields=["stage", "last_lockout_at", "locked_until", "updated_at"])
+        row.locked_until = attempt_time + cooloff_for_stage(stage)
+        row.save(update_fields=["stage", "last_lockout_at", "locked_until", "updated_at"])
 
 
-@receiver(user_locked_out)
+@receiver(user_locked_out, dispatch_uid="doctrack_lockout_escalate")
 def on_user_locked_out(sender, request, username, ip_address, **kwargs):
     attempt_time = getattr(request, "axes_attempt_time", None) or timezone.now()
     if username:
@@ -215,7 +223,7 @@ def on_user_locked_out(sender, request, username, ip_address, **kwargs):
         _record_lockout(LoginLockout.Kind.IP, ip_address, attempt_time)
 
 
-@receiver(user_logged_in)
+@receiver(user_logged_in, dispatch_uid="doctrack_lockout_on_login")
 def on_user_logged_in(sender, request, user, **kwargs):
     if request is not None:
         request.session.pop(SESSION_USERNAME_KEY, None)
