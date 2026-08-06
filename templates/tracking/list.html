@@ -57,9 +57,14 @@
             </td>
             <td>{{ record.current_office.code|default:"—" }}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
-            <td>
+          <td>
               {% include "partials/_status_pill.html" with status=record.display_status %}
-              {% if record.is_overdue %}<span class="pill pill-overdue ms-1">Overdue</span>{% endif %}
+
+              {% if record.is_overdue and record.display_status != "OVERDUE" %}
+                <span class="pill pill-overdue ms-1">
+                  Overdue
+                </span>
+              {% endif %}
             </td>
             <td class="text-end">
               {% if record.can_confirm_now %}
