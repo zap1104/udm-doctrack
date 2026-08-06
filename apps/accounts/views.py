@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
@@ -48,6 +49,12 @@ class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
         response = super().form_valid(form)
         User.objects.filter(pk=self.request.user.pk).update(must_change_password=False)
         update_session_auth_hash(self.request, form.user)
+        # Only now is the sign-in fully complete, so this is where a forced
+        # password change forgives the lockout escalation (when configured to).
+        if getattr(settings, "AXES_ESCALATION_RESET_ON_LOGIN", False):
+            from .axes_hooks import clear_escalation
+
+            clear_escalation(username=self.request.user.get_username())
         messages.success(self.request, "Password updated.")
         log_action(AuditLog.Action.UPDATE, "Changed own password", actor=self.request.user, request=self.request)
         return response

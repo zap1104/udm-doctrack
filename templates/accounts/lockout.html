@@ -10,7 +10,25 @@
     <span></span>
   </section>
   <section class="login-form"><div class="inner">
-    <h2>Try again in a few minutes</h2>
+    <h2 data-lockout-heading>Try again in a few minutes</h2>
+    {% if cooloff_timedelta %}
+      {% comment %}
+        The countdown itself lives in static/js/doctrack.js: an inline script
+        here would be blocked outright once ENABLE_CSP is turned on, because
+        CSP_SCRIPT_SRC allows no inline code.
+      {% endcomment %}
+      <div class="lockout-timer"
+           data-lockout-seconds="{{ cooloff_seconds_remaining|default_if_none:cooloff_timedelta.total_seconds|floatformat:0 }}"
+           data-lockout-redirect="{% url 'accounts:login' %}">
+        <p class="text-muted mb-1">Time remaining</p>
+        {% comment %}
+          aria-live is off: a value changing every second would be read out
+          endlessly. The status line below announces once, at the end.
+        {% endcomment %}
+        <div class="lockout-timer__clock" data-lockout-clock aria-live="off">--:--</div>
+        <p class="visually-hidden" data-lockout-status role="status" aria-live="polite"></p>
+      </div>
+    {% endif %}
     <p class="text-muted">If you cannot remember the password, ask the records administrator to set a new one for your account.</p>
     <a class="btn btn-udm-outline" href="{% url 'accounts:login' %}">Back to sign in</a>
   </div></section>
