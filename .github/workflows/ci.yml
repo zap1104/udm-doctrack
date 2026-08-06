@@ -56,5 +56,13 @@ jobs:
       - name: Make migrations (fails if a model change was not committed)
         run: python manage.py makemigrations --check --dry-run
 
+      # DJANGO_DEBUG is False here, so static files are served through
+      # whitenoise's manifest storage — the same as in production, where
+      # render.yaml's build step collects them. Without a manifest, rendering
+      # any template that uses {% static %} raises "Missing staticfiles
+      # manifest entry", so any test that loads a page would fail.
+      - name: Collect static files
+        run: python manage.py collectstatic --noinput
+
       - name: Run tests
         run: pytest -q

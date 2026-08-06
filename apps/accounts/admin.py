@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import Office, User
+from .models import LoginLockout, Office, User
 
 
 @admin.register(Office)
@@ -22,3 +22,17 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (
         ("DocTrack profile", {"fields": ("first_name", "last_name", "email", "office", "role", "position")}),
     )
+
+
+@admin.register(LoginLockout)
+class LoginLockoutAdmin(admin.ModelAdmin):
+    list_display = ("key", "kind", "stage", "locked_until", "last_lockout_at")
+    list_filter = ("kind",)
+    search_fields = ("key",)
+    readonly_fields = ("created_at", "updated_at")
+    actions = ["clear_escalation"]
+
+    @admin.action(description="Clear escalation (next lockout starts from the base wait)")
+    def clear_escalation(self, request, queryset):
+        count, _ = queryset.delete()
+        self.message_user(request, f"Cleared {count} lockout escalation record(s).")

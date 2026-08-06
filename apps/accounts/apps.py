@@ -8,4 +8,9 @@ class AccountsConfig(AppConfig):
     verbose_name = "Accounts & offices"
 
     def ready(self):
+        from django.conf import settings
+
         from . import signals  # noqa: F401
+
+        if getattr(settings, "ENABLE_AXES", False):
+            from . import axes_hooks  # noqa: F401

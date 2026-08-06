@@ -307,4 +307,62 @@
       box.focus();
     }
   });
+
+  /* ----------------------------------------------------------------------
+     6. Sign-in lockout countdown (templates/accounts/lockout.html).
+     Lives here rather than inline in the template so it still runs once
+     ENABLE_CSP is switched on — CSP_SCRIPT_SRC permits no inline scripts.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var wrap = document.querySelector("[data-lockout-seconds]");
+    if (!wrap) return;
+
+    var clock = wrap.querySelector("[data-lockout-clock]");
+    var status = wrap.querySelector("[data-lockout-status]");
+    var heading = document.querySelector("[data-lockout-heading]");
+    if (!clock) return;
+
+    var seconds = parseInt(wrap.dataset.lockoutSeconds, 10);
+    if (isNaN(seconds) || seconds < 0) seconds = 0;
+
+    /* Count towards a fixed deadline instead of subtracting a second per tick.
+       Browsers throttle timers in background tabs, so a decrementing counter
+       falls behind real time — and this countdown is meant to read the same
+       everywhere, including on a device that sat in the background. */
+    var deadline = Date.now() + seconds * 1000;
+    var timer = null;
+
+    function pad(value) {
+      return (value < 10 ? "0" : "") + value;
+    }
+
+    /* Waits reach hours at the higher lockout stages, where "120:00" would be
+       nonsense — show HH:MM:SS once past an hour. */
+    function format(total) {
+      var hours = Math.floor(total / 3600);
+      var minutes = Math.floor((total % 3600) / 60);
+      return (hours > 0 ? pad(hours) + ":" : "") + pad(minutes) + ":" + pad(total % 60);
+    }
+
+    function finish() {
+      clock.textContent = format(0);
+      if (heading) heading.textContent = "Sign-in is unlocked";
+      if (status) status.textContent = "The waiting time is over. You can try signing in again.";
+      var back = wrap.dataset.lockoutRedirect;
+      if (back) window.setTimeout(function () { window.location.href = back; }, 1500);
+    }
+
+    function tick() {
+      var left = Math.round((deadline - Date.now()) / 1000);
+      if (left <= 0) {
+        if (timer) window.clearInterval(timer);
+        finish();
+        return;
+      }
+      clock.textContent = format(left);
+    }
+
+    tick();
+    if (seconds > 0) timer = window.setInterval(tick, 1000);
+  })();
 })();

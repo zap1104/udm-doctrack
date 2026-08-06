@@ -3,7 +3,35 @@
 {% block title %}Sign-in Paused · {{ SITE_NAME }}{% endblock %}
 {% block body %}
 <div class="login-wrap">
-  <section class="login-art" aria-labelledby="lockout-heading"><div class="grid-lines" aria-hidden="true"></div><div class="login-brand"><img src="{% static 'img/favicon.svg' %}" alt=""><span class="wordmark wordmark--light"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span></div><div><h1 id="lockout-heading">Sign-in paused.</h1><div class="rule"></div><p>Five unsuccessful attempts triggered a temporary security lockout for this account or address.</p></div><p class="login-institution">Universidad de Manila · Office of the Vice President for Administration</p></section>
-  <main class="login-form" id="main-content"><div class="inner"><span class="lockout-icon" aria-hidden="true">!</span><h2>Try Again Later</h2><p class="text-muted">Wait for the security cooldown before trying again. If the password is unknown, ask the records administrator to reset the account.</p><a class="btn btn-udm-outline" href="{% url 'accounts:login' %}">Back to Sign In</a></div></main>
+  <section class="login-art">
+    <div class="grid-lines" aria-hidden="true"></div>
+    <div><span class="wordmark wordmark--light"><span class="udm">UDM</span> <span class="doctrack">Doc Track</span></span></div>
+    <div><h1>Sign-in paused</h1><div class="rule"></div>
+      <p>Too many failed attempts came from this account or address, so sign-in is locked for a short while.</p></div>
+    <span></span>
+  </section>
+  <section class="login-form"><div class="inner">
+    <h2 data-lockout-heading>Try again in a few minutes</h2>
+    {% if cooloff_timedelta %}
+      {% comment %}
+        The countdown itself lives in static/js/doctrack.js: an inline script
+        here would be blocked outright once ENABLE_CSP is turned on, because
+        CSP_SCRIPT_SRC allows no inline code.
+      {% endcomment %}
+      <div class="lockout-timer"
+           data-lockout-seconds="{{ cooloff_seconds_remaining|default_if_none:cooloff_timedelta.total_seconds|floatformat:0 }}"
+           data-lockout-redirect="{% url 'accounts:login' %}">
+        <p class="text-muted mb-1">Time remaining</p>
+        {% comment %}
+          aria-live is off: a value changing every second would be read out
+          endlessly. The status line below announces once, at the end.
+        {% endcomment %}
+        <div class="lockout-timer__clock" data-lockout-clock aria-live="off">--:--</div>
+        <p class="visually-hidden" data-lockout-status role="status" aria-live="polite"></p>
+      </div>
+    {% endif %}
+    <p class="text-muted">If you cannot remember the password, ask the records administrator to set a new one for your account.</p>
+    <a class="btn btn-udm-outline" href="{% url 'accounts:login' %}">Back to sign in</a>
+  </div></section>
 </div>
 {% endblock %}
