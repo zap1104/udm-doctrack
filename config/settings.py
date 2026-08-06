@@ -72,7 +72,8 @@ def has_package(name: str) -> bool:
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS",
+                         "localhost,127.0.0.1,[::1],testserver")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 ROOT_URLCONF = "config.urls"
@@ -82,7 +83,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 SITE_NAME = env("SITE_NAME", "UDM DocTrack")
-SITE_LONG_NAME = env("SITE_LONG_NAME", "UDM Records and Document Management System")
+SITE_LONG_NAME = env(
+    "SITE_LONG_NAME", "UDM Records and Document Management System")
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +106,8 @@ INSTALLED_APPS.append("django.contrib.staticfiles")
 
 ENABLE_AXES = env_bool("ENABLE_AXES", True) and has_package("axes")
 ENABLE_CSP = env_bool("ENABLE_CSP", False) and has_package("csp")
-ENABLE_BACKGROUND_TASKS = env_bool("ENABLE_BACKGROUND_TASKS", False) and has_package("django_q")
+ENABLE_BACKGROUND_TASKS = env_bool(
+    "ENABLE_BACKGROUND_TASKS", False) and has_package("django_q")
 
 if ENABLE_AXES:
     INSTALLED_APPS.append("axes")
@@ -199,6 +202,46 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# Cache
+#
+# Django's default is a per-process in-memory cache. That is the wrong shape
+# for this project twice over: the dev server's auto-reloader empties it on
+# every code change, and the three Gunicorn workers in render.yaml would each
+# keep their own private copy. Anything cached about sign-in lockouts would
+# quietly disappear or disagree between workers.
+#
+# So the default here is a cache table in PostgreSQL — shared by every worker
+# and untouched by restarts, with no extra service to pay for or run. The
+# table is created by the apps/core migration, so `manage.py migrate` (which
+# the Procfile release step already runs) is all that is needed.
+#
+# Set REDIS_URL to switch to Redis, which is faster; Django 5 ships the
+# backend, so no additional package is required.
+# ---------------------------------------------------------------------------
+CACHE_TABLE_NAME = "doctrack_cache"
+REDIS_URL = env("REDIS_URL")
+
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": CACHE_TABLE_NAME,
+            "TIMEOUT": env_int("CACHE_TIMEOUT_SECONDS", 300),
+            # The backend's default cap is 300 rows, which it culls a third of
+            # at a time — far too small to hold lockout state for a campus.
+            "OPTIONS": {"MAX_ENTRIES": env_int("CACHE_MAX_ENTRIES", 20000), "CULL_FREQUENCY": 4},
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
 # Authentication & passwords
 # ---------------------------------------------------------------------------
 AUTHENTICATION_BACKENDS = []
@@ -230,9 +273,11 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", 60 * 60 * 8)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
+    "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False  # HTMX reads the token from the DOM, not the cookie.
+# HTMX reads the token from the DOM, not the cookie.
+CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
@@ -242,9 +287,33 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # ---------------------------------------------------------------------------
 if ENABLE_AXES:
     AXES_FAILURE_LIMIT = env_int("AXES_FAILURE_LIMIT", 5)
-    AXES_COOLOFF_TIME = env_int("AXES_COOLOFF_MINUTES", 15) / 60  # hours
+    # Cool-off is computed dynamically so it doubles on each successive lockout
+    # for the same account/IP (see apps.accounts.axes_hooks). These two settings
+    # are the base and ceiling that callable uses.
+    AXES_COOLOFF_BASE_MINUTES = env_int("AXES_COOLOFF_MINUTES", 15)
+    AXES_COOLOFF_MAX_MINUTES = env_int("AXES_COOLOFF_MAX_MINUTES", 24 * 60)
+    AXES_COOLOFF_TIME = "apps.accounts.axes_hooks.get_progressive_cooloff"
+    # A quiet spell forgives the escalation, so an honest user who fumbled
+    # their password months ago does not start at a long wait.
+    AXES_ESCALATION_DECAY_DAYS = env_int("AXES_ESCALATION_DECAY_DAYS", 7)
+    # Off by default: the wait keeps growing per lockout even if a sign-in
+    # succeeds in between, and is only forgiven by the decay window above or by
+    # `manage.py fix_login`. Turn on to wipe an account's escalation as soon as
+    # its owner completes a full sign-in (including any forced password change).
+    AXES_ESCALATION_RESET_ON_LOGIN = env_bool("AXES_ESCALATION_RESET_ON_LOGIN", False)
     AXES_RESET_ON_SUCCESS = True
+    # axes' own default (True) pushes the lockout's unlock time forward on every
+    # retry made *while already locked out* — so a countdown just reflects
+    # whenever you last tried again, from wherever you tried it, rather than a
+    # fixed wait tied to the username/IP. False freezes the block at the moment
+    # it started: retries (from any device) are still refused, but they stop
+    # extending it, so the same countdown shows everywhere.
+    AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
     AXES_LOCKOUT_TEMPLATE = "accounts/lockout.html"
+    # Redirects to accounts:lockout instead of rendering the template inline as
+    # the body of the failed POST, so the page has a URL that can be reloaded
+    # without resending the login or replaying a cached, frozen countdown.
+    AXES_LOCKOUT_CALLABLE = "apps.accounts.axes_hooks.lockout_response"
     AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
     AXES_ENABLE_ADMIN = True
     AXES_VERBOSE = True
@@ -313,9 +382,11 @@ elif FILE_STORAGE_BACKEND == "azure" and has_package("storages"):
         },
     }
 
-_static_storage = {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}
+_static_storage = {
+    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}
 if not DEBUG and has_package("whitenoise"):
-    _static_storage = {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}
+    _static_storage = {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}
 
 STORAGES = {"default": _default_storage, "staticfiles": _static_storage}
 
@@ -349,13 +420,15 @@ if ENABLE_BACKGROUND_TASKS:
 # ---------------------------------------------------------------------------
 # Email (password resets / notifications)
 # ---------------------------------------------------------------------------
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", "")
 EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "UDM DocTrack <no-reply@udm.edu.ph>")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL",
+                         "UDM DocTrack <no-reply@udm.edu.ph>")
 
 
 # ---------------------------------------------------------------------------
@@ -392,15 +465,18 @@ SEARCH_RESULT_LIMIT = env_int("SEARCH_RESULT_LIMIT", 200)
 SEARCH_CONFIG = env("SEARCH_CONFIG", "english")
 
 # Text extraction / OCR
-OCR_BACKEND = env("OCR_BACKEND", "auto")  # auto | textlayer | ocrspace | azure | none
+# auto | textlayer | ocrspace | azure | none
+OCR_BACKEND = env("OCR_BACKEND", "auto")
 OCR_SPACE_API_KEY = env("OCR_SPACE_API_KEY", "")
-OCR_SPACE_ENDPOINT = env("OCR_SPACE_ENDPOINT", "https://api.ocr.space/parse/image")
+OCR_SPACE_ENDPOINT = env("OCR_SPACE_ENDPOINT",
+                         "https://api.ocr.space/parse/image")
 AZURE_DOCINT_ENDPOINT = env("AZURE_DOCINT_ENDPOINT", "")
 AZURE_DOCINT_KEY = env("AZURE_DOCINT_KEY", "")
 OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 200000)
 
 # Metadata suggestion engine
-SUGGESTION_ENGINE = env("SUGGESTION_ENGINE", "rules")  # rules | none | ai (future)
+# rules | none | ai (future)
+SUGGESTION_ENGINE = env("SUGGESTION_ENGINE", "rules")
 SUGGESTION_MIN_CONFIDENCE = float(env("SUGGESTION_MIN_CONFIDENCE", "0.35"))
 
 

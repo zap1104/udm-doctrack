@@ -359,6 +359,15 @@ a:hover { text-decoration: underline; }
 .login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background: #fff; }
 .login-form .inner { width: 100%; max-width: 372px; }
 
+.lockout-timer {
+  margin: 6px 0 20px; padding: 18px 20px; border-radius: 10px;
+  background: #f4f7fb; border: 1px solid #dfe5ec; text-align: center;
+}
+.lockout-timer__clock {
+  font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums; color: #0b315a;
+}
+
 @media (max-width: 900px) {
   .login-wrap { grid-template-columns: 1fr; }
   .login-art { padding: 34px 26px; }

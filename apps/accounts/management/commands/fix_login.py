@@ -113,6 +113,33 @@ class Command(BaseCommand):
         except Exception as exc:  # axes not installed, or its tables are missing
             self.stdout.write(f"   Skipped — django-axes is not available ({exc}).")
 
+        # -- 3b. Progressive lockout escalation --------------------------------
+        # Clearing the attempts above unlocks the account now, but the recorded
+        # escalation would still make the *next* lockout a long one.
+        from apps.accounts.models import LoginLockout
+
+        escalations = LoginLockout.objects.all()
+        if options["user"]:
+            escalations = escalations.filter(
+                kind=LoginLockout.Kind.USERNAME, key=options["user"]
+            )
+
+        escalation_count = escalations.count()
+        if escalation_count == 0:
+            self.stdout.write("   No lockout escalation recorded.")
+        else:
+            for row in escalations:
+                self.stdout.write(f"   {row.key:<14} escalation stage {row.stage}")
+            if options["keep_lockouts"]:
+                self.stdout.write(
+                    self.style.WARNING(f"   {escalation_count} escalation record(s) left in place.")
+                )
+            else:
+                escalations.delete()
+                self.stdout.write(
+                    self.style.SUCCESS(f"   Reset {escalation_count} lockout escalation(s) to the base wait.")
+                )
+
         # -- 4. Verdict --------------------------------------------------------
         self.stdout.write("")
         if problems:

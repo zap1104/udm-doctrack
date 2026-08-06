@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import path
 
 from . import views
@@ -17,3 +18,8 @@ urlpatterns = [
     path("offices/new/", views.OfficeEditView.as_view(), name="office_create"),
     path("offices/<int:pk>/", views.OfficeEditView.as_view(), name="office_edit"),
 ]
+
+if getattr(settings, "ENABLE_AXES", False):
+    from . import axes_hooks
+
+    urlpatterns.append(path("locked/", axes_hooks.lockout_status_view, name="lockout"))

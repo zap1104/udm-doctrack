@@ -10,9 +10,59 @@
     <span></span>
   </section>
   <section class="login-form"><div class="inner">
-    <h2>Try again in a few minutes</h2>
+    <h2 id="lockout-heading">Try again in a few minutes</h2>
+    {% if cooloff_timedelta %}
+      <div class="lockout-timer" data-seconds="{{ cooloff_seconds_remaining|default_if_none:cooloff_timedelta.total_seconds|floatformat:0 }}">
+        <p class="text-muted mb-1" id="lockout-timer-label">Time remaining</p>
+        <div class="lockout-timer__clock" id="lockout-countdown" aria-live="polite">--:--</div>
+      </div>
+    {% endif %}
     <p class="text-muted">If you cannot remember the password, ask the records administrator to set a new one for your account.</p>
     <a class="btn btn-udm-outline" href="{% url 'accounts:login' %}">Back to sign in</a>
   </div></section>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if cooloff_timedelta %}
+<script>
+(function () {
+  var wrap = document.querySelector('.lockout-timer');
+  var clockEl = document.getElementById('lockout-countdown');
+  var labelEl = document.getElementById('lockout-timer-label');
+  var headingEl = document.getElementById('lockout-heading');
+  if (!wrap || !clockEl) return;
+
+  var remaining = parseInt(wrap.dataset.seconds, 10) || 0;
+
+  function render() {
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    clockEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function finish() {
+    clockEl.textContent = '00:00';
+    labelEl.textContent = 'You can try again now';
+    headingEl.textContent = 'Sign-in is unlocked';
+  }
+
+  if (remaining <= 0) {
+    finish();
+    return;
+  }
+
+  render();
+  var timer = setInterval(function () {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      finish();
+      return;
+    }
+    render();
+  }, 1000);
+})();
+</script>
+{% endif %}
 {% endblock %}
