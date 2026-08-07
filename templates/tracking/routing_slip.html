@@ -6,9 +6,16 @@
 {% endblock %}
 {% block content %}
 <div class="routing-slip-actions no-print">
-  <button class="btn btn-udm" type="button" onclick="window.print()">Print Routing Slip</button>
+  <button class="btn btn-udm" type="button" data-print-trigger>Print Routing Slip</button>
   <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to Record</a>
 </div>
+
+<span hidden data-print-log="a routing slip"
+      data-print-log-reference="{{ record.tracking_number }}"
+      data-print-log-target-type="TrackingRecord"
+      data-print-log-target-id="{{ record.pk }}"
+      data-print-log-url="{% url 'core:log_print' %}"
+      data-print-log-csrf="{{ csrf_token }}"></span>
 
 <article class="routing-slip" aria-labelledby="routing-slip-title">
   <header class="routing-slip-header">

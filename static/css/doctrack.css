@@ -339,6 +339,58 @@ a:hover { text-decoration: underline; }
   padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; color: #5a4a20;
 }
 
+/* --------------------------------------------------------------- deadline */
+/* "Is there a deadline?" first, the calendar only if the answer is yes.
+   The date panel is visible by default so the field still works without JS;
+   doctrack.js hides it when "No deadline" is selected. */
+.deadline-field { min-width: 0; border: 1px solid var(--udm-line); border-radius: var(--radius); padding: 14px 16px; }
+.deadline-field > legend {
+  float: none; width: auto; padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #33415a;
+}
+.deadline-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.deadline-option {
+  display: inline-flex; align-items: center; gap: 9px; flex: 1 1 220px;
+  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 13px;
+  background: #fff; font-size: 14px; cursor: pointer;
+}
+.deadline-option:hover { border-color: var(--udm-teal); }
+.deadline-option input { margin: 0; flex: 0 0 auto; }
+.deadline-option:has(input:checked) { border-color: var(--udm-teal); background: var(--udm-teal-soft); }
+.deadline-date { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--udm-line); max-width: 320px; }
+.deadline-date[hidden] { display: none; }
+
+/* ------------------------------------------------- tracking slip: create/review */
+.phase2-card-caption { margin-top: 2px; color: var(--udm-muted); font-size: 12.5px; }
+.phase2-required-note { color: var(--udm-muted); font-size: 12px; white-space: nowrap; }
+.phase2-form-section { padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--udm-line); }
+.phase2-form-section--last { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+.phase2-section-title {
+  font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--udm-muted); font-weight: 700; margin: 0 0 14px;
+}
+.phase2-upload-box {
+  border: 1px dashed #cfd8e6; border-radius: var(--radius);
+  background: #fafbfd; padding: 16px;
+}
+.phase2-sticky-card { position: sticky; top: 84px; }
+.phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
+.phase2-checklist li { margin-bottom: 10px; }
+.phase2-checklist li:last-child { margin-bottom: 0; }
+.phase2-checklist strong { color: var(--udm-navy); }
+.phase2-review-table th {
+  width: 190px; color: var(--udm-muted); font-size: 13px; font-weight: 600; vertical-align: top;
+}
+.phase2-review-table td { font-size: 14px; }
+.phase2-preview-badge {
+  display: inline-block; background: var(--udm-gold-soft); color: #8a6a12;
+  border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 700;
+}
+.phase2-inline-editor {
+  border: 1px solid var(--udm-line); border-radius: var(--radius);
+  padding: 16px; margin-bottom: 14px; background: var(--udm-canvas);
+}
+@media (max-width: 991.98px) { .phase2-sticky-card { position: static; } }
+
 /* ------------------------------------------------------------------ login */
 .login-wrap { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; }
 .login-art {
@@ -540,9 +592,25 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   PHASE 5: Reports and analytics
+   Reports and analytics
+   ----------------------------------------------------------------
+   Chart colours are two validated categorical slots plus the reserved
+   status scale. --chart-one / --chart-two clear the lightness band,
+   chroma floor, protan/deutan separation and 3:1 contrast on white;
+   they are snapped-to-passing steps of UDM teal and institutional gold,
+   which sit just below the chroma floor at their brand values. Series
+   identity is never carried by colour alone — every chart ships a
+   legend or a labelled list, and the column charts a table view.
    ================================================================ */
+:root {
+  --chart-one: #0a6e9a;
+  --chart-two: #b58c24;
+  --chart-track: #e8edf3;
+  --chart-grid: #eef1f6;
+}
+
 .report-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
+.card-udm-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .report-print-header,.report-print-footer { display:none; }
 .reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:#fff; box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
@@ -553,32 +621,90 @@ a:hover { text-decoration: underline; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
 .report-section-head h2 { margin:0; font-size:19px; }
 .report-section-head p { margin:3px 0 0; color:var(--udm-muted); font-size:13px; }
-.report-office-row { padding:12px 0; border-bottom:1px solid #eef1f6; }
+.report-empty { padding:24px 10px; color:var(--udm-muted); text-align:center; }
+
+/* Numbers that sit in a column line up; standalone figures keep proportional
+   digits, where tabular spacing reads loose. */
+.num { font-variant-numeric:tabular-nums; }
+
+/* ------------------------------------------------------------ legend keys */
+.chart-legend { display:flex; flex-wrap:wrap; gap:14px; }
+.chart-key { display:inline-flex; align-items:center; gap:6px; color:var(--udm-muted); font-size:12px; font-weight:600; }
+.chart-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
+.chart-swatch--one { background:var(--chart-one); }
+.chart-swatch--two { background:var(--chart-two); }
+
+/* ------------------------------------------------------- horizontal bars */
+.report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
 .report-office-label { margin-bottom:7px; color:var(--udm-navy); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
-.report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 38px; align-items:center; gap:9px; font-size:11.5px; }
-.report-series-item span { color:var(--udm-muted); }
-.report-series-item strong { text-align:right; }
-.report-series-item--placeholder { opacity:.62; }
-.report-bar { height:9px; overflow:hidden; border-radius:999px; background:#e8edf3; }
-.report-bar i { display:block; height:100%; min-width:2px; border-radius:999px; background:var(--udm-teal); }
-.report-series-item--placeholder .report-bar i { background:var(--udm-gold); }
-.report-data-note { margin-top:12px; padding:8px 10px; border-radius:7px; background:#fff8e8; color:#725a1c; font-size:11.5px; }
-.report-monthly-chart { display:grid; gap:9px; }
-.report-month-item { display:grid; grid-template-columns:70px minmax(0,1fr) 35px; align-items:center; gap:10px; font-size:12px; }
-.report-month-label { color:var(--udm-muted); }
-.report-month-bar { height:10px; overflow:hidden; border-radius:999px; background:#e8edf3; }
-.report-month-bar span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--udm-teal),#3c8fa0); }
-.report-month-item strong { text-align:right; }
-.report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid #eef1f6; font-size:13.5px; }
+.report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
+.report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
+.report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
+.report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.report-series-item strong { text-align:right; color:var(--udm-navy); }
+.report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
+/* Square at the baseline, 4px rounded at the data end. No min-width: a zero
+   value must paint nothing (the view floors real values at 1% instead). */
+.report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
+.bar-one { background:var(--chart-one); }
+.bar-two { background:var(--chart-two); }
+.bar-alert { background:var(--udm-red); }
+
+/* -------------------------------------------------------- column charts */
+.column-chart { position:relative; padding-top:6px; }
+/* Hairline, solid, one shade off the surface — never dashed. */
+.column-chart-grid { position:absolute; inset:6px 0 22px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+.column-chart-grid i { display:block; height:1px; background:var(--chart-grid); }
+.column-chart-plot { position:relative; display:flex; align-items:flex-end; gap:6px; height:190px; }
+/* Heights are percentages, so every box between the plot and the mark keeps a
+   definite height — flex-grow here would leave the percentage unresolvable. */
+.column-group { flex:1 1 0; min-width:0; height:100%; }
+/* The 2px gap is the surface doing the separating — no stroke around a mark. */
+.column-pair { display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px); }
+.column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
+.column--one { background:var(--chart-one); }
+.column--two { background:var(--chart-two); }
+.column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
+.chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
+.chart-table { margin-top:12px; }
+.chart-table summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
+.chart-table table { margin-top:8px; }
+
+/* ---------------------------------------------------------- status by row */
+.status-row {
+  display:grid; grid-template-columns:108px minmax(0,1fr) 34px 40px;
+  align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--chart-grid);
+}
+.status-row:last-child { border-bottom:0; }
+.status-row-label { min-width:0; }
+.status-row strong { text-align:right; color:var(--udm-navy); font-size:14px; }
+.status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
+
+/* -------------------------------------------------------------- metrics */
+.report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
-.report-metric strong { color:var(--udm-muted); font-size:12px; text-align:right; }
-.report-empty { padding:24px 10px; color:var(--udm-muted); text-align:center; }
-.report-placeholder-chart { min-height:210px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; border:1px dashed #cfd8e6; border-radius:10px; background:#fafbfd; color:var(--udm-muted); font-size:12px; }
-.report-placeholder-chart > div { display:flex; align-items:flex-end; gap:11px; width:75%; height:100px; }
-.report-placeholder-chart i { flex:1; min-height:8px; border-radius:5px 5px 0 0; background:linear-gradient(var(--udm-teal),#74aebb); opacity:.7; }
-@media (max-width:767.98px) { .reports-tabs { display:flex; overflow-x:auto; } .reports-tab { flex:0 0 auto; } .report-series-item { grid-template-columns:72px minmax(0,1fr) 32px; } }
+.report-metric strong { color:var(--udm-navy); font-size:14px; text-align:right; white-space:nowrap; }
+.report-metric small { display:block; font-size:11.5px; }
+
+.meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
+.meter-head strong { color:var(--udm-navy); font-size:17px; }
+/* Unfilled track is a lighter step of the fill's own ramp, so state reads
+   across the whole bar. */
+.meter-track { height:10px; border-radius:2px; background:var(--udm-green-soft); }
+.meter-fill { display:block; height:100%; min-width:3px; border-radius:0 4px 4px 0; background:var(--udm-green); }
+.meter-foot { margin-top:6px; color:var(--udm-muted); font-size:11.5px; }
+
+@media (max-width:767.98px) {
+  .reports-tabs { display:flex; overflow-x:auto; }
+  .reports-tab { flex:0 0 auto; }
+  .report-series-item { grid-template-columns:72px minmax(0,1fr) 38px; }
+  .report-series-item--wide { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px; }
+  .status-row { grid-template-columns:100px minmax(0,1fr) 30px 36px; gap:8px; }
+  .column-chart-plot { height:150px; }
+  .column-label { font-size:10px; }
+}
 @media print {
   @page { size:A4 portrait; margin:12mm; }
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }
@@ -590,7 +716,11 @@ a:hover { text-decoration: underline; }
   .report-panel:last-of-type { page-break-after:auto; }
   .report-section-head { margin-top:0; }
   .stat-card,.card-udm { break-inside:avoid; box-shadow:none; }
-  .report-data-note { display:none; }
+  /* Bars and columns are background paint; without this they print blank. */
+  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill {
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .chart-table { display:none; }
 }
 
 /* ================================================================

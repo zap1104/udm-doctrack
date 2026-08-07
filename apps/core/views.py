@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import csv
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.contrib import messages
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, DurationField, F, Q
 from django.db.models.functions import TruncMonth
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,11 +15,12 @@ from django.views.generic import TemplateView, View
 from apps.accounts.models import Office
 from apps.documents.models import Document, SearchQueryLog
 from apps.tracking import services as tracking_services
-from apps.tracking.models import Status, TrackingRecord
+from apps.tracking.models import RoutingStep, Status, TrackingRecord
 
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Tag, TagRule
+from .utils import log_action
 
 
 # ---------------------------------------------------------------------------
@@ -69,16 +70,23 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         for record in attention:
             record.can_confirm_now = record.can_user_confirm_receipt(user)
 
+        recent = list(tracking_services.active_for(user)[:8])
+        show_office_columns = user.is_records_staff
+        if show_office_columns:
+            _annotate_destinations(recent)
+
         context.update(
             {
                 "inbox_count": inbox.count(),
                 "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
                 "custody_count": custody.count(),
-                "in_transit_count": in_transit.count(),
+                "outgoing_count": in_transit.count(),
+                "outgoing_new_today": in_transit.filter(last_movement_at__date=today).count(),
                 "overdue_count": overdue.count(),
                 "completed_count": completed.count(),
                 "attention_records": attention[:5],
-                "recent_records": tracking_services.active_for(user)[:6],
+                "recent_records": recent,
+                "show_office_columns": show_office_columns,
                 "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:5],
                 "received_today": office_today.distinct().count(),
                 "forwarded_today": forwarded_today,
@@ -87,6 +95,47 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             }
         )
         return context
+
+
+#: Office codes listed in the dashboard's "To" column before it collapses to
+#: "+N more". Four fits on one line at the width the column actually gets.
+DESTINATIONS_SHOWN = 4
+
+
+def _annotate_destinations(records) -> None:
+    """Attach `destination_label` — the office(s) the current batch was sent to.
+
+    Records staff and administrators watch traffic between offices, not just
+    their own queue, so the recent-activity list shows where each document is
+    headed. Done as one grouped query rather than `record.current_offices()`
+    per row, which would be a query per record.
+    """
+    if not records:
+        return
+    steps = (
+        RoutingStep.objects.filter(record__in=records)
+        .select_related("to_office")
+        .only("record_id", "batch", "to_office__code")
+    )
+    by_record: dict[int, list[RoutingStep]] = {}
+    for step in steps:
+        by_record.setdefault(step.record_id, []).append(step)
+
+    for record in records:
+        codes = list(
+            dict.fromkeys(
+                step.to_office.code
+                for step in by_record.get(record.pk, [])
+                if step.batch == record.current_batch
+            )
+        )
+        # A document sent to every office would otherwise make one row three
+        # lines tall; the record page carries the full list.
+        if len(codes) > DESTINATIONS_SHOWN:
+            shown = codes[:DESTINATIONS_SHOWN]
+            record.destination_label = f"{', '.join(shown)} +{len(codes) - DESTINATIONS_SHOWN} more"
+        else:
+            record.destination_label = ", ".join(codes) or "—"
 
 
 def _greeting() -> str:
@@ -101,61 +150,374 @@ def _greeting() -> str:
 # ---------------------------------------------------------------------------
 # Reports
 # ---------------------------------------------------------------------------
+#: Months of history the charts cover. A year is the reporting unit offices
+#: actually use, and it keeps every column chart to twelve readable bars.
+REPORT_MONTHS = 12
+
+#: Bar colour per status. Statuses are states, not series identities, so they
+#: wear the reserved status palette and are always shown with their label —
+#: never colour alone. Kept in step with `partials/_status_pill.html`.
+STATUS_COLOURS = {
+    "DRAFT": "#63718a",
+    "IN_TRANSIT": "#B58C24",
+    "FORWARDED": "#B58C24",
+    "RETURNED": "#B58C24",
+    "RECEIVED": "#2E7D5B",
+    "IN_PROCESS": "#0A6E9A",
+    "COMPLETED": "#25664a",
+    "OVERDUE": "#B4342B",
+}
+
+
+def _percent(part: int, whole: int) -> int:
+    return int(round(100 * part / whole)) if whole else 0
+
+
+def _bar(part: int, whole: int) -> int:
+    """Bar width as a percentage. Zero stays zero — a minimum-width stub would
+    paint a value that is not there — but a real value never rounds away."""
+    if not part or not whole:
+        return 0
+    return max(1, int(round(100 * part / whole)))
+
+
+def _humanise_duration(delta) -> str:
+    """A timedelta as office language: '2 days 4 hrs', '3 hrs', '18 mins'."""
+    if delta is None:
+        return "—"
+    total = int(delta.total_seconds())
+    if total < 60:
+        return "under a minute"
+    days, remainder = divmod(total, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+    if days:
+        return f"{days} day{'s' if days != 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
+    if hours:
+        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min{'s' if minutes != 1 else ''}"
+    return f"{minutes} min{'s' if minutes != 1 else ''}"
+
+
+def _month_window():
+    """The last `REPORT_MONTHS` calendar months, plus the datetime they start at.
+
+    Built by walking months rather than subtracting days so February and the
+    31-day months land on the right buckets.
+    """
+    months: list = []
+    cursor = timezone.localdate().replace(day=1)
+    for _ in range(REPORT_MONTHS):
+        months.append(cursor)
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    months.reverse()
+    since = timezone.make_aware(
+        datetime.combine(months[0], time.min), timezone.get_current_timezone()
+    )
+    return months, since
+
+
+def _month_series(queryset, field: str, since):
+    """{month: count} for one date field, so two series can share an axis."""
+    rows = (
+        queryset.filter(**{f"{field}__gte": since})
+        .annotate(month=TruncMonth(field))
+        .values("month")
+        .annotate(total=Count("id", distinct=True))
+        .order_by("month")
+    )
+    return {
+        timezone.localtime(row["month"]).date().replace(day=1): row["total"]
+        for row in rows
+        if row["month"]
+    }
+
+
 class ReportsView(AppLoginRequiredMixin, TemplateView):
+    """Records overview. Every number here is computed from the routing steps —
+    nothing on this page is a placeholder waiting for a dataset."""
+
     template_name = "reports/reports.html"
+
+    def _filters(self):
+        """Read the filter row, ignoring anything that is not a real choice."""
+        params = self.request.GET
+        office = None
+        if params.get("office", "").isdigit():
+            office = Office.objects.filter(pk=params["office"]).first()
+        year = int(params["year"]) if params.get("year", "").isdigit() else None
+        status = params.get("status", "")
+        if status not in dict(Status.choices) and status != "OVERDUE":
+            status = ""
+        document_type = None
+        if params.get("document_type", "").isdigit():
+            document_type = DocumentType.objects.filter(pk=params["document_type"]).first()
+        return {"office": office, "year": year, "status": status, "document_type": document_type}
+
+    def _apply(self, records, filters):
+        office, year = filters["office"], filters["year"]
+        if office:
+            records = records.filter(Q(originating_office=office) | Q(current_office=office))
+        if year:
+            records = records.filter(created_at__year=year)
+        if filters["status"] == "OVERDUE":
+            records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+        elif filters["status"]:
+            records = records.filter(status=filters["status"])
+        if filters["document_type"]:
+            records = records.filter(document_type=filters["document_type"])
+        return records
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        records = TrackingRecord.objects.visible_to(user)
-        documents = Document.objects.visible_to(user)
-        since = timezone.now() - timedelta(days=90)
+        filters = self._filters()
 
-        by_status = list(
-            records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total")
+        records = self._apply(TrackingRecord.objects.visible_to(user), filters).distinct()
+        documents = Document.objects.visible_to(user)
+        if filters["office"]:
+            documents = documents.filter(office=filters["office"])
+        if filters["year"]:
+            documents = documents.filter(created_at__year=filters["year"])
+        if filters["document_type"]:
+            documents = documents.filter(document_type=filters["document_type"])
+        documents = documents.distinct()
+
+        total_records = records.count()
+        total_documents = documents.count()
+        overdue = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED).count()
+        awaiting = (
+            records.filter(routing_steps__received_at__isnull=True)
+            .exclude(status=Status.COMPLETED)
+            .distinct()
+            .count()
         )
-        by_office = list(
-            records.values("originating_office__code", "originating_office__name")
-            .annotate(total=Count("id", distinct=True))
-            .order_by("-total")[:10]
-        )
-        by_type = list(
-            documents.values("document_type__name").annotate(total=Count("id", distinct=True)).order_by("-total")[:10]
-        )
-        monthly = list(
-            records.filter(created_at__gte=since)
-            .annotate(month=TruncMonth("created_at"))
-            .values("month")
-            .annotate(total=Count("id", distinct=True))
-            .order_by("month")
-        )
-        max_monthly = max([row["total"] for row in monthly], default=0) or 1
-        for row in monthly:
-            row["percent"] = int(round(100 * row["total"] / max_monthly))
+        completed = records.filter(status=Status.COMPLETED).count()
 
         context.update(
             {
-                "total_records": records.distinct().count(),
-                "total_documents": documents.distinct().count(),
-                "overdue": tracking_services.overdue_for(user).count(),
-                "awaiting_receipt": records.filter(routing_steps__received_at__isnull=True)
-                .exclude(status=Status.COMPLETED)
-                .distinct()
-                .count(),
-                "by_status": by_status,
-                "by_office": by_office,
-                "by_type": by_type,
-                "monthly": monthly,
-                "top_searches": (
-                    SearchQueryLog.objects.values("query")
-                    .annotate(total=Count("id"))
-                    .order_by("-total")[:10]
-                ),
+                "filters": filters,
+                "report_generated_at": timezone.localtime(),
+                "filter_offices": Office.active.all().order_by("name"),
+                "filter_types": DocumentType.active.all().order_by("name"),
+                "filter_years": self._years(user),
+                "has_filters": any(filters.values()),
+                "total_records": total_records,
+                "total_documents": total_documents,
+                "overdue": overdue,
+                "awaiting_receipt": awaiting,
+                "completed_records": completed,
+                "completion_rate": _percent(completed, total_records),
+                "by_status": self._by_status(records, total_records),
+                "office_flow": self._office_flow(records),
+                "monthly": self._monthly(records),
+                "turnaround": self._turnaround(records),
+                "overdue_offices": self._overdue_offices(records),
+                "document_types": self._document_types(documents),
+                "document_months": self._document_months(documents),
                 "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
                 "documents_without_text": documents.filter(ocr_text="").distinct().count(),
+                "top_searches": self._top_searches(),
             }
         )
         return context
+
+    # -- filter options ---------------------------------------------------
+    def _years(self, user):
+        years = (
+            TrackingRecord.objects.visible_to(user)
+            .dates("created_at", "year", order="DESC")
+        )
+        return [value.year for value in years]
+
+    # -- tracking panels ---------------------------------------------------
+    def _by_status(self, records, total):
+        """One row per status: share of the whole, plus a bar against the
+        largest status so the shortest bar is still visible."""
+        rows = list(records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total"))
+        labels = dict(Status.choices)
+        ceiling = max([row["total"] for row in rows], default=0)
+        for row in rows:
+            row["label"] = labels.get(row["status"], row["status"])
+            row["percent"] = _percent(row["total"], total)
+            row["bar_percent"] = _bar(row["total"], ceiling)
+            row["colour"] = STATUS_COLOURS.get(row["status"], STATUS_COLOURS["DRAFT"])
+        return rows
+
+    def _office_flow(self, records):
+        """Transferred vs received per office — both series from routing steps.
+
+        Transferred counts steps an office *sent*; received counts steps another
+        office confirmed. Counting records by `originating_office` (what this
+        panel used to do) misses every forward after the first hop.
+        """
+        steps = RoutingStep.objects.filter(record__in=records)
+        sent = {
+            row["from_office__code"]: row["total"]
+            for row in steps.exclude(from_office__isnull=True)
+            .values("from_office__code")
+            .annotate(total=Count("id"))
+            if row["from_office__code"]
+        }
+        received = {
+            row["to_office__code"]: row["total"]
+            for row in steps.filter(received_at__isnull=False)
+            .values("to_office__code")
+            .annotate(total=Count("id"))
+        }
+        names = {
+            office.code: office.name
+            for office in Office.objects.filter(Q(code__in=sent) | Q(code__in=received))
+        }
+
+        rows = []
+        for code in sorted(set(sent) | set(received)):
+            rows.append(
+                {
+                    "code": code,
+                    "name": names.get(code, code),
+                    "sent": sent.get(code, 0),
+                    "received": received.get(code, 0),
+                }
+            )
+        rows.sort(key=lambda row: row["sent"] + row["received"], reverse=True)
+        rows = rows[:10]
+        ceiling = max((max(row["sent"], row["received"]) for row in rows), default=0)
+        for row in rows:
+            row["sent_percent"] = _bar(row["sent"], ceiling)
+            row["received_percent"] = _bar(row["received"], ceiling)
+        return rows
+
+    def _monthly(self, records):
+        """Created vs completed, month by month, on one shared scale."""
+        months, since = _month_window()
+        created = _month_series(records, "created_at", since)
+        finished = _month_series(records.filter(status=Status.COMPLETED), "completed_at", since)
+
+        ceiling = max(
+            [created.get(month, 0) for month in months] + [finished.get(month, 0) for month in months] + [0]
+        )
+        rows = []
+        for month in months:
+            opened, closed = created.get(month, 0), finished.get(month, 0)
+            rows.append(
+                {
+                    "month": month,
+                    "created": opened,
+                    "completed": closed,
+                    "created_percent": _bar(opened, ceiling),
+                    "completed_percent": _bar(closed, ceiling),
+                }
+            )
+        return {"rows": rows, "ceiling": ceiling, "total": sum(row["created"] for row in rows)}
+
+    def _turnaround(self, records):
+        """Real averages from the timestamps the routing steps already carry."""
+        steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
+        receipt = steps.aggregate(
+            value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
+        )["value"]
+
+        done = records.filter(status=Status.COMPLETED, completed_at__isnull=False)
+        processing = done.filter(first_received_at__isnull=False).aggregate(
+            value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
+        )["value"]
+        lifetime = done.aggregate(
+            value=Avg(F("completed_at") - F("created_at"), output_field=DurationField())
+        )["value"]
+
+        with_deadline = done.filter(due_at__isnull=False)
+        deadline_total = with_deadline.count()
+        on_time = with_deadline.filter(completed_at__lte=F("due_at")).count()
+
+        return {
+            "receipt": _humanise_duration(receipt),
+            "processing": _humanise_duration(processing),
+            "lifetime": _humanise_duration(lifetime),
+            "receipt_samples": steps.count(),
+            "on_time": on_time,
+            "on_time_total": deadline_total,
+            "on_time_percent": _percent(on_time, deadline_total),
+            "unreceived": RoutingStep.objects.filter(
+                record__in=records, received_at__isnull=True
+            ).count(),
+        }
+
+    def _overdue_offices(self, records):
+        """Where overdue documents are sitting — a queue to chase, not a total."""
+        rows = list(
+            records.filter(due_at__lt=timezone.now())
+            .exclude(status=Status.COMPLETED)
+            .exclude(current_office__isnull=True)
+            .values("current_office__code", "current_office__name")
+            .annotate(total=Count("id", distinct=True))
+            .order_by("-total")[:8]
+        )
+        ceiling = max([row["total"] for row in rows], default=0)
+        for row in rows:
+            row["percent"] = _bar(row["total"], ceiling)
+        return rows
+
+    # -- document panels ---------------------------------------------------
+    def _document_types(self, documents):
+        rows = list(
+            documents.values("document_type__name")
+            .annotate(total=Count("id", distinct=True))
+            .order_by("-total")[:8]
+        )
+        ceiling = max([row["total"] for row in rows], default=0)
+        for row in rows:
+            row["label"] = row["document_type__name"] or "Unclassified"
+            row["percent"] = _bar(row["total"], ceiling)
+        return rows
+
+    def _document_months(self, documents):
+        months, since = _month_window()
+        series = _month_series(documents, "created_at", since)
+        ceiling = max(series.values(), default=0)
+        return [
+            {
+                "month": month,
+                "total": series.get(month, 0),
+                "percent": _bar(series.get(month, 0), ceiling),
+            }
+            for month in months
+        ]
+
+    def _top_searches(self):
+        rows = list(
+            SearchQueryLog.objects.values("query").annotate(total=Count("id")).order_by("-total")[:8]
+        )
+        ceiling = max([row["total"] for row in rows], default=0)
+        for row in rows:
+            row["percent"] = _bar(row["total"], ceiling)
+        return rows
+
+
+class PrintLogView(AppLoginRequiredMixin, View):
+    """Records that a user actually opened a print dialog.
+
+    Printing happens in the browser, so there is no request to log on its own —
+    the page posts here from its `beforeprint` handler. Paper copies of routed
+    documents leave the system entirely, which is exactly the movement an audit
+    trail exists to capture.
+    """
+
+    MAX_LABEL = 120
+
+    def post(self, request):
+        label = (request.POST.get("label") or "a page").strip()[: self.MAX_LABEL]
+        reference = (request.POST.get("reference") or "").strip()[: self.MAX_LABEL]
+        summary = f"Printed {label}" + (f" ({reference})" if reference else "")
+        log_action(
+            AuditLog.Action.PRINT,
+            summary,
+            actor=request.user,
+            target_type=request.POST.get("target_type", "")[:64],
+            target_id=request.POST.get("target_id", "")[:64],
+            extra={"label": label, "reference": reference},
+            request=request,
+        )
+        return JsonResponse({"logged": True})
 
 
 class ReportExportView(AppLoginRequiredMixin, View):

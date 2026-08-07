@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta
+
 from django import forms
+from django.utils import timezone
 
 from apps.accounts.models import Office, User
-from apps.core.forms import BootstrapFormMixin, MultipleFileField
+from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType
 
 from .models import RoutingStep, Status, TrackingRecord
@@ -16,9 +19,106 @@ DUE_CHOICES = [
     ("0", "No deadline"),
 ]
 
+#: How far ahead a deadline may be set. A date beyond this is almost always a
+#: typo in the year ("2027" for "2026"), and a deadline nobody will ever chase
+#: is worse than no deadline at all.
+MAX_DEADLINE_DAYS = 365
 
-class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
-    """Step 1 of Create New DTS. The originating office is never chosen by hand."""
+DEADLINE_NONE = "none"
+DEADLINE_DATE = "date"
+DEADLINE_CHOICES = [
+    (DEADLINE_NONE, "No deadline — the receiving office acts at its own pace"),
+    (DEADLINE_DATE, "Set a deadline date"),
+]
+
+
+def deadline_choice_field():
+    """Fresh 'is there a deadline?' field. A factory, not a shared instance —
+    two forms binding the same Field object would share its widget attrs."""
+    return forms.ChoiceField(
+        choices=DEADLINE_CHOICES,
+        initial=DEADLINE_NONE,
+        label="Is there a deadline?",
+        widget=forms.RadioSelect(attrs={"data-deadline-choice": "true"}),
+    )
+
+
+def due_date_field():
+    """Fresh calendar field for the deadline date.
+
+    `min` is stamped on the widget so the native picker greys out past dates;
+    the same rule is enforced again in `clean()` because a browser control is
+    a convenience, never a validation boundary.
+    """
+    today = timezone.localdate()
+    return forms.DateField(
+        required=False,
+        label="Deadline date",
+        widget=DateInput(
+            attrs={
+                "min": today.isoformat(),
+                "max": (today + timedelta(days=MAX_DEADLINE_DAYS)).isoformat(),
+                "data-deadline-date": "true",
+            }
+        ),
+        help_text="The receiving office is expected to act on or before this date.",
+    )
+
+
+class DeadlineMixin:
+    """Shared validation for the deadline pair used on both create steps.
+
+    Kept as a plain mixin (not a Form) so it can sit in front of a ModelForm
+    and a Form alike; each form declares the two fields from the factories
+    above and inherits the rules from here.
+    """
+
+    def clean(self):
+        cleaned = super().clean()
+        choice = cleaned.get("deadline_choice")
+        due_date = cleaned.get("due_date")
+
+        if choice != DEADLINE_DATE:
+            # "No deadline" wins over a date left behind by an earlier answer,
+            # otherwise switching the radio back to "No" would silently keep it.
+            cleaned["due_date"] = None
+            return cleaned
+
+        if not due_date:
+            self.add_error("due_date", "Choose the deadline date, or select “No deadline”.")
+            return cleaned
+
+        today = timezone.localdate()
+        if due_date < today:
+            self.add_error("due_date", "The deadline cannot be in the past.")
+        elif due_date > today + timedelta(days=MAX_DEADLINE_DAYS):
+            self.add_error(
+                "due_date",
+                f"Choose a date within the next {MAX_DEADLINE_DAYS} days. "
+                "Check the year if you meant a date sooner than that.",
+            )
+        return cleaned
+
+    def deadline_datetime(self):
+        """The chosen deadline as an aware datetime, or None.
+
+        The date is taken as the *end* of that day: a deadline of "today" means
+        close of business, not the instant the form happened to be submitted.
+        """
+        if not getattr(self, "cleaned_data", None):
+            return None
+        if self.cleaned_data.get("deadline_choice") != DEADLINE_DATE:
+            return None
+        due_date = self.cleaned_data.get("due_date")
+        if not due_date:
+            return None
+        return timezone.make_aware(
+            datetime.combine(due_date, time(23, 59, 59)), timezone.get_current_timezone()
+        )
+
+
+class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
+    """Step 1 of the tracking slip. The originating office is never chosen by hand."""
 
     receiving_offices = forms.ModelMultipleChoiceField(
         queryset=Office.active.all(),
@@ -28,9 +128,8 @@ class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
             attrs={"size": 8, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
         ),
     )
-    due_days = forms.ChoiceField(
-        choices=DUE_CHOICES, initial="3", label="Action deadline", required=False
-    )
+    deadline_choice = deadline_choice_field()
+    due_date = due_date_field()
     attachments = MultipleFileField(
         required=False,
         label="Attachments",
@@ -39,21 +138,29 @@ class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = TrackingRecord
-        fields = ("subject", "document_type", "classification", "priority", "instructions", "remarks")
+        fields = ("subject", "document_type", "classification", "priority", "instructions")
         widgets = {
             "subject": forms.TextInput(attrs={"placeholder": "Enter document subject", "autofocus": True}),
             "instructions": forms.Textarea(
-                attrs={"rows": 3, "placeholder": "For appropriate action and endorsement"}
+                attrs={
+                    "rows": 8,
+                    "placeholder": "State what the receiving office must do, and any remarks that go with it.\n"
+                                   "Example: For appropriate action and endorsement to the Dean's office.",
+                }
             ),
-            "remarks": forms.Textarea(attrs={"rows": 2, "placeholder": "Add context or handling instructions"}),
         }
-        labels = {"instructions": "Instructions / action required"}
+        labels = {"instructions": "Instructions / Remarks"}
+        help_texts = {
+            "instructions": "Required. This is what the receiving office reads first, and it is printed "
+                            "on the routing slip.",
+        }
 
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
         self.fields["document_type"].queryset = DocumentType.active.all()
         self.fields["document_type"].empty_label = "Not specified"
+        self.fields["instructions"].required = True
         if user is not None and user.office_id:
             self.fields["receiving_offices"].queryset = Office.active.exclude(pk=user.office_id)
 
@@ -63,9 +170,17 @@ class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
             raise forms.ValidationError("Write a subject of at least 5 characters so the record is findable.")
         return subject
 
+    def clean_instructions(self):
+        instructions = self.cleaned_data["instructions"].strip()
+        if len(instructions) < 5:
+            raise forms.ValidationError(
+                "Write the instructions or remarks for the receiving office — at least a short sentence."
+            )
+        return instructions
 
-class ReviewRouteForm(BootstrapFormMixin, forms.Form):
-    """Step 2 of Create New DTS.
+
+class ReviewRouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
+    """Step 2 of the tracking slip.
 
     The receiving offices were chosen on step 1 and remembered in the session,
     but a session can be lost (browser closed, cookies cleared, a draft opened
@@ -82,7 +197,8 @@ class ReviewRouteForm(BootstrapFormMixin, forms.Form):
             attrs={"size": 8, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
         ),
     )
-    due_days = forms.ChoiceField(choices=DUE_CHOICES, initial="3", label="Action deadline", required=False)
+    deadline_choice = deadline_choice_field()
+    due_date = due_date_field()
 
     def __init__(self, *args, user=None, **kwargs):
         self.user = user

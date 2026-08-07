@@ -307,6 +307,41 @@
     if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncNotes);
   });
 
+  /* ----------------------------------------------------------------------
+     Deadline: reveal the calendar only when the answer is "set a deadline".
+     The panel is rendered visible, so with this script blocked the field is
+     still complete and usable — hiding is the enhancement, not the default.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("[data-deadline-field]").forEach(function (field) {
+    var panel = field.querySelector("[data-deadline-panel]");
+    var dateInput = field.querySelector("[data-deadline-date]");
+    var radios = field.querySelectorAll("[data-deadline-choice]");
+    if (!panel || !radios.length) return;
+
+    function chosen() {
+      var picked = field.querySelector("[data-deadline-choice]:checked");
+      return picked ? picked.value : "";
+    }
+
+    function sync(focusDate) {
+      var wantsDate = chosen() === "date";
+      panel.hidden = !wantsDate;
+      if (dateInput) {
+        /* The field is only required once a deadline is asked for, which no
+           static `required` attribute can express. The server enforces the
+           same rule; this just saves a round trip. */
+        dateInput.required = wantsDate;
+        if (!wantsDate) dateInput.value = "";
+        if (wantsDate && focusDate) dateInput.focus();
+      }
+    }
+
+    radios.forEach(function (radio) {
+      radio.addEventListener("change", function () { sync(true); });
+    });
+    sync(false);
+  });
+
   var actionSelect = document.querySelector("[data-requested-action-select]");
   if (actionSelect) {
     var storedAction = window.sessionStorage.getItem("doctrackRequestedAction");
@@ -341,6 +376,92 @@
     });
   });
 
+
+  /* ----------------------------------------------------------------------
+     Reports: tab switching.
+     Lives here rather than inline in the template so it still runs once
+     ENABLE_CSP is switched on — CSP_SCRIPT_SRC permits no inline scripts.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var tabs = document.querySelectorAll("[data-report-tab]");
+    var panels = document.querySelectorAll("[data-report-panel]");
+    if (!tabs.length) return;
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        var target = tab.dataset.reportTab;
+        tabs.forEach(function (item) {
+          var active = item === tab;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        panels.forEach(function (panel) {
+          panel.classList.toggle("active", panel.dataset.reportPanel === target);
+        });
+      });
+    });
+  })();
+
+  /* ----------------------------------------------------------------------
+     Print auditing.
+     Printing happens entirely in the browser, so a paper copy would otherwise
+     leave no trace at all. Pages that opt in carry a [data-print-log] element;
+     opening a print dialog — via the button OR Ctrl+P — posts one entry.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var marker = document.querySelector("[data-print-log]");
+    if (!marker) return;
+
+    document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
+      button.addEventListener("click", function () { window.print(); });
+    });
+
+    var url = marker.dataset.printLogUrl;
+    var token = marker.dataset.printLogCsrf;
+    if (!url || !token) return;
+
+    /* One entry per print dialog, not per page view: a user who prints twice
+       has produced two copies, but a dialog they cancel is still an attempt
+       worth recording once. */
+    var logging = false;
+
+    function recordPrint() {
+      if (logging) return;
+      logging = true;
+      window.setTimeout(function () { logging = false; }, 2000);
+
+      var body = new URLSearchParams();
+      body.set("label", marker.dataset.printLog || "a page");
+      body.set("reference", marker.dataset.printLogReference || "");
+      body.set("target_type", marker.dataset.printLogTargetType || "");
+      body.set("target_id", marker.dataset.printLogTargetId || "");
+
+      window.fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "X-CSRFToken": token,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: body.toString(),
+        keepalive: true,  // the tab may close the moment printing finishes
+      }).catch(function () {
+        /* Auditing must never break printing. A failed entry is logged
+           server-side on the next successful request instead. */
+      });
+    }
+
+    if ("onbeforeprint" in window) {
+      window.addEventListener("beforeprint", recordPrint);
+    } else if (window.matchMedia) {
+      /* Safari has no beforeprint event; its print stylesheet media query
+         flips instead. */
+      var printQuery = window.matchMedia("print");
+      printQuery.addEventListener("change", function (event) {
+        if (event.matches) recordPrint();
+      });
+    }
+  })();
 
   /* ----------------------------------------------------------------------
      Phase 6 mobile navigation and shared accessibility helpers.
