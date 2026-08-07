@@ -47,7 +47,10 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <h2>Pending Receipt</h2>
-        <a href="{% url 'tracking:list' %}?scope=inbox" class="small">Open incoming</a>
+        <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=inbox">
+          <span>Open Tracking</span>
+          <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
+        </a>
       </div>
       <div class="card-udm-body p-0">
         {% if attention_records %}
@@ -64,7 +67,10 @@
                 </td>
                 <td class="text-end">
                   {% if record.can_confirm_now %}
-                    <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm Receipt</a>
+                    <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                      <span>Confirm Receipt</span>
+                    </a>
                   {% else %}
                     {% include "partials/_status_pill.html" with status=record.display_status %}
                   {% endif %}
@@ -119,7 +125,10 @@
     <div class="card-udm mt-4">
       <div class="card-udm-head">
         <h2>Newest in Document Management</h2>
-        <a class="small" href="{% url 'search:index' %}">Search</a>
+        <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
+          <span>Search</span>
+          <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
+        </a>
       </div>
       <div class="card-udm-body">
         {% for document in recent_documents %}

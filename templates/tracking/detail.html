@@ -136,7 +136,10 @@
           <form method="post" action="{% url 'tracking:confirm_receipt' record.pk %}">
             {% csrf_token %}
             {% include "partials/_field.html" with field=receipt_form.note %}
-            <button class="btn btn-udm-gold" type="submit">Confirm Receipt</button>
+            <button class="btn btn-receipt" type="submit">
+              <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+              <span>Confirm Receipt</span>
+            </button>
           </form>
         </div>
       </div>
