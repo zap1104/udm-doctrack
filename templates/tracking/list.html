@@ -68,7 +68,10 @@
             </td>
             <td class="text-end">
               {% if record.can_confirm_now %}
-                <a class="btn btn-udm-gold btn-sm" href="{{ record.get_absolute_url }}">Confirm Receipt</a>
+                <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                      <span>Confirm Receipt</span>
+                    </a>
               {% else %}
                 <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
               {% endif %}

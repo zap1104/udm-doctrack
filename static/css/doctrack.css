@@ -669,4 +669,168 @@ body.sidebar-open { overflow:hidden; }
   .app-footer { display:none !important; }
 }
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .app-sidebar,.sidebar-backdrop { transition:none; } }
+/* ================================================================
+   Confirm Receipt action
+   Dedicated style used on Dashboard, Tracking list, and record detail
+   ================================================================ */
+.btn-receipt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  min-width: max-content;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #bf9323;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #624907;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none !important;
+  box-shadow: 0 1px 2px rgba(11, 49, 90, 0.06);
+  transition: background-color 120ms ease, border-color 120ms ease,
+              color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
 
+.btn-receipt:hover {
+  border-color: var(--udm-gold);
+  background: var(--udm-gold-soft);
+  color: #4f3a05;
+  text-decoration: none !important;
+  box-shadow: 0 3px 8px rgba(196, 154, 46, 0.16);
+  transform: translateY(-1px);
+}
+
+.btn-receipt:active {
+  background: #eedcae;
+  transform: translateY(0);
+}
+
+.btn-receipt:focus-visible {
+  border-color: var(--udm-gold);
+  outline: 3px solid rgba(196, 154, 46, 0.25);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.btn-receipt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 50%;
+  background: var(--udm-gold);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.btn-receipt.btn-sm {
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 12.5px;
+}
+
+.btn-receipt:disabled,
+.btn-receipt.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+@media (max-width: 575.98px) {
+  .btn-receipt {
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 12.5px;
+  }
+}
+
+@media print {
+  .btn-receipt {
+    display: none !important;
+  }
+}
+
+/* ================================================================
+   Dashboard card actions
+   Visible secondary actions for Open Tracking and Search
+   ================================================================ */
+.btn-dashboard-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid #b9c9da;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--udm-navy);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none !important;
+  box-shadow: 0 1px 2px rgba(11, 49, 90, 0.05);
+  transition: background-color 120ms ease, border-color 120ms ease,
+              color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.btn-dashboard-action:hover {
+  border-color: var(--udm-teal);
+  background: var(--udm-teal-soft);
+  color: #0f5260;
+  text-decoration: none !important;
+  box-shadow: 0 3px 8px rgba(22, 105, 122, 0.12);
+  transform: translateY(-1px);
+}
+
+.btn-dashboard-action:active {
+  transform: translateY(0);
+}
+
+.btn-dashboard-action:focus-visible {
+  border-color: var(--udm-teal);
+  outline: 3px solid rgba(22, 105, 122, 0.2);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.btn-dashboard-action-arrow {
+  color: var(--udm-teal);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.btn-dashboard-action:hover .btn-dashboard-action-arrow {
+  transform: translateX(2px);
+}
+
+@media (max-width: 575.98px) {
+  .card-udm .card-udm-head:has(.btn-dashboard-action) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .btn-dashboard-action {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+@media print {
+  .btn-dashboard-action {
+    display: none !important;
+  }
+}
