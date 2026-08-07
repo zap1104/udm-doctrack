@@ -12,36 +12,94 @@
     if (select.dataset.enhanced === "1") return;
     select.dataset.enhanced = "1";
 
+    var fieldLabel = select.id ? document.querySelector('label[for="' + select.id + '"]') : null;
+    var noun = select.dataset.itemNoun || "office";
+
     var wrapper = document.createElement("div");
     wrapper.className = "multiselect";
+    wrapper.setAttribute("role", "group");
+    if (fieldLabel) {
+      wrapper.setAttribute("aria-label", fieldLabel.textContent.replace(/\*/g, "").trim());
+    }
 
     var filter = document.createElement("input");
     filter.type = "search";
-    filter.className = "form-control form-control-sm mb-2";
+    filter.className = "multiselect-search";
     filter.placeholder = select.dataset.placeholder || "Type to filter offices…";
-    filter.setAttribute("aria-label", "Filter options");
+    filter.setAttribute("aria-label", "Filter the list");
 
     var list = document.createElement("div");
     list.className = "multiselect-list";
 
+    var empty = document.createElement("div");
+    empty.className = "multiselect-empty";
+    empty.hidden = true;
+
+    var footer = document.createElement("div");
+    footer.className = "multiselect-footer";
+
+    var count = document.createElement("span");
+    count.className = "multiselect-count";
+    /* Announced politely: selecting is the whole job of this control, so the
+       running total is worth speaking, unlike a per-second countdown. */
+    count.setAttribute("role", "status");
+    count.setAttribute("aria-live", "polite");
+
+    var clear = document.createElement("button");
+    clear.type = "button";  // inside a <form>, an unqualified button submits it
+    clear.className = "multiselect-clear";
+    clear.textContent = "Clear all";
+    clear.hidden = true;
+
     var summary = document.createElement("div");
     summary.className = "multiselect-summary";
 
-    function refreshSummary() {
-      var chosen = Array.prototype.filter
-        .call(select.options, function (option) { return option.selected; })
-        .map(function (option) { return option.text; });
-      if (!chosen.length) {
-        summary.textContent = "No office selected yet.";
-        return;
-      }
+    var entries = [];
+
+    function setSelected(option, isSelected) {
+      option.selected = isSelected;
+      refresh();
+    }
+
+    function buildChips(chosen) {
       summary.innerHTML = "";
-      chosen.forEach(function (label, index) {
+      chosen.forEach(function (option) {
         var chip = document.createElement("span");
         chip.className = "tag-chip";
-        chip.textContent = (index === 0 ? "Primary Receiver: " : "Additional: ") + label;
+
+        var text = document.createElement("span");
+        text.textContent = option.text;
+        chip.appendChild(text);
+
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "multiselect-chip-remove";
+        remove.innerHTML = "&times;";
+        remove.setAttribute("aria-label", "Remove " + option.text);
+        remove.addEventListener("click", function () {
+          setSelected(option, false);
+          filter.focus();
+        });
+        chip.appendChild(remove);
+
         summary.appendChild(chip);
       });
+    }
+
+    function refresh() {
+      var chosen = [];
+      entries.forEach(function (entry) {
+        entry.box.checked = entry.option.selected;
+        entry.row.classList.toggle("is-selected", entry.option.selected);
+        if (entry.option.selected) chosen.push(entry.option);
+      });
+
+      count.textContent = chosen.length
+        ? chosen.length + " of " + entries.length + " selected"
+        : "No " + noun + " selected yet";
+      clear.hidden = chosen.length === 0;
+
+      buildChips(chosen);
     }
 
     Array.prototype.forEach.call(select.options, function (option) {
@@ -52,8 +110,7 @@
       box.type = "checkbox";
       box.checked = option.selected;
       box.addEventListener("change", function () {
-        option.selected = box.checked;
-        refreshSummary();
+        setSelected(option, box.checked);
       });
 
       var text = document.createElement("span");
@@ -63,22 +120,54 @@
       row.appendChild(text);
       row.dataset.search = option.text.toLowerCase();
       list.appendChild(row);
+      entries.push({ option: option, row: row, box: box });
     });
 
     filter.addEventListener("input", function () {
       var needle = filter.value.trim().toLowerCase();
-      Array.prototype.forEach.call(list.children, function (row) {
-        row.style.display = !needle || row.dataset.search.indexOf(needle) !== -1 ? "" : "none";
+      var visible = 0;
+      entries.forEach(function (entry) {
+        var match = !needle || entry.row.dataset.search.indexOf(needle) !== -1;
+        entry.row.hidden = !match;
+        if (match) visible += 1;
       });
+      empty.hidden = visible !== 0;
+      empty.textContent = 'No ' + noun + ' matches "' + filter.value.trim() + '".';
     });
 
+    clear.addEventListener("click", function () {
+      entries.forEach(function (entry) { entry.option.selected = false; });
+      refresh();
+      filter.focus();
+    });
+
+    /* The checkbox list replaces the native control, so the select is taken
+       out of the tab order and the accessibility tree — left in both, a
+       screen reader would announce every office twice. It stays in the DOM
+       because it is what actually submits. */
     select.classList.add("visually-hidden");
+    select.setAttribute("aria-hidden", "true");
+    select.setAttribute("tabindex", "-1");
+
+    /* The field's <label> still points at the now-hidden select, so send
+       clicks on it to the filter box instead of a control nobody can see. */
+    if (fieldLabel) {
+      fieldLabel.addEventListener("click", function (event) {
+        event.preventDefault();
+        filter.focus();
+      });
+    }
+
     select.parentNode.insertBefore(wrapper, select);
+    footer.appendChild(count);
+    footer.appendChild(clear);
     wrapper.appendChild(filter);
     wrapper.appendChild(list);
+    wrapper.appendChild(empty);
+    wrapper.appendChild(footer);
     wrapper.appendChild(summary);
     wrapper.appendChild(select);
-    refreshSummary();
+    refresh();
   }
 
   document.querySelectorAll("select[multiple].js-searchable").forEach(buildSearchableMultiSelect);

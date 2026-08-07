@@ -23,7 +23,7 @@ class CreateRecordForm(BootstrapFormMixin, forms.ModelForm):
     receiving_offices = forms.ModelMultipleChoiceField(
         queryset=Office.active.all(),
         label="Receiving office(s)",
-        help_text="The first office you pick takes custody; the others receive a copy for action.",
+        help_text="Every office you select receives the document. Custody passes to the office that confirms receipt.",
         widget=forms.SelectMultiple(
             attrs={"size": 8, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
         ),
@@ -77,7 +77,7 @@ class ReviewRouteForm(BootstrapFormMixin, forms.Form):
     receiving_offices = forms.ModelMultipleChoiceField(
         queryset=Office.active.all(),
         label="Receiving office(s)",
-        help_text="The first office listed takes custody; the others receive a copy for action.",
+        help_text="Every office listed receives the document. Custody passes to the office that confirms receipt.",
         widget=forms.SelectMultiple(
             attrs={"size": 8, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
         ),
@@ -132,8 +132,22 @@ class RouteForm(BootstrapFormMixin, forms.Form):
         self.record = record
         self.user = user
         super().__init__(*args, **kwargs)
-        if user is not None and user.office_id:
-            self.fields["offices"].queryset = Office.active.exclude(pk=user.office_id)
+        # Hide both the office acting and the office that currently holds the
+        # document. For ordinary staff those are the same office, but a system
+        # administrator can act for any office (`can_act_for_office`), and
+        # excluding only their own office left the current holder selectable —
+        # sending it a document it already has, which it would then be asked
+        # to receive again.
+        blocked = {
+            office_id
+            for office_id in (
+                getattr(user, "office_id", None),
+                getattr(record, "current_office_id", None),
+            )
+            if office_id
+        }
+        if blocked:
+            self.fields["offices"].queryset = Office.active.exclude(pk__in=blocked)
 
     def clean_offices(self):
         offices = self.cleaned_data["offices"]

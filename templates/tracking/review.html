@@ -35,7 +35,7 @@
                 <th>Receiving office(s)</th>
                 <td>
                   {% for office in offices %}
-                    <span class="tag-chip">{% if forloop.first %}Primary Receiver: {% endif %}{{ office.name }}</span>
+                    <span class="tag-chip">{{ office.name }}</span>
                   {% empty %}
                     <em class="text-danger">Not set — choose below before sending.</em>
                   {% endfor %}
