@@ -47,19 +47,11 @@
               </tr>
               <tr>
                 <th>Deadline</th>
-                <td>
-                  {% if due_days and due_days != "0" %}
-                    <span data-due-date-display data-due-days="{{ due_days }}">{{ due_days }} day(s) after sending</span>
-                  {% else %}
-                    No deadline
-                  {% endif %}
-                </td>
+                <td>{% if deadline %}{{ deadline|date:"d F Y" }}{% else %}No deadline{% endif %}</td>
               </tr>
               <tr>
                 <th>Instructions / Remarks</th>
-                <td>
-                  {% if record.instructions %}{{ record.instructions|linebreaksbr }}{% elif record.remarks %}{{ record.remarks|linebreaksbr }}{% else %}—{% endif %}
-                </td>
+                <td>{{ record.instructions|linebreaksbr|default:"—" }}</td>
               </tr>
               <tr>
                 <th>Attachments</th>
@@ -80,18 +72,10 @@
             </div>
           {% endif %}
 
-          <div {% if not session_lost %}class="collapse" id="editRouting"{% endif %}>
+          <div {% if not session_lost and not form.errors %}class="collapse" id="editRouting"{% else %}id="editRouting"{% endif %}>
             <div class="phase2-inline-editor">
               {% include "partials/_field.html" with field=form.receiving_offices %}
-              <div class="phase2-date-proxy" data-due-date-proxy data-due-days-id="{{ form.due_days.id_for_label }}">
-                <div class="phase2-date-ui">
-                  <label class="form-label" for="phase2-review-due-date">Deadline</label>
-                  <input id="phase2-review-due-date" type="date" class="form-control" data-due-date-input>
-                </div>
-                <div class="phase2-backend-field">
-                  {% include "partials/_field.html" with field=form.due_days %}
-                </div>
-              </div>
+              {% include "tracking/_deadline_field.html" with form=form %}
             </div>
           </div>
 

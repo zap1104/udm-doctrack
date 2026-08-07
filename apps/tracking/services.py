@@ -31,6 +31,11 @@ from .models import (
 
 logger = logging.getLogger("doctrack")
 
+#: Distinguishes "caller said nothing about a deadline" (fall back to due_days)
+#: from "caller explicitly said there is no deadline" (due_at=None). A plain
+#: None default would silently turn the latter into the former.
+_UNSET = object()
+
 
 # ---------------------------------------------------------------------------
 # Tracking numbers
@@ -130,8 +135,13 @@ def attach_files(record, files, *, user, note="", routing_step=None) -> list[Att
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def route_record(record, offices, *, user, instructions="", action=RoutingStep.Action.SEND,
-                 due_days=None, remark="") -> list[RoutingStep]:
-    """Send the record to one or more offices. Creates a new batch of steps."""
+                 due_days=None, due_at=_UNSET, remark="") -> list[RoutingStep]:
+    """Send the record to one or more offices. Creates a new batch of steps.
+
+    The deadline can arrive either way: `due_at` is an exact datetime picked
+    from a calendar (pass None for "no deadline"), `due_days` is the older
+    relative form. `due_at` wins when both are given.
+    """
     offices = [office for office in offices if office is not None]
     if not offices:
         raise ValidationError("Select at least one receiving office.")
@@ -154,8 +164,9 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     batch = (record.routing_steps.aggregate(value=Max("batch"))["value"] or 0) + 1
     sequence = record.routing_steps.aggregate(value=Max("sequence"))["value"] or 0
 
-    due_days = settings.DEFAULT_ACTION_DUE_DAYS if due_days is None else due_days
-    due_at = timezone.now() + timedelta(days=int(due_days)) if due_days else None
+    if due_at is _UNSET:
+        due_days = settings.DEFAULT_ACTION_DUE_DAYS if due_days is None else due_days
+        due_at = timezone.now() + timedelta(days=int(due_days)) if due_days else None
 
     steps: list[RoutingStep] = []
     for office in offices:

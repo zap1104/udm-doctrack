@@ -1,0 +1,32 @@
+{% comment %}
+  Deadline: ask whether there is one, then show the calendar only if there is.
+  Shared by both steps of the tracking slip. The date panel starts visible so
+  the field still works with JavaScript off; doctrack.js hides it when
+  "No deadline" is the answer.
+{% endcomment %}
+<fieldset class="deadline-field mb-3" data-deadline-field>
+  <legend class="form-label">{{ form.deadline_choice.label }} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></legend>
+
+  <div class="deadline-options">
+    {% for radio in form.deadline_choice %}
+      <label class="deadline-option" for="{{ radio.id_for_label }}">
+        {{ radio.tag }}
+        <span>{{ radio.choice_label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+  {% for error in form.deadline_choice.errors %}<div class="field-errors" role="alert">{{ error }}</div>{% endfor %}
+
+  <div class="deadline-date {% if form.due_date.errors %}form-field--error{% endif %}" data-deadline-panel>
+    <label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
+    {{ form.due_date }}
+    <div class="form-text">
+      {{ form.due_date.help_text }} Today or later, and no more than a year ahead.
+    </div>
+    {% if form.due_date.errors %}
+      <div class="field-errors" role="alert">
+        {% for error in form.due_date.errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</fieldset>

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -16,6 +18,8 @@ from apps.documents.services import archive_tracking_record
 
 from . import services
 from .forms import (
+    DEADLINE_DATE,
+    DEADLINE_NONE,
     CompleteForm,
     ConfirmReceiptForm,
     CreateRecordForm,
@@ -28,6 +32,11 @@ from .forms import (
 from .models import Attachment, RoutingStep, Status, TrackingRecord
 
 PAGE_SIZE = 20
+
+#: Session key holding the deadline chosen on step 1, as an ISO date or "" for
+#: none. Deliberately not the old `draft_due_<pk>` name — that key held a day
+#: count, and a session left over from before this change would be read as a date.
+DRAFT_DEADLINE_KEY = "draft_deadline_{pk}"
 
 
 def _get_record(request, pk) -> TrackingRecord:
@@ -116,16 +125,16 @@ class RecordCreateView(OfficeAssignedMixin, View):
             messages.error(request, "Check the highlighted fields.")
             return render(request, self.template_name, {"form": form})
 
-        due_days = form.cleaned_data.get("due_days") or "0"
+        deadline = form.deadline_datetime()
         try:
             record = services.create_draft_record(
                 user=request.user,
                 subject=form.cleaned_data["subject"],
                 instructions=form.cleaned_data["instructions"],
                 document_type=form.cleaned_data.get("document_type"),
-                remarks=form.cleaned_data.get("remarks", ""),
                 classification=form.cleaned_data.get("classification"),
                 priority=form.cleaned_data.get("priority"),
+                due_at=deadline,
             )
             services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
         except ValidationError as exc:
@@ -135,7 +144,9 @@ class RecordCreateView(OfficeAssignedMixin, View):
         request.session[f"draft_offices_{record.pk}"] = [
             office.pk for office in form.cleaned_data["receiving_offices"]
         ]
-        request.session[f"draft_due_{record.pk}"] = due_days
+        request.session[DRAFT_DEADLINE_KEY.format(pk=record.pk)] = (
+            form.cleaned_data["due_date"].isoformat() if deadline else ""
+        )
         return redirect("tracking:review", pk=record.pk)
 
 
@@ -159,12 +170,20 @@ class RecordReviewView(OfficeAssignedMixin, View):
         found = {office.pk: office for office in Office.objects.filter(pk__in=office_ids)}
         return [found[pk] for pk in office_ids if pk in found]
 
+    def _remembered_deadline(self, request, record):
+        """The date picked on step 1, or None. Falls back to whatever is already
+        on the draft so a lost session still shows the deadline that was saved."""
+        stored = request.session.get(DRAFT_DEADLINE_KEY.format(pk=record.pk))
+        if stored is not None:
+            return date.fromisoformat(stored) if stored else None
+        return timezone.localtime(record.due_at).date() if record.due_at else None
+
     def _context(self, request, record, form, offices):
         return {
             "record": record,
             "form": form,
             "offices": offices,
-            "due_days": request.session.get(f"draft_due_{record.pk}", "3"),
+            "deadline": self._remembered_deadline(request, record),
             "session_lost": not offices,
         }
 
@@ -173,11 +192,13 @@ class RecordReviewView(OfficeAssignedMixin, View):
         if record.status != Status.DRAFT:
             return redirect(record.get_absolute_url())
         offices = self._remembered(request, record)
+        deadline = self._remembered_deadline(request, record)
         form = ReviewRouteForm(
             user=request.user,
             initial={
                 "receiving_offices": [office.pk for office in offices],
-                "due_days": request.session.get(f"draft_due_{record.pk}", "3"),
+                "deadline_choice": DEADLINE_DATE if deadline else DEADLINE_NONE,
+                "due_date": deadline,
             },
         )
         return render(request, self.template_name, self._context(request, record, form, offices))
@@ -189,7 +210,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
 
         form = ReviewRouteForm(request.POST, user=request.user)
         if not form.is_valid():
-            messages.error(request, "Choose at least one receiving office before sending.")
+            messages.error(request, "Check the highlighted fields before sending.")
             return render(
                 request, self.template_name, self._context(request, record, form, self._remembered(request, record))
             )
@@ -208,14 +229,14 @@ class RecordReviewView(OfficeAssignedMixin, View):
                 user=request.user,
                 instructions=record.instructions,
                 action=RoutingStep.Action.SEND,
-                due_days=int(form.cleaned_data.get("due_days") or 0),
+                due_at=form.deadline_datetime(),
             )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return render(request, self.template_name, self._context(request, record, form, picked))
 
         request.session.pop(f"draft_offices_{record.pk}", None)
-        request.session.pop(f"draft_due_{record.pk}", None)
+        request.session.pop(DRAFT_DEADLINE_KEY.format(pk=record.pk), None)
         messages.success(
             request,
             f"{record.tracking_number} was routed. It stays “In transit” until the receiving office confirms receipt.",
@@ -384,6 +405,15 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
+        # A paper slip leaves the system entirely, so the audit trail records
+        # who generated one before the browser ever opens the print dialog.
+        log_action(
+            AuditLog.Action.PRINT,
+            f"Generated the routing slip for {record.tracking_number}",
+            actor=request.user,
+            target=record,
+            request=request,
+        )
         return render(
             request,
             self.template_name,
