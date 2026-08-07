@@ -8,7 +8,7 @@
     <h1>Active Document Tracking</h1>
     <p class="sub">Current documents only. Completed records remain available in Document Management.</p>
   </div>
-  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ Create New DTS</a>
+  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
 </div>
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">
@@ -82,7 +82,7 @@
             <div class="empty-state">
               <h3>No active records match this view</h3>
               <p>Clear the filters, or create a document to start a routing chain.</p>
-              <a class="btn btn-udm" href="{% url 'tracking:create' %}">Create New DTS</a>
+              <a class="btn btn-udm" href="{% url 'tracking:create' %}">New Tracking Slip</a>
             </div>
           </td></tr>
         {% endfor %}
