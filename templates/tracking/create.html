@@ -43,9 +43,6 @@
 
           <section class="phase2-form-section" aria-labelledby="routing-details-heading">
             <h3 id="routing-details-heading" class="phase2-section-title">Routing details</h3>
-            <div class="phase2-field-guide">
-              <strong>Primary receiver:</strong> the first selected office takes custody. Additional offices receive a copy for action.
-            </div>
             {% include "partials/_field.html" with field=form.receiving_offices %}
 
             <div class="mb-3">
@@ -121,7 +118,7 @@
         <div class="card-udm-body">
           <ol class="phase2-checklist">
             <li><strong>Originating office is fixed.</strong> It comes from the signed-in account.</li>
-            <li><strong>Choose the destination carefully.</strong> The first office selected is treated as the primary receiver.</li>
+            <li><strong>Choose the destinations carefully.</strong> Every office selected receives the document and must confirm receipt.</li>
             <li><strong>Use the calendar for the deadline.</strong> The interface converts the chosen date for the current backend.</li>
             <li><strong>Review before sending.</strong> Sending does not mean the document has been received.</li>
           </ol>

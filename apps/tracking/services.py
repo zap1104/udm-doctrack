@@ -142,8 +142,13 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     if action == RoutingStep.Action.SEND and record.status != Status.DRAFT:
         raise ValidationError("Only a draft can be sent for the first time.")
 
-    duplicate = [office for office in offices if office.pk == getattr(from_office, "pk", None)]
-    if duplicate and len(offices) == 1:
+    # Guard against a step whose from_office and to_office are the same office.
+    # This used to fire only when the sender was the *sole* recipient, so
+    # picking "own office + another office" slipped through and wrote a
+    # self-addressed step: the office then sat in its own inbox waiting to
+    # receive a document it had never let go of.
+    from_office_pk = getattr(from_office, "pk", None)
+    if from_office_pk is not None and any(office.pk == from_office_pk for office in offices):
         raise ValidationError("A document cannot be routed to the office that is sending it.")
 
     batch = (record.routing_steps.aggregate(value=Max("batch"))["value"] or 0) + 1
