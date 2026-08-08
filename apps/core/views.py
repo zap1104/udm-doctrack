@@ -37,7 +37,6 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         custody = tracking_services.in_custody_for(user)
         in_transit = tracking_services.in_transit_from(user)
         overdue = tracking_services.overdue_for(user)
-        completed = tracking_services.completed_this_year_for(user)
 
         attention = list(inbox[:5])
         if len(attention) < 5:
@@ -68,8 +67,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         )
 
         attention = attention[:5]
-        for record in attention:
-            record.can_confirm_now = record.can_user_confirm_receipt(user)
+        tracking_services.annotate_can_confirm(attention, user)
 
         recent = list(tracking_services.active_for(user)[:8])
         show_office_columns = user.is_records_staff
@@ -84,9 +82,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
                 "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
                 "custody_count": custody.count(),
                 "outgoing_count": in_transit.count(),
-                "outgoing_new_today": in_transit.filter(last_movement_at__date=today).count(),
                 "overdue_count": overdue.count(),
-                "completed_count": completed.count(),
                 "attention_records": attention,
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,

@@ -11,14 +11,6 @@ from apps.core.models import DocumentType
 
 from .models import RoutingStep, Status, TrackingRecord
 
-DUE_CHOICES = [
-    ("1", "1 day"),
-    ("3", "3 days"),
-    ("5", "5 days"),
-    ("7", "1 week"),
-    ("0", "No deadline"),
-]
-
 #: How far ahead a deadline may be set. A date beyond this is almost always a
 #: typo in the year ("2027" for "2026"), and a deadline nobody will ever chase
 #: is worse than no deadline at all.
@@ -138,7 +130,10 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = TrackingRecord
-        fields = ("subject", "document_type", "classification", "priority", "instructions")
+        fields = (
+            "subject", "document_type", "classification", "priority",
+            "requested_action", "instructions",
+        )
         widgets = {
             "subject": forms.TextInput(attrs={"placeholder": "Enter document subject", "autofocus": True}),
             "instructions": forms.Textarea(
@@ -161,6 +156,9 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
         self.fields["document_type"].queryset = DocumentType.active.all()
         self.fields["document_type"].empty_label = "Not specified"
         self.fields["instructions"].required = True
+        self.fields["requested_action"].widget.choices = [
+            ("", "Select the requested action")
+        ] + list(TrackingRecord.RequestedAction.choices)
         if user is not None and user.office_id:
             self.fields["receiving_offices"].queryset = Office.active.exclude(pk=user.office_id)
 
@@ -213,7 +211,7 @@ class ReviewRouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
         return offices
 
 
-class RouteForm(BootstrapFormMixin, forms.Form):
+class RouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
     """Forward or return a document that this office currently holds."""
 
     action = forms.ChoiceField(
@@ -231,17 +229,18 @@ class RouteForm(BootstrapFormMixin, forms.Form):
             attrs={"size": 6, "class": "form-select js-searchable", "data-placeholder": "Type to filter offices…"}
         ),
     )
+    # One notes field, matching the create form. There used to be a second
+    # "Remark for the timeline" box that JavaScript kept as a mirror copy of
+    # this one, so whatever was typed here appeared twice on screen and was
+    # stored twice. route_record() already falls back to the instructions when
+    # no separate remark is given.
     instructions = forms.CharField(
-        label="Instructions for the next office",
-        widget=forms.Textarea(attrs={"rows": 2, "placeholder": "For appropriate action"}),
+        label="Instructions / Remarks",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "For appropriate action"}),
         required=False,
     )
-    due_days = forms.ChoiceField(choices=DUE_CHOICES, initial="3", required=False, label="Action deadline")
-    remark = forms.CharField(
-        label="Remark for the timeline",
-        widget=forms.Textarea(attrs={"rows": 2}),
-        required=False,
-    )
+    deadline_choice = deadline_choice_field()
+    due_date = due_date_field()
     attachments = MultipleFileField(required=False, label="Attach a response or revision")
 
     def __init__(self, *args, record=None, user=None, **kwargs):

@@ -251,62 +251,6 @@
   ---------------------------------------------------------------------- */
   document.documentElement.classList.add("phase2-js");
 
-  function localDateValue(date) {
-    var year = date.getFullYear();
-    var month = String(date.getMonth() + 1).padStart(2, "0");
-    var day = String(date.getDate()).padStart(2, "0");
-    return year + "-" + month + "-" + day;
-  }
-
-  function startOfToday() {
-    var now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  document.querySelectorAll("[data-due-date-proxy]").forEach(function (wrapper) {
-    var dateInput = wrapper.querySelector("[data-due-date-input]");
-    var dueDaysInput = document.getElementById(wrapper.dataset.dueDaysId);
-    if (!dateInput || !dueDaysInput) return;
-
-    var today = startOfToday();
-    dateInput.min = localDateValue(today);
-
-    var initialDays = parseInt(dueDaysInput.value || "0", 10);
-    if (initialDays > 0) {
-      var initialDate = new Date(today);
-      initialDate.setDate(initialDate.getDate() + initialDays);
-      dateInput.value = localDateValue(initialDate);
-    }
-
-    function syncDueDays() {
-      if (!dateInput.value) {
-        dueDaysInput.value = "0";
-        return;
-      }
-      var selected = new Date(dateInput.value + "T00:00:00");
-      var difference = Math.ceil((selected - today) / 86400000);
-      dueDaysInput.value = String(Math.max(0, difference));
-    }
-
-    dateInput.addEventListener("change", syncDueDays);
-    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncDueDays);
-  });
-
-  document.querySelectorAll("[data-combined-notes]").forEach(function (wrapper) {
-    var instructions = document.getElementById(wrapper.dataset.instructionsId);
-    var remarks = document.getElementById(wrapper.dataset.remarksId);
-    if (!instructions || !remarks) return;
-
-    if (!instructions.value && remarks.value) instructions.value = remarks.value;
-
-    function syncNotes() {
-      remarks.value = instructions.value;
-    }
-
-    instructions.addEventListener("input", syncNotes);
-    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncNotes);
-  });
-
   /* ----------------------------------------------------------------------
      Deadline: reveal the calendar only when the answer is "set a deadline".
      The panel is rendered visible, so with this script blocked the field is
@@ -340,34 +284,6 @@
       radio.addEventListener("change", function () { sync(true); });
     });
     sync(false);
-  });
-
-  var actionSelect = document.querySelector("[data-requested-action-select]");
-  if (actionSelect) {
-    var storedAction = window.sessionStorage.getItem("doctrackRequestedAction");
-    if (storedAction) actionSelect.value = storedAction;
-    actionSelect.addEventListener("change", function () {
-      window.sessionStorage.setItem("doctrackRequestedAction", actionSelect.value);
-      var label = actionSelect.options[actionSelect.selectedIndex].text;
-      window.sessionStorage.setItem("doctrackRequestedActionLabel", label);
-    });
-  }
-
-  document.querySelectorAll("[data-requested-action-review]").forEach(function (target) {
-    var label = window.sessionStorage.getItem("doctrackRequestedActionLabel");
-    if (label) target.textContent = label;
-  });
-
-  document.querySelectorAll("[data-due-date-display]").forEach(function (target) {
-    var days = parseInt(target.dataset.dueDays || "0", 10);
-    if (days <= 0) return;
-    var dueDate = startOfToday();
-    dueDate.setDate(dueDate.getDate() + days);
-    target.textContent = dueDate.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
   });
 
   document.querySelectorAll("[data-back-to-edit]").forEach(function (button) {

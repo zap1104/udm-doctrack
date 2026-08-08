@@ -43,7 +43,7 @@
               </tr>
               <tr>
                 <th>Requested action</th>
-                <td><span data-requested-action-review>Not selected</span> <span class="phase2-preview-badge">Frontend preview</span></td>
+                <td>{{ record.get_requested_action_display|default:"Not specified" }}</td>
               </tr>
               <tr>
                 <th>Deadline</th>
@@ -61,11 +61,11 @@
           </table>
         </div>
 
-        <form method="post" class="mt-3 phase2-review-form" novalidate>
+        <form method="post" class="mt-3" novalidate>
           {% csrf_token %}
 
           {% if session_lost %}
-            <div class="alert alert-warning phase2-alert">
+            <div class="alert alert-warning">
               <strong>Pick the receiving office(s) again.</strong>
               This draft was started in an earlier session, so the earlier choice was not retained.
               The tracking number and document information remain available.

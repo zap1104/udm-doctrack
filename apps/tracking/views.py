@@ -96,16 +96,21 @@ class RecordListView(AppLoginRequiredMixin, View):
 
         records = records.distinct().order_by("-last_movement_at")
         page = Paginator(records, PAGE_SIZE).get_page(request.GET.get("page"))
-        for record in page.object_list:
-            record.can_confirm_now = record.can_user_confirm_receipt(request.user)
+        # Materialised once so the annotation below lands on the very objects
+        # the template iterates, not on a throwaway copy of the queryset.
+        page_records = list(page.object_list)
+        services.annotate_can_confirm(page_records, request.user)
         return render(
             request,
             self.template_name,
             {
                 "form": form,
                 "page_obj": page,
-                "records": page.object_list,
-                "total": records.count(),
+                "records": page_records,
+                # The paginator has already counted this queryset; calling
+                # .count() again would run the same DISTINCT-over-joins query
+                # a second time on every page load.
+                "total": page.paginator.count,
                 "querystring": request.GET.urlencode(),
             },
         )
@@ -134,6 +139,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
                 document_type=form.cleaned_data.get("document_type"),
                 classification=form.cleaned_data.get("classification"),
                 priority=form.cleaned_data.get("priority"),
+                requested_action=form.cleaned_data.get("requested_action", ""),
                 due_at=deadline,
             )
             services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
@@ -319,7 +325,11 @@ class RouteRecordView(OfficeAssignedMixin, View):
             raise PermissionDenied("Only the office that currently holds the document can forward it.")
         form = RouteForm(request.POST, request.FILES, record=record, user=request.user)
         if not form.is_valid():
-            messages.error(request, "Choose at least one office to send the document to.")
+            # The deadline can fail validation too, so report what actually
+            # broke instead of always blaming the office selection.
+            messages.error(request, "; ".join(
+                f"{field}: {error}" for field, errors in form.errors.items() for error in errors
+            ))
             return redirect(record.get_absolute_url())
         try:
             services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
@@ -329,8 +339,7 @@ class RouteRecordView(OfficeAssignedMixin, View):
                 user=request.user,
                 instructions=form.cleaned_data.get("instructions", ""),
                 action=form.cleaned_data["action"],
-                due_days=int(form.cleaned_data.get("due_days") or 0),
-                remark=form.cleaned_data.get("remark", ""),
+                due_at=form.deadline_datetime(),
             )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))

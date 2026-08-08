@@ -76,7 +76,8 @@ def add_activity(record, event, message, *, actor=None, detail="", batch=None) -
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def create_draft_record(*, user, subject, instructions, document_type=None, remarks="",
-                        classification=None, priority=None, due_at=None, originating_office=None):
+                        classification=None, priority=None, due_at=None, originating_office=None,
+                        requested_action=""):
     office = originating_office or user.office
     if office is None:
         raise ValidationError("Your account has no office, so it cannot originate a document.")
@@ -87,6 +88,7 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         document_type=document_type,
         classification=classification or TrackingRecord.Classification.INTERNAL,
         priority=priority or TrackingRecord.Priority.NORMAL,
+        requested_action=requested_action or "",
         originating_office=office,
         created_by=user,
         instructions=instructions.strip(),
@@ -421,3 +423,31 @@ def completed_this_year_for(user):
 
 def active_for(user):
     return TrackingRecord.objects.visible_to(user).filter(status__in=ACTIVE_STATUSES).with_related().distinct()
+
+
+def annotate_can_confirm(records, user) -> None:
+    """Set `can_confirm_now` on each record in one query.
+
+    `record.can_user_confirm_receipt(user)` asks the database per record, which
+    on a twenty-row page is twenty queries for a question one `IN` clause can
+    answer. The lists that show a Confirm Receipt button use this instead.
+    """
+    if not records:
+        return
+    if not user.is_authenticated or not user.office_id:
+        for record in records:
+            record.can_confirm_now = False
+        return
+
+    # A record is confirmable when the *current* batch still has an unreceived
+    # step addressed to this office — the same rule as pending_step_for_office.
+    pending = set(
+        RoutingStep.objects.filter(
+            record__in=records,
+            to_office_id=user.office_id,
+            received_at__isnull=True,
+            batch=F("record__current_batch"),
+        ).values_list("record_id", flat=True)
+    )
+    for record in records:
+        record.can_confirm_now = record.pk in pending

@@ -13,7 +13,7 @@
   </div>
 </div>
 
-<form method="post" enctype="multipart/form-data" novalidate class="phase2-dts-form" data-combined-notes-form>
+<form method="post" enctype="multipart/form-data" novalidate>
   {% csrf_token %}
   <div class="row g-4">
     <div class="col-lg-8">
@@ -45,23 +45,7 @@
             <h3 id="routing-details-heading" class="phase2-section-title">Routing details</h3>
             {% include "partials/_field.html" with field=form.receiving_offices %}
 
-            <div class="mb-3">
-              <label class="form-label" for="phase2-requested-action">Requested action</label>
-              <select id="phase2-requested-action" class="form-select" data-requested-action-select>
-                <option value="">Select the requested action</option>
-                <option value="2">2 · Appropriate Action</option>
-                <option value="3">3 · Comment / Recommendation</option>
-                <option value="4">4 · Study / Inquiry</option>
-                <option value="5">5 · Reply Direct to Writer</option>
-                <option value="6">6 · For Signature</option>
-                <option value="7">7 · Rewrite / Redraft / Retype</option>
-                <option value="8">8 · Notation to Return</option>
-                <option value="9">9 · Notation to Forward</option>
-                <option value="10">10 · Re-route</option>
-                <option value="11">11 · File</option>
-              </select>
-              <div class="form-text">Frontend preview only. Your backend teammate still needs to store this value.</div>
-            </div>
+            {% include "partials/_field.html" with field=form.requested_action %}
 
             {% include "partials/_field.html" with field=form.instructions %}
 

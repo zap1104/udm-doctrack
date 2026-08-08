@@ -66,6 +66,10 @@
       <div class="routing-slip-summary-value">{{ record.document_type.name|default:"Not specified" }}</div>
     </div>
     <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Requested Action</div>
+      <div class="routing-slip-summary-value">{{ record.get_requested_action_display|default:"Not specified" }}</div>
+    </div>
+    <div class="routing-slip-summary-row">
       <div class="routing-slip-summary-label">Instructions / Remarks</div>
       <div class="routing-slip-summary-value routing-slip-notes">
         {% if record.instructions %}{{ record.instructions|linebreaksbr }}{% elif record.remarks %}{{ record.remarks|linebreaksbr }}{% else %}—{% endif %}
