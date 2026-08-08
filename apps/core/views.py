@@ -67,13 +67,16 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             .count()
         )
 
+        attention = attention[:5]
         for record in attention:
             record.can_confirm_now = record.can_user_confirm_receipt(user)
 
         recent = list(tracking_services.active_for(user)[:8])
         show_office_columns = user.is_records_staff
         if show_office_columns:
-            _annotate_destinations(recent)
+            # Both panels in one pass — the helper groups by record, so a
+            # second call would only repeat the same query.
+            _annotate_destinations(attention + recent)
 
         context.update(
             {
@@ -84,7 +87,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
                 "outgoing_new_today": in_transit.filter(last_movement_at__date=today).count(),
                 "overdue_count": overdue.count(),
                 "completed_count": completed.count(),
-                "attention_records": attention[:5],
+                "attention_records": attention,
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,
                 "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:5],
@@ -102,40 +105,58 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
 DESTINATIONS_SHOWN = 4
 
 
+def _office_label(codes: list[str]) -> str:
+    """Office codes for one table cell.
+
+    A document sent to every office would otherwise make one row three lines
+    tall, so the tail collapses; the record page carries the full list.
+    """
+    if not codes:
+        return "—"
+    if len(codes) > DESTINATIONS_SHOWN:
+        return f"{', '.join(codes[:DESTINATIONS_SHOWN])} +{len(codes) - DESTINATIONS_SHOWN} more"
+    return ", ".join(codes)
+
+
 def _annotate_destinations(records) -> None:
-    """Attach `destination_label` — the office(s) the current batch was sent to.
+    """Attach the office(s) each record's current batch was sent to.
+
+    Sets two labels, because the two dashboard panels ask different questions:
+
+    * `destination_label` — every office in the current batch. What "where is
+      this headed" means on the recent-activity list.
+    * `pending_label` — only the offices that have not confirmed receipt yet.
+      What "who are we waiting on" means on the pending-receipt panel. Rows
+      that are there for another reason (overdue, or already in this office's
+      custody) have nothing outstanding, so they fall back to the full list.
 
     Records staff and administrators watch traffic between offices, not just
-    their own queue, so the recent-activity list shows where each document is
-    headed. Done as one grouped query rather than `record.current_offices()`
-    per row, which would be a query per record.
+    their own queue. Done as one grouped query rather than
+    `record.current_offices()` per row, which would be a query per record.
     """
     if not records:
         return
     steps = (
         RoutingStep.objects.filter(record__in=records)
         .select_related("to_office")
-        .only("record_id", "batch", "to_office__code")
+        # received_at is read below; without it here each step would fetch it
+        # on its own, reintroducing the per-row query this function avoids.
+        .only("record_id", "batch", "received_at", "to_office__code")
     )
     by_record: dict[int, list[RoutingStep]] = {}
     for step in steps:
         by_record.setdefault(step.record_id, []).append(step)
 
     for record in records:
-        codes = list(
-            dict.fromkeys(
-                step.to_office.code
-                for step in by_record.get(record.pk, [])
-                if step.batch == record.current_batch
-            )
+        current = [
+            step for step in by_record.get(record.pk, []) if step.batch == record.current_batch
+        ]
+        codes = list(dict.fromkeys(step.to_office.code for step in current))
+        awaiting = list(
+            dict.fromkeys(step.to_office.code for step in current if step.received_at is None)
         )
-        # A document sent to every office would otherwise make one row three
-        # lines tall; the record page carries the full list.
-        if len(codes) > DESTINATIONS_SHOWN:
-            shown = codes[:DESTINATIONS_SHOWN]
-            record.destination_label = f"{', '.join(shown)} +{len(codes) - DESTINATIONS_SHOWN} more"
-        else:
-            record.destination_label = ", ".join(codes) or "—"
+        record.destination_label = _office_label(codes)
+        record.pending_label = _office_label(awaiting) if awaiting else record.destination_label
 
 
 def _greeting() -> str:

@@ -38,7 +38,14 @@
   <div class="col-lg-8">
     <div class="card-udm">
       <div class="card-udm-head">
-        <h2>Pending Receipt</h2>
+        <div>
+          <h2>Pending Receipt</h2>
+          {% if show_office_columns %}
+            <div class="card-udm-caption">
+              Showing which office sent each document and which has still to confirm it.
+            </div>
+          {% endif %}
+        </div>
         <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=inbox">
           <span>Open Tracking</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
@@ -47,16 +54,35 @@
       <div class="card-udm-body p-0">
         {% if attention_records %}
           <div class="table-responsive"><table class="table-udm">
+            {% if show_office_columns %}
+              <thead>
+                <tr>
+                  <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                </tr>
+              </thead>
+            {% endif %}
             <tbody>
             {% for record in attention_records %}
               <tr>
-                <td>
-                  <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
-                  <div style="font-size:14px;">{{ record.subject }}</div>
-                  <div class="text-muted" style="font-size:12.5px;">
-                    From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
-                  </div>
-                </td>
+                {% if show_office_columns %}
+                  <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+                  <td>
+                    {{ record.subject|truncatechars:46 }}
+                    <div class="text-muted" style="font-size:12.5px;">
+                      updated {{ record.last_movement_at|timesince }} ago
+                    </div>
+                  </td>
+                  <td class="office-cell">{{ record.originating_office.code }}</td>
+                  <td class="office-cell">{{ record.pending_label }}</td>
+                {% else %}
+                  <td>
+                    <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
+                    <div style="font-size:14px;">{{ record.subject }}</div>
+                    <div class="text-muted" style="font-size:12.5px;">
+                      From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                    </div>
+                  </td>
+                {% endif %}
                 <td class="text-end">
                   {% if record.can_confirm_now %}
                     <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
