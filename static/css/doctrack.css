@@ -508,6 +508,14 @@ a:hover { text-decoration: underline; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
 .routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
+/* The status pill sits in the narrow QR column of the letterhead. `.pill` is
+   nowrap by default, so a long status ("IN TRANSIT", "IN PROCESS",
+   "FORWARDED") ran past the column and was clipped at the paper's edge —
+   printed slips came out reading "FORWARDE". Let it wrap and shrink to the
+   column instead of overflowing it. */
+.routing-slip-header-status .pill {
+  display:inline-flex; max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:center;
+}
 /* Holds the generated QR svg. No border or padding: the code carries its own
    quiet zone (QR_BORDER), and framing it again would eat scannable area. */
 .routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:#fff; }
@@ -575,6 +583,11 @@ a:hover { text-decoration: underline; }
   .routing-slip-table th,.routing-slip-table td { padding:6px 5px; }
   .routing-slip-qr { width:28mm; min-height:28mm; }
   .routing-slip-qr-pattern { width:19mm; height:19mm; }
+  /* Sized to fit the 23mm letterhead column on one line at the longest label. */
+  .routing-slip-header-status .pill {
+    padding:1px 5px; gap:3px; font-size:6.5pt; letter-spacing:0; line-height:1.25;
+  }
+  .routing-slip-header-status .pill-dot { width:4px; height:4px; flex:0 0 4px; }
   .routing-slip-footer { position:relative; break-inside:avoid; }
   .routing-slip-action-reference { page-break-before:auto; }
   .routing-slip-attachments { page-break-before:auto; }
