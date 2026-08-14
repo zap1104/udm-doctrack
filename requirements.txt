@@ -30,6 +30,11 @@ pypdf>=5.0.1,<7.0                # text layer of digital PDFs
 python-docx>=1.1.2,<2.0          # .docx files
 openpyxl>=3.1.5,<4.0             # .xlsx files
 
+# --- Routing slips ---------------------------------------------------------
+# QR codes on the printed slip. Pure Python with no dependencies of its own and
+# writes SVG directly, so nothing here pulls in Pillow or a C toolchain.
+segno>=1.6.1,<2.0
+
 # --- File storage (only needed when STORAGE_BACKEND is not "local") --------
 django-storages[s3]>=1.14.4,<2.0 # Cloudflare R2 / any S3-compatible bucket
 # django-storages[azure]>=1.14.4,<2.0  # uncomment instead if you use Azure Blob

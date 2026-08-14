@@ -508,9 +508,10 @@ a:hover { text-decoration: underline; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
 .routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
-.routing-slip-qr-pattern { display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:4px; width:78px; height:78px; margin:0 auto; padding:4px; background:#fff; border:4px solid var(--udm-ink); }
-.routing-slip-qr-pattern span { background:var(--udm-ink); }
-.routing-slip-qr-pattern span:nth-child(2),.routing-slip-qr-pattern span:nth-child(4),.routing-slip-qr-pattern span:nth-child(6),.routing-slip-qr-pattern span:nth-child(8) { background:#fff; border:2px solid var(--udm-ink); }
+/* Holds the generated QR svg. No border or padding: the code carries its own
+   quiet zone (QR_BORDER), and framing it again would eat scannable area. */
+.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:#fff; }
+.routing-slip-qr-pattern svg { display:block; width:100%; height:100%; }
 .routing-slip-control { min-width:160px; padding:8px 10px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-control span { display:block; color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 .routing-slip-control strong { display:block; margin-top:8px; font-family:"Cascadia Mono","Consolas",monospace; font-size:13px; letter-spacing:.04em; }

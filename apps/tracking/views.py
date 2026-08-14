@@ -13,7 +13,7 @@ from django.views.generic import View
 
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
-from apps.core.utils import log_action
+from apps.core.utils import log_action, qr_svg
 from apps.documents.services import archive_tracking_record
 
 from . import services
@@ -416,7 +416,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
         record = _get_record(request, pk)
         # A paper slip leaves the system entirely, so the audit trail records
         # who generated one before the browser ever opens the print dialog.
-        log_action(
+        entry = log_action(
             AuditLog.Action.PRINT,
             f"Generated the routing slip for {record.tracking_number}",
             actor=request.user,
@@ -434,6 +434,15 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 "attachments": record.attachments.all(),
                 "printed_at": timezone.localtime(),
                 "printed_by": request.user,
+                # Printed on the slip so a paper copy can be matched to the
+                # exact audit row that recorded it. log_action() never raises;
+                # it returns an unsaved entry if the write failed, hence the pk
+                # check rather than assuming there is one.
+                "print_reference": entry.pk if getattr(entry, "pk", None) else None,
+                "qr_svg": qr_svg(
+                    record.tracking_number,
+                    label=f"QR code for tracking number {record.tracking_number}",
+                ),
             },
         )
 
