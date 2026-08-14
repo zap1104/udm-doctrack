@@ -425,6 +425,67 @@ def active_for(user):
     return TrackingRecord.objects.visible_to(user).filter(status__in=ACTIVE_STATUSES).with_related().distinct()
 
 
+#: Queue names the Tracking page's `?scope=` links use.
+SCOPE_INBOX = "inbox"
+SCOPE_AWAITING = "awaiting"
+SCOPE_CUSTODY = "custody"
+SCOPE_SENT = "sent"
+SCOPE_MINE = "mine"
+
+
+def apply_scope(records, scope, user):
+    """Narrow a record queryset to one of the Tracking page's queues.
+
+    Kept here rather than inline in the view so the queues have one definition,
+    and so every office-based queue gets the same guard: a user with no office
+    matches nothing, instead of `to_office_id=None` quietly matching no rows in
+    a way that looks like an empty database.
+    """
+    if scope == SCOPE_AWAITING:
+        return awaiting_receipt(records, user)
+    if scope == SCOPE_MINE:
+        return records.filter(created_by=user)
+    if scope not in {SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT}:
+        return records
+
+    if not user.office_id:
+        return records.none()
+    if scope == SCOPE_INBOX:
+        return records.filter(
+            routing_steps__to_office_id=user.office_id,
+            routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        )
+    if scope == SCOPE_CUSTODY:
+        return records.filter(current_office_id=user.office_id)
+    return records.filter(
+        routing_steps__from_office_id=user.office_id,
+        routing_steps__received_at__isnull=True,
+        routing_steps__batch=F("current_batch"),
+    )
+
+
+def awaiting_receipt(records, user):
+    """Documents somebody still has to confirm receipt of.
+
+    For records personnel and administrators this means *anywhere* they are
+    allowed to see, because overseeing traffic between offices is their job —
+    scoping it to their own office showed an administrator an empty queue while
+    dozens of documents sat unconfirmed elsewhere.
+
+    An ordinary office user has no such oversight, so for them the only
+    meaningful answer is their own inbox.
+    """
+    if not user.is_authenticated:
+        return records.none()
+    if user.is_records_staff:
+        return records.filter(
+            routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        )
+    return apply_scope(records, SCOPE_INBOX, user)
+
+
 def annotate_can_confirm(records, user) -> None:
     """Set `can_confirm_now` on each record in one query.
 

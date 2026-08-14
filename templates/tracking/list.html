@@ -10,17 +10,26 @@
   </div>
   <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
 </div>
+{% with scope=request.GET.scope status=request.GET.status %}
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}">All Active</a>
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?scope=inbox">Pending Receipt</a>
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
-    <a class="tracking-queue-link" href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
-    <a class="tracking-queue-link tracking-queue-link--alert" href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
+    <a class="tracking-queue-link{% if not scope and not status %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}">All Active</a>
+    <a class="tracking-queue-link{% if scope == 'inbox' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
+    <a class="tracking-queue-link{% if scope == 'sent' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
+    <a class="tracking-queue-link{% if scope == 'awaiting' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt</a>
+    <a class="tracking-queue-link{% if status == 'RECEIVED' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
+    <a class="tracking-queue-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
+    <a class="tracking-queue-link tracking-queue-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
   </div>
 </nav>
+{% endwith %}
 <div class="card-udm mb-3">
   <div class="card-udm-body">
     <form method="get" class="row g-2 align-items-center">

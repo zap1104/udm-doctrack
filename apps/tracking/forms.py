@@ -332,6 +332,7 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         choices=[
             ("", "All I can see"),
             ("inbox", "Waiting for my receipt"),
+            ("awaiting", "Awaiting receipt"),
             ("custody", "In my office"),
             ("sent", "Sent by my office"),
             ("mine", "Created by me"),

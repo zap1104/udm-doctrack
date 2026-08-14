@@ -483,11 +483,18 @@ a:hover { text-decoration: underline; }
 .tracking-subnav-link { display:block; margin:1px 0; padding:6px 10px; border-radius:7px; color:rgba(205,217,232,.76); font-size:12.5px; line-height:1.25; text-decoration:none; }
 .tracking-subnav-link:hover,.tracking-subnav-link:focus { background:rgba(255,255,255,.08); color:#fff; text-decoration:none; }
 .tracking-subnav-link--alert { color:#ffd2cd; }
+/* Which queue you are looking at. Both navs previously gave no indication at
+   all, so every queue looked identical once the page had loaded. */
+.tracking-subnav-link.is-active { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
 .tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:#fff; color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
 .tracking-queue-link:hover,.tracking-queue-link:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:#10505d; text-decoration:none; }
+.tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+.tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:#fff; }
 .tracking-queue-link--alert { border-color:#efc6c2; color:var(--udm-red); }
+.tracking-queue-link--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
+.tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
 .tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:#8f2a22; }
 @media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
 @media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } .tracking-subnav { display:flex; flex:0 0 auto; gap:4px; margin:0; padding:0; border-left:0; } .tracking-subnav-link { flex:0 0 auto; padding:8px 10px; white-space:nowrap; } }

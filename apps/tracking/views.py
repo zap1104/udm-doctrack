@@ -5,7 +5,7 @@ from datetime import date
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import F, Q
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -57,42 +57,40 @@ class RecordListView(AppLoginRequiredMixin, View):
         form = TrackingFilterForm(request.GET or None)
         records = services.active_for(request.user)
 
-        if form.is_valid():
-            query = form.cleaned_data.get("q")
-            status = form.cleaned_data.get("status")
-            office = form.cleaned_data.get("office")
-            scope = form.cleaned_data.get("scope")
+        # Apply every filter that validated, not only the all-or-nothing case.
+        # `if form.is_valid()` used to drop *all* filters when any one of them
+        # was unrecognised, so a stale link like "?scope=inbox&status=BOGUS"
+        # quietly returned every active record while looking like an inbox —
+        # the wrong answer presented as the right one.
+        form.is_valid()
+        data = getattr(form, "cleaned_data", {})
+        query = data.get("q")
+        status = data.get("status")
+        office = data.get("office")
+        scope = data.get("scope")
 
-            if query:
-                records = records.filter(
-                    Q(tracking_number__icontains=query)
-                    | Q(subject__icontains=query)
-                    | Q(originating_office__name__icontains=query)
-                    | Q(originating_office__code__icontains=query)
-                    | Q(current_office__name__icontains=query)
-                )
-            if status == "OVERDUE":
-                records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
-            elif status:
-                records = records.filter(status=status)
-            if office:
-                records = records.filter(Q(originating_office=office) | Q(current_office=office))
-            if scope == "inbox":
-                records = records.filter(
-                    routing_steps__to_office_id=request.user.office_id,
-                    routing_steps__received_at__isnull=True,
-                    routing_steps__batch=F("current_batch"),
-                )
-            elif scope == "custody":
-                records = records.filter(current_office_id=request.user.office_id)
-            elif scope == "sent":
-                records = records.filter(
-                    routing_steps__from_office_id=request.user.office_id,
-                    routing_steps__received_at__isnull=True,
-                    routing_steps__batch=F("current_batch"),
-                )
-            elif scope == "mine":
-                records = records.filter(created_by=request.user)
+        if query:
+            records = records.filter(
+                Q(tracking_number__icontains=query)
+                | Q(subject__icontains=query)
+                | Q(originating_office__name__icontains=query)
+                | Q(originating_office__code__icontains=query)
+                | Q(current_office__name__icontains=query)
+            )
+        if status == "OVERDUE":
+            records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+        elif status:
+            records = records.filter(status=status)
+        if office:
+            records = records.filter(Q(originating_office=office) | Q(current_office=office))
+        records = services.apply_scope(records, scope, request.user)
+
+        if form.errors:
+            messages.warning(
+                request,
+                "Ignored a filter that was not recognised: "
+                + ", ".join(sorted(form.errors)) + ". Showing the rest.",
+            )
 
         records = records.distinct().order_by("-last_movement_at")
         page = Paginator(records, PAGE_SIZE).get_page(request.GET.get("page"))
