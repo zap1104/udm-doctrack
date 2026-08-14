@@ -12,36 +12,94 @@
     if (select.dataset.enhanced === "1") return;
     select.dataset.enhanced = "1";
 
+    var fieldLabel = select.id ? document.querySelector('label[for="' + select.id + '"]') : null;
+    var noun = select.dataset.itemNoun || "office";
+
     var wrapper = document.createElement("div");
     wrapper.className = "multiselect";
+    wrapper.setAttribute("role", "group");
+    if (fieldLabel) {
+      wrapper.setAttribute("aria-label", fieldLabel.textContent.replace(/\*/g, "").trim());
+    }
 
     var filter = document.createElement("input");
     filter.type = "search";
-    filter.className = "form-control form-control-sm mb-2";
+    filter.className = "multiselect-search";
     filter.placeholder = select.dataset.placeholder || "Type to filter offices…";
-    filter.setAttribute("aria-label", "Filter options");
+    filter.setAttribute("aria-label", "Filter the list");
 
     var list = document.createElement("div");
     list.className = "multiselect-list";
 
+    var empty = document.createElement("div");
+    empty.className = "multiselect-empty";
+    empty.hidden = true;
+
+    var footer = document.createElement("div");
+    footer.className = "multiselect-footer";
+
+    var count = document.createElement("span");
+    count.className = "multiselect-count";
+    /* Announced politely: selecting is the whole job of this control, so the
+       running total is worth speaking, unlike a per-second countdown. */
+    count.setAttribute("role", "status");
+    count.setAttribute("aria-live", "polite");
+
+    var clear = document.createElement("button");
+    clear.type = "button";  // inside a <form>, an unqualified button submits it
+    clear.className = "multiselect-clear";
+    clear.textContent = "Clear all";
+    clear.hidden = true;
+
     var summary = document.createElement("div");
     summary.className = "multiselect-summary";
 
-    function refreshSummary() {
-      var chosen = Array.prototype.filter
-        .call(select.options, function (option) { return option.selected; })
-        .map(function (option) { return option.text; });
-      if (!chosen.length) {
-        summary.textContent = "No office selected yet.";
-        return;
-      }
+    var entries = [];
+
+    function setSelected(option, isSelected) {
+      option.selected = isSelected;
+      refresh();
+    }
+
+    function buildChips(chosen) {
       summary.innerHTML = "";
-      chosen.forEach(function (label, index) {
+      chosen.forEach(function (option) {
         var chip = document.createElement("span");
         chip.className = "tag-chip";
-        chip.textContent = (index === 0 ? "Primary Receiver: " : "Additional: ") + label;
+
+        var text = document.createElement("span");
+        text.textContent = option.text;
+        chip.appendChild(text);
+
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "multiselect-chip-remove";
+        remove.innerHTML = "&times;";
+        remove.setAttribute("aria-label", "Remove " + option.text);
+        remove.addEventListener("click", function () {
+          setSelected(option, false);
+          filter.focus();
+        });
+        chip.appendChild(remove);
+
         summary.appendChild(chip);
       });
+    }
+
+    function refresh() {
+      var chosen = [];
+      entries.forEach(function (entry) {
+        entry.box.checked = entry.option.selected;
+        entry.row.classList.toggle("is-selected", entry.option.selected);
+        if (entry.option.selected) chosen.push(entry.option);
+      });
+
+      count.textContent = chosen.length
+        ? chosen.length + " of " + entries.length + " selected"
+        : "No " + noun + " selected yet";
+      clear.hidden = chosen.length === 0;
+
+      buildChips(chosen);
     }
 
     Array.prototype.forEach.call(select.options, function (option) {
@@ -52,8 +110,7 @@
       box.type = "checkbox";
       box.checked = option.selected;
       box.addEventListener("change", function () {
-        option.selected = box.checked;
-        refreshSummary();
+        setSelected(option, box.checked);
       });
 
       var text = document.createElement("span");
@@ -63,22 +120,54 @@
       row.appendChild(text);
       row.dataset.search = option.text.toLowerCase();
       list.appendChild(row);
+      entries.push({ option: option, row: row, box: box });
     });
 
     filter.addEventListener("input", function () {
       var needle = filter.value.trim().toLowerCase();
-      Array.prototype.forEach.call(list.children, function (row) {
-        row.style.display = !needle || row.dataset.search.indexOf(needle) !== -1 ? "" : "none";
+      var visible = 0;
+      entries.forEach(function (entry) {
+        var match = !needle || entry.row.dataset.search.indexOf(needle) !== -1;
+        entry.row.hidden = !match;
+        if (match) visible += 1;
       });
+      empty.hidden = visible !== 0;
+      empty.textContent = 'No ' + noun + ' matches "' + filter.value.trim() + '".';
     });
 
+    clear.addEventListener("click", function () {
+      entries.forEach(function (entry) { entry.option.selected = false; });
+      refresh();
+      filter.focus();
+    });
+
+    /* The checkbox list replaces the native control, so the select is taken
+       out of the tab order and the accessibility tree — left in both, a
+       screen reader would announce every office twice. It stays in the DOM
+       because it is what actually submits. */
     select.classList.add("visually-hidden");
+    select.setAttribute("aria-hidden", "true");
+    select.setAttribute("tabindex", "-1");
+
+    /* The field's <label> still points at the now-hidden select, so send
+       clicks on it to the filter box instead of a control nobody can see. */
+    if (fieldLabel) {
+      fieldLabel.addEventListener("click", function (event) {
+        event.preventDefault();
+        filter.focus();
+      });
+    }
+
     select.parentNode.insertBefore(wrapper, select);
+    footer.appendChild(count);
+    footer.appendChild(clear);
     wrapper.appendChild(filter);
     wrapper.appendChild(list);
+    wrapper.appendChild(empty);
+    wrapper.appendChild(footer);
     wrapper.appendChild(summary);
     wrapper.appendChild(select);
-    refreshSummary();
+    refresh();
   }
 
   document.querySelectorAll("select[multiple].js-searchable").forEach(buildSearchableMultiSelect);
@@ -162,88 +251,39 @@
   ---------------------------------------------------------------------- */
   document.documentElement.classList.add("phase2-js");
 
-  function localDateValue(date) {
-    var year = date.getFullYear();
-    var month = String(date.getMonth() + 1).padStart(2, "0");
-    var day = String(date.getDate()).padStart(2, "0");
-    return year + "-" + month + "-" + day;
-  }
+  /* ----------------------------------------------------------------------
+     Deadline: reveal the calendar only when the answer is "set a deadline".
+     The panel is rendered visible, so with this script blocked the field is
+     still complete and usable — hiding is the enhancement, not the default.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("[data-deadline-field]").forEach(function (field) {
+    var panel = field.querySelector("[data-deadline-panel]");
+    var dateInput = field.querySelector("[data-deadline-date]");
+    var radios = field.querySelectorAll("[data-deadline-choice]");
+    if (!panel || !radios.length) return;
 
-  function startOfToday() {
-    var now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  document.querySelectorAll("[data-due-date-proxy]").forEach(function (wrapper) {
-    var dateInput = wrapper.querySelector("[data-due-date-input]");
-    var dueDaysInput = document.getElementById(wrapper.dataset.dueDaysId);
-    if (!dateInput || !dueDaysInput) return;
-
-    var today = startOfToday();
-    dateInput.min = localDateValue(today);
-
-    var initialDays = parseInt(dueDaysInput.value || "0", 10);
-    if (initialDays > 0) {
-      var initialDate = new Date(today);
-      initialDate.setDate(initialDate.getDate() + initialDays);
-      dateInput.value = localDateValue(initialDate);
+    function chosen() {
+      var picked = field.querySelector("[data-deadline-choice]:checked");
+      return picked ? picked.value : "";
     }
 
-    function syncDueDays() {
-      if (!dateInput.value) {
-        dueDaysInput.value = "0";
-        return;
+    function sync(focusDate) {
+      var wantsDate = chosen() === "date";
+      panel.hidden = !wantsDate;
+      if (dateInput) {
+        /* The field is only required once a deadline is asked for, which no
+           static `required` attribute can express. The server enforces the
+           same rule; this just saves a round trip. */
+        dateInput.required = wantsDate;
+        if (!wantsDate) dateInput.value = "";
+        if (wantsDate && focusDate) dateInput.focus();
       }
-      var selected = new Date(dateInput.value + "T00:00:00");
-      var difference = Math.ceil((selected - today) / 86400000);
-      dueDaysInput.value = String(Math.max(0, difference));
     }
 
-    dateInput.addEventListener("change", syncDueDays);
-    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncDueDays);
-  });
-
-  document.querySelectorAll("[data-combined-notes]").forEach(function (wrapper) {
-    var instructions = document.getElementById(wrapper.dataset.instructionsId);
-    var remarks = document.getElementById(wrapper.dataset.remarksId);
-    if (!instructions || !remarks) return;
-
-    if (!instructions.value && remarks.value) instructions.value = remarks.value;
-
-    function syncNotes() {
-      remarks.value = instructions.value;
-    }
-
-    instructions.addEventListener("input", syncNotes);
-    if (wrapper.closest("form")) wrapper.closest("form").addEventListener("submit", syncNotes);
-  });
-
-  var actionSelect = document.querySelector("[data-requested-action-select]");
-  if (actionSelect) {
-    var storedAction = window.sessionStorage.getItem("doctrackRequestedAction");
-    if (storedAction) actionSelect.value = storedAction;
-    actionSelect.addEventListener("change", function () {
-      window.sessionStorage.setItem("doctrackRequestedAction", actionSelect.value);
-      var label = actionSelect.options[actionSelect.selectedIndex].text;
-      window.sessionStorage.setItem("doctrackRequestedActionLabel", label);
+    radios.forEach(function (radio) {
+      radio.addEventListener("change", function () { sync(true); });
     });
-  }
-
-  document.querySelectorAll("[data-requested-action-review]").forEach(function (target) {
-    var label = window.sessionStorage.getItem("doctrackRequestedActionLabel");
-    if (label) target.textContent = label;
-  });
-
-  document.querySelectorAll("[data-due-date-display]").forEach(function (target) {
-    var days = parseInt(target.dataset.dueDays || "0", 10);
-    if (days <= 0) return;
-    var dueDate = startOfToday();
-    dueDate.setDate(dueDate.getDate() + days);
-    target.textContent = dueDate.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
+    sync(false);
   });
 
   document.querySelectorAll("[data-back-to-edit]").forEach(function (button) {
@@ -252,6 +292,92 @@
     });
   });
 
+
+  /* ----------------------------------------------------------------------
+     Reports: tab switching.
+     Lives here rather than inline in the template so it still runs once
+     ENABLE_CSP is switched on — CSP_SCRIPT_SRC permits no inline scripts.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var tabs = document.querySelectorAll("[data-report-tab]");
+    var panels = document.querySelectorAll("[data-report-panel]");
+    if (!tabs.length) return;
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        var target = tab.dataset.reportTab;
+        tabs.forEach(function (item) {
+          var active = item === tab;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        panels.forEach(function (panel) {
+          panel.classList.toggle("active", panel.dataset.reportPanel === target);
+        });
+      });
+    });
+  })();
+
+  /* ----------------------------------------------------------------------
+     Print auditing.
+     Printing happens entirely in the browser, so a paper copy would otherwise
+     leave no trace at all. Pages that opt in carry a [data-print-log] element;
+     opening a print dialog — via the button OR Ctrl+P — posts one entry.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var marker = document.querySelector("[data-print-log]");
+    if (!marker) return;
+
+    document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
+      button.addEventListener("click", function () { window.print(); });
+    });
+
+    var url = marker.dataset.printLogUrl;
+    var token = marker.dataset.printLogCsrf;
+    if (!url || !token) return;
+
+    /* One entry per print dialog, not per page view: a user who prints twice
+       has produced two copies, but a dialog they cancel is still an attempt
+       worth recording once. */
+    var logging = false;
+
+    function recordPrint() {
+      if (logging) return;
+      logging = true;
+      window.setTimeout(function () { logging = false; }, 2000);
+
+      var body = new URLSearchParams();
+      body.set("label", marker.dataset.printLog || "a page");
+      body.set("reference", marker.dataset.printLogReference || "");
+      body.set("target_type", marker.dataset.printLogTargetType || "");
+      body.set("target_id", marker.dataset.printLogTargetId || "");
+
+      window.fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "X-CSRFToken": token,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: body.toString(),
+        keepalive: true,  // the tab may close the moment printing finishes
+      }).catch(function () {
+        /* Auditing must never break printing. A failed entry is logged
+           server-side on the next successful request instead. */
+      });
+    }
+
+    if ("onbeforeprint" in window) {
+      window.addEventListener("beforeprint", recordPrint);
+    } else if (window.matchMedia) {
+      /* Safari has no beforeprint event; its print stylesheet media query
+         flips instead. */
+      var printQuery = window.matchMedia("print");
+      printQuery.addEventListener("change", function (event) {
+        if (event.matches) recordPrint();
+      });
+    }
+  })();
 
   /* ----------------------------------------------------------------------
      Phase 6 mobile navigation and shared accessibility helpers.

@@ -35,7 +35,7 @@
                 <th>Receiving office(s)</th>
                 <td>
                   {% for office in offices %}
-                    <span class="tag-chip">{% if forloop.first %}Primary Receiver: {% endif %}{{ office.name }}</span>
+                    <span class="tag-chip">{{ office.name }}</span>
                   {% empty %}
                     <em class="text-danger">Not set — choose below before sending.</em>
                   {% endfor %}
@@ -43,23 +43,15 @@
               </tr>
               <tr>
                 <th>Requested action</th>
-                <td><span data-requested-action-review>Not selected</span> <span class="phase2-preview-badge">Frontend preview</span></td>
+                <td>{{ record.get_requested_action_display|default:"Not specified" }}</td>
               </tr>
               <tr>
                 <th>Deadline</th>
-                <td>
-                  {% if due_days and due_days != "0" %}
-                    <span data-due-date-display data-due-days="{{ due_days }}">{{ due_days }} day(s) after sending</span>
-                  {% else %}
-                    No deadline
-                  {% endif %}
-                </td>
+                <td>{% if deadline %}{{ deadline|date:"d F Y" }}{% else %}No deadline{% endif %}</td>
               </tr>
               <tr>
                 <th>Instructions / Remarks</th>
-                <td>
-                  {% if record.instructions %}{{ record.instructions|linebreaksbr }}{% elif record.remarks %}{{ record.remarks|linebreaksbr }}{% else %}—{% endif %}
-                </td>
+                <td>{{ record.instructions|linebreaksbr|default:"—" }}</td>
               </tr>
               <tr>
                 <th>Attachments</th>
@@ -69,29 +61,21 @@
           </table>
         </div>
 
-        <form method="post" class="mt-3 phase2-review-form" novalidate>
+        <form method="post" class="mt-3" novalidate>
           {% csrf_token %}
 
           {% if session_lost %}
-            <div class="alert alert-warning phase2-alert">
+            <div class="alert alert-warning">
               <strong>Pick the receiving office(s) again.</strong>
               This draft was started in an earlier session, so the earlier choice was not retained.
               The tracking number and document information remain available.
             </div>
           {% endif %}
 
-          <div {% if not session_lost %}class="collapse" id="editRouting"{% endif %}>
+          <div {% if not session_lost and not form.errors %}class="collapse" id="editRouting"{% else %}id="editRouting"{% endif %}>
             <div class="phase2-inline-editor">
               {% include "partials/_field.html" with field=form.receiving_offices %}
-              <div class="phase2-date-proxy" data-due-date-proxy data-due-days-id="{{ form.due_days.id_for_label }}">
-                <div class="phase2-date-ui">
-                  <label class="form-label" for="phase2-review-due-date">Deadline</label>
-                  <input id="phase2-review-due-date" type="date" class="form-control" data-due-date-input>
-                </div>
-                <div class="phase2-backend-field">
-                  {% include "partials/_field.html" with field=form.due_days %}
-                </div>
-              </div>
+              {% include "tracking/_deadline_field.html" with form=form %}
             </div>
           </div>
 

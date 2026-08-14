@@ -32,6 +32,8 @@
           <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Pending Receipt" }}</td></tr>
           <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
           <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Requested action</th>
+              <td>{{ record.get_requested_action_display|default:"Not specified" }}</td></tr>
           <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>
           <tr><th class="text-muted fw-normal">Deadline</th>
               <td>{% if record.due_at %}{{ record.due_at|date:"d M Y" }}{% if record.is_overdue %} <span class="pill pill-overdue">Overdue</span>{% endif %}{% else %}None{% endif %}</td></tr>
@@ -176,28 +178,8 @@
                   {% endfor %}
                 </div>
                 {% include "partials/_field.html" with field=route_form.offices %}
-                <div
-                  class="mb-3 phase2-combined-notes"
-                  data-combined-notes
-                  data-instructions-id="{{ route_form.instructions.id_for_label }}"
-                  data-remarks-id="{{ route_form.remark.id_for_label }}"
-                >
-                  <label class="form-label" for="{{ route_form.instructions.id_for_label }}">Instructions / Remarks</label>
-                  {{ route_form.instructions }}
-                  {% for error in route_form.instructions.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
-                  <div class="phase2-backend-field mt-3">
-                    {% include "partials/_field.html" with field=route_form.remark %}
-                  </div>
-                </div>
-                <div class="phase2-date-proxy mb-3" data-due-date-proxy data-due-days-id="{{ route_form.due_days.id_for_label }}">
-                  <div class="phase2-date-ui">
-                    <label class="form-label" for="phase2-route-due-date">Deadline</label>
-                    <input id="phase2-route-due-date" type="date" class="form-control" data-due-date-input>
-                  </div>
-                  <div class="phase2-backend-field">
-                    {% include "partials/_field.html" with field=route_form.due_days %}
-                  </div>
-                </div>
+                {% include "partials/_field.html" with field=route_form.instructions %}
+                {% include "tracking/_deadline_field.html" with form=route_form %}
                 {% include "partials/_field.html" with field=route_form.attachments %}
                 <button class="btn btn-udm" type="submit">Send Document</button>
               </form>

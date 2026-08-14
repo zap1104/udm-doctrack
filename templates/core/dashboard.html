@@ -8,36 +8,28 @@
     <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
     <p class="sub">{{ user.office_label }}</p>
   </div>
-  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ Create New DTS</a>
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
+  <div class="col-12 col-md-4">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
       <div class="label">Incoming</div>
       <div class="value">{{ inbox_count }}</div>
-      <div class="hint">{{ inbox_new_today }} arrived today · pending receipt</div>
+      <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
     </a>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-md-4">
     <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
-      <div class="label">In Transit</div>
-      <div class="value">{{ in_transit_count }}</div>
+      <div class="label">Outgoing</div>
+      <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-md-4">
     <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
-    </a>
-  </div>
-  <div class="col-6 col-lg-3">
-    <a class="stat-card green" href="{% url 'documents:repository' %}">
-      <div class="label">Completed</div>
-      <div class="value">{{ completed_count }}</div>
-      <div class="hint">This year · available in Document Management</div>
     </a>
   </div>
 </div>
@@ -46,7 +38,14 @@
   <div class="col-lg-8">
     <div class="card-udm">
       <div class="card-udm-head">
-        <h2>Pending Receipt</h2>
+        <div>
+          <h2>Pending Receipt</h2>
+          {% if show_office_columns %}
+            <div class="card-udm-caption">
+              Showing which office sent each document and which has still to confirm it.
+            </div>
+          {% endif %}
+        </div>
         <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=inbox">
           <span>Open Tracking</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
@@ -55,16 +54,35 @@
       <div class="card-udm-body p-0">
         {% if attention_records %}
           <div class="table-responsive"><table class="table-udm">
+            {% if show_office_columns %}
+              <thead>
+                <tr>
+                  <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                </tr>
+              </thead>
+            {% endif %}
             <tbody>
             {% for record in attention_records %}
               <tr>
-                <td>
-                  <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
-                  <div style="font-size:14px;">{{ record.subject }}</div>
-                  <div class="text-muted" style="font-size:12.5px;">
-                    From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
-                  </div>
-                </td>
+                {% if show_office_columns %}
+                  <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+                  <td>
+                    {{ record.subject|truncatechars:46 }}
+                    <div class="text-muted" style="font-size:12.5px;">
+                      updated {{ record.last_movement_at|timesince }} ago
+                    </div>
+                  </td>
+                  <td class="office-cell">{{ record.originating_office.code }}</td>
+                  <td class="office-cell">{{ record.pending_label }}</td>
+                {% else %}
+                  <td>
+                    <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
+                    <div style="font-size:14px;">{{ record.subject }}</div>
+                    <div class="text-muted" style="font-size:12.5px;">
+                      From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                    </div>
+                  </td>
+                {% endif %}
                 <td class="text-end">
                   {% if record.can_confirm_now %}
                     <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
@@ -90,18 +108,38 @@
     </div>
 
     <div class="card-udm mt-4">
-      <div class="card-udm-head"><h2>Recent Tracking Activity</h2></div>
-      <div class="card-udm-body p-0">
+      <div class="card-udm-head">
+        <div>
+          <h2>Recent Tracking Activity</h2>
+          {% if show_office_columns %}
+            <div class="card-udm-caption">Showing office-to-office movement — records personnel view.</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-udm-body p-0 table-responsive">
         <table class="table-udm">
+          {% if show_office_columns %}
+            <thead>
+              <tr>
+                <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
+              </tr>
+            </thead>
+          {% endif %}
           <tbody>
           {% for record in recent_records %}
             <tr>
               <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
               <td>{{ record.subject|truncatechars:52 }}</td>
+              {% if show_office_columns %}
+                <td class="office-cell">{{ record.originating_office.code }}</td>
+                <td class="office-cell">{{ record.destination_label }}</td>
+              {% endif %}
               <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
             </tr>
           {% empty %}
-            <tr><td class="text-muted p-4">No active records yet.</td></tr>
+            <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
+              No active records yet.
+            </td></tr>
           {% endfor %}
           </tbody>
         </table>

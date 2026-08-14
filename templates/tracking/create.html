@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Create New DTS · {{ SITE_NAME }}{% endblock %}
+{% block title %}New Tracking Slip · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking</div>
-    <h1>Create New DTS</h1>
+    <h1>New Tracking Slip</h1>
     <div class="step-indicator mt-2">
       <span class="step active"><span class="num">1</span> Document and Routing Details</span>
       <span aria-hidden="true">›</span>
@@ -13,7 +13,7 @@
   </div>
 </div>
 
-<form method="post" enctype="multipart/form-data" novalidate class="phase2-dts-form" data-combined-notes-form>
+<form method="post" enctype="multipart/form-data" novalidate>
   {% csrf_token %}
   <div class="row g-4">
     <div class="col-lg-8">
@@ -43,59 +43,17 @@
 
           <section class="phase2-form-section" aria-labelledby="routing-details-heading">
             <h3 id="routing-details-heading" class="phase2-section-title">Routing details</h3>
-            <div class="phase2-field-guide">
-              <strong>Primary receiver:</strong> the first selected office takes custody. Additional offices receive a copy for action.
-            </div>
             {% include "partials/_field.html" with field=form.receiving_offices %}
 
-            <div class="mb-3">
-              <label class="form-label" for="phase2-requested-action">Requested action</label>
-              <select id="phase2-requested-action" class="form-select" data-requested-action-select>
-                <option value="">Select the requested action</option>
-                <option value="2">2 · Appropriate Action</option>
-                <option value="3">3 · Comment / Recommendation</option>
-                <option value="4">4 · Study / Inquiry</option>
-                <option value="5">5 · Reply Direct to Writer</option>
-                <option value="6">6 · For Signature</option>
-                <option value="7">7 · Rewrite / Redraft / Retype</option>
-                <option value="8">8 · Notation to Return</option>
-                <option value="9">9 · Notation to Forward</option>
-                <option value="10">10 · Re-route</option>
-                <option value="11">11 · File</option>
-              </select>
-              <div class="form-text">Frontend preview only. Your backend teammate still needs to store this value.</div>
-            </div>
+            {% include "partials/_field.html" with field=form.requested_action %}
 
-            <div
-              class="mb-3 phase2-combined-notes"
-              data-combined-notes
-              data-instructions-id="{{ form.instructions.id_for_label }}"
-              data-remarks-id="{{ form.remarks.id_for_label }}"
-            >
-              <label class="form-label" for="{{ form.instructions.id_for_label }}">Instructions / Remarks</label>
-              {{ form.instructions }}
-              {% if form.instructions.help_text %}<div class="form-text">{{ form.instructions.help_text }}</div>{% endif %}
-              {% for error in form.instructions.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
-              <div class="phase2-backend-field mt-3">
-                {% include "partials/_field.html" with field=form.remarks %}
-              </div>
-            </div>
+            {% include "partials/_field.html" with field=form.instructions %}
 
             <div class="row">
               <div class="col-md-6">{% include "partials/_field.html" with field=form.priority %}</div>
-              <div class="col-md-6">
-                <div class="phase2-date-proxy" data-due-date-proxy data-due-days-id="{{ form.due_days.id_for_label }}">
-                  <div class="phase2-date-ui">
-                    <label class="form-label" for="phase2-due-date">Deadline</label>
-                    <input id="phase2-due-date" type="date" class="form-control" data-due-date-input>
-                    <div class="form-text">Choose a date. The existing backend will receive the equivalent number of days.</div>
-                  </div>
-                  <div class="phase2-backend-field">
-                    {% include "partials/_field.html" with field=form.due_days %}
-                  </div>
-                </div>
-              </div>
             </div>
+
+            {% include "tracking/_deadline_field.html" with form=form %}
           </section>
 
           <section class="phase2-form-section phase2-form-section--last" aria-labelledby="attachments-heading">
@@ -121,7 +79,7 @@
         <div class="card-udm-body">
           <ol class="phase2-checklist">
             <li><strong>Originating office is fixed.</strong> It comes from the signed-in account.</li>
-            <li><strong>Choose the destination carefully.</strong> The first office selected is treated as the primary receiver.</li>
+            <li><strong>Choose the destinations carefully.</strong> Every office selected receives the document and must confirm receipt.</li>
             <li><strong>Use the calendar for the deadline.</strong> The interface converts the chosen date for the current backend.</li>
             <li><strong>Review before sending.</strong> Sending does not mean the document has been received.</li>
           </ol>

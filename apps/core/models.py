@@ -208,6 +208,7 @@ class AuditLog(models.Model):
         COMPLETE = "COMPLETE", "Completed"
         ARCHIVE = "ARCHIVE", "Archived"
         DOWNLOAD = "DOWNLOAD", "Downloaded"
+        PRINT = "PRINT", "Printed"
         SEARCH = "SEARCH", "Searched"
         PERMISSION = "PERMISSION", "Changed access"
 

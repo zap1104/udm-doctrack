@@ -298,7 +298,7 @@
 {% endblock %}
 {% block content %}
 <div class="routing-slip-actions no-print">
-  <button class="btn btn-udm" type="button" onclick="window.print()">Print Routing Slip</button>
+  <button class="btn btn-udm" type="button" data-print-trigger>Print Routing Slip</button>
   <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to Record</a>
 </div>
 
@@ -356,6 +356,10 @@
     <div class="routing-slip-summary-row">
       <div class="routing-slip-summary-label">Document Type</div>
       <div class="routing-slip-summary-value">{{ record.document_type.name|default:"Not specified" }}</div>
+    </div>
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Requested Action</div>
+      <div class="routing-slip-summary-value">{{ record.get_requested_action_display|default:"Not specified" }}</div>
     </div>
     <div class="routing-slip-summary-row">
       <div class="routing-slip-summary-label">Instructions / Remarks</div>

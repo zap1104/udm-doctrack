@@ -22,20 +22,21 @@ Sign in as `admin` / `DocTrack2026!`.
 
 Point at the dashboard cards.
 
-> "My inbox, in transit, overdue, completed. A person sees their own workload first, not a database."
+> "Incoming, outgoing, overdue. A person sees their own workload first, not a database."
 
 ---
 
 ## 2. Create a document (90 seconds)
 
-Click **+ Create New DTS**.
+Click **+ New Tracking Slip**.
 
 - Subject: `Request for repair of registrar air-conditioning unit`
 - Type: Work Order
 - Point at the locked origin office: *"This comes from my account. You cannot route a document as another office."*
 - Receiving offices: pick **SUP** and **MED**
-- Deadline: 3 days
-- Instructions: `For immediate inspection and repair.`
+- Instructions / Remarks: `For immediate inspection and repair.`
+- Deadline: choose **Set a deadline date**, then pick a date three days out.
+  *"The calendar refuses anything before today, so nobody can back-date a deadline."*
 
 Click **Review & create**.
 

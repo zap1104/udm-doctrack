@@ -123,6 +123,24 @@ class TrackingRecord(TimeStampedModel):
         CONFIDENTIAL = "CONFIDENTIAL", "Confidential"
         PUBLIC = "PUBLIC", "Public"
 
+    class RequestedAction(models.TextChoices):
+        """The numbered action codes printed on the paper routing slip.
+
+        Numbering starts at 2 because that is what the approved slip uses; the
+        values are the codes themselves so a slip and a screen always agree.
+        """
+
+        APPROPRIATE_ACTION = "2", "2 · Appropriate Action"
+        COMMENT = "3", "3 · Comment / Recommendation"
+        STUDY = "4", "4 · Study / Inquiry"
+        REPLY_DIRECT = "5", "5 · Reply Direct to Writer"
+        SIGNATURE = "6", "6 · For Signature"
+        REWRITE = "7", "7 · Rewrite / Redraft / Retype"
+        NOTATION_RETURN = "8", "8 · Notation to Return"
+        NOTATION_FORWARD = "9", "9 · Notation to Forward"
+        REROUTE = "10", "10 · Re-route"
+        FILE = "11", "11 · File"
+
     tracking_number = models.CharField(max_length=48, unique=True, db_index=True)
     subject = models.CharField(max_length=255)
     document_type = models.ForeignKey(
@@ -132,6 +150,12 @@ class TrackingRecord(TimeStampedModel):
         max_length=16, choices=Classification.choices, default=Classification.INTERNAL
     )
     priority = models.CharField(max_length=8, choices=Priority.choices, default=Priority.NORMAL)
+    requested_action = models.CharField(
+        max_length=2,
+        choices=RequestedAction.choices,
+        blank=True,
+        help_text="What the receiving office is being asked to do, as numbered on the routing slip.",
+    )
 
     originating_office = models.ForeignKey(
         "accounts.Office", on_delete=models.PROTECT, related_name="originated_records"

@@ -1,4 +1,3 @@
-{% load static %}
 <header class="app-topbar no-print">
   <button
     class="sidebar-toggle"
@@ -10,11 +9,6 @@
   >
     <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
   </button>
-
-  <a class="topbar-brand d-none d-md-inline-flex" href="{% url 'core:dashboard' %}" aria-label="{{ SITE_NAME }} dashboard">
-    <img class="topbar-brand-icon" src="{% static 'img/favicon.svg' %}" alt="">
-    <span class="wordmark"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span>
-  </a>
 
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
     <label class="visually-hidden" for="topbar-search-input">Search records</label>

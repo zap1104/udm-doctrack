@@ -31,6 +31,11 @@ from .models import (
 
 logger = logging.getLogger("doctrack")
 
+#: Distinguishes "caller said nothing about a deadline" (fall back to due_days)
+#: from "caller explicitly said there is no deadline" (due_at=None). A plain
+#: None default would silently turn the latter into the former.
+_UNSET = object()
+
 
 # ---------------------------------------------------------------------------
 # Tracking numbers
@@ -71,7 +76,8 @@ def add_activity(record, event, message, *, actor=None, detail="", batch=None) -
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def create_draft_record(*, user, subject, instructions, document_type=None, remarks="",
-                        classification=None, priority=None, due_at=None, originating_office=None):
+                        classification=None, priority=None, due_at=None, originating_office=None,
+                        requested_action=""):
     office = originating_office or user.office
     if office is None:
         raise ValidationError("Your account has no office, so it cannot originate a document.")
@@ -82,6 +88,7 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         document_type=document_type,
         classification=classification or TrackingRecord.Classification.INTERNAL,
         priority=priority or TrackingRecord.Priority.NORMAL,
+        requested_action=requested_action or "",
         originating_office=office,
         created_by=user,
         instructions=instructions.strip(),
@@ -130,8 +137,13 @@ def attach_files(record, files, *, user, note="", routing_step=None) -> list[Att
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def route_record(record, offices, *, user, instructions="", action=RoutingStep.Action.SEND,
-                 due_days=None, remark="") -> list[RoutingStep]:
-    """Send the record to one or more offices. Creates a new batch of steps."""
+                 due_days=None, due_at=_UNSET, remark="") -> list[RoutingStep]:
+    """Send the record to one or more offices. Creates a new batch of steps.
+
+    The deadline can arrive either way: `due_at` is an exact datetime picked
+    from a calendar (pass None for "no deadline"), `due_days` is the older
+    relative form. `due_at` wins when both are given.
+    """
     offices = [office for office in offices if office is not None]
     if not offices:
         raise ValidationError("Select at least one receiving office.")
@@ -142,15 +154,21 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     if action == RoutingStep.Action.SEND and record.status != Status.DRAFT:
         raise ValidationError("Only a draft can be sent for the first time.")
 
-    duplicate = [office for office in offices if office.pk == getattr(from_office, "pk", None)]
-    if duplicate and len(offices) == 1:
+    # Guard against a step whose from_office and to_office are the same office.
+    # This used to fire only when the sender was the *sole* recipient, so
+    # picking "own office + another office" slipped through and wrote a
+    # self-addressed step: the office then sat in its own inbox waiting to
+    # receive a document it had never let go of.
+    from_office_pk = getattr(from_office, "pk", None)
+    if from_office_pk is not None and any(office.pk == from_office_pk for office in offices):
         raise ValidationError("A document cannot be routed to the office that is sending it.")
 
     batch = (record.routing_steps.aggregate(value=Max("batch"))["value"] or 0) + 1
     sequence = record.routing_steps.aggregate(value=Max("sequence"))["value"] or 0
 
-    due_days = settings.DEFAULT_ACTION_DUE_DAYS if due_days is None else due_days
-    due_at = timezone.now() + timedelta(days=int(due_days)) if due_days else None
+    if due_at is _UNSET:
+        due_days = settings.DEFAULT_ACTION_DUE_DAYS if due_days is None else due_days
+        due_at = timezone.now() + timedelta(days=int(due_days)) if due_days else None
 
     steps: list[RoutingStep] = []
     for office in offices:
@@ -405,3 +423,31 @@ def completed_this_year_for(user):
 
 def active_for(user):
     return TrackingRecord.objects.visible_to(user).filter(status__in=ACTIVE_STATUSES).with_related().distinct()
+
+
+def annotate_can_confirm(records, user) -> None:
+    """Set `can_confirm_now` on each record in one query.
+
+    `record.can_user_confirm_receipt(user)` asks the database per record, which
+    on a twenty-row page is twenty queries for a question one `IN` clause can
+    answer. The lists that show a Confirm Receipt button use this instead.
+    """
+    if not records:
+        return
+    if not user.is_authenticated or not user.office_id:
+        for record in records:
+            record.can_confirm_now = False
+        return
+
+    # A record is confirmable when the *current* batch still has an unreceived
+    # step addressed to this office — the same rule as pending_step_for_office.
+    pending = set(
+        RoutingStep.objects.filter(
+            record__in=records,
+            to_office_id=user.office_id,
+            received_at__isnull=True,
+            batch=F("record__current_batch"),
+        ).values_list("record_id", flat=True)
+    )
+    for record in records:
+        record.can_confirm_now = record.pk in pending
