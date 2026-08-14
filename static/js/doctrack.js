@@ -319,6 +319,16 @@
   })();
 
   /* ----------------------------------------------------------------------
+     Print trigger: any [data-print-trigger] button opens the print dialog.
+     Kept independent of the audit-logging block below — a page with a print
+     button but no [data-print-log] marker (or one added later without it)
+     must not end up with a button that silently does nothing.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
+    button.addEventListener("click", function () { window.print(); });
+  });
+
+  /* ----------------------------------------------------------------------
      Print auditing.
      Printing happens entirely in the browser, so a paper copy would otherwise
      leave no trace at all. Pages that opt in carry a [data-print-log] element;
@@ -327,10 +337,6 @@
   (function () {
     var marker = document.querySelector("[data-print-log]");
     if (!marker) return;
-
-    document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
-      button.addEventListener("click", function () { window.print(); });
-    });
 
     var url = marker.dataset.printLogUrl;
     var token = marker.dataset.printLogCsrf;
