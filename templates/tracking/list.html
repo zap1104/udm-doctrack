@@ -67,8 +67,10 @@
             <td>{% include "partials/_office_badge.html" with office=record.current_office %}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
           <td>
-              {# display_status already resolves to OVERDUE whenever is_overdue
-                 is true, so a second pill guarded on both could never render. #}
+              {% comment %}
+                display_status already resolves to OVERDUE whenever is_overdue
+                is true, so a second pill guarded on both could never render.
+              {% endcomment %}
               {% include "partials/_status_pill.html" with status=record.display_status %}
             </td>
             <td class="text-end">
