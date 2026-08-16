@@ -158,7 +158,8 @@ class UserUpdateView(AdminRequiredMixin, View):
         return render(
             request,
             self.template_name,
-            {"form": AdminUserUpdateForm(instance=user), "edited_user": user, "is_new": False,
+            {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk),
+             "edited_user": user, "is_new": False,
              "password_form": AdminSetPasswordForm(user)},
         )
 
@@ -181,11 +182,14 @@ class UserUpdateView(AdminRequiredMixin, View):
             return render(
                 request,
                 self.template_name,
-                {"form": AdminUserUpdateForm(instance=user), "edited_user": user, "is_new": False,
+                {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk),
+                 "edited_user": user, "is_new": False,
                  "password_form": password_form},
             )
 
-        form = AdminUserUpdateForm(request.POST, instance=user)
+        form = AdminUserUpdateForm(
+            request.POST, instance=user, editing_self=user.pk == request.user.pk
+        )
         if form.is_valid():
             form.save()
             log_action(

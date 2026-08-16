@@ -299,6 +299,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "grant_form": GrantAccessForm(),
                 "pending_offices": record.pending_receipt_offices(),
                 "can_act": record.can_user_act(request.user),
+                "can_archive": record.can_user_archive(request.user),
                 "can_confirm": record.can_user_confirm_receipt(request.user),
                 "archived_document": getattr(record, "archived_document", None),
             },
@@ -403,6 +404,11 @@ class CompleteRecordView(OfficeAssignedMixin, View):
 class ArchiveRecordView(OfficeAssignedMixin, View):
     def post(self, request, pk):
         record = _get_record(request, pk)
+        if not record.can_user_archive(request.user):
+            raise PermissionDenied(
+                "Only records personnel or the offices that handled this document "
+                "can file it into Document Management."
+            )
         try:
             document = archive_tracking_record(record, user=request.user)
         except ValidationError as exc:

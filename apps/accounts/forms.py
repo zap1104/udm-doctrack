@@ -64,10 +64,33 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
             "first_name", "last_name", "email", "office", "role", "position", "phone", "is_active",
         )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, editing_self: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.editing_self = editing_self
         self.fields["office"].queryset = Office.active.all()
         self.fields["is_active"].label = "Account is active"
+
+    def clean(self):
+        """Stop an administrator locking everyone out of administration.
+
+        The suspend/reactivate button already refuses to act on your own
+        account, but this form could do both of the same things — drop your own
+        role to USER, or clear "Account is active" — and there is no screen left
+        that could undo either afterwards. Only the shell could, which for this
+        project means nobody could.
+        """
+        cleaned = super().clean()
+        if not self.editing_self:
+            return cleaned
+        if cleaned.get("role") != User.Role.ADMIN:
+            self.add_error(
+                "role",
+                "You cannot remove your own administrator role. Ask another "
+                "administrator to change it for you.",
+            )
+        if not cleaned.get("is_active"):
+            self.add_error("is_active", "You cannot deactivate your own account.")
+        return cleaned
 
 
 class AdminSetPasswordForm(BootstrapFormMixin, SetPasswordForm):

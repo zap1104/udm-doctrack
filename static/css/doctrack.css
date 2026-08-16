@@ -361,7 +361,7 @@ a:hover { text-decoration: underline; }
 .btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
 .btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
 .btn-udm-outline { background: #fff; border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { border-color: var(--udm-navy); }
+.btn-udm-outline:hover { background: #fff; border-color: var(--udm-navy); color: var(--udm-navy); }
 .btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
 .btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
 .btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }

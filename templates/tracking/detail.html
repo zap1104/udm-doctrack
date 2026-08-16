@@ -222,7 +222,7 @@
       </div>
     {% endif %}
 
-    {% if record.status == "COMPLETED" and not archived_document %}
+    {% if record.status == "COMPLETED" and not archived_document and can_archive %}
       <form method="post" action="{% url 'tracking:archive' record.pk %}" class="mt-4 no-print">{% csrf_token %}
         <button class="btn btn-udm-teal" type="submit">Archive into Document Management</button>
       </form>

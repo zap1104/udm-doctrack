@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -101,9 +101,14 @@ class TrackingRecordQuerySet(models.QuerySet):
         return self.filter(status__in=ACTIVE_STATUSES, is_archived=False)
 
     def awaiting_receipt_for(self, office):
+        # Scoped to the current batch, like every other inbox query here. An
+        # unscoped version matches steps from *any* earlier batch that was
+        # never received, so a document long since forwarded on would still be
+        # reported as waiting for this office to confirm it.
         return self.filter(
             routing_steps__to_office=office,
             routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
         ).distinct()
 
     def overdue(self):
@@ -284,6 +289,31 @@ class TrackingRecord(TimeStampedModel):
         if not user.is_authenticated or not user.office_id:
             return False
         return self.pending_step_for_office(user.office) is not None
+
+    def can_user_archive(self, user) -> bool:
+        """Who may file a completed record into Document Management.
+
+        `can_user_act` cannot answer this: it is deliberately False for a
+        COMPLETED record, and archiving only ever happens after completion.
+        Without a rule of its own the archive endpoint had no permission check
+        at all, so anyone who could *read* the record — an office it merely
+        passed through, or somebody holding a read-only access grant — could
+        push it into the repository, copying every attachment and writing an
+        ARCHIVED entry into the append-only history under their name.
+
+        Filing is records work: records personnel do it as their job, and the
+        offices that raised or finished the document may file their own.
+        """
+        if not user.is_authenticated:
+            return False
+        if user.is_records_staff:
+            return True
+        if self.completed_by_id == user.pk or self.created_by_id == user.pk:
+            return True
+        return bool(user.office_id) and user.office_id in {
+            self.originating_office_id,
+            self.current_office_id,
+        }
 
     def can_user_view(self, user) -> bool:
         return TrackingRecord.objects.filter(pk=self.pk).visible_to(user).exists()
