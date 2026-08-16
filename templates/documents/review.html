@@ -129,23 +129,13 @@
     </div>
   </div>
 </form>
-{% endblock %}
 
-{% block extra_scripts %}
-<script>
-  // Suggested-tag chips append to the comma separated tag box.
-  document.querySelectorAll('.js-add-tag').forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      var box = document.getElementById('{{ form.tags.id_for_label }}');
-      if (!box) return;
-      var existing = box.value.split(',').map(function (item) { return item.trim().toLowerCase(); }).filter(Boolean);
-      var value = chip.dataset.tag.toLowerCase();
-      if (existing.indexOf(value) === -1) {
-        existing.push(value);
-        box.value = existing.join(', ');
-      }
-      chip.classList.add('d-none');
-    });
-  });
-</script>
+{% comment %}
+  The suggested-tag chips used to be wired up by an inline <script> here.
+  CSP_SCRIPT_SRC allows no inline code, so turning ENABLE_CSP on would have left
+  the chips looking clickable and doing nothing. The behaviour lives in
+  doctrack.js now and takes the tag box id from this marker, so Django keeps
+  ownership of the generated id.
+{% endcomment %}
+<span hidden data-tag-chips data-tag-chips-input="{{ form.tags.id_for_label }}"></span>
 {% endblock %}

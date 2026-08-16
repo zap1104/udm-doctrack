@@ -386,6 +386,283 @@
   })();
 
   /* ----------------------------------------------------------------------
+     Metadata review: suggested-tag chips append to the comma-separated box.
+     Here rather than inline in the template so it survives ENABLE_CSP.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var marker = document.querySelector("[data-tag-chips]");
+    if (!marker) return;
+    var box = document.getElementById(marker.dataset.tagChipsInput || "");
+    if (!box) return;
+
+    document.querySelectorAll(".js-add-tag").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var existing = box.value
+          .split(",")
+          .map(function (item) { return item.trim().toLowerCase(); })
+          .filter(Boolean);
+        var value = (chip.dataset.tag || "").toLowerCase();
+        if (value && existing.indexOf(value) === -1) {
+          existing.push(value);
+          box.value = existing.join(", ");
+        }
+        chip.classList.add("d-none");
+      });
+    });
+  })();
+
+  /* ----------------------------------------------------------------------
+     Idle sign-out warning.
+
+     The server is what ends the session; this is the courtesy that stops it
+     happening silently. Two rules shape the behaviour:
+
+     1. Working at the keyboard counts as being present, even with no page
+        loads. Typing a long remark sends nothing to the server, so without a
+        keep-alive the session would expire mid-sentence and take the text with
+        it. Activity therefore pings the server, throttled hard.
+     2. Once the warning is up, ambient activity is ignored and the button must
+        be pressed. A mouse nudged by a passer-by is not evidence that the
+        person who signed in has come back.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var marker = document.querySelector("[data-session-timeout]");
+    if (!marker) return;
+
+    var idleSeconds = parseInt(marker.dataset.sessionTimeout, 10);
+    var warnAt = parseInt(marker.dataset.sessionWarnAt, 10);
+    var keepAliveUrl = marker.dataset.sessionKeepaliveUrl;
+    var loginUrl = marker.dataset.sessionLoginUrl;
+    var logoutUrl = marker.dataset.sessionLogoutUrl;
+    var token = marker.dataset.sessionCsrf;
+    if (!idleSeconds || !keepAliveUrl || !token || !loginUrl || !logoutUrl) return;
+    if (isNaN(warnAt) || warnAt <= 0 || warnAt >= idleSeconds) warnAt = 120;
+
+    /* Count towards a fixed deadline rather than decrementing, for the same
+       reason the lockout page does: background tabs get their timers throttled
+       and a decrementing counter falls behind real time. */
+    var deadline = Date.now() + idleSeconds * 1000;
+    var nextPingAllowedAt = 0;
+    var pingGap = Math.max(60, Math.floor(idleSeconds / 4)) * 1000;
+    var warning = null;
+    var clock = null;
+    var signedOut = false;
+
+    function secondsLeft() {
+      return Math.round((deadline - Date.now()) / 1000);
+    }
+
+    function pad(value) {
+      return (value < 10 ? "0" : "") + value;
+    }
+
+    function keepAlive() {
+      nextPingAllowedAt = Date.now() + pingGap;
+      return window.fetch(keepAliveUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "X-CSRFToken": token, "Content-Type": "application/x-www-form-urlencoded" },
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error("keep-alive refused");
+          return response.json();
+        })
+        .then(function (data) {
+          deadline = Date.now() + (data.seconds_remaining || idleSeconds) * 1000;
+          return true;
+        })
+        .catch(function () {
+          /* Offline or already signed out. Leave the deadline alone: the
+             countdown carries on and the redirect below is the safe landing. */
+          return false;
+        });
+    }
+
+    function buildWarning() {
+      var dialog = document.createElement("dialog");
+      dialog.className = "session-dialog";
+      dialog.setAttribute("aria-labelledby", "session-dialog-title");
+
+      var heading = document.createElement("h2");
+      heading.id = "session-dialog-title";
+      heading.textContent = "Still there?";
+
+      var body = document.createElement("p");
+      body.textContent =
+        "You are about to be signed out because the account has been idle. " +
+        "Anything you have typed but not saved will be lost.";
+
+      clock = document.createElement("div");
+      clock.className = "session-dialog__clock";
+      /* Not announced: a value changing every second would be read out
+         endlessly. Opening the dialog announces the heading and body. */
+      clock.setAttribute("aria-live", "off");
+
+      var actions = document.createElement("div");
+      actions.className = "session-dialog__actions";
+
+      var stay = document.createElement("button");
+      stay.type = "button";
+      stay.className = "btn btn-udm";
+      stay.textContent = "Stay signed in";
+      stay.addEventListener("click", function () {
+        stay.disabled = true;
+        keepAlive().then(function (ok) {
+          stay.disabled = false;
+          if (ok) {
+            hideWarning();
+          } else {
+            redirectToLogin();
+          }
+        });
+      });
+
+      var out = document.createElement("button");
+      out.type = "button";
+      out.className = "btn btn-udm-outline";
+      out.textContent = "Sign out now";
+      out.addEventListener("click", signOutNow);
+
+      actions.appendChild(stay);
+      actions.appendChild(out);
+      dialog.appendChild(heading);
+      dialog.appendChild(body);
+      dialog.appendChild(clock);
+      dialog.appendChild(actions);
+
+      /* Escape must not dismiss it. Closing the warning without answering
+         would leave the countdown running behind a page that looks fine. */
+      dialog.addEventListener("cancel", function (event) { event.preventDefault(); });
+
+      document.body.appendChild(dialog);
+      return dialog;
+    }
+
+    function showWarning() {
+      if (warning) return;
+      warning = buildWarning();
+      if (typeof warning.showModal === "function") {
+        warning.showModal();
+      } else {
+        warning.setAttribute("open", "open");  // very old browsers
+      }
+    }
+
+    function hideWarning() {
+      if (!warning) return;
+      if (typeof warning.close === "function") warning.close();
+      warning.remove();
+      warning = null;
+      clock = null;
+    }
+
+    /* Reached when the countdown runs out. Deliberately a navigation and not a
+       sign-out: the server, not this timer, decides when the session ends. If
+       the countdown is early — another tab has been keeping the session alive —
+       the sign-in page bounces the user harmlessly back, and the real expiry
+       still happens on the server's schedule. Forcing a sign-out here would let
+       an idle background tab end a session someone is actively working in. */
+    function redirectToLogin() {
+      if (signedOut) return;
+      signedOut = true;
+      var here = window.location.pathname + window.location.search;
+      window.location.href = loginUrl + "?timeout=1&next=" + encodeURIComponent(here);
+    }
+
+    /* "Sign out now", on the other hand, has to actually sign out. Sending the
+       browser to the sign-in page does not: the view redirects an already
+       authenticated visitor straight back to `next`, so the button returned
+       the user to the page they were on, still signed in — the exact opposite
+       of what it said. LogoutView is POST-only, so this posts. */
+    function signOutNow() {
+      if (signedOut) return;
+      signedOut = true;
+      var form = document.createElement("form");
+      form.method = "post";
+      form.action = logoutUrl;
+      var field = document.createElement("input");
+      field.type = "hidden";
+      field.name = "csrfmiddlewaretoken";
+      field.value = token;
+      form.appendChild(field);
+      document.body.appendChild(form);
+      form.submit();
+    }
+
+    function tick() {
+      var left = secondsLeft();
+      if (left <= 0) {
+        redirectToLogin();
+        return;
+      }
+      if (left <= warnAt) {
+        showWarning();
+        if (clock) {
+          clock.textContent = Math.floor(left / 60) + ":" + pad(left % 60);
+        }
+      }
+    }
+
+    function onActivity() {
+      /* While the warning is up the button is the only way back. */
+      if (warning) return;
+      if (Date.now() < nextPingAllowedAt) return;
+      if (secondsLeft() <= warnAt) return;
+      keepAlive();
+    }
+
+    ["pointerdown", "keydown", "scroll", "focusin"].forEach(function (name) {
+      window.addEventListener(name, onActivity, { passive: true });
+    });
+
+    window.setInterval(tick, 1000);
+    tick();
+  })();
+
+  /* ----------------------------------------------------------------------
+     Search page: relevance readout + tag/title autocomplete.
+     Lives here rather than inline in the template so it still runs once
+     ENABLE_CSP is switched on — CSP_SCRIPT_SRC permits no inline scripts.
+     The template hands over the field ids and the endpoint on a marker,
+     so Django keeps ownership of both.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var marker = document.querySelector("[data-search-enhance]");
+    if (!marker) return;
+
+    var slider = document.getElementById(marker.dataset.searchRelevanceId || "");
+    var readout = document.getElementById("relevance-value");
+    if (slider && readout) {
+      slider.addEventListener("input", function () { readout.textContent = slider.value; });
+    }
+
+    var box = document.getElementById(marker.dataset.searchQueryId || "");
+    var list = document.getElementById("search-suggestions");
+    var url = marker.dataset.searchAutocompleteUrl;
+    if (!box || !list || !url) return;
+
+    var timer = null;
+    box.addEventListener("input", function () {
+      window.clearTimeout(timer);
+      var value = box.value.trim();
+      if (value.length < 2) return;
+      timer = window.setTimeout(function () {
+        window.fetch(url + "?q=" + encodeURIComponent(value), { credentials: "same-origin" })
+          .then(function (response) { return response.json(); })
+          .then(function (data) {
+            list.innerHTML = "";
+            (data.results || []).forEach(function (term) {
+              var option = document.createElement("option");
+              option.value = term;
+              list.appendChild(option);
+            });
+          })
+          .catch(function () { /* suggestions are optional */ });
+      }, 220);
+    });
+  })();
+
+  /* ----------------------------------------------------------------------
      Phase 6 mobile navigation and shared accessibility helpers.
   ---------------------------------------------------------------------- */
   var sidebarToggle = document.querySelector("[data-sidebar-toggle]");

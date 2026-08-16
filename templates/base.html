@@ -38,6 +38,21 @@
         </footer>
       </div>
     </div>
+    {% comment %}
+      Idle sign-out. Inside the default body block on purpose: the sign-in and
+      lockout pages replace that block wholesale, and neither has a session to
+      count down. The server is what actually expires the session — this only
+      warns, so a half-typed remark is never lost to a silent sign-out.
+    {% endcomment %}
+    {% if user.is_authenticated %}
+      <span hidden
+            data-session-timeout="{{ SESSION_IDLE_SECONDS }}"
+            data-session-warn-at="{{ SESSION_WARNING_SECONDS }}"
+            data-session-keepalive-url="{% url 'accounts:session_keep_alive' %}"
+            data-session-login-url="{% url 'accounts:login' %}"
+            data-session-logout-url="{% url 'accounts:logout' %}"
+            data-session-csrf="{{ csrf_token }}"></span>
+    {% endif %}
   {% endblock %}
   {% if USE_LOCAL_VENDOR %}
     <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>

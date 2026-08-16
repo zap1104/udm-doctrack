@@ -13,6 +13,17 @@
     <div class="inner">
       <div class="login-form-heading"><span class="eyebrow">Secure Access</span><h2>Welcome Back</h2><p>Sign in using the account created by the system administrator.</p></div>
       {% include "partials/_messages.html" %}
+      {% comment %}
+        Arriving here from an idle sign-out should say so. A form that has
+        simply reappeared reads as a bug, or as someone else having signed the
+        account out.
+      {% endcomment %}
+      {% if request.GET.timeout %}
+        <div class="alert alert-warning app-alert" role="status">
+          <span class="app-alert-icon" aria-hidden="true"></span>
+          <div>You were signed out after {{ SESSION_IDLE_MINUTES }} minutes without activity. Sign in again to carry on where you left off.</div>
+        </div>
+      {% endif %}
       {% if form.non_field_errors %}<div class="alert alert-danger app-alert" role="alert"><span class="app-alert-icon" aria-hidden="true"></span><div>{% for error in form.non_field_errors %}{{ error }}{% endfor %}</div></div>{% endif %}
       <form method="post" novalidate>{% csrf_token %}{% include "partials/_field.html" with field=form.username %}{% include "partials/_field.html" with field=form.password %}<input type="hidden" name="next" value="{{ next }}"><button type="submit" class="btn btn-udm w-100 py-2">Sign In</button></form>
       <div class="login-security-note"><strong>Account security</strong><span>Five failed sign-in attempts trigger a temporary lockout. Contact the records administrator if a password reset is needed.</span></div>

@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import TemplateView, View
@@ -58,6 +59,26 @@ class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
         messages.success(self.request, "Password updated.")
         log_action(AuditLog.Action.UPDATE, "Changed own password", actor=self.request.user, request=self.request)
         return response
+
+
+class SessionKeepAliveView(AppLoginRequiredMixin, View):
+    """Push the idle sign-out back, and report how long is now left.
+
+    POST-only on purpose. Extending a session is a state change, and a GET that
+    silently kept people signed in could be triggered by a prefetch or a stray
+    link — the browser deciding on the user's behalf that somebody is still at
+    the desk.
+
+    There is nothing to do in the body: SESSION_SAVE_EVERY_REQUEST means the
+    session middleware rewrites the expiry on the way out of any request from a
+    signed-in user. The value returned is therefore what the expiry *will* be
+    once this response is written, not what it was on the way in.
+    """
+
+    def post(self, request):
+        return JsonResponse(
+            {"seconds_remaining": settings.SESSION_COOKIE_AGE, "authenticated": True}
+        )
 
 
 class ProfileView(AppLoginRequiredMixin, View):

@@ -139,6 +139,8 @@ MIDDLEWARE += [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
+    # After auth and messages: it reads request.user and adds a message.
+    "apps.core.middleware.ForcePasswordChangeMiddleware",
 ]
 
 if ENABLE_CSP:
@@ -272,7 +274,33 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
-SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", 60 * 60 * 8)
+# ---------------------------------------------------------------------------
+# Idle sign-out
+#
+# Offices here share workstations, and confirming receipt writes a permanent
+# entry naming who took custody and when. A session left open at an empty desk
+# lets somebody else perform that act under a colleague's name, into a history
+# this system deliberately makes impossible to correct.
+#
+# SESSION_SAVE_EVERY_REQUEST is what makes the window *idle* rather than
+# absolute. Without it the clock runs from sign-in, so it managed to be wrong
+# in both directions at once: a clerk working steadily was thrown out mid-task
+# when the fixed period elapsed, while a clerk who walked away stayed signed in
+# for the rest of it.
+#
+# Thirty minutes suits the actual rhythm of records work — long enough to
+# survive a walk-in query or a trip to the filing room, short enough that an
+# unattended terminal is not exposed for a whole lunch break. Shorter windows
+# get worked around, which is worse than a longer one that is respected.
+# ---------------------------------------------------------------------------
+SESSION_IDLE_MINUTES = env_int("SESSION_IDLE_MINUTES", 30)
+#: Explicit SESSION_COOKIE_AGE still wins, for a deployment that already set it.
+SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", SESSION_IDLE_MINUTES * 60)
+SESSION_SAVE_EVERY_REQUEST = True
+#: How long the "you are about to be signed out" warning is on screen. Two
+#: minutes is enough to read it and save a half-typed remark.
+SESSION_WARNING_SECONDS = env_int("SESSION_WARNING_SECONDS", 120)
+
 SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
     "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_HTTPONLY = True
@@ -351,19 +379,32 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(env("MEDIA_ROOT", str(BASE_DIR / "media")))
 
-FILE_STORAGE_BACKEND = env("FILE_STORAGE_BACKEND", "local").lower()
+# STORAGE_BACKEND is the name .env.example documents and the one render.yaml
+# and the CI workflow actually set. This read used to accept only
+# FILE_STORAGE_BACKEND, so every one of those settings was ignored: putting
+# STORAGE_BACKEND=s3 in the Render dashboard silently kept local disk storage,
+# and Render's disk does not survive a deploy — the uploaded documents would
+# have gone missing with nothing in the logs to say why. Both spellings are
+# honoured so an environment already using either one keeps working.
+FILE_STORAGE_BACKEND = env("STORAGE_BACKEND", env("FILE_STORAGE_BACKEND", "local")).lower()
 
 _default_storage = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 if FILE_STORAGE_BACKEND == "s3" and has_package("storages"):
     # Cloudflare R2 (S3 compatible) or AWS S3.
+    #
+    # AWS_* first: that is what .env.example documents and what django-storages
+    # calls these itself. Reading only the S3_* spellings meant anyone who
+    # filled in the example file got empty credentials and an authentication
+    # failure from the bucket, with nothing pointing at the cause. Both are
+    # accepted so neither set of names is a trap.
     _default_storage = {
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
-            "bucket_name": env("S3_BUCKET_NAME", ""),
-            "access_key": env("S3_ACCESS_KEY_ID", ""),
-            "secret_key": env("S3_SECRET_ACCESS_KEY", ""),
-            "endpoint_url": env("S3_ENDPOINT_URL", ""),
-            "region_name": env("S3_REGION_NAME", "auto"),
+            "bucket_name": env("AWS_STORAGE_BUCKET_NAME", env("S3_BUCKET_NAME", "")),
+            "access_key": env("AWS_ACCESS_KEY_ID", env("S3_ACCESS_KEY_ID", "")),
+            "secret_key": env("AWS_SECRET_ACCESS_KEY", env("S3_SECRET_ACCESS_KEY", "")),
+            "endpoint_url": env("AWS_S3_ENDPOINT_URL", env("S3_ENDPOINT_URL", "")),
+            "region_name": env("AWS_S3_REGION_NAME", env("S3_REGION_NAME", "auto")),
             "default_acl": None,
             "querystring_auth": True,
             "querystring_expire": env_int("SIGNED_URL_TTL_SECONDS", 900),

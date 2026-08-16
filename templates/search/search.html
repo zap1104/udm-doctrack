@@ -83,7 +83,7 @@
                   <div class="meta">
                     {{ result.document.office.code }} ·
                     {{ result.document.document_type.name|default:"Unclassified" }} ·
-                    {{ result.document.document_date|date:"d M Y"|default:result.document.created_at|date:"d M Y" }}
+                    {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
                     {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
                   </div>
                   {% if result.snippet_html %}
@@ -128,39 +128,18 @@
     </div>
   </div>
 </form>
-{% endblock %}
 
-{% block extra_scripts %}
-<script>
-  var slider = document.getElementById('{{ form.min_relevance.id_for_label }}');
-  var readout = document.getElementById('relevance-value');
-  if (slider && readout) {
-    slider.addEventListener('input', function () { readout.textContent = slider.value; });
-  }
-
-  // Lightweight autocomplete backed by tags and titles.
-  var box = document.getElementById('{{ form.q.id_for_label }}');
-  var list = document.getElementById('search-suggestions');
-  var timer = null;
-  if (box && list) {
-    box.addEventListener('input', function () {
-      window.clearTimeout(timer);
-      var value = box.value.trim();
-      if (value.length < 2) return;
-      timer = window.setTimeout(function () {
-        fetch('{% url "search:autocomplete" %}?q=' + encodeURIComponent(value))
-          .then(function (response) { return response.json(); })
-          .then(function (data) {
-            list.innerHTML = '';
-            (data.results || []).forEach(function (term) {
-              var option = document.createElement('option');
-              option.value = term;
-              list.appendChild(option);
-            });
-          })
-          .catch(function () { /* suggestions are optional */ });
-      }, 220);
-    });
-  }
-</script>
+{% comment %}
+  The slider readout and the autocomplete used to be an inline <script> here.
+  CSP_SCRIPT_SRC allows no inline code, so switching ENABLE_CSP on would have
+  killed both of them silently — the same trap the reports tabs and the lockout
+  countdown were already moved out of. The behaviour now lives in doctrack.js
+  and reads what it needs from this marker, so Django keeps ownership of the
+  auto-generated field ids and the URL.
+{% endcomment %}
+<span hidden
+      data-search-enhance
+      data-search-autocomplete-url="{% url 'search:autocomplete' %}"
+      data-search-query-id="{{ form.q.id_for_label }}"
+      data-search-relevance-id="{{ form.min_relevance.id_for_label }}"></span>
 {% endblock %}

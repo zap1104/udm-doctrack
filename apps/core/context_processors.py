@@ -34,4 +34,13 @@ def site_context(request):
         "SEARCH_MIN_RELEVANCE_DEFAULT": settings.SEARCH_MIN_RELEVANCE_DEFAULT,
         "MAX_UPLOAD_MB": settings.MAX_UPLOAD_MB,
         "DEBUG": settings.DEBUG,
+        # The page is rendered inside a request, and the session middleware
+        # rewrites the expiry on the way out, so a signed-in reader always has
+        # the full window from the moment this page arrives.
+        "SESSION_IDLE_SECONDS": settings.SESSION_COOKIE_AGE,
+        "SESSION_WARNING_SECONDS": settings.SESSION_WARNING_SECONDS,
+        # Derived from the real cookie age, not from SESSION_IDLE_MINUTES, so
+        # the sign-in page cannot quote a figure the server is not enforcing
+        # when a deployment overrides SESSION_COOKIE_AGE directly.
+        "SESSION_IDLE_MINUTES": max(1, round(settings.SESSION_COOKIE_AGE / 60)),
     }
