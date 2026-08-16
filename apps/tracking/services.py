@@ -381,16 +381,54 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
 
 @transaction.atomic
 def reopen_record(record, *, user, reason="") -> TrackingRecord:
-    """Administrators can reopen a completed record; the history is kept intact."""
+    """Send a completed record back into active tracking. History is kept intact.
+
+    Refuses a record that has already been filed. `is_archived` is cleared all
+    the same rather than trusted: a record carrying that flag is excluded from
+    `active()`, so reopening one without clearing it would return the record to
+    Tracking and leave it invisible there — the same limbo this is meant to
+    undo.
+
+    `completion_note` is deliberately left alone. The note explains a
+    completion that genuinely happened, and this timeline does not rewrite
+    itself; the reopening is recorded as its own entry beneath it.
+    """
     if record.status != Status.COMPLETED:
         return record
+    if record.is_archived or getattr(record, "archived_document", None):
+        raise ValidationError(
+            "This record has already been filed into Document Management and "
+            "cannot be returned to tracking."
+        )
     record.status = Status.RECEIVED
     record.completed_at = None
     record.completed_by = None
-    record.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
+    record.is_archived = False
+    record.archived_at = None
+    record.save(
+        update_fields=[
+            "status", "completed_at", "completed_by", "is_archived", "archived_at", "updated_at",
+        ]
+    )
+    # Restores the real state from the routing steps — received, in process, or
+    # still awaiting a receipt — rather than assuming the value set above.
     record.recalculate_status()
-    add_activity(record, RecordActivity.Event.REMARK, f"Reopened by {user.display_name}", actor=user, detail=reason)
-    log_action(AuditLog.Action.UPDATE, f"Reopened {record.tracking_number}", actor=user, target=record)
+    add_activity(
+        record,
+        RecordActivity.Event.REMARK,
+        f"Returned to tracking by {user.display_name}",
+        actor=user,
+        detail=reason,
+    )
+    # Without this the record keeps the movement time of its completion and
+    # sorts to wherever that falls, instead of surfacing as freshly reopened.
+    record.touch_movement()
+    log_action(
+        AuditLog.Action.UPDATE,
+        f"Returned {record.tracking_number} to tracking",
+        actor=user,
+        target=record,
+    )
     return record
 
 

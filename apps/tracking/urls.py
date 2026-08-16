@@ -14,6 +14,7 @@ urlpatterns = [
     path("<int:pk>/route/", views.RouteRecordView.as_view(), name="route"),
     path("<int:pk>/complete/", views.CompleteRecordView.as_view(), name="complete"),
     path("<int:pk>/archive/", views.ArchiveRecordView.as_view(), name="archive"),
+    path("<int:pk>/reopen/", views.ReopenRecordView.as_view(), name="reopen"),
     path("<int:pk>/share/", views.GrantAccessView.as_view(), name="grant_access"),
     path("<int:pk>/slip/", views.RoutingSlipView.as_view(), name="routing_slip"),
     path("attachment/<int:pk>/", views.AttachmentDownloadView.as_view(), name="attachment_download"),

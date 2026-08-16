@@ -25,6 +25,7 @@ from .forms import (
     CreateRecordForm,
     GrantAccessForm,
     RemarkForm,
+    ReopenForm,
     ReviewRouteForm,
     RouteForm,
     TrackingFilterForm,
@@ -276,6 +277,13 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             record.activities.select_related("actor", "actor_office").order_by("created_at", "id")
         )
         attachments = list(record.attachments.select_related("uploaded_by"))
+        archived_document = getattr(record, "archived_document", None)
+        can_archive_now = (
+            record.status == Status.COMPLETED
+            and archived_document is None
+            and record.can_user_archive(request.user)
+        )
+        can_reopen = record.can_user_reopen(request.user)
         return render(
             request,
             self.template_name,
@@ -300,9 +308,14 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "grant_form": GrantAccessForm(),
                 "pending_offices": record.pending_receipt_offices(),
                 "can_act": record.can_user_act(request.user),
-                "can_archive": record.can_user_archive(request.user),
                 "can_confirm": record.can_user_confirm_receipt(request.user),
-                "archived_document": getattr(record, "archived_document", None),
+                "can_archive_now": can_archive_now,
+                "can_reopen": can_reopen,
+                # One panel carries both filing actions, so it shows when either
+                # is on offer rather than repeating the condition in the markup.
+                "show_filing_panel": can_archive_now or can_reopen,
+                "reopen_form": ReopenForm(),
+                "archived_document": archived_document,
             },
         )
 
@@ -417,6 +430,33 @@ class ArchiveRecordView(OfficeAssignedMixin, View):
             return redirect(record.get_absolute_url())
         messages.success(request, "Record archived into Document Management.")
         return redirect(document.get_absolute_url())
+
+
+class ReopenRecordView(OfficeAssignedMixin, View):
+    """Send a completed-but-unfiled record back into active tracking."""
+
+    def post(self, request, pk):
+        record = _get_record(request, pk)
+        if not record.can_user_reopen(request.user):
+            raise PermissionDenied(
+                "Only records personnel or the office that completed this document "
+                "can return it to tracking."
+            )
+        form = ReopenForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Say briefly why the record is going back.")
+            return redirect(record.get_absolute_url())
+        try:
+            services.reopen_record(record, user=request.user, reason=form.cleaned_data["reason"])
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect(record.get_absolute_url())
+        messages.success(
+            request,
+            f"{record.tracking_number} is back in active tracking. The completion "
+            "stays in its history.",
+        )
+        return redirect(record.get_absolute_url())
 
 
 class GrantAccessView(OfficeAssignedMixin, View):

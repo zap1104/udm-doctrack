@@ -222,10 +222,34 @@
       </div>
     {% endif %}
 
-    {% if record.status == "COMPLETED" and not archived_document and can_archive %}
-      <form method="post" action="{% url 'tracking:archive' record.pk %}" class="mt-4 no-print">{% csrf_token %}
-        <button class="btn btn-udm-teal" type="submit">Archive into Document Management</button>
-      </form>
+    {% if show_filing_panel %}
+      <div class="card-udm mt-4 no-print">
+        <div class="card-udm-head"><h2>This record is completed but not yet filed</h2></div>
+        <div class="card-udm-body">
+          <p class="text-muted" style="font-size:14px;">
+            Until it is filed it sits in the <strong>Pending filing</strong> queue in
+            Document Management: out of the active tracking list, but not yet searchable
+            as a document.
+          </p>
+          {% if can_archive_now %}
+            <form method="post" action="{% url 'tracking:archive' record.pk %}">{% csrf_token %}
+              <button class="btn btn-udm-teal" type="submit">Archive into Document Management</button>
+            </form>
+          {% endif %}
+          {% if can_reopen %}
+            <hr>
+            <p class="text-muted" style="font-size:14px;">
+              Completed by mistake? Send it back to active tracking. Nothing is erased —
+              the completion stays in the history with this reason beneath it.
+            </p>
+            <form method="post" action="{% url 'tracking:reopen' record.pk %}">
+              {% csrf_token %}
+              {% include "partials/_field.html" with field=reopen_form.reason %}
+              <button class="btn btn-udm-outline" type="submit">Return to tracking</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
   </div>
 </div>

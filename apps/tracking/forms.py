@@ -335,6 +335,23 @@ class CompleteForm(BootstrapFormMixin, forms.Form):
     )
 
 
+class ReopenForm(BootstrapFormMixin, forms.Form):
+    """Why a completed record is going back into tracking.
+
+    The reason is required. Undoing a completion is the one action here that
+    contradicts something the history already states, so the record has to
+    carry an explanation of why beside it.
+    """
+
+    reason = forms.CharField(
+        label="Why is this going back?",
+        max_length=MAX_NOTE_CHARS,
+        widget=forms.Textarea(
+            attrs={"rows": 2, "placeholder": "Completed too early — the endorsement is still missing"}
+        ),
+    )
+
+
 class GrantAccessForm(BootstrapFormMixin, forms.Form):
     office = forms.ModelChoiceField(queryset=Office.active.all(), required=False, label="Give access to office")
     user = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="or to user")

@@ -1,0 +1,169 @@
+"""Completed records that were never filed used to fall between the modules.
+
+Tracking lists active records only and Documents lists what has actually been
+filed, so a record completed with "file it now" unticked appeared in neither.
+Nothing linked to it; the only way back was a URL somebody had kept.
+
+Returning one to tracking is the other half: completing a record was a one-way
+door, even though routing a completed record refuses with "Reopen it before
+routing again" — advice for a reopen that had no way to happen.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from apps.documents.services import archive_tracking_record
+from apps.tracking.models import Status, TrackingRecord
+from apps.tracking.services import (
+    active_for,
+    complete_record,
+    confirm_receipt,
+    create_draft_record,
+    grant_access,
+    reopen_record,
+    route_record,
+)
+
+
+@pytest.fixture
+def completed_unfiled(users, offices, memo_type):
+    """MED raises it, SUP receives and completes it — without filing it."""
+    record = create_draft_record(
+        user=users["med"], subject="Completed but never filed", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    record.refresh_from_db()
+    complete_record(record, user=users["sup"], note="Done.")
+    record.refresh_from_db()
+    return record
+
+
+# --- the queue -------------------------------------------------------------
+@pytest.mark.django_db
+def test_the_record_is_in_neither_module_but_is_in_the_queue(completed_unfiled, users):
+    from apps.documents.models import Document
+
+    assert completed_unfiled not in active_for(users["sup"]), "not in Tracking"
+    assert not Document.objects.filter(tracking_record=completed_unfiled).exists(), "not in Documents"
+    assert completed_unfiled in TrackingRecord.objects.visible_to(users["sup"]).pending_filing()
+
+
+@pytest.mark.django_db
+def test_filing_it_takes_it_out_of_the_queue(completed_unfiled, users):
+    archive_tracking_record(completed_unfiled, user=users["sup"])
+    completed_unfiled.refresh_from_db()
+
+    assert completed_unfiled not in TrackingRecord.objects.visible_to(users["sup"]).pending_filing()
+
+
+@pytest.mark.django_db
+def test_an_active_record_is_never_in_the_queue(users, offices, memo_type):
+    record = create_draft_record(
+        user=users["med"], subject="Still moving", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    record.refresh_from_db()
+
+    assert record not in TrackingRecord.objects.visible_to(users["med"]).pending_filing()
+
+
+@pytest.mark.django_db
+def test_the_queue_appears_on_the_documents_page(client, completed_unfiled, users):
+    client.force_login(users["sup"])
+    body = client.get("/documents/").content.decode()
+
+    assert "Pending filing" in body
+    assert completed_unfiled.tracking_number in body
+
+
+@pytest.mark.django_db
+def test_the_queue_respects_visibility(client, completed_unfiled, users):
+    """HR had nothing to do with this record and must not see it queued."""
+    client.force_login(users["hr"])
+    body = client.get("/documents/").content.decode()
+
+    assert completed_unfiled.tracking_number not in body
+
+
+# --- returning to tracking -------------------------------------------------
+@pytest.mark.django_db
+def test_the_office_that_completed_it_can_return_it(completed_unfiled, users):
+    assert completed_unfiled.can_user_reopen(users["sup"]) is True
+
+
+@pytest.mark.django_db
+def test_a_read_only_viewer_cannot_return_it(completed_unfiled, users, offices):
+    grant_access(completed_unfiled, user=users["med"], office=offices["HR"], reason="fyi")
+    assert completed_unfiled.can_user_view(users["hr"]) is True
+    assert completed_unfiled.can_user_reopen(users["hr"]) is False
+
+
+@pytest.mark.django_db
+def test_the_originating_office_cannot_pull_it_back(completed_unfiled, users):
+    """MED raised it, but SUP did the work and finished it."""
+    assert completed_unfiled.can_user_reopen(users["med"]) is False
+
+
+@pytest.mark.django_db
+def test_a_filed_record_can_no_longer_be_returned(completed_unfiled, users):
+    archive_tracking_record(completed_unfiled, user=users["sup"])
+    completed_unfiled.refresh_from_db()
+
+    assert completed_unfiled.can_user_reopen(users["sup"]) is False
+    assert completed_unfiled.can_user_reopen(users["admin"]) is False
+
+
+@pytest.mark.django_db
+def test_returning_restores_the_real_state_and_keeps_the_history(completed_unfiled, users):
+    before = completed_unfiled.activities.count()
+
+    reopen_record(completed_unfiled, user=users["sup"], reason="Endorsement still missing")
+    completed_unfiled.refresh_from_db()
+
+    # SUP had confirmed receipt, so that is the state it goes back to.
+    assert completed_unfiled.status == Status.RECEIVED
+    assert completed_unfiled.completed_at is None
+    assert completed_unfiled.is_archived is False
+    # Back where it can be worked on, and nothing was erased on the way.
+    assert completed_unfiled in active_for(users["sup"])
+    assert completed_unfiled.activities.count() == before + 1
+    assert completed_unfiled.completion_note == "Done."
+
+
+@pytest.mark.django_db
+def test_returning_needs_a_reason(client, completed_unfiled, users):
+    client.force_login(users["sup"])
+    client.post(f"/tracking/{completed_unfiled.pk}/reopen/", {"reason": ""})
+
+    completed_unfiled.refresh_from_db()
+    assert completed_unfiled.status == Status.COMPLETED, "an empty reason must not reopen it"
+
+
+@pytest.mark.django_db
+def test_returning_end_to_end(client, completed_unfiled, users):
+    client.force_login(users["sup"])
+    response = client.post(
+        f"/tracking/{completed_unfiled.pk}/reopen/", {"reason": "Finished too early"}
+    )
+
+    assert response.status_code == 302
+    completed_unfiled.refresh_from_db()
+    assert completed_unfiled.status == Status.RECEIVED
+    assert any(
+        "Finished too early" in (a.detail or "") for a in completed_unfiled.activities.all()
+    )
+
+
+@pytest.mark.django_db
+def test_a_returned_record_can_be_routed_again(completed_unfiled, users, offices):
+    """The dead end this closes: a completed record refuses to be routed."""
+    reopen_record(completed_unfiled, user=users["sup"], reason="Needs another office")
+    completed_unfiled.refresh_from_db()
+
+    route_record(completed_unfiled, [offices["HR"]], user=users["sup"], action="FORWARD")
+    completed_unfiled.refresh_from_db()
+    assert completed_unfiled.status == Status.FORWARDED

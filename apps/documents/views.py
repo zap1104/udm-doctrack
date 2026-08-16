@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import View
@@ -12,6 +12,7 @@ from apps.accounts.models import Office
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, Tag
 from apps.core.utils import log_action
+from apps.tracking.models import TrackingRecord
 
 from . import services
 from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
@@ -19,6 +20,10 @@ from .models import Document, DocumentFile
 from .suggestions import Suggestion
 
 PAGE_SIZE = 24
+
+#: Rows of the pending-filing queue shown before it collapses to a count. It is
+#: a to-do list that should be worked down, not another table to page through.
+PENDING_FILING_SHOWN = 8
 
 
 def _get_document(request, pk) -> Document:
@@ -73,6 +78,25 @@ class RepositoryView(AppLoginRequiredMixin, View):
             .order_by("office__name")
         )
 
+        # Completed records that never made it into the repository. They are in
+        # neither module's list until somebody files them, so this is the only
+        # place they can be found — and the reason the queue is on this page
+        # rather than in Tracking is that filing them is what it is for.
+        pending_filing = list(
+            TrackingRecord.objects.visible_to(request.user)
+            .pending_filing()
+            .with_related()
+            # nulls_last because Postgres sorts NULLs first on DESC, which would
+            # float a record with no completion time to the top of the queue.
+            .order_by(F("completed_at").desc(nulls_last=True))[: PENDING_FILING_SHOWN + 1]
+        )
+        pending_filing_more = max(0, len(pending_filing) - PENDING_FILING_SHOWN)
+        pending_filing = pending_filing[:PENDING_FILING_SHOWN]
+        for record in pending_filing:
+            # Filing is one click from here; returning to tracking needs a
+            # written reason, so that action lives on the record page itself.
+            record.can_file = record.can_user_archive(request.user)
+
         return render(
             request,
             self.template_name,
@@ -87,6 +111,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 # every page load.
                 "total": page.paginator.count,
                 "all_count": visible.count(),
+                "pending_filing": pending_filing,
+                "pending_filing_more": pending_filing_more,
                 "years": years,
                 "popular_tags": Tag.active.filter(usage_count__gt=0).order_by("-usage_count")[:12],
             },

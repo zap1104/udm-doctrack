@@ -115,6 +115,21 @@ class TrackingRecordQuerySet(models.QuerySet):
             routing_steps__batch=F("current_batch"),
         ).distinct()
 
+    def pending_filing(self):
+        """Completed, but not yet filed into Document Management.
+
+        These fall between the two modules: Tracking lists active records only,
+        and Documents lists what has actually been filed, so a record completed
+        with the "file it now" box unticked appeared in neither. The only way
+        to reach one was a direct link to a page nothing linked to. The queue on
+        the repository page is built from this.
+
+        Asks the relation rather than the `is_archived` flag, because the
+        question is literally "is there a document for it?" — the two are
+        written together, but the relation is the one that cannot go stale.
+        """
+        return self.filter(status=Status.COMPLETED, archived_document__isnull=True)
+
     def overdue(self):
         return self.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
 
@@ -318,6 +333,35 @@ class TrackingRecord(TimeStampedModel):
             self.originating_office_id,
             self.current_office_id,
         }
+
+    def can_user_reopen(self, user) -> bool:
+        """Who may send a completed record back into active tracking.
+
+        Completing a record is otherwise a one-way door: a record marked
+        completed by mistake cannot be routed (`route_record` refuses it),
+        cannot be acted on (`can_user_act` is False once COMPLETED), and has no
+        way back — even though the refusal message tells the reader to "reopen
+        it before routing again".
+
+        Deliberately narrower than archiving, and only before the record is
+        filed. Once a Document exists the record is part of the repository, and
+        withdrawing it from there is a different act with different
+        consequences than correcting a premature completion.
+
+        The originating office is *not* included: it should not be able to pull
+        a document back into play after another office finished the work. The
+        office that completed it can correct its own mistake, and records
+        personnel can correct anyone's.
+        """
+        if not user.is_authenticated:
+            return False
+        if self.status != Status.COMPLETED or self.is_archived:
+            return False
+        if user.is_records_staff:
+            return True
+        if self.completed_by_id == user.pk:
+            return True
+        return bool(user.office_id) and user.office_id == self.current_office_id
 
     def can_user_view(self, user) -> bool:
         return TrackingRecord.objects.filter(pk=self.pk).visible_to(user).exists()
