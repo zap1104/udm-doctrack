@@ -30,6 +30,12 @@ test: ## Run the test suite
 selfcheck: ## Exercise the whole workflow against the real database (rolls back)
 	$(PY) manage.py selfcheck
 
+smoke: ## Request every page as each role against the real database (rolls back)
+	$(PY) scripts/smoke_pages.py
+
+templates: ## Lint the templates (balanced tags, real URL names and includes)
+	$(PY) scripts/check_templates.py
+
 fixlogin: ## Diagnose and repair sign-in problems (lockouts, passwords)
 	$(PY) manage.py fix_login
 
@@ -52,4 +58,4 @@ shell: ## Open a Django shell
 export-training: ## Export reviewed metadata as AI training data
 	$(PY) manage.py export_training_data --out training/metadata.jsonl
 
-.PHONY: help setup run migrations migrate seed reindex test selfcheck fixlogin lint format check worker shell export-training
+.PHONY: help setup run migrations migrate seed reindex test selfcheck smoke templates fixlogin lint format check worker shell export-training

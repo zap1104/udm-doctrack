@@ -121,6 +121,8 @@ Rule of thumb: **views never change data directly.** They call `services.py`. Th
 make run              # start the server
 make test             # run the tests
 make selfcheck        # exercise the whole workflow, then roll back
+make smoke            # request every page as each role, then roll back
+make templates        # lint the templates
 make fixlogin         # repair sign-in problems
 make migrations       # after changing a model
 make migrate          # apply migrations
@@ -129,7 +131,15 @@ make reindex          # rebuild the search index
 make lint             # check code style
 ```
 
-No `make` on Windows? Every command is just `python manage.py <thing>` — see the `Makefile`.
+`selfcheck` and `smoke` answer different questions. `selfcheck` proves the
+*rules* hold — create, route, receive, forward, complete, archive, search.
+`smoke` proves the *pages* render, which is a separate failure: a template that
+reads a context key its view never sets breaks only when somebody opens it.
+Both run against the real database inside a transaction they roll back, so
+neither leaves anything behind.
+
+No `make` on Windows? Every command is just `python manage.py <thing>` (or
+`python scripts/<thing>.py`) — see the `Makefile`.
 
 ---
 
