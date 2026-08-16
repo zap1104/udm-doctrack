@@ -349,12 +349,35 @@ def _snippet(document: Document, tokens: list[str], width: int = 240) -> str:
         prefix = "…" if start > 0 else ""
         suffix = "…" if start + width < len(haystack) else ""
 
-    safe = escape(" ".join(excerpt.split()))
-    for token in sorted(set(tokens), key=len, reverse=True):
-        if len(token) < 3:
-            continue
-        safe = re.sub(f"({re.escape(escape(token))})", r"<mark>\1</mark>", safe, flags=re.IGNORECASE)
-    return f"{prefix}{safe}{suffix}"
+    return f"{prefix}{_highlight(' '.join(excerpt.split()), tokens)}{suffix}"
+
+
+def _highlight(text: str, tokens: list[str]) -> str:
+    """Escape `text`, then wrap the query words in <mark>, in one pass.
+
+    One pass matters. Highlighting used to run a substitution per token over
+    already-escaped, already-marked-up text, so each round could match inside
+    what the previous rounds had inserted: searching "marks mar" wrapped
+    "marks", then matched the "mar" of the `<mark>` tag itself and produced
+    `<<mark>mar</mark>k>`. Escaping does the same thing from the other side —
+    an "amp" token matches the middle of the `&amp;` that escaping just wrote.
+
+    Matching against the raw text and escaping each piece as it is emitted
+    means neither the tags nor the entities are ever in the haystack.
+    """
+    words = sorted({token for token in tokens if len(token) >= 3}, key=len, reverse=True)
+    if not words:
+        return escape(text)
+
+    pattern = re.compile("|".join(re.escape(word) for word in words), re.IGNORECASE)
+    parts: list[str] = []
+    position = 0
+    for match in pattern.finditer(text):
+        parts.append(escape(text[position : match.start()]))
+        parts.append(f"<mark>{escape(match.group(0))}</mark>")
+        position = match.end()
+    parts.append(escape(text[position:]))
+    return "".join(parts)
 
 
 def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:

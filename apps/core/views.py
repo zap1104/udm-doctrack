@@ -537,6 +537,23 @@ class PrintLogView(AppLoginRequiredMixin, View):
         return JsonResponse({"logged": True})
 
 
+#: Leading characters that make Excel, LibreOffice and Sheets read a cell as a
+#: formula rather than text. A subject line is free text typed by staff, so
+#: "=cmd|..." or "+HYPERLINK(...)" reaches this export intact and executes when
+#: somebody opens the file — the spreadsheet, not the browser, is the sink.
+_CSV_FORMULA_LEADS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value) -> str:
+    """One CSV field, neutered so a spreadsheet cannot execute it.
+
+    Prefixing with an apostrophe is the conventional escape: every major
+    spreadsheet strips it on display and treats the rest as literal text.
+    """
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(_CSV_FORMULA_LEADS) else text
+
+
 class ReportExportView(AppLoginRequiredMixin, View):
     """CSV of the active tracking queue — useful evidence for the defence."""
 
@@ -551,7 +568,8 @@ class ReportExportView(AppLoginRequiredMixin, View):
         )
         for record in TrackingRecord.objects.visible_to(request.user).with_related().order_by("-created_at")[:5000]:
             writer.writerow(
-                [
+                _csv_cell(value)
+                for value in (
                     record.tracking_number,
                     record.subject,
                     record.document_type.name if record.document_type_id else "",
@@ -561,7 +579,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",
-                ]
+                )
             )
         return response
 
