@@ -45,7 +45,7 @@ def test_the_instructions_box_is_capped_even_though_the_column_is_not(users):
     the cap has to be applied by hand or it silently is not there."""
     form = CreateRecordForm(user=users["med"])
     assert form.fields["instructions"].max_length == MAX_INSTRUCTIONS_CHARS
-    assert 'maxlength="%d"' % MAX_INSTRUCTIONS_CHARS in form["instructions"].as_widget()
+    assert f'maxlength="{MAX_INSTRUCTIONS_CHARS}"' in form["instructions"].as_widget()
 
 
 # ---------------------------------------------------------------------------

@@ -5,5 +5,11 @@
 pytest>=8.3.3,<9.0
 pytest-django>=4.9.0,<5.0
 pytest-cov>=5.0.0,<8.0
-ruff>=0.6.9,<1.0                 # linter + formatter
+# Pinned exactly, unlike everything else here. A linter is the one dependency
+# where a range is actively harmful: each release adds rules, so CI lints with
+# a stricter ruff than anybody has locally and the build fails on code that
+# passed on the machine it was written on. That happened — CI on 0.16.3 caught
+# a UP031 that 0.6.9 does not report. Bump this deliberately, see what the new
+# version says, fix it, and commit the bump together with the fixes.
+ruff==0.16.3                     # linter + formatter
 django-debug-toolbar>=4.4.6,<7.0
