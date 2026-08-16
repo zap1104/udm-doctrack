@@ -26,7 +26,7 @@
     <div class="card-udm">
       <div class="card-udm-head"><h2>Document information</h2></div>
       <div class="card-udm-body">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-stacked mb-0">
           <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.code }}</td></tr>
           <tr><th class="text-muted fw-normal">Current office</th><td>{{ record.current_office.code|default:"—" }}</td></tr>
           <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Pending Receipt" }}</td></tr>
@@ -45,16 +45,16 @@
     <div class="card-udm mt-4">
       <div class="card-udm-head"><h2>Files</h2></div>
       <div class="card-udm-body">
-        {% for attachment in attachments %}
-          <div class="file-chip mb-2">
-            <span class="ext">{{ attachment.extension|default:"FILE" }}</span>
-            <div class="flex-grow-1" style="min-width:0;">
-              <a href="{% url 'tracking:attachment_download' attachment.pk %}" style="font-size:14px;">{{ attachment.original_name }}</a>
-              <div class="text-muted" style="font-size:12px;">
-                {{ attachment.size|human_size }} · {{ attachment.uploaded_by.short_display|default:"—" }} · {{ attachment.created_at|date:"d M Y" }}
-              </div>
-            </div>
-          </div>
+        {% if older_attachments %}
+          <details class="fold" open>
+            <summary>{{ older_attachments|length }} earlier file{{ older_attachments|length|pluralize }}</summary>
+            {% for attachment in older_attachments %}
+              {% include "tracking/_attachment_chip.html" %}
+            {% endfor %}
+          </details>
+        {% endif %}
+        {% for attachment in recent_attachments %}
+          {% include "tracking/_attachment_chip.html" %}
         {% empty %}
           <p class="text-muted mb-0">No files attached.</p>
         {% endfor %}
@@ -76,27 +76,27 @@
         <span class="text-muted small">Append-only — nothing is ever overwritten</span>
       </div>
       <div class="card-udm-body">
+        {% comment %}
+          The history is append-only and grows for the life of the record, so a
+          document that has been round five offices opens as a wall nobody
+          reads. The oldest entries fold; the newest always stay open, because
+          "where is it now" is the question this page is opened to answer.
+
+          Rendered with `open` and closed by doctrack.js, never the other way
+          round — with the script blocked the whole history is still there, and
+          the fold reopens for printing. Hiding is the enhancement.
+        {% endcomment %}
+        {% if older_steps %}
+          <details class="fold" open>
+            <summary>{{ older_steps|length }} earlier movement{{ older_steps|length|pluralize }}</summary>
+            <ul class="timeline">
+              {% for step in older_steps %}{% include "tracking/_timeline_step.html" %}{% endfor %}
+            </ul>
+          </details>
+        {% endif %}
         <ul class="timeline">
-          {% for step in steps %}
-            <li class="{% if step.is_received %}is-done{% else %}is-pending{% endif %}">
-              <div class="t-title">
-                {{ step.get_action_display }}: {{ step.from_office.code|default:"—" }} → {{ step.to_office.code }}
-              </div>
-              <div class="t-meta">
-                Sent by {{ step.sent_by.display_name }} · {{ step.sent_at|date:"d M Y, g:i A" }}
-                {% if step.due_at %} · due {{ step.due_at|date:"d M, g:i A" }}{% endif %}
-              </div>
-              {% if step.instructions %}<div class="t-detail">{{ step.instructions }}</div>{% endif %}
-              {% if step.is_received %}
-                <div class="t-meta mt-1" style="color:#2e7d5b;">
-                  ✓ Receipt confirmed by {{ step.received_by.display_name }} ({{ step.to_office.code }})
-                  · {{ step.received_at|date:"d M Y, g:i A" }}
-                </div>
-                {% if step.receipt_note %}<div class="t-detail">{{ step.receipt_note }}</div>{% endif %}
-              {% else %}
-                <div class="t-meta mt-1" style="color:#8a6a12;">Awaiting receipt from {{ step.to_office.code }}</div>
-              {% endif %}
-            </li>
+          {% for step in recent_steps %}
+            {% include "tracking/_timeline_step.html" %}
           {% empty %}
             <li class="is-muted">
               <div class="t-title">Draft created</div>
@@ -107,14 +107,16 @@
 
         <hr>
         <h3 style="font-size:15px;">Activity log</h3>
+        {% if older_activities %}
+          <details class="fold" open>
+            <summary>{{ older_activities|length }} earlier entr{{ older_activities|length|pluralize:"y,ies" }}</summary>
+            <ul class="timeline">
+              {% for activity in older_activities %}{% include "tracking/_timeline_activity.html" %}{% endfor %}
+            </ul>
+          </details>
+        {% endif %}
         <ul class="timeline">
-          {% for activity in activities %}
-            <li class="{% if activity.event == 'COMPLETED' or activity.event == 'ARCHIVED' %}is-done{% elif activity.event == 'REMARK' %}is-muted{% endif %}">
-              <div class="t-title">{{ activity.message }}</div>
-              <div class="t-meta">{{ activity.created_at|date:"d M Y, g:i A" }} · {{ activity.get_event_display }}</div>
-              {% if activity.detail %}<div class="t-detail">{{ activity.detail }}</div>{% endif %}
-            </li>
-          {% endfor %}
+          {% for activity in recent_activities %}{% include "tracking/_timeline_activity.html" %}{% endfor %}
         </ul>
       </div>
     </div>

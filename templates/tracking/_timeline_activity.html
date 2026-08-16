@@ -1,0 +1,9 @@
+{% comment %}
+  One activity-log entry. Its own file for the same reason as the routing step
+  beside it: the list renders in a folded half and a visible half.
+{% endcomment %}
+<li class="{% if activity.event == 'COMPLETED' or activity.event == 'ARCHIVED' %}is-done{% elif activity.event == 'REMARK' %}is-muted{% endif %}">
+  <div class="t-title">{{ activity.message }}</div>
+  <div class="t-meta">{{ activity.created_at|date:"d M Y, g:i A" }} · {{ activity.get_event_display }}</div>
+  {% if activity.detail %}<div class="t-detail">{{ activity.detail }}</div>{% endif %}
+</li>

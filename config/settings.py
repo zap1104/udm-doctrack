@@ -56,7 +56,17 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
-def env_list(name: str, default: str = "") -> list[str]:
+def env_list(name: str, default: str | list[str] | tuple[str, ...] = "") -> list[str]:
+    """A comma-separated setting as a list.
+
+    A list default is accepted as well as a string one. It looks like the
+    obvious thing to pass, and the old signature took it without complaint and
+    then str()'d it — turning ["localhost", "127.0.0.1"] into the hostnames
+    "['localhost'" and "'127.0.0.1'". Nothing raised; the site simply stopped
+    recognising its own address.
+    """
+    if isinstance(default, list | tuple):
+        default = ",".join(str(item) for item in default)
     return [item.strip() for item in str(env(name, default) or "").split(",") if item.strip()]
 
 
@@ -72,6 +82,9 @@ def has_package(name: str) -> bool:
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", True)
+# To reach the dev server from a phone on the same wifi, add that machine's LAN
+# address to DJANGO_ALLOWED_HOSTS in .env — not here. .env is untracked, so the
+# address stays off GitHub and out of everybody else's checkout.
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS",
                          "localhost,127.0.0.1,[::1],testserver")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
@@ -328,7 +341,8 @@ if ENABLE_AXES:
     # succeeds in between, and is only forgiven by the decay window above or by
     # `manage.py fix_login`. Turn on to wipe an account's escalation as soon as
     # its owner completes a full sign-in (including any forced password change).
-    AXES_ESCALATION_RESET_ON_LOGIN = env_bool("AXES_ESCALATION_RESET_ON_LOGIN", False)
+    AXES_ESCALATION_RESET_ON_LOGIN = env_bool(
+        "AXES_ESCALATION_RESET_ON_LOGIN", False)
     AXES_RESET_ON_SUCCESS = True
     # axes' own default (True) pushes the lockout's unlock time forward on every
     # retry made *while already locked out* — so a countdown just reflects
@@ -386,7 +400,8 @@ MEDIA_ROOT = Path(env("MEDIA_ROOT", str(BASE_DIR / "media")))
 # and Render's disk does not survive a deploy — the uploaded documents would
 # have gone missing with nothing in the logs to say why. Both spellings are
 # honoured so an environment already using either one keeps working.
-FILE_STORAGE_BACKEND = env("STORAGE_BACKEND", env("FILE_STORAGE_BACKEND", "local")).lower()
+FILE_STORAGE_BACKEND = env("STORAGE_BACKEND", env(
+    "FILE_STORAGE_BACKEND", "local")).lower()
 
 _default_storage = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 if FILE_STORAGE_BACKEND == "s3" and has_package("storages"):

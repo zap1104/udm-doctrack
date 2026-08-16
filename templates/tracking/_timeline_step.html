@@ -1,0 +1,24 @@
+{% comment %}
+  One routing step. Its own file because the detail page renders the list in
+  two halves — the folded older entries and the visible recent ones — and two
+  copies of this markup would drift apart the first time either was edited.
+{% endcomment %}
+<li class="{% if step.is_received %}is-done{% else %}is-pending{% endif %}">
+  <div class="t-title">
+    {{ step.get_action_display }}: {{ step.from_office.code|default:"—" }} → {{ step.to_office.code }}
+  </div>
+  <div class="t-meta">
+    Sent by {{ step.sent_by.display_name }} · {{ step.sent_at|date:"d M Y, g:i A" }}
+    {% if step.due_at %} · due {{ step.due_at|date:"d M, g:i A" }}{% endif %}
+  </div>
+  {% if step.instructions %}<div class="t-detail">{{ step.instructions }}</div>{% endif %}
+  {% if step.is_received %}
+    <div class="t-meta mt-1 t-received">
+      ✓ Receipt confirmed by {{ step.received_by.display_name }} ({{ step.to_office.code }})
+      · {{ step.received_at|date:"d M Y, g:i A" }}
+    </div>
+    {% if step.receipt_note %}<div class="t-detail">{{ step.receipt_note }}</div>{% endif %}
+  {% else %}
+    <div class="t-meta mt-1 t-awaiting">Awaiting receipt from {{ step.to_office.code }}</div>
+  {% endif %}
+</li>

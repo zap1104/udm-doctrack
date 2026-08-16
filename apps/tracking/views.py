@@ -250,23 +250,48 @@ class RecordReviewView(OfficeAssignedMixin, View):
         return redirect(record.get_absolute_url())
 
 
+#: How many of the newest timeline entries stay expanded. Anything older folds
+#: behind a labelled control that names the number hidden — the history is
+#: append-only and grows for the life of the record, so a document that has
+#: been round five offices otherwise opens as a wall nobody reads.
+TIMELINE_VISIBLE = 5
+
+
 class RecordDetailView(AppLoginRequiredMixin, View):
     template_name = "tracking/detail.html"
 
     def get(self, request, pk):
         record = _get_record(request, pk)
-        steps = record.routing_steps.select_related(
-            "from_office", "to_office", "sent_by", "received_by"
-        ).order_by("sequence")
-        activities = record.activities.select_related("actor", "actor_office").order_by("created_at", "id")
+        # Split here rather than with |slice in the template. Django's slice
+        # filter fails *silently* on a queryset — negative indexing is
+        # unsupported, and the filter swallows the error and returns the whole
+        # thing, which would render every entry twice instead of raising.
+        steps = list(
+            record.routing_steps.select_related(
+                "from_office", "to_office", "sent_by", "received_by"
+            ).order_by("sequence")
+        )
+        activities = list(
+            record.activities.select_related("actor", "actor_office").order_by("created_at", "id")
+        )
+        attachments = list(record.attachments.select_related("uploaded_by"))
         return render(
             request,
             self.template_name,
             {
                 "record": record,
                 "steps": steps,
+                # Oldest first in both lists, so the fold takes the head and the
+                # tail stays open. A short list makes the head empty on its own,
+                # which is why neither slice needs a length check.
+                "older_steps": steps[:-TIMELINE_VISIBLE],
+                "recent_steps": steps[-TIMELINE_VISIBLE:],
                 "activities": activities,
-                "attachments": record.attachments.select_related("uploaded_by"),
+                "older_activities": activities[:-TIMELINE_VISIBLE],
+                "recent_activities": activities[-TIMELINE_VISIBLE:],
+                "older_attachments": attachments[:-TIMELINE_VISIBLE],
+                "recent_attachments": attachments[-TIMELINE_VISIBLE:],
+                "attachments": attachments,
                 "receipt_form": ConfirmReceiptForm(),
                 "remark_form": RemarkForm(),
                 "route_form": RouteForm(record=record, user=request.user),

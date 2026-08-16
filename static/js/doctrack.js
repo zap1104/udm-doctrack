@@ -386,6 +386,25 @@
   })();
 
   /* ----------------------------------------------------------------------
+     Folded history (<details class="fold">).
+
+     The markup ships open, so with this script blocked the whole record is
+     still readable — hiding is the enhancement, never the default. That is
+     also why printing reopens every fold: a paper copy of a routed document
+     has to carry the complete history whatever the screen happened to show.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var folds = document.querySelectorAll("details.fold");
+    if (!folds.length) return;
+
+    folds.forEach(function (fold) { fold.open = false; });
+
+    window.addEventListener("beforeprint", function () {
+      folds.forEach(function (fold) { fold.open = true; });
+    });
+  })();
+
+  /* ----------------------------------------------------------------------
      Metadata review: suggested-tag chips append to the comma-separated box.
      Here rather than inline in the template so it survives ENABLE_CSP.
   ---------------------------------------------------------------------- */

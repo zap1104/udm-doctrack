@@ -1,0 +1,14 @@
+{% load doctrack %}
+{% comment %}
+  One attached file. Shared by the folded and unfolded halves of the Files card
+  so the two cannot drift apart.
+{% endcomment %}
+<div class="file-chip mb-2">
+  <span class="ext">{{ attachment.extension|default:"FILE" }}</span>
+  <div class="flex-grow-1" style="min-width:0;">
+    <a class="file-chip-name" href="{% url 'tracking:attachment_download' attachment.pk %}">{{ attachment.original_name }}</a>
+    <div class="file-chip-meta">
+      {{ attachment.size|human_size }} · {{ attachment.uploaded_by.short_display|default:"—" }} · {{ attachment.created_at|date:"d M Y" }}
+    </div>
+  </div>
+</div>

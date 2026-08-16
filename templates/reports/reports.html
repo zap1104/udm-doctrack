@@ -169,7 +169,7 @@
             <div class="chart-scale">Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }}</div>
             <details class="chart-table">
               <summary>View as table</summary>
-              <table class="table-udm">
+              <div class="table-responsive"><table class="table-udm">
                 <thead><tr><th>Month</th><th class="text-end">Created</th><th class="text-end">Completed</th></tr></thead>
                 <tbody>
                   {% for row in monthly.rows %}
@@ -180,7 +180,7 @@
                     </tr>
                   {% endfor %}
                 </tbody>
-              </table>
+              </table></div>
             </details>
           {% else %}
             <div class="report-empty">No tracking activity in the last 12 months.</div>
@@ -399,14 +399,14 @@
             </div>
             <details class="chart-table">
               <summary>View as table</summary>
-              <table class="table-udm">
+              <div class="table-responsive"><table class="table-udm">
                 <thead><tr><th>Month</th><th class="text-end">Documents added</th></tr></thead>
                 <tbody>
                   {% for row in document_months %}
                     <tr><td>{{ row.month|date:"F Y" }}</td><td class="text-end num">{{ row.total }}</td></tr>
                   {% endfor %}
                 </tbody>
-              </table>
+              </table></div>
             </details>
           {% else %}
             <div class="report-empty">The repository is empty for these filters.</div>

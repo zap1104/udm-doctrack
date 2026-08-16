@@ -37,13 +37,13 @@
       </div>
       <div class="card-udm-body">
         <div class="row">
-          <div class="col-md-6"><table class="table table-sm">
+          <div class="col-md-6"><table class="table table-sm table-stacked">
             <tr><th class="text-muted fw-normal">Owning office</th><td>{{ document.office.name }}</td></tr>
             <tr><th class="text-muted fw-normal">Document type</th><td>{{ document.document_type.name|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Document date</th><td>{{ document.document_date|date:"d M Y"|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Year</th><td>{{ document.year }}</td></tr>
           </table></div>
-          <div class="col-md-6"><table class="table table-sm">
+          <div class="col-md-6"><table class="table table-sm table-stacked">
             <tr><th class="text-muted fw-normal">From / author</th><td>{{ document.author_name|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">To / recipient</th><td>{{ document.recipient_name|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Signatory</th><td>{{ document.signatory|default:"—" }}</td></tr>
@@ -53,9 +53,9 @@
 
         {% if metadata_values %}
           <h3 style="font-size:15px;margin-top:6px;">Office fields</h3>
-          <table class="table table-sm">
+          <table class="table table-sm table-stacked">
             {% for value in metadata_values %}
-              <tr><th class="text-muted fw-normal" style="width:220px;">{{ value.field.label }}</th><td>{{ value.value }}</td></tr>
+              <tr><th class="text-muted fw-normal" style="min-width:160px;max-width:220px;">{{ value.field.label }}</th><td>{{ value.value }}</td></tr>
             {% endfor %}
           </table>
         {% endif %}
