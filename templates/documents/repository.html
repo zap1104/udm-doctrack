@@ -45,18 +45,27 @@
 
   <div class="col-lg-9">
     <div class="card-udm mb-3"><div class="card-udm-body">
-      <form method="get" class="row g-2 align-items-center">
+      {% comment %}
+        Two rows, each summing to twelve. The controls used to total
+        seventeen columns in one row and wrapped wherever they landed, which
+        is how "year" and "month" — the two halves of one date filter — ended
+        up separated by document type and tag. Read order now matches the way
+        the filters are used: what you are looking for, what kind of thing it
+        is, then when it is from.
+      {% endcomment %}
+      <form method="get" class="row g-2">
         {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.code }}">{% endif %}
-        <div class="col-md-5">{{ form.q }}</div>
-        <div class="col-4 col-md-2">{{ form.year }}</div>
-        <div class="col-4 col-md-2">{{ form.document_type }}</div>
-        <div class="col-4 col-md-2">{{ form.tag }}</div>
-        <div class="col-6 col-md-2">{{ form.month }}</div>
-        <div class="col-6 col-md-2">{{ form.source }}</div>
-        <div class="col-12 col-md-2 d-flex gap-2">
-          <button class="btn btn-udm-outline" type="submit">Filter</button>
-          <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Clear</a>
+        <div class="col-12 col-lg-9">{{ form.q }}</div>
+        <div class="col-12 col-lg-3 d-flex gap-2">
+          <button class="btn btn-udm flex-grow-1" type="submit">Filter</button>
+          <a class="btn btn-udm-outline flex-grow-1" href="{% url 'documents:repository' %}">Clear</a>
         </div>
+
+        <div class="col-6 col-lg-3">{{ form.document_type }}</div>
+        <div class="col-6 col-lg-3">{{ form.tag }}</div>
+        <div class="col-12 col-lg-2">{{ form.source }}</div>
+        <div class="col-6 col-lg-2">{{ form.year }}</div>
+        <div class="col-6 col-lg-2">{{ form.month }}</div>
       </form>
     </div></div>
 
@@ -92,11 +101,20 @@
                   <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
                   <td style="white-space:nowrap;">{{ record.completed_at|date:"d M Y" }}</td>
                   <td class="text-end">
-                    <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+                    {% comment %}
+                      align-items-center, and the form is a flex box of its own:
+                      as a plain block inside a stretch-aligned row the button
+                      sat at the top of a taller cell and did not line up with
+                      the link beside it. Navy is the primary action everywhere
+                      else in the app — the solid teal this used to be appears
+                      on no other table row.
+                    {% endcomment %}
+                    <div class="d-inline-flex align-items-center justify-content-end gap-2 flex-wrap">
                       <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Review</a>
                       {% if record.can_file %}
-                        <form method="post" action="{% url 'tracking:archive' record.pk %}">{% csrf_token %}
-                          <button class="btn btn-udm-teal btn-sm" type="submit">File</button>
+                        <form method="post" action="{% url 'tracking:archive' record.pk %}" class="d-flex m-0">
+                          {% csrf_token %}
+                          <button class="btn btn-udm btn-sm" type="submit">File</button>
                         </form>
                       {% endif %}
                     </div>

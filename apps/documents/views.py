@@ -10,7 +10,7 @@ from django.views.generic import View
 
 from apps.accounts.models import Office
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
-from apps.core.models import AuditLog, Tag
+from apps.core.models import AuditLog, DocumentType, Tag
 from apps.core.utils import log_action
 from apps.tracking.models import TrackingRecord
 
@@ -40,42 +40,79 @@ class RepositoryView(AppLoginRequiredMixin, View):
 
     template_name = "documents/repository.html"
 
+    @staticmethod
+    def _options(visible):
+        """The filter choices that can actually return one of `visible`.
+
+        Built from the unfiltered visible set, not from what is on screen: an
+        option list that narrowed as you filtered would take away the control
+        you needed to widen the search again.
+        """
+        return {
+            "years": sorted(
+                {value for value in visible.values_list("year", flat=True) if value}, reverse=True
+            ),
+            "months": {
+                value
+                for value in visible.values_list("document_date__month", flat=True)
+                if value
+            },
+            "document_types": DocumentType.active.filter(documents__in=visible).distinct(),
+            # Most-used first: with a shared vocabulary the useful tags are the
+            # common ones, and alphabetical order buries them under one-offs.
+            "tags": Tag.active.filter(documents__in=visible).distinct().order_by("-usage_count", "name"),
+            "sources": set(visible.values_list("source", flat=True).distinct()),
+        }
+
     def get(self, request):
         documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
-        years = sorted(
-            {value for value in documents.values_list("year", flat=True) if value}, reverse=True
-        )
-        form = RepositoryFilterForm(request.GET or None, years=years)
+        visible = Document.objects.visible_to(request.user).filter(is_active=True)
+        form = RepositoryFilterForm(request.GET or None, **self._options(visible))
 
         office_code = request.GET.get("office", "")
         selected_office = Office.objects.filter(code=office_code).first() if office_code else None
         if selected_office:
             documents = documents.filter(office=selected_office)
 
-        if form.is_valid():
-            query = form.cleaned_data.get("q")
-            if query:
-                documents = documents.filter(
-                    Q(title__icontains=query)
-                    | Q(reference_number__icontains=query)
-                    | Q(index_meta__icontains=query)
-                    | Q(ocr_text__icontains=query)
-                )
-            if form.cleaned_data.get("year"):
-                documents = documents.filter(year=form.cleaned_data["year"])
-            if form.cleaned_data.get("month"):
-                documents = documents.filter(document_date__month=form.cleaned_data["month"])
-            if form.cleaned_data.get("document_type"):
-                documents = documents.filter(document_type=form.cleaned_data["document_type"])
-            if form.cleaned_data.get("tag"):
-                documents = documents.filter(tags=form.cleaned_data["tag"])
-            if form.cleaned_data.get("source"):
-                documents = documents.filter(source=form.cleaned_data["source"])
+        # Apply every filter that validated, not the all-or-nothing case. The
+        # whole block used to hang off `if form.is_valid()`, so one unrecognised
+        # value — a stale bookmark, a tag since deleted — silently dropped
+        # *every* filter and returned the entire repository while the controls
+        # still showed a narrow search. Same fault the tracking list had.
+        form.is_valid()
+        data = getattr(form, "cleaned_data", {})
+
+        query = data.get("q")
+        if query:
+            documents = documents.filter(
+                Q(title__icontains=query)
+                | Q(reference_number__icontains=query)
+                | Q(index_meta__icontains=query)
+                | Q(ocr_text__icontains=query)
+            )
+        if data.get("year"):
+            documents = documents.filter(year=data["year"])
+        if data.get("month"):
+            documents = documents.filter(document_date__month=data["month"])
+        if data.get("document_type"):
+            documents = documents.filter(document_type=data["document_type"])
+        if data.get("tag"):
+            documents = documents.filter(tags=data["tag"])
+        if data.get("source"):
+            documents = documents.filter(source=data["source"])
+
+        if form.errors:
+            messages.warning(
+                request,
+                "Ignored a filter that no longer applies here: "
+                + ", ".join(sorted(form.errors))
+                + ". Showing the rest.",
+            )
 
         documents = documents.distinct().order_by("-document_date", "-created_at")
         page = Paginator(documents, PAGE_SIZE).get_page(request.GET.get("page"))
 
-        visible = Document.objects.visible_to(request.user).filter(is_active=True)
+        years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
         smart_folders = (
             visible.values("office__code", "office__name")
             .annotate(total=Count("id", distinct=True))

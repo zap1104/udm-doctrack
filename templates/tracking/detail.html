@@ -232,8 +232,9 @@
             as a document.
           </p>
           {% if can_archive_now %}
+            {# Navy, matching "File" in the pending-filing queue: one action, one look. #}
             <form method="post" action="{% url 'tracking:archive' record.pk %}">{% csrf_token %}
-              <button class="btn btn-udm-teal" type="submit">Archive into Document Management</button>
+              <button class="btn btn-udm" type="submit">Archive into Document Management</button>
             </form>
           {% endif %}
           {% if can_reopen %}

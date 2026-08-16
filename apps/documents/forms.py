@@ -139,10 +139,11 @@ class AddFilesForm(BootstrapFormMixin, forms.Form):
     files = MultipleFileField(label="Add more files")
 
 
-#: Month options for the repository filter. Written out rather than generated
-#: so the names do not follow the server's locale away from the rest of the UI.
-MONTH_CHOICES = [
-    ("", "All months"),
+#: Month names in calendar order. Written out rather than generated so they do
+#: not follow the server's locale away from the rest of the UI, and kept in this
+#: order so the dropdown reads January-to-December however the database
+#: happened to return the months that exist.
+MONTH_NAMES = [
     ("1", "January"), ("2", "February"), ("3", "March"), ("4", "April"),
     ("5", "May"), ("6", "June"), ("7", "July"), ("8", "August"),
     ("9", "September"), ("10", "October"), ("11", "November"), ("12", "December"),
@@ -152,33 +153,67 @@ MONTH_CHOICES = [
 class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
     """Filters for the repository list.
 
-    `month` and `source` used to be hand-written `<select>` elements in the
-    template that no form declared and no view ever read. They submitted
-    happily and changed nothing, so picking "Archived" returned the same list
-    as before — a filter that lies is worse than no filter, because the reader
-    believes the result. They are real fields here, and the template renders
-    them from the form so a control cannot drift away from its handler again.
+    Two rules, both learned the hard way on the tracking page:
+
+    1. **Every control is a real field.** `month` and `source` used to be
+       hand-written `<select>` elements the form did not declare and the view
+       never read. They submitted happily and changed nothing, so picking
+       "Archived" returned the same list — a filter that lies is worse than no
+       filter, because the reader believes the answer.
+    2. **Only offer what can actually return something.** A dropdown listing
+       every tag in the system, most of them on no document the reader can
+       see, is a menu of dead ends: each pick answers "no results" for a
+       filter that was never going to match. The options are built from the
+       documents actually visible to this user, so anything on the list finds
+       at least one record.
+
+    Tags are ordered by how much they are used rather than alphabetically —
+    with a shared vocabulary the useful ones are the common ones, and A-to-Z
+    buries them.
     """
 
     q = forms.CharField(
         required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search metadata, tags, office or text…"})
     )
-    year = forms.ChoiceField(required=False, label="", choices=[])
-    month = forms.ChoiceField(required=False, label="", choices=MONTH_CHOICES)
     document_type = forms.ModelChoiceField(
-        required=False, label="", queryset=DocumentType.active.all(), empty_label="All types"
+        required=False, label="", queryset=DocumentType.active.none(), empty_label="All types"
     )
-    tag = forms.ModelChoiceField(required=False, label="", queryset=Tag.active.all(), empty_label="All tags")
+    tag = forms.ModelChoiceField(required=False, label="", queryset=Tag.active.none(), empty_label="All tags")
     # Named for what the repository actually stores. The old control offered
     # "Completed / Archived / Historical upload", two of which described the
     # same rows and none of which was a field on the model.
-    source = forms.ChoiceField(
-        required=False, label="", choices=[("", "Any origin")] + list(Source.choices)
-    )
+    source = forms.ChoiceField(required=False, label="", choices=[])
+    year = forms.ChoiceField(required=False, label="", choices=[])
+    month = forms.ChoiceField(required=False, label="", choices=[])
 
-    def __init__(self, *args, years=None, **kwargs):
+    #: Declaration order is also the order the row is read in: what you are
+    #: looking for, then what kind of thing it is, then when it is from.
+    FIELD_ORDER = ("q", "document_type", "tag", "source", "year", "month")
+
+    def __init__(self, *args, years=None, months=None, document_types=None, tags=None,
+                 sources=None, **kwargs):
         super().__init__(*args, **kwargs)
-        year_choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]
-        self.fields["year"].choices = year_choices
+        self.order_fields(self.FIELD_ORDER)
+
+        self.fields["year"].choices = [("", "All years")] + [
+            (str(year), str(year)) for year in (years or [])
+        ]
+        # Chronological, not by however the database returned them, and only
+        # the months that have something in them.
+        present = set(months or [])
+        self.fields["month"].choices = [("", "All months")] + [
+            (value, label) for value, label in MONTH_NAMES if int(value) in present
+        ]
+        self.fields["source"].choices = [("", "Any origin")] + [
+            (value, label) for value, label in Source.choices if value in set(sources or [])
+        ]
+        if document_types is not None:
+            self.fields["document_type"].queryset = document_types
+        if tags is not None:
+            self.fields["tag"].queryset = tags
+
         for name in ("year", "month", "document_type", "tag", "source"):
-            self.fields[name].widget.attrs.setdefault("aria-label", name.replace("_", " ") + " filter")
+            self.fields[name].widget.attrs.setdefault(
+                "aria-label", self.fields[name].widget.attrs.get("aria-label")
+                or f"Filter by {name.replace('_', ' ')}"
+            )
