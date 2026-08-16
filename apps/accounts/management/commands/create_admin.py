@@ -49,4 +49,4 @@ class Command(BaseCommand):
         user.save()
 
         verb = "Created" if created else "Reset"
-        self.stdout.write(self.style.SUCCESS(f"✓ {verb} administrator '{user.username}'."))
+        self.stdout.write(self.style.SUCCESS(f"OK  {verb} administrator '{user.username}'."))

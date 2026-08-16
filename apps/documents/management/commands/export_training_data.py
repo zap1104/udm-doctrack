@@ -70,7 +70,7 @@ class Command(BaseCommand):
                 )
                 written += 1
 
-        self.stdout.write(self.style.SUCCESS(f"✓ Wrote {written} example(s) to {path}"))
+        self.stdout.write(self.style.SUCCESS(f"OK  Wrote {written} example(s) to {path}"))
         if skipped:
             self.stdout.write(f"  Skipped {skipped} (too little text, or unedited when --edited-only was used).")
         if written < 200:

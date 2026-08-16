@@ -61,7 +61,9 @@ class Command(BaseCommand):
             raise SystemExit(1)
 
         self.stdout.write(self.style.SUCCESS(f"All {self.passed} checks passed."))
-        self.stdout.write("The full workflow works: create → route → receive → forward → complete → archive → search.")
+        self.stdout.write(
+            "The full workflow works: create -> route -> receive -> forward -> complete -> archive -> search."
+        )
         if options["keep"]:
             self.stdout.write(self.style.WARNING("Test data was KEPT (--keep). Run seed_demo --wipe to clear it."))
 

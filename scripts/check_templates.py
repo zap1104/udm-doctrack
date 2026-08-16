@@ -130,12 +130,33 @@ def main() -> int:
     if problems:
         print(f"\n{len(problems)} problem(s) found:\n")
         for problem in problems:
-            print(f"  ✗ {problem}")
+            print(f"  FAIL  {problem}")
         return 1
 
-    print("✓ No problems found.")
+    print("OK  No problems found.")
     return 0
 
 
+def _make_console_printable() -> None:
+    """See manage.py's version. Repeated rather than imported because this
+    script deliberately runs before Django (and before manage.py) is usable.
+
+    Without it a stock Windows cp1252 console turned the success line into an
+    UnicodeEncodeError traceback, so a clean run of this linter exited 1 —
+    reporting a failure it had just finished proving was not there. A template
+    path or tag name can carry a non-cp1252 character too, so the failure list
+    needs the same protection as the summary.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(errors="backslashreplace")
+        except (ValueError, OSError):
+            pass
+
+
 if __name__ == "__main__":
+    _make_console_printable()
     sys.exit(main())

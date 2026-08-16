@@ -33,4 +33,4 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Indexing {total} document(s)…")
         done = reindex_all(queryset, batch_size=options["batch_size"])
-        self.stdout.write(self.style.SUCCESS(f"✓ Reindexed {done} document(s)."))
+        self.stdout.write(self.style.SUCCESS(f"OK  Reindexed {done} document(s)."))

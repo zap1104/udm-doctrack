@@ -48,11 +48,11 @@ class Command(BaseCommand):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute(sql)
-                self.stdout.write(self.style.SUCCESS(f"✓ {name} ready — {why}"))
+                self.stdout.write(self.style.SUCCESS(f"OK  {name} ready — {why}"))
             except Exception as exc:  # pragma: no cover - depends on DB privileges
                 self.stderr.write(
                     self.style.WARNING(
-                        f"× Could not enable {name}: {exc}\n"
+                        f"!!  Could not enable {name}: {exc}\n"
                         f"  The app still runs. Ask your database admin to run: {sql}"
                     )
                 )
