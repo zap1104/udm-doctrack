@@ -134,7 +134,7 @@ def human_size(num_bytes: int | None) -> str:
 #
 # Colour is never the only signal: every badge also prints the office code. See
 # `partials/_office_badge.html`, and the same rule already stated for statuses
-# in apps/core/views.STATUS_COLOURS.
+# in apps/core/colors.STATUS_COLOURS.
 # ---------------------------------------------------------------------------
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 

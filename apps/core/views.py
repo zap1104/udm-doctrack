@@ -17,6 +17,7 @@ from apps.documents.models import Document, SearchQueryLog
 from apps.tracking import services as tracking_services
 from apps.tracking.models import RoutingStep, Status, TrackingRecord
 
+from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Tag, TagRule
@@ -181,21 +182,6 @@ def _greeting() -> str:
 #: Months of history the charts cover. A year is the reporting unit offices
 #: actually use, and it keeps every column chart to twelve readable bars.
 REPORT_MONTHS = 12
-
-#: Bar colour per status. Statuses are states, not series identities, so they
-#: wear the reserved status palette and are always shown with their label —
-#: never colour alone. Kept in step with `partials/_status_pill.html`.
-STATUS_COLOURS = {
-    "DRAFT": "#63718a",
-    "IN_TRANSIT": "#B58C24",
-    "FORWARDED": "#B58C24",
-    "RETURNED": "#B58C24",
-    "RECEIVED": "#2E7D5B",
-    "IN_PROCESS": "#0A6E9A",
-    "COMPLETED": "#25664a",
-    "OVERDUE": "#B4342B",
-}
-
 
 def _percent(part: int, whole: int) -> int:
     return int(round(100 * part / whole)) if whole else 0

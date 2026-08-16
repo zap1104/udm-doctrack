@@ -20,7 +20,7 @@
         {% csrf_token %}
         <div class="mb-3">
           <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark">*</span></label>
-          <div style="border:2px dashed #cfd8e6;border-radius:10px;padding:22px;background:#fff;text-align:center;">
+          <div style="border:2px dashed var(--udm-line-soft);border-radius:10px;padding:22px;background:#fff;text-align:center;">
             {{ form.file }}
             <div class="form-text mt-2">{{ form.file.help_text }}</div>
           </div>
@@ -37,7 +37,7 @@
   <div class="col-lg-5">
     <div class="card-udm"><div class="card-udm-body">
       <h2 style="font-size:15px;">What Happens Next</h2>
-      <ol class="ps-3" style="font-size:13.5px;color:#4a5771;">
+      <ol class="ps-3" style="font-size:13.5px;color:var(--udm-slate-text);">
         <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
         <li class="mb-2">Scanned pages use OCR when a provider is configured.</li>
         <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>

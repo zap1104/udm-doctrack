@@ -87,7 +87,7 @@
                     {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
                   </div>
                   {% if result.snippet_html %}
-                    <p class="mt-2 mb-1" style="font-size:14px;color:#41506a;">{{ result.snippet_html|safe }}</p>
+                    <p class="mt-2 mb-1" style="font-size:14px;color:var(--udm-slate-text);">{{ result.snippet_html|safe }}</p>
                   {% endif %}
                   <div>
                     {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
