@@ -36,6 +36,20 @@ from apps.documents.models import Document, DocumentFile  # noqa: E402
 from apps.tracking.models import Attachment, TrackingRecord  # noqa: E402
 from apps.tracking.services import create_draft_record  # noqa: E402
 
+
+class HttpsClient(Client):
+    """Always speaks HTTPS.
+
+    With DJANGO_DEBUG=False, SECURE_SSL_REDIRECT answers every plain-http
+    request with a 301 that never reaches the view, so this script would report
+    a wall of failures that say nothing about the pages. The deployed app is
+    served over HTTPS anyway.
+    """
+
+    def generic(self, method, path, *args, **kwargs):
+        kwargs["secure"] = True
+        return super().generic(method, path, *args, **kwargs)
+
 # Pages that render for any signed-in user, as (url name, args) pairs.
 STATIC_PAGES = [
     ("core:dashboard", ()),
@@ -134,13 +148,13 @@ def _run() -> int:
 
     with transaction.atomic():
         # -- signed out -----------------------------------------------------
-        anon = Client()
+        anon = HttpsClient()
         smoke.get(anon, "/", "anonymous", expected=(302,))
         smoke.get(anon, reverse("accounts:login"), "anonymous", expected=(200,))
         smoke.get(anon, reverse("tracking:list"), "anonymous", expected=(302,))
 
         for label, person in present:
-            client = Client()
+            client = HttpsClient()
             client.force_login(person)
 
             for name, args in STATIC_PAGES:
