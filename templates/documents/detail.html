@@ -23,7 +23,7 @@
 <div class="card-udm mb-4">
   <div class="card-udm-body d-flex flex-wrap gap-4 align-items-center">
     <div><span class="text-muted small d-block">Repository source</span><strong>{% if document.source == "DTS" %}Completed DTS record{% else %}Historical office upload{% endif %}</strong></div>
-    <div><span class="text-muted small d-block">Owning office</span><strong>{{ document.office.code }}</strong></div>
+    <div><span class="text-muted small d-block">Owning office</span>{% include "partials/_office_badge.html" with office=document.office %}</div>
     <div><span class="text-muted small d-block">Access</span><strong>{{ document.get_access_level_display }}</strong></div>
     {% if document.tracking_record %}<div class="ms-lg-auto"><a href="{{ document.tracking_record.get_absolute_url }}">Open DTS history</a></div>{% endif %}
   </div>

@@ -61,10 +61,10 @@
             <td>
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
-                {{ record.document_type.name|default:"No type" }} · from {{ record.originating_office.code }}
+                {{ record.document_type.name|default:"No type" }} · from {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>
             </td>
-            <td>{{ record.current_office.code|default:"—" }}</td>
+            <td>{% include "partials/_office_badge.html" with office=record.current_office %}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
           <td>
               {% include "partials/_status_pill.html" with status=record.display_status %}

@@ -72,8 +72,8 @@
                       updated {{ record.last_movement_at|timesince }} ago
                     </div>
                   </td>
-                  <td class="office-cell">{{ record.originating_office.code }}</td>
-                  <td class="office-cell">{{ record.pending_label }}</td>
+                  <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                  <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
                 {% else %}
                   <td>
                     <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
@@ -131,8 +131,8 @@
               <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
               <td>{{ record.subject|truncatechars:52 }}</td>
               {% if show_office_columns %}
-                <td class="office-cell">{{ record.originating_office.code }}</td>
-                <td class="office-cell">{{ record.destination_label }}</td>
+                <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
               {% endif %}
               <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
             </tr>
@@ -173,7 +173,7 @@
           <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
             <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
             <div class="text-muted" style="font-size:12.5px;">
-              {{ document.office.code }} · {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+              {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
             </div>
           </div>
         {% empty %}

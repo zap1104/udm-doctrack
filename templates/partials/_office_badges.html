@@ -1,0 +1,11 @@
+{% comment %}
+  A short list of office badges with the tail collapsed to a count.
+
+  Usage: {% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}
+{% endcomment %}
+<span class="office-badge-group">
+  {% for office in offices %}
+    {% include "partials/_office_badge.html" with office=office %}
+  {% empty %}—{% endfor %}
+  {% if more %}<span class="office-badge-more">+{{ more }}</span>{% endif %}
+</span>

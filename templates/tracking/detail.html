@@ -27,8 +27,8 @@
       <div class="card-udm-head"><h2>Document information</h2></div>
       <div class="card-udm-body">
         <table class="table table-sm table-stacked mb-0">
-          <tr><th class="text-muted fw-normal">Originating office</th><td>{{ record.originating_office.code }}</td></tr>
-          <tr><th class="text-muted fw-normal">Current office</th><td>{{ record.current_office.code|default:"—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Originating office</th><td>{% include "partials/_office_badge.html" with office=record.originating_office %}</td></tr>
+          <tr><th class="text-muted fw-normal">Current office</th><td>{% include "partials/_office_badge.html" with office=record.current_office %}</td></tr>
           <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Pending Receipt" }}</td></tr>
           <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
           <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
@@ -64,7 +64,7 @@
     {% if pending_offices %}
       <div class="help-note mt-3">
         Waiting for receipt from:
-        {% for office in pending_offices %}<strong>{{ office.code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+        {% for office in pending_offices %}{% include "partials/_office_badge.html" with office=office %}{% endfor %}
       </div>
     {% endif %}
   </div>

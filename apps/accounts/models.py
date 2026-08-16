@@ -7,9 +7,30 @@ created by an administrator and always carry a role and an office.
 from __future__ import annotations
 
 from django.contrib.auth.models import AbstractUser, UserManager
+from django.core.validators import RegexValidator
 from django.db import models
 
 from apps.core.models import ActiveManager, TimeStampedModel
+
+#: Default badge colours, handed out one per office so a fresh install is
+#: already colour-coded without anybody visiting the admin screen. Chosen to sit
+#: with the UDM navy/teal/gold system and to stay apart from one another for the
+#: common forms of colour blindness — though the office code is printed on every
+#: badge regardless, so colour is never carrying the meaning on its own.
+OFFICE_COLOURS = [
+    "#0b315a",  # navy
+    "#16697a",  # teal
+    "#2e7d5b",  # green
+    "#b4342b",  # red
+    "#6b4c9a",  # violet
+    "#c2611f",  # orange
+    "#1f6fb2",  # blue
+    "#a8336b",  # magenta
+    "#8a6a12",  # gold, darkened to hold its own as text
+    "#4a5a70",  # slate
+    "#7a5230",  # brown
+    "#3f7d3f",  # moss
+]
 
 
 class Office(TimeStampedModel):
@@ -29,6 +50,19 @@ class Office(TimeStampedModel):
     head_name = models.CharField(max_length=150, blank=True)
     email = models.EmailField(blank=True)
     location = models.CharField(max_length=150, blank=True)
+    colour = models.CharField(
+        max_length=7,
+        blank=True,
+        verbose_name="badge colour",
+        validators=[
+            RegexValidator(
+                r"^#[0-9A-Fa-f]{6}$",
+                "Enter a colour as six hex digits, for example #16697A.",
+            )
+        ],
+        help_text="Identifies this office at a glance wherever it appears. "
+                  "Leave blank to be given an unused colour automatically.",
+    )
     sort_order = models.PositiveSmallIntegerField(default=100)
     is_active = models.BooleanField(default=True)
 
@@ -45,11 +79,43 @@ class Office(TimeStampedModel):
         self.code = self.code.strip().upper()
         if not self.short_name:
             self.short_name = self.code
+        if not self.colour:
+            self.colour = self.next_free_colour()
         super().save(*args, **kwargs)
+
+    @classmethod
+    def next_free_colour(cls) -> str:
+        """The first palette colour no other office is using.
+
+        Handed out by scarcity rather than by hashing the code: a hash gives
+        the same office the same colour forever, but with a dozen colours and a
+        dozen offices it also collides often enough that two offices on the
+        same screen would share one — which is the one thing the colour is
+        there to prevent.
+        """
+        taken = set(cls.objects.exclude(colour="").values_list("colour", flat=True))
+        for candidate in OFFICE_COLOURS:
+            if candidate not in taken:
+                return candidate
+        # More offices than colours. Reuse in order, so it is at least even.
+        return OFFICE_COLOURS[cls.objects.count() % len(OFFICE_COLOURS)]
 
     @property
     def label(self) -> str:
         return self.short_name or self.code
+
+    @property
+    def badge(self) -> dict[str, str]:
+        """Background and text colours for this office's badge.
+
+        Derived rather than stored, because the pair has to stay readable for
+        whatever colour an administrator picks — including the pale ones. See
+        apps.core.utils.badge_palette.
+        """
+        from apps.core.utils import badge_palette, normalise_hex
+
+        tint, ink = badge_palette(self.colour)
+        return {"base": normalise_hex(self.colour), "tint": tint, "ink": ink}
 
 
 class UserQuerySet(models.QuerySet):

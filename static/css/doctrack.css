@@ -1165,6 +1165,58 @@ body.sidebar-open { overflow:hidden; }
 
 @media print { .session-dialog { display: none !important; } }
 
+/* --- Office badges --------------------------------------------------------
+   Deliberately not shaped like a status pill. A status is a state and a pill
+   is the reserved shape for one; an office is an identity, and two things that
+   look alike in the same table would be read as the same kind of fact. Hence
+   the square-ish chip and the solid key down its left edge.
+
+   Colours arrive as custom properties from Office.badge, already checked for
+   contrast, so nothing here has to guess whether the text will be readable. */
+.office-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 100%; padding: 2px 8px 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--office-ink, #63718a) 22%, transparent);
+  border-radius: 6px;
+  background: var(--office-tint, #eceff4);
+  color: var(--office-ink, #55637a);
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5;
+  vertical-align: baseline; white-space: nowrap;
+}
+.office-badge-key {
+  width: 3px; align-self: stretch; min-height: 13px; flex: 0 0 3px;
+  border-radius: 2px; background: var(--office-base, #63718a);
+}
+.office-badge-code { overflow: hidden; text-overflow: ellipsis; }
+.office-badge-name {
+  overflow: hidden; font-weight: 500; opacity: 0.85; text-overflow: ellipsis; white-space: nowrap;
+}
+a .office-badge, .office-badge a { text-decoration: none; }
+
+.office-badge-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.office-badge-more {
+  color: var(--udm-muted); font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+
+/* The swatch picker is square; the full-width form-control look makes a
+   400px-wide colour well, which reads as a broken text box. */
+.form-control-colour {
+  width: 56px; height: 38px; padding: 3px; cursor: pointer;
+}
+
+/* A badge inside a link or a heading should not shout over it. */
+h1 .office-badge, h2 .office-badge { font-size: 12.5px; }
+
+@media print {
+  /* Backgrounds are commonly dropped when printing, and a mono printer flattens
+     the key to grey. The code is text, so the badge still says which office it
+     is — the border keeps it looking deliberate rather than broken. */
+  .office-badge {
+    border-color: #8793a3; background: transparent !important; color: #16202c !important;
+  }
+  .office-badge-key { background: #8793a3 !important; }
+}
+
 /* --- Text boxes -----------------------------------------------------------
    Vertical resize only. A textarea is resizable in both directions by default,
    and dragging one wider pushed it straight out of its card and gave the page

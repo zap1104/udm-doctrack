@@ -94,7 +94,7 @@
             </div>
             <h3>{{ document.title|truncatechars:64 }}</h3>
             <div class="meta">
-              {{ document.office.code }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+              {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_date|default:document.created_at|date:"d M Y" }}
               {% if document.reference_number %}<br><span class="mono">{{ document.reference_number }}</span>{% endif %}
             </div>
             <div>

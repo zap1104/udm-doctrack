@@ -1,0 +1,24 @@
+{% comment %}
+  One office, colour-coded.
+
+  Usage:  {% include "partials/_office_badge.html" with office=record.current_office %}
+  Options: name=True  puts the full office name beside the code
+           dash="—"   what to show when there is no office (default "—")
+
+  The code is always printed. Colour is the fast signal, never the only one —
+  the same rule the status pills follow, and what keeps the badge meaningful in
+  greyscale, on a mono printer, and to a colour-blind reader.
+
+  Both colours come from Office.badge, which derives a readable pair from
+  whatever the administrator picked, so a pale choice cannot make this
+  unreadable. They are validated hex before they reach the style attribute.
+{% endcomment %}
+{% if office %}
+  <span class="office-badge"
+        style="--office-tint:{{ office.badge.tint }};--office-ink:{{ office.badge.ink }};--office-base:{{ office.badge.base }};"
+        title="{{ office.name }}">
+    <span class="office-badge-key" aria-hidden="true"></span>
+    <span class="office-badge-code">{{ office.code }}</span>
+    {% if name %}<span class="office-badge-name">{{ office.name }}</span>{% endif %}
+  </span>
+{% else %}{{ dash|default:"—" }}{% endif %}

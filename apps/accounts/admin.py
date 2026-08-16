@@ -6,9 +6,22 @@ from .models import LoginLockout, Office, User
 
 @admin.register(Office)
 class OfficeAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "cluster", "head_name", "sort_order", "is_active")
+    list_display = ("name", "code", "swatch", "cluster", "head_name", "sort_order", "is_active")
     list_filter = ("cluster", "is_active")
     search_fields = ("name", "code", "head_name")
+
+    @admin.display(description="Badge colour")
+    def swatch(self, obj):
+        """The colour itself, not just its hex. A list of hex codes tells you
+        nothing about whether two offices are about to look alike."""
+        from django.utils.html import format_html
+
+        badge = obj.badge
+        return format_html(
+            '<span style="display:inline-block;padding:2px 8px;border-radius:5px;'
+            'background:{};color:{};font-weight:700;">{}</span>',
+            badge["tint"], badge["ink"], badge["base"],
+        )
 
 
 @admin.register(User)

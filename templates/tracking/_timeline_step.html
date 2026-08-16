@@ -5,7 +5,10 @@
 {% endcomment %}
 <li class="{% if step.is_received %}is-done{% else %}is-pending{% endif %}">
   <div class="t-title">
-    {{ step.get_action_display }}: {{ step.from_office.code|default:"—" }} → {{ step.to_office.code }}
+    {{ step.get_action_display }}:
+    {% include "partials/_office_badge.html" with office=step.from_office %}
+    <span aria-hidden="true">→</span>
+    {% include "partials/_office_badge.html" with office=step.to_office %}
   </div>
   <div class="t-meta">
     Sent by {{ step.sent_by.display_name }} · {{ step.sent_at|date:"d M Y, g:i A" }}

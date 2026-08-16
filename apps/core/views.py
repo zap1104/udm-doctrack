@@ -101,30 +101,32 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
 DESTINATIONS_SHOWN = 4
 
 
-def _office_label(codes: list[str]) -> str:
-    """Office codes for one table cell.
+def _unique_offices(offices) -> list:
+    """De-duplicated, in the order first seen.
 
-    A document sent to every office would otherwise make one row three lines
-    tall, so the tail collapses; the record page carries the full list.
+    Offices, not codes: the cells render colour-coded badges now, which need
+    the colour and the name as well as the code.
     """
-    if not codes:
-        return "—"
-    if len(codes) > DESTINATIONS_SHOWN:
-        return f"{', '.join(codes[:DESTINATIONS_SHOWN])} +{len(codes) - DESTINATIONS_SHOWN} more"
-    return ", ".join(codes)
+    seen, ordered = set(), []
+    for office in offices:
+        if office is not None and office.pk not in seen:
+            seen.add(office.pk)
+            ordered.append(office)
+    return ordered
 
 
 def _annotate_destinations(records) -> None:
     """Attach the office(s) each record's current batch was sent to.
 
-    Sets two labels, because the two dashboard panels ask different questions:
+    Sets two lists, because the two dashboard panels ask different questions:
 
-    * `destination_label` — every office in the current batch. What "where is
+    * `destination_offices` — every office in the current batch. What "where is
       this headed" means on the recent-activity list.
-    * `pending_label` — only the offices that have not confirmed receipt yet.
-      What "who are we waiting on" means on the pending-receipt panel. Rows
-      that are there for another reason (overdue, or already in this office's
-      custody) have nothing outstanding, so they fall back to the full list.
+    * `pending_offices_shown` — only the offices that have not confirmed
+      receipt yet. What "who are we waiting on" means on the pending-receipt
+      panel. Rows that are there for another reason (overdue, or already in
+      this office's custody) have nothing outstanding, so they fall back to the
+      full list.
 
     Records staff and administrators watch traffic between offices, not just
     their own queue. Done as one grouped query rather than
@@ -135,9 +137,13 @@ def _annotate_destinations(records) -> None:
     steps = (
         RoutingStep.objects.filter(record__in=records)
         .select_related("to_office")
-        # received_at is read below; without it here each step would fetch it
-        # on its own, reintroducing the per-row query this function avoids.
-        .only("record_id", "batch", "received_at", "to_office__code")
+        # received_at is read below, and the badge needs the office name and
+        # colour. Leaving any of them out here would defer the field and fetch
+        # it one row at a time, reintroducing the per-row query this avoids.
+        .only(
+            "record_id", "batch", "received_at",
+            "to_office__code", "to_office__name", "to_office__colour",
+        )
     )
     by_record: dict[int, list[RoutingStep]] = {}
     for step in steps:
@@ -147,12 +153,17 @@ def _annotate_destinations(records) -> None:
         current = [
             step for step in by_record.get(record.pk, []) if step.batch == record.current_batch
         ]
-        codes = list(dict.fromkeys(step.to_office.code for step in current))
-        awaiting = list(
-            dict.fromkeys(step.to_office.code for step in current if step.received_at is None)
+        destinations = _unique_offices(step.to_office for step in current)
+        awaiting = _unique_offices(
+            step.to_office for step in current if step.received_at is None
         )
-        record.destination_label = _office_label(codes)
-        record.pending_label = _office_label(awaiting) if awaiting else record.destination_label
+        # A document sent to every office would make one row several lines
+        # tall, so the tail collapses to a count; the record page has them all.
+        record.destination_offices = destinations[:DESTINATIONS_SHOWN]
+        record.destination_more = max(0, len(destinations) - DESTINATIONS_SHOWN)
+        outstanding = awaiting or destinations
+        record.pending_offices_shown = outstanding[:DESTINATIONS_SHOWN]
+        record.pending_more = max(0, len(outstanding) - DESTINATIONS_SHOWN)
 
 
 def _greeting() -> str:

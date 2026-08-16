@@ -125,6 +125,88 @@ def human_size(num_bytes: int | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Colour
+#
+# Offices carry a badge colour an administrator can change at will, which means
+# no pairing of background and text can be chosen up front — the readable
+# combination has to be derived from whatever colour they pick. These helpers
+# do that arithmetic, so a badly chosen colour costs legibility nowhere.
+#
+# Colour is never the only signal: every badge also prints the office code. See
+# `partials/_office_badge.html`, and the same rule already stated for statuses
+# in apps/core/views.STATUS_COLOURS.
+# ---------------------------------------------------------------------------
+_HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+#: Minimum contrast for normal-size text under WCAG 2.1 AA.
+MIN_CONTRAST = 4.5
+
+
+def normalise_hex(value: str | None, fallback: str = "#63718a") -> str:
+    """A validated `#rrggbb`, or the fallback.
+
+    Everything that reaches a `style` attribute goes through here. The field is
+    validated on the way in as well, but a colour arriving from a fixture, a
+    shell session or a hand-edited row must not be able to put arbitrary text
+    inside a style attribute.
+    """
+    value = (value or "").strip()
+    if not _HEX_RE.match(value):
+        return fallback
+    if len(value) == 4:  # #abc -> #aabbcc
+        value = "#" + "".join(char * 2 for char in value[1:])
+    return value.lower()
+
+
+def _to_rgb(value: str) -> tuple[float, float, float]:
+    value = normalise_hex(value)
+    return tuple(int(value[index : index + 2], 16) / 255 for index in (1, 3, 5))
+
+
+def _to_hex(rgb) -> str:
+    return "#" + "".join(f"{round(max(0.0, min(1.0, channel)) * 255):02x}" for channel in rgb)
+
+
+def _mix(a: str, b: str, weight: float) -> str:
+    """`weight` of colour `a` against `1 - weight` of colour `b`."""
+    first, second = _to_rgb(a), _to_rgb(b)
+    return _to_hex(x * weight + y * (1 - weight) for x, y in zip(first, second, strict=True))
+
+
+def _luminance(value: str) -> float:
+    """WCAG relative luminance, sRGB linearised."""
+    channels = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in _to_rgb(value)]
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(first: str, second: str) -> float:
+    """WCAG contrast between two colours, 1.0 (identical) to 21.0 (black on white)."""
+    light, dark = sorted((_luminance(first), _luminance(second)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+@lru_cache(maxsize=256)
+def badge_palette(base: str) -> tuple[str, str]:
+    """A readable (background, text) pair built from one office colour.
+
+    The background is the colour thinned almost to white, which keeps a row of
+    badges calm rather than a bag of sweets. The text starts as the colour
+    itself and is darkened in steps until it clears AA against that background,
+    so an administrator can choose a pale yellow and still get a legible badge
+    instead of an invisible one.
+    """
+    base = normalise_hex(base)
+    tint = _mix(base, "#ffffff", 0.14)
+    ink = base
+    for _ in range(24):  # bounded: each step darkens, so this always terminates
+        if contrast_ratio(ink, tint) >= MIN_CONTRAST:
+            break
+        ink = _mix(ink, "#000000", 0.85)
+    return tint, ink
+
+
+# ---------------------------------------------------------------------------
 # QR codes
 # ---------------------------------------------------------------------------
 #: Quiet zone in modules. The spec asks for 4; 2 still scans reliably and buys

@@ -30,7 +30,7 @@
       {% for row in users %}
         <tr>
           <td><strong>{{ row.display_name }}</strong><div class="text-muted" style="font-size:12.5px;">{{ row.username }}{% if row.email %} · {{ row.email }}{% endif %}</div></td>
-          <td>{{ row.office.code|default:"—" }}</td>
+          <td>{% include "partials/_office_badge.html" with office=row.office %}</td>
           <td>{{ row.get_role_display }}</td>
           <td>
             {% if row.is_active %}<span class="pill pill-received">Active</span>

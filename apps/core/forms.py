@@ -60,6 +60,17 @@ class MultipleFileField(forms.FileField):
         return [single_clean(data, initial)]
 
 
+class ColourInput(forms.TextInput):
+    """Native swatch picker.
+
+    Deliberately a TextInput subclass rather than a bare input_type override:
+    the value has to keep round-tripping as the "#rrggbb" text the model
+    validates, and every browser's colour control already speaks exactly that.
+    """
+
+    input_type = "color"
+
+
 class DateInput(forms.DateInput):
     input_type = "date"
 

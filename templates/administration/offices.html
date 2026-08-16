@@ -15,7 +15,7 @@
       {% for office in offices %}
         <tr>
           <td><strong>{{ office.name }}</strong></td>
-          <td class="mono">{{ office.code }}</td>
+          <td>{% include "partials/_office_badge.html" with office=office %}</td>
           <td>{{ office.cluster }}</td>
           <td>{{ office.head_name|default:"—" }}</td>
           <td>{{ office.member_count }}</td>

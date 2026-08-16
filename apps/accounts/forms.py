@@ -3,7 +3,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, SetPasswordForm, UserCreationForm
 
-from apps.core.forms import BootstrapFormMixin
+from apps.core.forms import BootstrapFormMixin, ColourInput
 
 from .models import Office, User
 
@@ -79,10 +79,20 @@ class OfficeForm(BootstrapFormMixin, forms.ModelForm):
         model = Office
         fields = (
             "code", "name", "short_name", "cluster", "parent", "head_name", "email", "location",
-            "sort_order", "is_active",
+            "colour", "sort_order", "is_active",
         )
+        widgets = {"colour": ColourInput()}
         help_texts = {
             "code": "Appears inside every tracking number, so keep it short and stable."}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A colour input has no empty state — left blank it posts #000000, which
+        # would read as a deliberate choice of black. Showing the colour the
+        # office would be given anyway means whatever is saved is what was seen.
+        if not self.initial.get("colour") and not getattr(self.instance, "colour", ""):
+            self.initial["colour"] = Office.next_free_colour()
+        self.fields["colour"].widget.attrs["class"] = "form-control form-control-colour"
 
     def clean_code(self):
         return self.cleaned_data["code"].strip().upper()
