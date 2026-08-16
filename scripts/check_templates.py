@@ -8,6 +8,7 @@ Checks:
   2. Every {% extends %} and {% include %} target actually exists
   3. Every {% url 'app:name' %} matches a real URL name
   4. Every {% load %} library exists
+  5. Every {# comment #} closes on its own line
 
 Runs without Django installed, so it is usable in CI before anything is set up.
 It is a linter, not a substitute for opening the pages in a browser.
@@ -95,6 +96,27 @@ def check_balance(path: Path, text: str, problems: list[str]) -> None:
         problems.append(f"{path}:{line_number}: {{% {tag} %}} is never closed")
 
 
+def check_inline_comments(path: Path, text: str, problems: list[str]) -> None:
+    """`{# ... #}` is single-line only.
+
+    Split over two lines Django never finds a closing marker, so the comment
+    is rendered to the reader as ordinary text — on a page that still answers
+    200, which is why neither the tests nor the page smoke test noticed. Use
+    {% comment %}…{% endcomment %} for anything multi-line.
+    """
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        cursor = 0
+        while (start := line.find("{#", cursor)) != -1:
+            end = line.find("#}", start + 2)
+            if end == -1:
+                problems.append(
+                    f"{path}:{line_number}: {{# comment #}} is not closed on this line — "
+                    f"it will render as text. Use {{% comment %}} for multiple lines."
+                )
+                break
+            cursor = end + 2
+
+
 def main() -> int:
     if not TEMPLATES.exists():
         print(f"No templates directory at {TEMPLATES}")
@@ -112,6 +134,7 @@ def main() -> int:
         shown = path.relative_to(ROOT)
 
         check_balance(shown, text, problems)
+        check_inline_comments(shown, text, problems)
 
         for target in INCLUDE_RE.findall(text):
             if target not in relative:

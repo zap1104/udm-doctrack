@@ -15,6 +15,7 @@
 
 <form method="post" enctype="multipart/form-data" novalidate>
   {% csrf_token %}
+  {% include "partials/_form_errors.html" %}
   <div class="row g-4">
     <div class="col-lg-8">
       <div class="card-udm">

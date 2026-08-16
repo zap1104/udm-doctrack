@@ -6,7 +6,7 @@
   <h1>{% if office %}{{ office.name }}{% else %}Add office{% endif %}</h1>
 </div></div>
 <div class="row"><div class="col-lg-7"><div class="card-udm"><div class="card-udm-body">
-  <form method="post" novalidate>{% csrf_token %}
+  <form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
     {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
     <button class="btn btn-udm" type="submit">Save office</button>
     <a class="btn btn-udm-outline" href="{% url 'accounts:office_list' %}">Cancel</a>

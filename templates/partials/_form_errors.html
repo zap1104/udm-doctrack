@@ -1,0 +1,22 @@
+{% comment %}
+  Form-level (non-field) errors.
+
+  `partials/_field.html` renders the errors attached to a field, which is most
+  of them — but anything raised by a form's own `clean()` belongs to no field
+  and had nowhere to appear. Only the sign-in page rendered these, so every
+  other form-level rule failed silently: the search page's "the From date is
+  after the To date" left the reader with an empty result list and no reason
+  for it, which reads as "there are no such documents".
+
+  Include it directly above the fields of any form that has a `clean()`.
+{% endcomment %}
+{% if form.non_field_errors %}
+  <div class="alert alert-danger app-alert" role="alert">
+    <span class="app-alert-icon" aria-hidden="true"></span>
+    <div>
+      {% for error in form.non_field_errors %}
+        <div>{{ error }}</div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}

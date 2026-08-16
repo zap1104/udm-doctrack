@@ -139,17 +139,46 @@ class AddFilesForm(BootstrapFormMixin, forms.Form):
     files = MultipleFileField(label="Add more files")
 
 
+#: Month options for the repository filter. Written out rather than generated
+#: so the names do not follow the server's locale away from the rest of the UI.
+MONTH_CHOICES = [
+    ("", "All months"),
+    ("1", "January"), ("2", "February"), ("3", "March"), ("4", "April"),
+    ("5", "May"), ("6", "June"), ("7", "July"), ("8", "August"),
+    ("9", "September"), ("10", "October"), ("11", "November"), ("12", "December"),
+]
+
+
 class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
+    """Filters for the repository list.
+
+    `month` and `source` used to be hand-written `<select>` elements in the
+    template that no form declared and no view ever read. They submitted
+    happily and changed nothing, so picking "Archived" returned the same list
+    as before — a filter that lies is worse than no filter, because the reader
+    believes the result. They are real fields here, and the template renders
+    them from the form so a control cannot drift away from its handler again.
+    """
+
     q = forms.CharField(
         required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search metadata, tags, office or text…"})
     )
     year = forms.ChoiceField(required=False, label="", choices=[])
+    month = forms.ChoiceField(required=False, label="", choices=MONTH_CHOICES)
     document_type = forms.ModelChoiceField(
         required=False, label="", queryset=DocumentType.active.all(), empty_label="All types"
     )
     tag = forms.ModelChoiceField(required=False, label="", queryset=Tag.active.all(), empty_label="All tags")
+    # Named for what the repository actually stores. The old control offered
+    # "Completed / Archived / Historical upload", two of which described the
+    # same rows and none of which was a field on the model.
+    source = forms.ChoiceField(
+        required=False, label="", choices=[("", "Any origin")] + list(Source.choices)
+    )
 
     def __init__(self, *args, years=None, **kwargs):
         super().__init__(*args, **kwargs)
         year_choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]
         self.fields["year"].choices = year_choices
+        for name in ("year", "month", "document_type", "tag", "source"):
+            self.fields[name].widget.attrs.setdefault("aria-label", name.replace("_", " ") + " filter")

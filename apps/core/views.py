@@ -183,6 +183,24 @@ def _greeting() -> str:
 #: actually use, and it keeps every column chart to twelve readable bars.
 REPORT_MONTHS = 12
 
+#: Widest year a filter may name. Django's `__year` lookup builds real
+#: `datetime` objects for the range bounds, so a year outside what `datetime`
+#: can represent raises rather than matching nothing: `?year=10000` raised
+#: ValueError and `?year=99999999999999` raised OverflowError, each a 500 on a
+#: page any signed-in user can reach by editing the address bar. `isdigit()`
+#: alone does not bound anything — it is happy with fourteen digits.
+MIN_FILTER_YEAR, MAX_FILTER_YEAR = 1900, 2999
+
+
+def _filter_year(raw: str) -> int | None:
+    """A usable year from the query string, or None if it is not one."""
+    raw = (raw or "").strip()
+    if not raw.isdigit():
+        return None
+    value = int(raw)
+    return value if MIN_FILTER_YEAR <= value <= MAX_FILTER_YEAR else None
+
+
 def _percent(part: int, whole: int) -> int:
     return int(round(100 * part / whole)) if whole else 0
 
@@ -258,7 +276,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         office = None
         if params.get("office", "").isdigit():
             office = Office.objects.filter(pk=params["office"]).first()
-        year = int(params["year"]) if params.get("year", "").isdigit() else None
+        year = _filter_year(params.get("year", ""))
         status = params.get("status", "")
         if status not in dict(Status.choices) and status != "OVERDUE":
             status = ""

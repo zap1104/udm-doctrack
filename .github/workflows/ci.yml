@@ -50,6 +50,12 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      # Runs without Django, so it catches a broken template before anything
+      # else is set up. Not covered by the tests: a malformed tag renders as
+      # text on a page that still answers 200, so pytest sees nothing wrong.
+      - name: Check templates
+        run: python scripts/check_templates.py
+
       - name: Django system check
         run: python manage.py check
 

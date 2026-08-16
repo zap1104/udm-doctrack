@@ -63,10 +63,14 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 )
             if form.cleaned_data.get("year"):
                 documents = documents.filter(year=form.cleaned_data["year"])
+            if form.cleaned_data.get("month"):
+                documents = documents.filter(document_date__month=form.cleaned_data["month"])
             if form.cleaned_data.get("document_type"):
                 documents = documents.filter(document_type=form.cleaned_data["document_type"])
             if form.cleaned_data.get("tag"):
                 documents = documents.filter(tags=form.cleaned_data["tag"])
+            if form.cleaned_data.get("source"):
+                documents = documents.filter(source=form.cleaned_data["source"])
 
         documents = documents.distinct().order_by("-document_date", "-created_at")
         page = Paginator(documents, PAGE_SIZE).get_page(request.GET.get("page"))
@@ -364,9 +368,22 @@ class ReExtractView(OfficeAssignedMixin, View):
         from .extraction import extract_document_text
         from .models import OcrStatus
 
-        primary.file.open("rb")
-        result = extract_document_text(primary.file, primary.original_name)
-        primary.file.close()
+        # The download views already answer a vanished file with a 404; this one
+        # opened it bare, so a record whose file had gone missing from storage
+        # turned the button into a 500 instead of saying what was wrong.
+        try:
+            primary.file.open("rb")
+        except (FileNotFoundError, OSError):
+            messages.error(
+                request,
+                f"“{primary.original_name}” is missing from storage, so there is nothing to read. "
+                "Upload the file again to restore it.",
+            )
+            return redirect(document.get_absolute_url())
+        try:
+            result = extract_document_text(primary.file, primary.original_name)
+        finally:
+            primary.file.close()
         document.ocr_text = result.text
         document.ocr_status = getattr(OcrStatus, result.status, OcrStatus.EMPTY)
         document.ocr_engine = result.engine[:32]

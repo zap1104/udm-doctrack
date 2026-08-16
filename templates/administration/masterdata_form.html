@@ -7,7 +7,7 @@
   <p class="sub">{{ config.help }}</p>
 </div></div>
 <div class="row"><div class="col-lg-7"><div class="card-udm"><div class="card-udm-body">
-  <form method="post" novalidate>{% csrf_token %}
+  <form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
     {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
     <button class="btn btn-udm" type="submit">Save</button>
     <a class="btn btn-udm-outline" href="{% url 'core:masterdata_list' slug %}">Cancel</a>
