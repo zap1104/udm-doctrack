@@ -142,7 +142,7 @@ a:hover { text-decoration: underline; }
   color: rgba(205, 217, 232, 0.55); padding: 18px 12px 8px;
 }
 
-.app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
 
 .app-topbar {
   background: #fff;
@@ -332,7 +332,8 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow-card);
 }
 .doc-tile:hover { border-color: var(--udm-teal); }
-.doc-tile h3 { font-size: 15px; margin: 0; }
+.doc-tile h3 { font-size: 15px; margin: 0; overflow-wrap: anywhere; }
+.doc-tile .mono { white-space: normal; overflow-wrap: anywhere; }
 .doc-tile .meta { color: var(--udm-muted); font-size: 12.5px; }
 
 .empty-state { text-align: center; padding: 46px 20px; color: var(--udm-muted); }
@@ -811,7 +812,23 @@ body.sidebar-open { overflow:hidden; }
 .error-code { color:var(--udm-gold); font-family:"Aptos Display","Segoe UI",sans-serif; font-size:54px; font-weight:800; line-height:1; }
 .error-page h1 { margin:10px 0 6px; font-size:26px; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
-.table-responsive { scrollbar-width:thin; }
+.table-responsive { max-width: 100%; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.table-responsive > .table-udm { min-width: 720px; }
+.search-filters-card .card-udm-body { min-width: 0; }
+.search-query-card .form-control { min-width: 0; }
+.search-results-head { gap: 12px; }
+
+@media (max-width: 767.98px) {
+  .table-responsive > .table-udm { min-width: 660px; }
+  .search-results-head { align-items: flex-start !important; flex-direction: column; }
+  .search-filters-card .card-udm-body { padding-top: 14px; }
+}
+
+@media (max-width: 575.98px) {
+  .search-query-card .card-udm-body { padding: 13px; }
+  .search-date-range { margin-left: 0; margin-right: 0; }
+  .search-date-range > [class*="col-"] { padding-left: 0; padding-right: 0; }
+}
 @media (max-width:900px) {
   .app-shell { display:block; }
   .app-sidebar { position:fixed; top:0; bottom:0; left:0; z-index:1050; display:block; width:min(82vw,286px); height:100vh; padding:18px 14px; overflow-y:auto; transform:translateX(-105%); transition:transform 180ms ease; box-shadow:12px 0 32px rgba(6,28,52,.24); }

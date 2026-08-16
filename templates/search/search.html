@@ -11,7 +11,7 @@
 
 <form method="get">
   {% include "partials/_form_errors.html" %}
-  <div class="card-udm mb-4"><div class="card-udm-body">
+  <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
     <div class="row g-2">
       <div class="col-md-10">{{ form.q }}</div>
       <div class="col-md-2 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
@@ -21,7 +21,7 @@
 
   <div class="row g-4">
     <div class="col-lg-3">
-      <div class="card-udm">
+      <div class="card-udm search-filters-card">
         <div class="card-udm-head"><h2>Filters</h2></div>
         <div class="card-udm-body">
           {% include "partials/_field.html" with field=form.year %}
@@ -29,13 +29,13 @@
           {% include "partials/_field.html" with field=form.document_type %}
           {% include "partials/_field.html" with field=form.tag %}
           {% include "partials/_field.html" with field=form.source %}
-          <div class="row">
-            <div class="col-6">{% include "partials/_field.html" with field=form.date_from %}</div>
-            <div class="col-6">{% include "partials/_field.html" with field=form.date_to %}</div>
+          <div class="row g-2 search-date-range">
+            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_from %}</div>
+            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_to %}</div>
           </div>
 
           <label class="form-label" for="{{ form.min_relevance.id_for_label }}">
-            Minimum relevance: <span id="relevance-value">{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
+            Minimum relevance: <span id="relevance-value" data-relevance-value>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
           </label>
           {{ form.min_relevance }}
           <div class="form-check mt-2">
@@ -49,14 +49,14 @@
       </div>
 
       <div class="help-note mt-3">
-        75% is a <strong>display filter</strong>, not a universal truth. The percentage means
+        <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% is a <strong>display filter</strong>, not a universal truth. The percentage means
         “how well this record matches your words”, not “how accurate the system is”.
       </div>
     </div>
 
     <div class="col-lg-9">
       {% if has_searched %}
-        <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
           <div>
             <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
             {% if response.total_matches > response.results|length %}
@@ -70,7 +70,7 @@
         {% if response.hidden_count %}
           <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
             {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
-            {{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}% threshold.
+            <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
             Tick “Include results below the threshold” to see them.
           </div>
         {% endif %}

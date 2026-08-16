@@ -684,8 +684,15 @@
 
     var slider = document.getElementById(marker.dataset.searchRelevanceId || "");
     var readout = document.getElementById("relevance-value");
-    if (slider && readout) {
-      slider.addEventListener("input", function () { readout.textContent = slider.value; });
+    var thresholdLabels = document.querySelectorAll("[data-relevance-threshold]");
+    if (slider) {
+      var syncRelevanceReadout = function () {
+        if (readout) readout.textContent = slider.value;
+        thresholdLabels.forEach(function (label) { label.textContent = slider.value; });
+      };
+      syncRelevanceReadout();
+      slider.addEventListener("input", syncRelevanceReadout);
+      slider.addEventListener("change", syncRelevanceReadout);
     }
 
     var box = document.getElementById(marker.dataset.searchQueryId || "");

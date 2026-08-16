@@ -12,7 +12,7 @@
 
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
     <label class="visually-hidden" for="topbar-search-input">Search records</label>
-    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search records..." aria-label="Search records" autocomplete="off">
+    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search archive..." aria-label="Search the document archive" autocomplete="off">
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
@@ -31,7 +31,7 @@
         <li><hr class="dropdown-divider"></li>
         <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">My Profile</a></li>
         <li><a class="dropdown-item" href="{% url 'accounts:password_change' %}">Change Password</a></li>
-        {% if user.is_superuser %}<li><a class="dropdown-item" href="/django-admin/">Django Administration</a></li>{% endif %}
+        {% if user.is_superuser %}<li><a class="dropdown-item" href="{% url 'admin:index' %}">Django Administration</a></li>{% endif %}
         <li><hr class="dropdown-divider"></li>
         <li><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit" class="dropdown-item account-signout">Sign Out</button></form></li>
       </ul>
