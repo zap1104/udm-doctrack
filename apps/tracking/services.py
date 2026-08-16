@@ -74,6 +74,25 @@ def add_activity(record, event, message, *, actor=None, detail="", batch=None) -
 # ---------------------------------------------------------------------------
 # Create / attach
 # ---------------------------------------------------------------------------
+def _one_of(value, choices, field_name: str, default: str) -> str:
+    """Reject a code that is not on the model's own choice list.
+
+    `Model.objects.create()` does not check choices, so an unrecognised value is
+    stored happily and only shows itself later as a raw code where a label
+    should be — `get_priority_display()` echoing "HIGH" back at the reader
+    because HIGH was never a priority this system has. Catching it here means
+    the caller that got it wrong is the thing that fails, not the screen.
+    """
+    if not value:
+        return default
+    valid = {code for code, _label in choices}
+    if value not in valid:
+        raise ValidationError(
+            f"“{value}” is not a valid {field_name}. Choose one of: {', '.join(sorted(valid))}."
+        )
+    return value
+
+
 @transaction.atomic
 def create_draft_record(*, user, subject, instructions, document_type=None, remarks="",
                         classification=None, priority=None, due_at=None, originating_office=None,
@@ -86,8 +105,15 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         tracking_number=generate_tracking_number(office),
         subject=subject.strip(),
         document_type=document_type,
-        classification=classification or TrackingRecord.Classification.INTERNAL,
-        priority=priority or TrackingRecord.Priority.NORMAL,
+        classification=_one_of(
+            classification,
+            TrackingRecord.Classification.choices,
+            "classification",
+            TrackingRecord.Classification.INTERNAL,
+        ),
+        priority=_one_of(
+            priority, TrackingRecord.Priority.choices, "priority", TrackingRecord.Priority.NORMAL
+        ),
         requested_action=requested_action or "",
         originating_office=office,
         created_by=user,
@@ -135,6 +161,27 @@ def attach_files(record, files, *, user, note="", routing_step=None) -> list[Att
 # ---------------------------------------------------------------------------
 # Routing
 # ---------------------------------------------------------------------------
+def sending_office(record, user):
+    """Which office a forward or a return is actually leaving.
+
+    Not simply `user.office`. Ordinary staff can only act on a document their
+    own office has confirmed receipt of (see `TrackingRecord.can_user_act`), so
+    for them the two are always the same answer. A system administrator can act
+    for *any* office, and taking their own office there wrote a step claiming
+    the document left Records when it was in fact sitting in Supply — a false
+    entry in the one history this system exists to keep honest, and it moved
+    `current_office` to the administrator's office as a side effect.
+
+    An administrator with no office at all was worse still: `from_office` came
+    out None, which erased the record's location entirely (the Outgoing queue
+    joins on it) and slipped past the guard that stops a document being sent to
+    the office already holding it.
+    """
+    if user.office_id and record.has_custody(user.office):
+        return user.office
+    return record.current_office or user.office
+
+
 @transaction.atomic
 def route_record(record, offices, *, user, instructions="", action=RoutingStep.Action.SEND,
                  due_days=None, due_at=_UNSET, remark="") -> list[RoutingStep]:
@@ -150,17 +197,27 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     if record.status == Status.COMPLETED:
         raise ValidationError("This record is completed. Reopen it before routing again.")
 
-    from_office = user.office if action != RoutingStep.Action.SEND else record.originating_office
-    if action == RoutingStep.Action.SEND and record.status != Status.DRAFT:
-        raise ValidationError("Only a draft can be sent for the first time.")
+    if action == RoutingStep.Action.SEND:
+        if record.status != Status.DRAFT:
+            raise ValidationError("Only a draft can be sent for the first time.")
+        from_office = record.originating_office
+    else:
+        from_office = sending_office(record, user)
+
+    if from_office is None:
+        raise ValidationError(
+            "This record has no office to send it from. Assign the acting user to an office, "
+            "or have the office currently holding the document route it."
+        )
 
     # Guard against a step whose from_office and to_office are the same office.
     # This used to fire only when the sender was the *sole* recipient, so
     # picking "own office + another office" slipped through and wrote a
     # self-addressed step: the office then sat in its own inbox waiting to
-    # receive a document it had never let go of.
-    from_office_pk = getattr(from_office, "pk", None)
-    if from_office_pk is not None and any(office.pk == from_office_pk for office in offices):
+    # receive a document it had never let go of. It also used to be skipped
+    # entirely whenever from_office came out None, which is precisely when the
+    # sender was unknown and the guard was needed most.
+    if any(office.pk == from_office.pk for office in offices):
         raise ValidationError("A document cannot be routed to the office that is sending it.")
 
     batch = (record.routing_steps.aggregate(value=Max("batch"))["value"] or 0) + 1

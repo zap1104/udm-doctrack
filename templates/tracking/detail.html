@@ -189,6 +189,14 @@
               <form method="post" action="{% url 'tracking:complete' record.pk %}">
                 {% csrf_token %}
                 {% include "partials/_field.html" with field=complete_form.note %}
+                {% comment %}
+                  This checkbox was missing, so CompleteRecordView's archiving
+                  branch could never run: the field defaults to on, but an
+                  unrendered checkbox simply is not posted, which reads as off.
+                  Completing a record left it out of Document Management until
+                  somebody noticed the separate Archive button underneath.
+                {% endcomment %}
+                {% include "partials/_field.html" with field=complete_form.archive_now %}
                 <button class="btn btn-udm-teal" type="submit">Mark as Completed</button>
               </form>
             </div>

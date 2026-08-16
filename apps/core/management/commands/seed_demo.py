@@ -22,7 +22,7 @@ from django.utils import timezone
 from apps.accounts.models import Office
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag, TagRule
 from apps.documents.models import Document
-from apps.documents.services import archive_tracking_record
+from apps.documents.services import archive_tracking_record, set_tags
 from apps.tracking import services as tracking_services
 from apps.tracking.models import RoutingStep, TrackingRecord
 
@@ -96,11 +96,15 @@ USERS = [
     ("lnd.staff", "Paolo", "Mercado", "LND", "USER", "Training Specialist", False),
 ]
 
+# The last column is a TrackingRecord.Priority code. There are only two —
+# NORMAL and URGENT. "HIGH" used to appear here and was stored verbatim,
+# because Model.objects.create() does not police choices; the record page then
+# showed the raw code "HIGH" where a priority label belongs.
 SAMPLE_RECORDS = [
     ("MED", ["SUP", "PROC"], "MEMO", "Request for replenishment of electrical and plumbing supplies",
      "Please act within three days. Attach the current inventory count.", "URGENT"),
     ("SEC", ["OVPA"], "REPORT", "Incident report — gate 2 CCTV outage, 28 July 2026",
-     "For information and appropriate instruction.", "HIGH"),
+     "For information and appropriate instruction.", "URGENT"),
     ("HR", ["PAY"], "MEMO", "Submission of overtime summary for July 2026 payroll",
      "Kindly reconcile with the DTR before processing.", "NORMAL"),
     ("PROC", ["SUP", "OVPA"], "PR", "Purchase request for 20 units of office chairs",
@@ -108,7 +112,7 @@ SAMPLE_RECORDS = [
     ("LND", ["HR", "OVPA"], "NOTICE", "Notice of in-service training for administrative staff",
      "Please confirm the list of participants per office.", "NORMAL"),
     ("SUP", ["MED"], "WO", "Work order — repair of air-conditioning unit at the registrar office",
-     "Scheduled inspection on Thursday. Coordinate with maintenance.", "HIGH"),
+     "Scheduled inspection on Thursday. Coordinate with maintenance.", "URGENT"),
     ("PAY", ["OVPA"], "VOUCHER", "Disbursement voucher for honoraria of part-time lecturers",
      "For review and signature.", "NORMAL"),
     ("REC", ["HR", "MED", "SEC"], "MEMO", "Reminder on records disposal schedule and retention periods",
@@ -177,7 +181,7 @@ class Command(BaseCommand):
             with transaction.atomic():
                 self._records(offices, types, users)
             with transaction.atomic():
-                self._archive(offices, types, tags, users)
+                self._archive(offices, types, users)
         except Exception as exc:
             self.stderr.write("")
             self.stderr.write(self.style.ERROR(f"Sample records could not be created: {exc}"))
@@ -365,7 +369,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Tracking records: {created}")
 
-    def _archive(self, offices, types, tags, users):
+    def _archive(self, offices, types, users):
         created = 0
         for office_code, type_code, title, year, description, tag_names in ARCHIVE_DOCUMENTS:
             if Document.objects.filter(title=title).exists():
@@ -381,7 +385,12 @@ class Command(BaseCommand):
                 ocr_status="SKIPPED",
                 ocr_text=f"{title}. {description}",
             )
-            document.tags.set([tags[name] for name in tag_names if name in tags])
+            # set_tags(), not document.tags.set(): the helper is what keeps
+            # Tag.usage_count in step. Assigning the m2m directly left every
+            # seeded tag on zero, and the repository's popular-tags panel only
+            # lists tags with a count above zero — so a freshly seeded demo
+            # showed an empty panel next to five tagged documents.
+            set_tags(document, tag_names, user=users.get("records"))
             document.rebuild_index()
             created += 1
         self.stdout.write(f"Archived documents: {created}")
