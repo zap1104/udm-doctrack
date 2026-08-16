@@ -48,7 +48,7 @@ Click **Create & route**.
 
 ## 3. The critical distinction (90 seconds) — *the heart of the demo*
 
-Stay on the detail page and point at the status pill: **In transit**.
+Stay on the detail page and point at the status pill: **Pending receipt**.
 
 > "This document has been sent. It has not been received. Those are different facts, and most logbooks cannot tell them apart."
 

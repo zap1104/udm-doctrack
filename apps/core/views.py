@@ -36,7 +36,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
 
         inbox = tracking_services.inbox_for(user)
         custody = tracking_services.in_custody_for(user)
-        in_transit = tracking_services.in_transit_from(user)
+        outgoing = tracking_services.outgoing_for(user)
         overdue = tracking_services.overdue_for(user)
 
         attention = list(inbox[:5])
@@ -82,7 +82,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
                 "inbox_count": inbox.count(),
                 "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
                 "custody_count": custody.count(),
-                "outgoing_count": in_transit.count(),
+                "outgoing_count": outgoing.count(),
                 "overdue_count": overdue.count(),
                 "attention_records": attention,
                 "recent_records": recent,

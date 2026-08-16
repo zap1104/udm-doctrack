@@ -22,8 +22,8 @@ def routed_record(users, offices, memo_type):
 
 
 @pytest.mark.django_db
-def test_routing_puts_the_record_in_transit_not_received(routed_record):
-    assert routed_record.status == "IN_TRANSIT"
+def test_routing_leaves_the_record_pending_receipt_not_received(routed_record):
+    assert routed_record.status == "PENDING_RECEIPT"
     assert routed_record.current_office is None or routed_record.current_office.code != "SUP"
     assert routed_record.routing_steps.filter(received_at__isnull=True).count() == 1
 

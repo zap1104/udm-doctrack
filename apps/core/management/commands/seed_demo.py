@@ -363,7 +363,7 @@ class Command(BaseCommand):
             created += 1
 
         # One deliberately overdue item so the red card on the dashboard is real.
-        overdue = TrackingRecord.objects.filter(status="IN_TRANSIT").order_by("created_at").first()
+        overdue = TrackingRecord.objects.filter(status="PENDING_RECEIPT").order_by("created_at").first()
         if overdue:
             TrackingRecord.objects.filter(pk=overdue.pk).update(due_at=now - timedelta(days=2))
 

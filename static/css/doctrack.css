@@ -226,7 +226,7 @@ a:hover { text-decoration: underline; }
 }
 .pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-transit   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
+.pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-forwarded { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-returned  { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
@@ -549,7 +549,7 @@ a:hover { text-decoration: underline; }
 .routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
-   nowrap by default, so a long status ("IN TRANSIT", "IN PROCESS",
+   nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
    "FORWARDED") ran past the column and was clipped at the paper's edge —
    printed slips came out reading "FORWARDE". Let it wrap and shrink to the
    column instead of overflowing it. */

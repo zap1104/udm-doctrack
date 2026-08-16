@@ -11,6 +11,7 @@ from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType
 
 from .models import (
+    ACTIVE_STATUSES,
     MAX_INSTRUCTIONS_CHARS,
     MAX_NOTE_CHARS,
     MAX_REMARK_CHARS,
@@ -355,7 +356,13 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     status = forms.ChoiceField(
         required=False,
         label="",
-        choices=[("", "All statuses"), ("OVERDUE", "Overdue")] + list(Status.choices),
+        # Only the statuses this page can actually show. The list used to be
+        # every status there is, so "Completed" sat in the dropdown of a page
+        # that shows active records only — picking it always returned nothing,
+        # which reads as "there are none" rather than "they are not kept here".
+        # Derived from ACTIVE_STATUSES so the two cannot drift apart again.
+        choices=[("", "All statuses"), ("OVERDUE", "Overdue")]
+        + [(value, label) for value, label in Status.choices if value in ACTIVE_STATUSES],
     )
     office = forms.ModelChoiceField(
         required=False, label="", queryset=Office.active.all(), empty_label="All offices"
@@ -366,7 +373,7 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         choices=[
             ("", "All I can see"),
             ("inbox", "Waiting for my receipt"),
-            ("awaiting", "Awaiting receipt"),
+            ("awaiting", "Awaiting anyone's receipt"),
             ("custody", "In my office"),
             ("sent", "Sent by my office"),
             ("mine", "Created by me"),

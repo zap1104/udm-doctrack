@@ -24,7 +24,7 @@ PALETTE = {
 #: Kept in step with STATUS_PILL in apps/core/templatetags/doctrack.py.
 STATUS_COLOUR_KEYS = {
     "DRAFT": "muted",
-    "IN_TRANSIT": "gold",
+    "PENDING_RECEIPT": "gold",
     "FORWARDED": "gold",
     "RETURNED": "gold",
     "RECEIVED": "green",

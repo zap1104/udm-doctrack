@@ -28,7 +28,11 @@ def attachment_upload_path(instance, filename: str) -> str:
 
 class Status(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
-    IN_TRANSIT = "IN_TRANSIT", "In transit"
+    #: Sent for the first time and nobody has confirmed it yet. Named for what
+    #: the reader needs to do about it — somebody owes a receipt — rather than
+    #: for where the paper is, which "In transit" described and which no office
+    #: can act on. FORWARDED and RETURNED are the same wait after a later hop.
+    PENDING_RECEIPT = "PENDING_RECEIPT", "Pending receipt"
     RECEIVED = "RECEIVED", "Received"
     IN_PROCESS = "IN_PROCESS", "In process"
     FORWARDED = "FORWARDED", "Forwarded"
@@ -50,11 +54,11 @@ MAX_NOTE_CHARS = 2000
 MAX_INSTRUCTIONS_CHARS = 5000
 
 #: Statuses where a receiving office still has to press "Confirm receipt".
-AWAITING_RECEIPT_STATUSES = {Status.IN_TRANSIT, Status.FORWARDED, Status.RETURNED}
+AWAITING_RECEIPT_STATUSES = {Status.PENDING_RECEIPT, Status.FORWARDED, Status.RETURNED}
 #: Statuses that belong in the Tracking module (Completed records move to Documents).
 ACTIVE_STATUSES = {
     Status.DRAFT,
-    Status.IN_TRANSIT,
+    Status.PENDING_RECEIPT,
     Status.RECEIVED,
     Status.IN_PROCESS,
     Status.FORWARDED,
@@ -334,7 +338,7 @@ class TrackingRecord(TimeStampedModel):
                 self.status = {
                     RoutingStep.Action.FORWARD: Status.FORWARDED,
                     RoutingStep.Action.RETURN: Status.RETURNED,
-                }.get(action, Status.IN_TRANSIT)
+                }.get(action, Status.PENDING_RECEIPT)
                 # Nothing has been received in this batch yet, so the document
                 # has not actually left where it last had confirmed custody —
                 # `from_office` (the originating office on a first send, or the

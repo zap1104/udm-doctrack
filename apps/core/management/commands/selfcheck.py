@@ -178,13 +178,13 @@ class Command(BaseCommand):
             ),
         )
 
-        def check_in_transit():
+        def check_pending_receipt():
             record.refresh_from_db()
-            if record.status != "IN_TRANSIT":
-                raise RuntimeError(f"Expected IN_TRANSIT after routing, got {record.status}")
+            if record.status != "PENDING_RECEIPT":
+                raise RuntimeError(f"Expected PENDING_RECEIPT after routing, got {record.status}")
             return True
 
-        self.step("Status is In transit — sending is not receiving", check_in_transit)
+        self.step("Status is Pending receipt — sending is not receiving", check_pending_receipt)
 
         def check_inbox():
             inbox = services.inbox_for(receiver)

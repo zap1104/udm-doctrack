@@ -258,7 +258,7 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
         # transition out of DRAFT we need it to compute — so it is cleared
         # here first. The value is a placeholder; recalculate_status()
         # immediately below computes the real one from the routing steps.
-        record.status = Status.IN_TRANSIT
+        record.status = Status.PENDING_RECEIPT
     record.save(update_fields=["current_batch", "due_at", "last_movement_at", "status", "updated_at"])
     # recalculate_status() is the single source of truth for status,
     # current_office and current_holder — computing them again here
@@ -457,8 +457,14 @@ def in_custody_for(user):
     )
 
 
-def in_transit_from(user):
-    """Documents this office sent that nobody has confirmed yet."""
+def outgoing_for(user):
+    """Documents this office sent that nobody has confirmed yet.
+
+    Named for the queue it fills ("Outgoing") rather than for the status the
+    records carry, which is what `in_transit_from` used to do — the status is
+    called Pending receipt now, and the phrase "in transit" is no longer
+    vocabulary this system uses anywhere a reader can see.
+    """
     if not user.is_authenticated or not user.office_id:
         return TrackingRecord.objects.none()
     return (
@@ -533,22 +539,28 @@ def apply_scope(records, scope, user):
 def awaiting_receipt(records, user):
     """Documents somebody still has to confirm receipt of.
 
-    For records personnel and administrators this means *anywhere* they are
-    allowed to see, because overseeing traffic between offices is their job —
-    scoping it to their own office showed an administrator an empty queue while
-    dozens of documents sat unconfirmed elsewhere.
+    One definition for everybody: anything the user can see that still has an
+    unconfirmed recipient in its current batch. `visible_to` has already
+    narrowed the set to records their office actually touched, so this needs no
+    role split of its own.
 
-    An ordinary office user has no such oversight, so for them the only
-    meaningful answer is their own inbox.
+    It used to have one, and that is what made this queue useless for most
+    people: ordinary users were quietly redirected to their own inbox, so
+    "Pending Receipt" returned exactly the same rows as "Incoming" and the two
+    links sat next to each other doing the same thing. The office waiting on a
+    document it *sent* could not see that it was still unconfirmed — which is
+    the one question this queue exists to answer.
+
+    Broader than filtering on AWAITING_RECEIPT_STATUSES, deliberately: when a
+    batch goes to several offices and only one confirms, the record reads
+    RECEIVED while a recipient still owes a receipt. That record belongs here.
     """
     if not user.is_authenticated:
         return records.none()
-    if user.is_records_staff:
-        return records.filter(
-            routing_steps__received_at__isnull=True,
-            routing_steps__batch=F("current_batch"),
-        )
-    return apply_scope(records, SCOPE_INBOX, user)
+    return records.filter(
+        routing_steps__received_at__isnull=True,
+        routing_steps__batch=F("current_batch"),
+    ).exclude(status=Status.COMPLETED)
 
 
 def annotate_can_confirm(records, user) -> None:

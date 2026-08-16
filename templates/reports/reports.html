@@ -51,7 +51,7 @@
         <label class="form-label" for="report-status">Status</label>
         <select class="form-select" id="report-status" name="status">
           <option value="">All statuses</option>
-          <option value="IN_TRANSIT" {% if filters.status == "IN_TRANSIT" %}selected{% endif %}>In transit</option>
+          <option value="PENDING_RECEIPT" {% if filters.status == "PENDING_RECEIPT" %}selected{% endif %}>Pending receipt</option>
           <option value="RECEIVED" {% if filters.status == "RECEIVED" %}selected{% endif %}>Received</option>
           <option value="IN_PROCESS" {% if filters.status == "IN_PROCESS" %}selected{% endif %}>In process</option>
           <option value="COMPLETED" {% if filters.status == "COMPLETED" %}selected{% endif %}>Completed</option>
@@ -204,8 +204,9 @@
         <div class="card-udm-body">
           {% comment %}
             One labelled bar per status rather than a single stacked bar. The
-            statuses share colours by design — "in transit", "forwarded" and
-            "returned" are all the same gold pill everywhere else in the app —
+            statuses share colours by design — "pending receipt", "forwarded"
+            and "returned" are all the same gold pill everywhere else in the
+            app, because all three mean the same wait —
             so segments of one stack could not be told apart. Giving each its
             own row makes the pill the identity channel and leaves colour as
             reinforcement.
