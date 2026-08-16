@@ -3,13 +3,21 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 
 from django import forms
+from django.core.validators import MaxLengthValidator
 from django.utils import timezone
 
 from apps.accounts.models import Office, User
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType
 
-from .models import RoutingStep, Status, TrackingRecord
+from .models import (
+    MAX_INSTRUCTIONS_CHARS,
+    MAX_NOTE_CHARS,
+    MAX_REMARK_CHARS,
+    RoutingStep,
+    Status,
+    TrackingRecord,
+)
 
 #: How far ahead a deadline may be set. A date beyond this is almost always a
 #: typo in the year ("2027" for "2026"), and a deadline nobody will ever chase
@@ -22,6 +30,20 @@ DEADLINE_CHOICES = [
     (DEADLINE_NONE, "No deadline — the receiving office acts at its own pace"),
     (DEADLINE_DATE, "Set a deadline date"),
 ]
+
+
+def cap_textarea(field, limit: int) -> None:
+    """Put a character ceiling on a field Django built from a model TextField.
+
+    A TextField has no max_length, so the form field arrives with no validator
+    and no maxlength attribute. Assigning `.max_length` on its own changes
+    neither: CharField adds the validator in its constructor and the attribute
+    in widget_attrs(), both long finished by the time a ModelForm hands the
+    field over. All three have to be set together.
+    """
+    field.max_length = limit
+    field.validators.append(MaxLengthValidator(limit))
+    field.widget.attrs["maxlength"] = str(limit)
 
 
 def deadline_choice_field():
@@ -156,6 +178,11 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
         self.fields["document_type"].queryset = DocumentType.active.all()
         self.fields["document_type"].empty_label = "Not specified"
         self.fields["instructions"].required = True
+        # route_record() copies this onto every RoutingStep, where it is cut to
+        # MAX_INSTRUCTIONS_CHARS. Capping the box at the same number stops the
+        # record and its own routing slip quietly disagreeing about what the
+        # instructions were.
+        cap_textarea(self.fields["instructions"], MAX_INSTRUCTIONS_CHARS)
         self.fields["requested_action"].widget.choices = [
             ("", "Select the requested action")
         ] + list(TrackingRecord.RequestedAction.choices)
@@ -236,6 +263,7 @@ class RouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
     # no separate remark is given.
     instructions = forms.CharField(
         label="Instructions / Remarks",
+        max_length=MAX_INSTRUCTIONS_CHARS,
         widget=forms.Textarea(attrs={"rows": 4, "placeholder": "For appropriate action"}),
         required=False,
     )
@@ -275,13 +303,18 @@ class ConfirmReceiptForm(BootstrapFormMixin, forms.Form):
     note = forms.CharField(
         label="Receipt note (optional)",
         required=False,
+        max_length=MAX_NOTE_CHARS,
         widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Add a note for the sender"}),
     )
 
 
 class RemarkForm(BootstrapFormMixin, forms.Form):
+    # A remark goes into the timeline, which is read as a running account of
+    # what each office did. Without a ceiling it accepted a pasted document,
+    # and the page it lands on has to render every remark ever added.
     remark = forms.CharField(
         label="Remark",
+        max_length=MAX_REMARK_CHARS,
         widget=forms.Textarea(attrs={"rows": 3, "placeholder": "What action did your office take?"}),
     )
     attachments = MultipleFileField(required=False, label="Attach files")
@@ -291,6 +324,7 @@ class CompleteForm(BootstrapFormMixin, forms.Form):
     note = forms.CharField(
         label="Completion note",
         required=False,
+        max_length=MAX_NOTE_CHARS,
         widget=forms.Textarea(attrs={"rows": 3, "placeholder": "How was the document resolved?"}),
     )
     archive_now = forms.BooleanField(

@@ -386,6 +386,39 @@
   })();
 
   /* ----------------------------------------------------------------------
+     Character counter for any textarea that carries a maxlength.
+
+     The browser silently refuses the keystroke past the limit, which reads as
+     a broken keyboard if nothing on screen says why. Driven off the attribute
+     rather than a list of field names, so a box gains a counter the moment its
+     form field gains a ceiling.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("textarea[maxlength]").forEach(function (box) {
+    var limit = parseInt(box.getAttribute("maxlength"), 10);
+    if (!limit) return;
+
+    var readout = document.createElement("div");
+    readout.className = "char-count";
+    /* Announced only when it starts mattering, not on every keystroke. */
+    readout.setAttribute("aria-live", "polite");
+    box.insertAdjacentElement("afterend", readout);
+
+    function update() {
+      var used = box.value.length;
+      var left = limit - used;
+      readout.textContent = used + " / " + limit;
+      readout.classList.toggle("is-near", left <= limit * 0.1 && left > 0);
+      readout.classList.toggle("is-full", left <= 0);
+      readout.textContent = left <= 0
+        ? limit + " / " + limit + " — limit reached"
+        : used + " / " + limit;
+    }
+
+    box.addEventListener("input", update);
+    update();
+  });
+
+  /* ----------------------------------------------------------------------
      Folded history (<details class="fold">).
 
      The markup ships open, so with this script blocked the whole record is

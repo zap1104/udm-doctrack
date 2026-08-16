@@ -20,6 +20,9 @@ from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
     ACTIVE_STATUSES,
+    MAX_INSTRUCTIONS_CHARS,
+    MAX_NOTE_CHARS,
+    MAX_REMARK_CHARS,
     Attachment,
     RecordAccessGrant,
     RecordActivity,
@@ -239,7 +242,7 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
                 from_office=from_office,
                 to_office=office,
                 sent_by=user,
-                instructions=(instructions or record.instructions)[:5000],
+                instructions=(instructions or record.instructions)[:MAX_INSTRUCTIONS_CHARS],
                 due_at=due_at,
             )
         )
@@ -302,7 +305,7 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
 
     step.received_by = user
     step.received_at = timezone.now()
-    step.receipt_note = (note or "")[:2000]
+    step.receipt_note = (note or "")[:MAX_NOTE_CHARS]
     step.save(update_fields=["received_by", "received_at", "receipt_note"])
 
     if record.first_received_at is None:
@@ -332,6 +335,11 @@ def add_remark(record, *, user, remark) -> RecordActivity:
     remark = (remark or "").strip()
     if not remark:
         raise ValidationError("Write the remark before saving.")
+    # Backstop for callers that are not RemarkForm — seed data, the self check,
+    # anything added later. The detail column is a TextField, so without this a
+    # remark had no ceiling at all and a pasted document would be replayed on
+    # the record page for the rest of the record's life.
+    remark = remark[:MAX_REMARK_CHARS]
     activity = add_activity(
         record, RecordActivity.Event.REMARK, f"{user.display_name} added a remark", actor=user, detail=remark
     )
@@ -353,7 +361,7 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
     record.status = Status.COMPLETED
     record.completed_at = timezone.now()
     record.completed_by = user
-    record.completion_note = (note or "")[:2000]
+    record.completion_note = (note or "")[:MAX_NOTE_CHARS]
     record.last_movement_at = record.completed_at
     record.save(
         update_fields=[

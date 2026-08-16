@@ -1165,6 +1165,23 @@ body.sidebar-open { overflow:hidden; }
 
 @media print { .session-dialog { display: none !important; } }
 
+/* --- Text boxes -----------------------------------------------------------
+   Vertical resize only. A textarea is resizable in both directions by default,
+   and dragging one wider pushed it straight out of its card and gave the page
+   a horizontal scrollbar — the same failure as an unbreakable filename, just
+   user-driven. Height stays adjustable, which is the useful half. */
+.form-control,
+textarea.form-control { max-width: 100%; }
+textarea.form-control { resize: vertical; min-height: 64px; }
+
+.char-count {
+  margin-top: 4px; color: var(--udm-muted); font-size: 12px;
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.char-count.is-near { color: #8a6a12; }
+.char-count.is-full { color: var(--udm-red); font-weight: 600; }
+@media print { .char-count { display: none !important; } }
+
 /* --- Folded history -------------------------------------------------------
    Native <details>, so it works with the keyboard, is announced properly, and
    needs no JavaScript to open. doctrack.js closes it on load when the list is

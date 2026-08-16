@@ -36,6 +36,19 @@ class Status(models.TextChoices):
     COMPLETED = "COMPLETED", "Completed"
 
 
+#: Ceilings for the free-text boxes, shared by the forms and the services so
+#: the two cannot disagree.
+#:
+#: They existed only in the service layer before, as bare slices — a note longer
+#: than the ceiling was quietly cut down on save with nothing said, which in an
+#: append-only record is silent data loss on a note somebody meant to keep. The
+#: forms now carry the same numbers, so the limit is announced in the box, the
+#: browser stops the typing, and the server answers with an error instead of
+#: with scissors. The slices stay as a backstop for callers that are not forms.
+MAX_REMARK_CHARS = 2000
+MAX_NOTE_CHARS = 2000
+MAX_INSTRUCTIONS_CHARS = 5000
+
 #: Statuses where a receiving office still has to press "Confirm receipt".
 AWAITING_RECEIPT_STATUSES = {Status.IN_TRANSIT, Status.FORWARDED, Status.RETURNED}
 #: Statuses that belong in the Tracking module (Completed records move to Documents).
