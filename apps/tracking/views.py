@@ -109,7 +109,9 @@ class RecordListView(AppLoginRequiredMixin, View):
                 # .count() again would run the same DISTINCT-over-joins query
                 # a second time on every page load.
                 "total": page.paginator.count,
-                "querystring": request.GET.urlencode(),
+                # No "querystring" here any more: the pagination partial reads
+                # request.GET itself, which is what stopped one page's links
+                # carrying another page's filters (or none at all).
             },
         )
 

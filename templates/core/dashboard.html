@@ -173,7 +173,7 @@
           <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
             <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
             <div class="text-muted" style="font-size:12.5px;">
-              {{ document.office.code }} · {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|date:"d M Y"|default:document.created_at|date:"d M Y" }}
+              {{ document.office.code }} · {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
             </div>
           </div>
         {% empty %}

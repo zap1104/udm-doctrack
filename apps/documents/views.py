@@ -82,7 +82,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "documents": page.object_list,
                 "smart_folders": smart_folders,
                 "selected_office": selected_office,
-                "total": documents.count(),
+                # The paginator has already counted this queryset; .count()
+                # would run the same DISTINCT-over-joins query a second time on
+                # every page load.
+                "total": page.paginator.count,
                 "all_count": visible.count(),
                 "years": years,
                 "popular_tags": Tag.active.filter(usage_count__gt=0).order_by("-usage_count")[:12],

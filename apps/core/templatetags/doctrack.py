@@ -3,11 +3,38 @@
 from __future__ import annotations
 
 from django import template
+from django.http import QueryDict
 from django.utils.safestring import mark_safe
 
 from apps.core.utils import human_size as _human_size
 
 register = template.Library()
+
+
+@register.simple_tag(takes_context=True)
+def pagination_url(context, page_number) -> str:
+    """A link to `page_number` that keeps the current filters and nothing else.
+
+    The pagination partial used to build this by hand as
+    `?page=N&{{ request.GET.urlencode }}`, which broke twice over:
+
+    * On any page but the first, `request.GET` already contained `page`, so the
+      link came out `?page=3&page=2`. A QueryDict yields the *last* value for a
+      repeated key, so Next served page 2 again — once you reached page two of
+      Tracking you could not leave it.
+    * The Repository page never passed the querystring in at all, so its links
+      were a bare `?page=N` and paging through a filtered result silently threw
+      the filters away.
+
+    Copying the real query and *assigning* page fixes both: assignment replaces
+    the key rather than appending to it, and every other parameter rides along.
+    The return value is escaped by the template engine, which is what turns the
+    separators into `&amp;` for the href.
+    """
+    request = context.get("request")
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    params["page"] = page_number
+    return f"?{params.urlencode()}"
 
 STATUS_PILL = {
     "DRAFT": "pill-draft",
