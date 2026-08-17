@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -512,8 +513,9 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 # check rather than assuming there is one.
                 "print_reference": entry.pk if getattr(entry, "pk", None) else None,
                 "qr_svg": qr_svg(
-                    record.tracking_number,
-                    label=f"QR code for tracking number {record.tracking_number}",
+                    f"{settings.SITE_BASE_URL}{record.get_absolute_url()}" if settings.SITE_BASE_URL
+                    else request.build_absolute_uri(record.get_absolute_url()),
+                    label=f"QR code for {record.tracking_number}",
                 ),
             },
         )
@@ -532,6 +534,8 @@ class AttachmentDownloadView(AppLoginRequiredMixin, View):
             request=request,
         )
         try:
-            return FileResponse(attachment.file.open("rb"), as_attachment=True, filename=attachment.original_name)
+            response = FileResponse(attachment.file.open("rb"), as_attachment=True, filename=attachment.original_name)
+            response["X-Content-Type-Options"] = "nosniff"
+            return response
         except FileNotFoundError as exc:
             raise Http404("The file is missing from storage.") from exc

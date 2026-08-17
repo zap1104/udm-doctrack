@@ -6,6 +6,7 @@ import hashlib
 import os
 import re
 import unicodedata
+import zipfile
 from datetime import date, datetime
 from functools import lru_cache
 
@@ -84,7 +85,7 @@ def file_extension(filename: str) -> str:
 
 
 def validate_upload(uploaded_file) -> None:
-    """Extension + size validation shared by every upload form."""
+    """Validate extension, size, and a small pure-Python content signature."""
     extension = file_extension(getattr(uploaded_file, "name", ""))
     allowed = [item.lower() for item in settings.ALLOWED_UPLOAD_EXTENSIONS]
     if extension not in allowed:
@@ -96,6 +97,51 @@ def validate_upload(uploaded_file) -> None:
         raise ValidationError(
             f"“{uploaded_file.name}” is {human_size(uploaded_file.size)}. "
             f"The limit is {settings.MAX_UPLOAD_MB} MB per file."
+        )
+    position = uploaded_file.tell() if hasattr(uploaded_file, "tell") else 0
+    try:
+        uploaded_file.seek(0)
+        head = uploaded_file.read(16)
+        uploaded_file.seek(0)
+        payload = uploaded_file.read(4096)
+    finally:
+        try:
+            uploaded_file.seek(position)
+        except Exception:
+            pass
+    signatures = {
+        "pdf": head.startswith(b"%PDF-"),
+        "jpg": head.startswith(b"\xff\xd8\xff"), "jpeg": head.startswith(b"\xff\xd8\xff"),
+        "png": head.startswith(b"\x89PNG\r\n\x1a\n"),
+        "gif": head.startswith((b"GIF87a", b"GIF89a")),
+        "bmp": head.startswith(b"BM"),
+        "tif": head.startswith((b"II*\x00", b"MM\x00*")),
+        "tiff": head.startswith((b"II*\x00", b"MM\x00*")),
+        "doc": head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"),
+        "xls": head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"),
+        "ppt": head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"),
+    }
+    zip_types = {"docx": "word/", "dotx": "word/", "xlsx": "xl/", "xlsm": "xl/", "pptx": "ppt/"}
+    if extension in zip_types:
+        try:
+            uploaded_file.seek(0)
+            with zipfile.ZipFile(uploaded_file) as archive:
+                names = set(archive.namelist())
+                valid = "[Content_Types].xml" in names and any(name.startswith(zip_types[extension]) for name in names)
+        except (OSError, zipfile.BadZipFile):
+            valid = False
+        finally:
+            uploaded_file.seek(position)
+        signatures[extension] = valid
+    elif extension in {"txt", "csv", "md", "log"}:
+        # Text formats have no fixed magic bytes. Reject obvious HTML payloads
+        # so a renamed script cannot enter the repository as a text document.
+        decoded = payload.decode("utf-8", errors="ignore").lstrip().lower()
+        signatures[extension] = not (decoded.startswith("<html") or "<script" in decoded[:4096])
+    if extension in signatures and not signatures[extension]:
+        raise ValidationError(
+            f"The contents of “{uploaded_file.name}” do not match its .{extension} extension. "
+            "Rename the file only after saving it in the correct format."
         )
 
 

@@ -15,7 +15,8 @@ from django.db import transaction
 from django.db.models import F, Max
 from django.utils import timezone
 
-from apps.core.models import AuditLog
+from apps.core.models import AuditLog, Notification
+from apps.core.notifications import notify_office
 from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
@@ -286,6 +287,12 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
         target=record,
         extra={"offices": office_labels, "action": action},
     )
+    for office in offices:
+        notify_office(
+            office, kind="ROUTED", title="A document is waiting for your office",
+            message=f"{record.tracking_number} was routed to {office.name}.",
+            url=record.get_absolute_url(), tracking_record=record,
+        )
     return steps
 
 
@@ -326,6 +333,14 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
         f"{user.office.code} confirmed receipt of {record.tracking_number}",
         actor=user,
         target=record,
+    )
+    Notification.objects.filter(
+        tracking_record=record, office_id=user.office_id, kind="ROUTED", resolved_at__isnull=True
+    ).update(resolved_at=timezone.now())
+    notify_office(
+        step.from_office, kind="RECEIVED", title="A document you sent was received",
+        message=f"{record.tracking_number} was received by {user.office.name}.",
+        url=record.get_absolute_url(), tracking_record=record,
     )
     return step
 
@@ -376,6 +391,11 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
         detail=note or "",
     )
     log_action(AuditLog.Action.COMPLETE, f"Completed {record.tracking_number}", actor=user, target=record)
+    notify_office(
+        record.originating_office, kind="COMPLETED", title="A document you originated is complete",
+        message=f"{record.tracking_number} has been marked completed.",
+        url=record.get_absolute_url(), tracking_record=record,
+    )
     return record
 
 
@@ -454,6 +474,12 @@ def grant_access(record, *, user, office=None, target_user=None, reason="") -> R
             actor=user,
             target=record,
         )
+        if office:
+            notify_office(
+                office, kind="SHARED", title="A document was shared with your office",
+                message=f"Access was granted to {record.tracking_number}.",
+                url=record.get_absolute_url(), tracking_record=record,
+            )
     return grant
 
 

@@ -20,7 +20,7 @@ from apps.tracking.models import RoutingStep, Status, TrackingRecord
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
-from .models import AuditLog, DocumentType, MetadataFieldDefinition, Tag, TagRule
+from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, Tag, TagRule
 from .utils import log_action
 
 
@@ -264,6 +264,35 @@ def _month_series(queryset, field: str, since):
     }
 
 
+def report_filters_from_request(request):
+    params = request.GET
+    office = Office.objects.filter(pk=params["office"]).first() if params.get("office", "").isdigit() else None
+    year = _filter_year(params.get("year", ""))
+    status = params.get("status", "")
+    if status not in dict(Status.choices) and status != "OVERDUE":
+        status = ""
+    document_type = (
+        DocumentType.objects.filter(pk=params["document_type"]).first()
+        if params.get("document_type", "").isdigit() else None
+    )
+    return {"office": office, "year": year, "status": status, "document_type": document_type}
+
+
+def apply_report_filters(records, filters):
+    office, year = filters["office"], filters["year"]
+    if office:
+        records = records.filter(Q(originating_office=office) | Q(current_office=office))
+    if year:
+        records = records.filter(created_at__year=year)
+    if filters["status"] == "OVERDUE":
+        records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+    elif filters["status"]:
+        records = records.filter(status=filters["status"])
+    if filters["document_type"]:
+        records = records.filter(document_type=filters["document_type"])
+    return records
+
+
 class ReportsView(AppLoginRequiredMixin, TemplateView):
     """Records overview. Every number here is computed from the routing steps —
     nothing on this page is a placeholder waiting for a dataset."""
@@ -272,32 +301,10 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
 
     def _filters(self):
         """Read the filter row, ignoring anything that is not a real choice."""
-        params = self.request.GET
-        office = None
-        if params.get("office", "").isdigit():
-            office = Office.objects.filter(pk=params["office"]).first()
-        year = _filter_year(params.get("year", ""))
-        status = params.get("status", "")
-        if status not in dict(Status.choices) and status != "OVERDUE":
-            status = ""
-        document_type = None
-        if params.get("document_type", "").isdigit():
-            document_type = DocumentType.objects.filter(pk=params["document_type"]).first()
-        return {"office": office, "year": year, "status": status, "document_type": document_type}
+        return report_filters_from_request(self.request)
 
     def _apply(self, records, filters):
-        office, year = filters["office"], filters["year"]
-        if office:
-            records = records.filter(Q(originating_office=office) | Q(current_office=office))
-        if year:
-            records = records.filter(created_at__year=year)
-        if filters["status"] == "OVERDUE":
-            records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
-        elif filters["status"]:
-            records = records.filter(status=filters["status"])
-        if filters["document_type"]:
-            records = records.filter(document_type=filters["document_type"])
-        return records
+        return apply_report_filters(records, filters)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -525,6 +532,73 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
 
+class HealthzView(View):
+    """Cheap platform probe; ?deep=1 adds a recent django-q success check."""
+    def get(self, request):
+        from django.core.cache import cache
+        from django.core.files.storage import default_storage
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+        checks = {}
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            checks["database"] = True
+        except Exception:
+            checks["database"] = False
+        try:
+            checks["cache"] = "doctrack_cache" in connection.introspection.table_names()
+            cache.get("healthz")
+        except Exception:
+            checks["cache"] = False
+        try:
+            executor = MigrationExecutor(connection)
+            checks["migrations"] = not executor.migration_plan(executor.loader.graph.leaf_nodes())
+        except Exception:
+            checks["migrations"] = False
+        try:
+            if hasattr(default_storage, "location"):
+                checks["storage"] = bool(default_storage.location)
+            else:
+                default_storage.exists(".healthz")
+                checks["storage"] = True
+        except Exception:
+            checks["storage"] = False
+        if request.GET.get("deep") == "1":
+            try:
+                from django_q.models import Success
+                checks["worker"] = Success.objects.filter(stopped__gte=timezone.now() - timedelta(minutes=10)).exists()
+            except Exception:
+                checks["worker"] = False
+        healthy = all(checks.values())
+        response = JsonResponse({"status": "ok" if healthy else "unhealthy", "checks": checks}, status=200 if healthy else 503)
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class NotificationListView(AppLoginRequiredMixin, View):
+    def get(self, request):
+        notification_query = Notification.objects.filter(office_id=request.user.office_id).select_related("tracking_record", "document")
+        read_ids = set(notification_query.filter(reads__user=request.user).values_list("pk", flat=True))
+        return render(request, "core/notifications.html", {"notifications": notification_query[:50], "read_ids": read_ids})
+
+
+class NotificationCountView(AppLoginRequiredMixin, View):
+    def get(self, request):
+        from .notifications import unread_count
+        return JsonResponse({"unread": unread_count(request.user)})
+
+
+class NotificationReadView(AppLoginRequiredMixin, View):
+    def post(self, request, pk):
+        from .notifications import mark_read
+        notification = get_object_or_404(Notification, pk=pk)
+        mark_read(notification, request.user)
+        if notification.url:
+            return redirect(notification.url)
+        return redirect("core:notifications")
+
+
 class PrintLogView(AppLoginRequiredMixin, View):
     """Records that a user actually opened a print dialog.
 
@@ -573,15 +647,28 @@ class ReportExportView(AppLoginRequiredMixin, View):
     """CSV of the active tracking queue — useful evidence for the defence."""
 
     def get(self, request):
+        filters = report_filters_from_request(request)
+        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().distinct().order_by("-created_at")
+        total = records.count()
+        cap = 5000
         response = HttpResponse(content_type="text/csv")
         stamp = timezone.localtime().strftime("%Y%m%d-%H%M")
-        response["Content-Disposition"] = f'attachment; filename="doctrack-records-{stamp}.csv"'
+        parts = ["doctrack-records"]
+        if filters["office"]:
+            parts.append(filters["office"].code)
+        if filters["year"]:
+            parts.append(str(filters["year"]))
+        if filters["status"]:
+            parts.append(filters["status"].lower())
+        response["Content-Disposition"] = f'attachment; filename="{"-".join(parts)}-{stamp}.csv"'
         writer = csv.writer(response)
+        writer.writerow(["Active filters", "; ".join(f"{key}={value}" for key, value in filters.items() if value) or "none"])
+        writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
         writer.writerow(
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
              "Status", "Created", "Last movement", "Completed"]
         )
-        for record in TrackingRecord.objects.visible_to(request.user).with_related().order_by("-created_at")[:5000]:
+        for record in records[:cap]:
             writer.writerow(
                 _csv_cell(value)
                 for value in (

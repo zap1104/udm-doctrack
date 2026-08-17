@@ -59,6 +59,10 @@ jobs:
       - name: Django system check
         run: python manage.py check
 
+      - name: Deployment checks
+        run: |
+          DJANGO_DEBUG=False ENABLE_CSP=True EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend EMAIL_HOST=smtp.ci.invalid STORAGE_BACKEND=s3 AWS_STORAGE_BUCKET_NAME=ci-check AWS_ACCESS_KEY_ID=ci AWS_SECRET_ACCESS_KEY=ci python manage.py check --deploy --fail-level ERROR
+
       - name: Make migrations (fails if a model change was not committed)
         run: python manage.py makemigrations --check --dry-run
 
@@ -71,4 +75,13 @@ jobs:
         run: python manage.py collectstatic --noinput
 
       - name: Run tests
-        run: pytest -q
+        run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=20
+
+      - name: Self-check
+        run: python manage.py selfcheck
+
+      - name: Page smoke test
+        run: python scripts/smoke_pages.py
+
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt || true

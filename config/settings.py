@@ -356,7 +356,11 @@ if ENABLE_AXES:
     # the body of the failed POST, so the page has a URL that can be reloaded
     # without resending the login or replaying a cached, frozen countdown.
     AXES_LOCKOUT_CALLABLE = "apps.accounts.axes_hooks.lockout_response"
-    AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+    # django-axes 6.5.2 treats a flat list as independent lockout keys. The
+    # campus uses shared NAT, so one person's failures must not lock the whole
+    # building. Username-only is deliberate: it preserves the team's previous
+    # safe behavior; progressive per-account backoff limits password spraying.
+    AXES_LOCKOUT_PARAMETERS = ["username"]
     AXES_ENABLE_ADMIN = True
     AXES_VERBOSE = True
 
@@ -485,6 +489,10 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL",
                          "UDM DocTrack <no-reply@udm.edu.ph>")
+EMAIL_CONFIGURED = (
+    EMAIL_BACKEND != "django.core.mail.backends.console.EmailBackend"
+    and bool(EMAIL_HOST)
+)
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +514,7 @@ if not DEBUG:
 # ---------------------------------------------------------------------------
 # DocTrack domain settings
 # ---------------------------------------------------------------------------
+SITE_BASE_URL = env("SITE_BASE_URL", "").rstrip("/")
 TRACKING_NUMBER_PREFIX = env("TRACKING_NUMBER_PREFIX", "UDM-OVPA")
 TRACKING_NUMBER_SEQUENCE_WIDTH = env_int("TRACKING_NUMBER_SEQUENCE_WIDTH", 4)
 DEFAULT_ACTION_DUE_DAYS = env_int("DEFAULT_ACTION_DUE_DAYS", 3)

@@ -5,6 +5,10 @@ from . import views
 app_name = "core"
 
 urlpatterns = [
+    path("healthz/", views.HealthzView.as_view(), name="healthz"),
+    path("notifications/", views.NotificationListView.as_view(), name="notifications"),
+    path("notifications/count/", views.NotificationCountView.as_view(), name="notification_count"),
+    path("notifications/<int:pk>/read/", views.NotificationReadView.as_view(), name="notification_read"),
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("reports/", views.ReportsView.as_view(), name="reports"),
     path("reports/export/", views.ReportExportView.as_view(), name="report_export"),
