@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -237,6 +238,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             self.template_name,
             {
                 "document": document,
+                "is_extraction_pending": document.ocr_status in {"PENDING", "RUNNING"},
                 "form": form,
                 "suggestion": suggestion,
                 "confidence": suggestion.get("confidence", {}),
@@ -258,6 +260,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                 self.template_name,
                 {
                     "document": document,
+                    "is_extraction_pending": document.ocr_status in {"PENDING", "RUNNING"},
                     "form": form,
                     "suggestion": suggestion,
                     "confidence": suggestion.get("confidence", {}),
@@ -384,9 +387,11 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
             request=request,
         )
         try:
-            return FileResponse(
+            response = FileResponse(
                 document_file.file.open("rb"), as_attachment=True, filename=document_file.original_name
             )
+            response["X-Content-Type-Options"] = "nosniff"
+            return response
         except FileNotFoundError as exc:
             raise Http404("The file is missing from storage.") from exc
 
@@ -404,6 +409,13 @@ class ReExtractView(OfficeAssignedMixin, View):
             return redirect(document.get_absolute_url())
         from .extraction import extract_document_text
         from .models import OcrStatus
+
+        if settings.ENABLE_BACKGROUND_TASKS:
+            document.ocr_status = OcrStatus.PENDING
+            document.save(update_fields=["ocr_status", "updated_at"])
+            services._enqueue_extraction(document, user_id=request.user.pk, file_ids=[primary.pk], replace=True)
+            messages.success(request, "Reading the document in the background. This page will update when it is ready.")
+            return redirect(document.get_absolute_url())
 
         # The download views already answer a vanished file with a 404; this one
         # opened it bare, so a record whose file had gone missing from storage
@@ -432,6 +444,12 @@ class ReExtractView(OfficeAssignedMixin, View):
             f"Text extraction finished ({result.engine}): {result.char_count} characters. Search index refreshed.",
         )
         return redirect(document.get_absolute_url())
+
+
+class ExtractionStatusView(AppLoginRequiredMixin, View):
+    def get(self, request, pk):
+        document = _get_document(request, pk)
+        return render(request, "documents/_extraction_status.html", {"document": document})
 
 
 class TagSuggestJsonView(AppLoginRequiredMixin, View):

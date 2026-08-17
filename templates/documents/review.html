@@ -14,6 +14,8 @@
   </div>
 </div>
 
+<div id="review-content">
+  {% if is_extraction_pending %}{% include "documents/_extraction_status.html" %}{% endif %}
 <form method="post" novalidate>
   {% csrf_token %}
   {% include "partials/_form_errors.html" %}
@@ -130,6 +132,7 @@
     </div>
   </div>
 </form>
+</div>
 
 {% comment %}
   The suggested-tag chips used to be wired up by an inline <script> here.

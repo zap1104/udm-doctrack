@@ -12,6 +12,7 @@ urlpatterns = [
     path("<int:pk>/edit/", views.DocumentEditView.as_view(), name="edit"),
     path("<int:pk>/files/", views.AddFilesView.as_view(), name="add_files"),
     path("<int:pk>/re-extract/", views.ReExtractView.as_view(), name="re_extract"),
+    path("<int:pk>/extraction-status/", views.ExtractionStatusView.as_view(), name="extraction_status"),
     path("file/<int:pk>/", views.DocumentFileDownloadView.as_view(), name="file_download"),
     path("tags/suggest/", views.TagSuggestJsonView.as_view(), name="tag_suggest"),
 ]
