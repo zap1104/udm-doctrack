@@ -3,7 +3,16 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
-from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
+from django.contrib.auth.views import (
+    LoginView,
+    LogoutView,
+    PasswordChangeView,
+    PasswordResetCompleteView,
+    PasswordResetConfirmView,
+    PasswordResetDoneView,
+    PasswordResetView,
+)
+from django.core.cache import cache
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -11,18 +20,61 @@ from django.urls import reverse_lazy
 from django.views.generic import TemplateView, View
 
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
-from apps.core.models import AuditLog
+from apps.core.models import AuditLog, NotificationPreference
 from apps.core.utils import log_action
 
 from .forms import (
     AdminSetPasswordForm,
     AdminUserCreateForm,
     AdminUserUpdateForm,
+    NotificationPreferenceForm,
     OfficeForm,
     ProfileForm,
     SignInForm,
 )
 from .models import Office, User
+
+
+class PasswordResetAvailableMixin:
+    def dispatch(self, request, *args, **kwargs):
+        if not settings.EMAIL_CONFIGURED:
+            messages.info(request, "Password recovery email is not configured. Contact the system administrator.")
+            return redirect("accounts:login")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PasswordResetRequestView(PasswordResetAvailableMixin, PasswordResetView):
+    template_name = "accounts/password_reset_form.html"
+    email_template_name = "accounts/password_reset_email.txt"
+    subject_template_name = "accounts/password_reset_subject.txt"
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+    def form_valid(self, form):
+        key = f"password-reset:{self.request.META.get('REMOTE_ADDR', '')}"
+        attempts = cache.get(key, 0)
+        if attempts >= 5:
+            return redirect(self.success_url)
+        cache.set(key, attempts + 1, 60 * 60)
+        response = super().form_valid(form)
+        log_action(AuditLog.Action.UPDATE, "Password recovery requested", request=self.request, extra={"kind": "password_reset"})
+        return response
+
+
+class PasswordResetDonePage(PasswordResetAvailableMixin, PasswordResetDoneView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class PasswordResetConfirmPage(PasswordResetAvailableMixin, PasswordResetConfirmView):
+    template_name = "accounts/password_reset_confirm.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        log_action(AuditLog.Action.UPDATE, "Password recovery completed", actor=getattr(self, "user", None), extra={"kind": "password_reset"})
+        return response
+
+
+class PasswordResetCompletePage(PasswordResetAvailableMixin, PasswordResetCompleteView):
+    template_name = "accounts/password_reset_complete.html"
 
 
 class SignInView(LoginView):
@@ -85,15 +137,19 @@ class ProfileView(AppLoginRequiredMixin, View):
     template_name = "accounts/profile.html"
 
     def get(self, request):
-        return render(request, self.template_name, {"form": ProfileForm(instance=request.user)})
+        preferences, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        return render(request, self.template_name, {"form": ProfileForm(instance=request.user), "preferences_form": NotificationPreferenceForm(instance=preferences)})
 
     def post(self, request):
         form = ProfileForm(request.POST, instance=request.user)
-        if form.is_valid():
+        preferences, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        preferences_form = NotificationPreferenceForm(request.POST, instance=preferences)
+        if form.is_valid() and preferences_form.is_valid():
             form.save()
-            messages.success(request, "Profile updated.")
+            preferences_form.save()
+            messages.success(request, "Profile and notification preferences updated.")
             return redirect("accounts:profile")
-        return render(request, self.template_name, {"form": form})
+        return render(request, self.template_name, {"form": form, "preferences_form": preferences_form})
 
 
 # ---------------------------------------------------------------------------

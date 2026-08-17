@@ -42,6 +42,10 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 
 ---
 
+## Status
+
+The deployment-readiness branch adds background extraction through django-q2 with a safe synchronous fallback, office-scoped in-app notifications, optional SMTP password recovery, `/healthz/` platform checks, deployment-blocking security checks, filtered report exports, pure-Python upload content sniffing, and CI coverage for self-check and page smoke verification. Review [docs/OPERATIONS.md](docs/OPERATIONS.md) before deploying with real records.
+
 ## What it does
 
 **Tracking**
@@ -53,7 +57,7 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 
 **Documents**
 - Completed records archive themselves into the repository, files and all.
-- Text is read from digital PDFs, Word and Excel files for free. Scanned pages go to OCR only when there is no text layer.
+- Text is read from digital PDFs, Word and Excel files for free. Scanned pages go to OCR only when there is no text layer; with background tasks enabled, the upload returns immediately and the repository shows a plain-language pending state.
 - The system proposes a title, type, office, date and tags. **A person reviews and corrects before anything is saved.**
 - Smart folders are saved views over metadata — one file, many folders, no duplicates on disk.
 
@@ -65,7 +69,7 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 **Control**
 - Accounts are created by administrators. There is no public registration anywhere.
 - Regular users see only what was routed to, originated by, assigned to, or explicitly shared with them.
-- Append-only audit log for sign-ins, routing, receipts, downloads and master-data edits.
+- Append-only audit log for sign-ins, routing, receipts, downloads and master-data edits, plus office-level notifications with per-user read state.
 
 ---
 

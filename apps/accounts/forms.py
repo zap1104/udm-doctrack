@@ -4,6 +4,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, SetPasswordForm, UserCreationForm
 
 from apps.core.forms import BootstrapFormMixin, ColourInput
+from apps.core.models import NotificationPreference
 
 from .models import Office, User
 
@@ -125,3 +126,14 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "email", "phone", "position")
+
+
+class NotificationPreferenceForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = NotificationPreference
+        fields = ("in_app_enabled", "email_digest_enabled", "email_urgent_enabled")
+        labels = {
+            "in_app_enabled": "Show in-app notifications",
+            "email_digest_enabled": "Send a daily email digest when SMTP is configured",
+            "email_urgent_enabled": "Send email for urgent or overdue documents",
+        }

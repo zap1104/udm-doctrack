@@ -176,12 +176,32 @@ The free tier allows 25,000 pages a month, which is more than a capstone demo wi
 
 ## Optional: background jobs
 
-Extraction runs immediately on upload, which is fine for a demo. For bulk imports, run the worker in a **second terminal**:
+Set `ENABLE_BACKGROUND_TASKS=True` in `.env` for production or for any installation that handles scanned documents. Uploads are saved quickly with a **Reading the document…** state; the worker performs text extraction and OCR after the database transaction commits, then rebuilds the search index. If the setting is false or django-q2 is unavailable, the laptop-safe synchronous path remains available.
+
+Run the worker in a **second terminal** locally:
 
 ```bash
 source .venv/bin/activate
 python manage.py qcluster
 ```
+
+On Render, create a separate worker process with `python manage.py qcluster`. If no worker is running, uploads remain pending and the health endpoint's `?deep=1` check reports the worker as unavailable. The web process still serves existing records.
+
+## Optional: password recovery email
+
+Password recovery is offered only when `EMAIL_BACKEND` is not the console backend and `EMAIL_HOST` is set. A university IT department typically needs to provide the SMTP hostname, port, TLS or SSL requirement, an authenticated service account, the approved sender address, and any relay or firewall allow-list entry. Set these values in the Render environment rather than committing them:
+
+```dotenv
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.university.example
+EMAIL_PORT=587
+EMAIL_HOST_USER=doctrack@university.example
+EMAIL_HOST_PASSWORD=use-the-secret-store
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=UDM DocTrack <doctrack@university.example>
+```
+
+Reset requests are rate-limited by source address, never reveal whether an address exists, and write an audit entry. Do not place document content or personal details in email.
 
 ---
 
