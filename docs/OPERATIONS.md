@@ -90,10 +90,14 @@ If the object-storage bucket is lost, restore the database and object snapshot a
 
 If only the search index is corrupted, do not restore older metadata. Run `python manage.py reindex_documents` against the current database. The command rebuilds the denormalised search columns and stored PostgreSQL vector from the current records.
 
-If the django-q2 worker is down, existing records remain available but new uploads with `ENABLE_BACKGROUND_TASKS=True` stay in the pending extraction state. Start the worker, inspect the queue, and use the repository's failed-extraction recovery command when it is available. Do not bypass the pending state by editing OCR fields directly.
+If the django-q2 worker is down, existing records remain available but new uploads with `ENABLE_BACKGROUND_TASKS=True` stay in the pending extraction state. Start the worker and inspect the queue. Authorized users can use the document's **Run text extraction again** action after the worker recovers; do not bypass the pending state by editing OCR fields directly.
 
 ## Retention and privacy
 
-`DocumentType.retention_years` and `Document.retention_until` describe when a record becomes due for human disposition. The system must never silently delete a document because a date passed. Records personnel should approve disposition, record the reason, and preserve the disposition register.
+`DocumentType.retention_years` and `Document.retention_until` describe when a record becomes due for human disposition. Migration backfills missing dates only where the document type and year or date are sufficient. The system must never silently delete, hide, or deactivate a document because a date passed. Records personnel should approve disposition, record the reason, and preserve the disposition register.
+
+Before enabling an OCR provider, have the university privacy officer approve the provider and its data-processing terms. Each document stores whether external OCR is allowed. Sensitive uploads can remain local-only, and records archived from tracking default to external OCR disabled. Temporary provider failures retry a bounded number of times; document-visible notes report retries or permanent failure without including extracted content in email.
+
+Bulk receipt requires an explicit selection and custody confirmation. Every selected record receives its own append-only routing event and audit entry. Search click telemetry stores the user, query-log identifier, document identifier, rank, and timestamp; it does not copy document content. Restrict reports and database access accordingly because search terms themselves can still reveal work context.
 
 The archive contains personal data and is operated by a Philippine university. Apply the principles of the Data Privacy Act of 2012: limit access to the people and offices that need it, protect backups and object storage, avoid putting document content in email, keep audit logs, and follow the university's approved retention and disposal policy. Consult the university privacy officer for the institution's definitive retention schedule and breach-response procedure.

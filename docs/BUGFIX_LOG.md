@@ -335,3 +335,52 @@ The platform probe pointed at the login page, which could return 200 without tou
 **Fix:** add `/healthz/` with database, cache table, migration, storage, and optional worker checks; point Render at it; and add deployment-blocking system checks for insecure defaults.
 
 **Lesson:** a health check must exercise the dependencies that make a request useful, while revealing only a boolean component result to unauthenticated callers.
+
+
+---
+
+## 16. OCR retries existed only as a user pressing the button again
+
+**Files:** `apps/documents/extraction.py`, `apps/documents/tasks.py`, `apps/documents/models.py`
+
+A temporary timeout, rate limit, or provider server error immediately left extraction failed, while image uploads were sent to the configured provider with no per-document privacy choice.
+
+**Fix:** add bounded exponential retry for transient provider failures, in-memory image orientation/grayscale/contrast normalization, language hints, optional provider confidence capture, persisted processing notes, and a per-document external-OCR consent field. Completed tracking records default to local-only extraction.
+
+**Lesson:** a configured provider is not blanket consent. Privacy policy must travel with the queued document, and retries must distinguish temporary transport failures from permanent provider responses.
+
+---
+
+## 17. Receiving many documents required repeating the same action page by page
+
+**Files:** `apps/tracking/forms.py`, `apps/tracking/services.py`, `apps/tracking/views.py`, `templates/tracking/list.html`
+
+Office staff could confirm only one incoming record at a time. A naive bulk update would have been faster but would bypass the routing step, receipt timestamp, activity, audit entry, and notification that make custody defensible.
+
+**Fix:** add explicit per-row selection plus a custody acknowledgment, validate every selected record against the user's live inbox, lock the records in one transaction, and delegate every item to the existing single-record receipt service.
+
+**Lesson:** bulk operations should reuse domain actions, not replace them with a queryset update that erases history.
+
+---
+
+## 18. Retention dates were editable but not operational
+
+**Files:** `apps/documents/models.py`, `apps/documents/views.py`, `templates/documents/repository.html`, `apps/documents/migrations/0004_backfill_retention_dates.py`
+
+Document types carried retention years and documents had a retention date, but blank dates stayed blank and no queue showed records due for disposition review.
+
+**Fix:** compute a default date from document date or year, backfill only missing dates, add due/due-soon/unscheduled repository filters, and show a review queue. No migration or runtime path deletes, hides, or deactivates a due record.
+
+**Lesson:** a retention deadline is a prompt for an authorized human decision, not permission for automatic destruction.
+
+---
+
+## 19. Search logs recorded queries but not whether results were useful
+
+**Files:** `apps/documents/models.py`, `apps/search/services.py`, `apps/search/views.py`, `templates/search/search.html`, `apps/core/views.py`
+
+Reports could rank common queries and timing, but there was no evidence that a user opened a result, so tuning could optimize a metric without measuring navigation.
+
+**Fix:** add append-only result-click events linked to the originating user's query, document, rank, and timestamp; permission-check the redirect; and report clicks, clicked-query rate, and average clicked rank. Document content is never copied into the event.
+
+**Lesson:** search telemetry is useful only when attribution is trustworthy and it obeys the same visibility rules as the document itself.

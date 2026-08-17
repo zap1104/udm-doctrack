@@ -161,7 +161,7 @@ Press `Ctrl+C` to stop the server.
 
 ## Optional: turn on OCR for scanned documents
 
-Without a key, digital PDFs and Word files still work perfectly — only scanned images are skipped.
+Without a key, digital PDFs and Word files still work locally — only scanned images are skipped. Each upload asks for a language hint and whether its scanned content may be sent to an external provider. Clear the external-OCR checkbox for sensitive records; the file is still saved and any local text layer is still indexed.
 
 1. Register free at <https://ocr.space/ocrapi> (no card required)
 2. Put the key in `.env`:
@@ -170,7 +170,7 @@ Without a key, digital PDFs and Word files still work perfectly — only scanned
    ```
 3. Restart the server
 
-The free tier allows 25,000 pages a month, which is more than a capstone demo will ever use.
+Provider limits can change, so confirm the current allowance and data-processing terms before university use. Transient timeouts, rate limits, and server errors retry with bounded exponential backoff controlled by `OCR_PROVIDER_TIMEOUT_SECONDS`, `OCR_PROVIDER_RETRIES`, and `OCR_RETRY_BASE_SECONDS`. Permanent failures remain visible on the document and can be retried by an authorized user.
 
 ---
 
@@ -185,7 +185,15 @@ source .venv/bin/activate
 python manage.py qcluster
 ```
 
-On Render, create a separate worker process with `python manage.py qcluster`. If no worker is running, uploads remain pending and the health endpoint's `?deep=1` check reports the worker as unavailable. The web process still serves existing records.
+On Render, create a separate worker process with `python manage.py qcluster`. If no worker is running, uploads remain pending and the health endpoint's `?deep=1` check reports the worker as unavailable. The web process still serves existing records. Completed tracking records are archived with external OCR disabled by default; an authorized editor must opt in and deliberately run extraction again.
+
+## Daily custody and retention work
+
+The Incoming queue allows an office user to select several documents, enter one optional shared note, and confirm that all selected physical or digital records are actually present. The service records a separate receipt timestamp, routing activity, audit entry, and sender notification for every selected record. Records that are not currently receivable by that office are rejected rather than silently skipped.
+
+Document types supply retention years. When enough metadata exists, DocTrack computes a retention review date and backfills missing dates during migration. The repository shows due and due-soon records as a human review queue. A due date never deletes, hides, or deactivates a record automatically; disposition remains a records-officer decision under university policy.
+
+Search records query-level timing and permission-checked result-click events. Reports show total clicks, the share of queries with a click, average clicked rank, and per-query clicks. Telemetry stores identifiers and query terms, not document content.
 
 ## Optional: password recovery email
 

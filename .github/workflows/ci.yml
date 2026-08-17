@@ -75,7 +75,7 @@ jobs:
         run: python manage.py collectstatic --noinput
 
       - name: Run tests
-        run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=20
+        run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60
 
       - name: Self-check
         run: python manage.py selfcheck
