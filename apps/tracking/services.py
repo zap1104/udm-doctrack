@@ -346,6 +346,21 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
 
 
 @transaction.atomic
+def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
+    """Confirm an explicit selection while preserving one receipt event per record."""
+    record_ids = [record.pk for record in records]
+    if not record_ids:
+        raise ValidationError("Select at least one document to receive.")
+    locked = {
+        record.pk: record
+        for record in TrackingRecord.objects.select_for_update().filter(pk__in=record_ids).order_by("pk")
+    }
+    if len(locked) != len(set(record_ids)):
+        raise ValidationError("One of the selected documents is no longer available.")
+    return [confirm_receipt(locked[record_id], user=user, note=note) for record_id in record_ids]
+
+
+@transaction.atomic
 def add_remark(record, *, user, remark) -> RecordActivity:
     remark = (remark or "").strip()
     if not remark:

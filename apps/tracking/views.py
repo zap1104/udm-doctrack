@@ -9,6 +9,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
@@ -21,6 +22,7 @@ from . import services
 from .forms import (
     DEADLINE_DATE,
     DEADLINE_NONE,
+    BulkConfirmReceiptForm,
     CompleteForm,
     ConfirmReceiptForm,
     CreateRecordForm,
@@ -107,6 +109,7 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "form": form,
                 "page_obj": page,
                 "records": page_records,
+                "can_bulk_receive": any(record.can_confirm_now for record in page_records),
                 # The paginator has already counted this queryset; calling
                 # .count() again would run the same DISTINCT-over-joins query
                 # a second time on every page load.
@@ -319,6 +322,28 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "archived_document": archived_document,
             },
         )
+
+
+class BulkConfirmReceiptView(OfficeAssignedMixin, View):
+    def post(self, request):
+        available = services.inbox_for(request.user).with_related().distinct()
+        form = BulkConfirmReceiptForm(request.POST, queryset=available)
+        if not form.is_valid():
+            message = next(iter(form.errors.values()))[0] if form.errors else "Choose documents to receive."
+            messages.error(request, message)
+            return redirect(f"{reverse('tracking:list')}?scope=inbox")
+        try:
+            steps = services.bulk_confirm_receipts(
+                form.cleaned_data["record_ids"], user=request.user, note=form.cleaned_data.get("note", "")
+            )
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, getattr(exc, "messages", [str(exc)])[0])
+            return redirect("tracking:list")
+        messages.success(
+            request,
+            f"Receipt recorded for {len(steps)} selected document{'s' if len(steps) != 1 else ''}.",
+        )
+        return redirect(f"{reverse('tracking:list')}?scope=inbox")
 
 
 class ConfirmReceiptView(OfficeAssignedMixin, View):
