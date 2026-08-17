@@ -14,6 +14,8 @@
   </div>
 </div>
 
+<div id="review-content">
+  {% if is_extraction_pending %}{% include "documents/_extraction_status.html" %}{% endif %}
 <form method="post" novalidate>
   {% csrf_token %}
   {% include "partials/_form_errors.html" %}
@@ -90,6 +92,8 @@
             <div class="col-md-6">{% include "partials/_field.html" with field=form.recipient_name %}</div>
             <div class="col-md-6">{% include "partials/_field.html" with field=form.signatory %}</div>
             <div class="col-md-6">{% include "partials/_field.html" with field=form.access_level %}</div>
+            <div class="col-md-6">{% include "partials/_field.html" with field=form.ocr_language %}</div>
+            <div class="col-12">{% include "partials/_field.html" with field=form.allow_external_ocr %}</div>
           </div>
 
           <div class="mb-3">
@@ -130,6 +134,7 @@
     </div>
   </div>
 </form>
+</div>
 
 {% comment %}
   The suggested-tag chips used to be wired up by an inline <script> here.

@@ -42,30 +42,34 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 
 ---
 
+## Status
+
+The deployment-readiness branch adds background extraction through django-q2 with a safe synchronous fallback; bounded OCR retries, language hints, image normalization, confidence display, and a per-document external-provider opt-out; explicit bulk receipt; office-scoped notifications; optional SMTP password recovery; retention review queues that never auto-delete; search click-through analytics; `/healthz/`; deployment-blocking security checks; filtered report exports; pure-Python upload content sniffing; and deeper CI verification. Review [docs/OPERATIONS.md](docs/OPERATIONS.md) and [docs/ACCESSIBILITY_AUDIT.md](docs/ACCESSIBILITY_AUDIT.md) before deploying with real records.
+
 ## What it does
 
 **Tracking**
 - Automatic tracking numbers: `UDM-OVPA-MED-2026-08-0001` — unique, readable, never reused.
 - Routing to one or many offices, with instructions and a deadline.
-- **Explicit receipt.** Sent is not received. Custody changes only when someone at the receiving office presses *Confirm receipt*, and the server writes the timestamp — not the user.
+- **Explicit receipt.** Sent is not received. Custody changes only when someone at the receiving office confirms the selected record or explicit bulk selection, and the server writes one timestamped history event per record.
 - Append-only history. Forwarding never overwrites an earlier step; nothing disappears.
 - Printable routing slip carrying the full movement history.
 
 **Documents**
 - Completed records archive themselves into the repository, files and all.
-- Text is read from digital PDFs, Word and Excel files for free. Scanned pages go to OCR only when there is no text layer.
+- Text is read locally from digital PDFs, Word and Excel files. Scanned pages use OCR only when there is no text layer and the record permits an external provider; with background tasks enabled, the upload returns immediately and the repository shows a plain-language pending state.
 - The system proposes a title, type, office, date and tags. **A person reviews and corrects before anything is saved.**
-- Smart folders are saved views over metadata — one file, many folders, no duplicates on disk.
+- Smart folders are saved views over metadata — one file, many folders, no duplicates on disk. Retention dates are computed from document type and surfaced for human disposition review without automatic deletion.
 
 **Search**
 - PostgreSQL full-text search with weighted fields, plus fuzzy matching for misspellings.
-- Every result shows a **relevance** percentage and *why* it matched.
+- Every result shows a **relevance** percentage and *why* it matched; permission-checked click-through telemetry helps records staff tune search quality later.
 - The 75% minimum is a display filter you can move, not a claim about accuracy. See **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)**.
 
 **Control**
 - Accounts are created by administrators. There is no public registration anywhere.
 - Regular users see only what was routed to, originated by, assigned to, or explicitly shared with them.
-- Append-only audit log for sign-ins, routing, receipts, downloads and master-data edits.
+- Append-only audit log for sign-ins, routing, receipts, downloads and master-data edits, plus office-level notifications with per-user read state.
 
 ---
 

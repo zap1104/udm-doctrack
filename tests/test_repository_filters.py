@@ -142,7 +142,7 @@ def test_tags_lead_with_the_most_used(admin_client, users, offices):
 def test_the_row_reads_in_a_sensible_order(admin_client, repository):
     """Query, then what kind of thing, then when — with year and month adjacent."""
     form = admin_client.get("/documents/").context["form"]
-    assert list(form.fields) == ["q", "document_type", "tag", "source", "year", "month"]
+    assert list(form.fields) == ["q", "document_type", "tag", "source", "year", "month", "retention"]
 
 
 # --- one bad filter must not drop the rest --------------------------------

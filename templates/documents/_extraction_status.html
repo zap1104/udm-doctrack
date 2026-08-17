@@ -1,0 +1,14 @@
+<div id="extraction-status"
+     {% if document.ocr_status == "PENDING" or document.ocr_status == "RUNNING" %}
+       hx-get="{% url 'documents:extraction_status' document.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"
+     {% endif %}
+     class="alert {% if document.ocr_status == "FAILED" %}alert-danger{% elif document.ocr_status == "DONE" or document.ocr_status == "EMPTY" %}alert-success{% else %}alert-info{% endif %} mb-4"
+     role="status" aria-live="polite">
+  {% if document.ocr_status == "PENDING" or document.ocr_status == "RUNNING" %}
+    <strong>Reading the document…</strong> You can review the suggested details as soon as text extraction finishes.
+  {% elif document.ocr_status == "FAILED" %}
+    <strong>We could not read this document automatically.</strong> You can enter the details by hand and try again later.
+  {% else %}
+    Text extraction is ready. Refresh this page to load the suggestions.
+  {% endif %}
+</div>

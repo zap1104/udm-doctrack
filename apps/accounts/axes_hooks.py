@@ -151,6 +151,13 @@ def _invalidate_cached_record(sender, instance, **kwargs):
     cache.delete(cache_key(instance.kind, instance.key))
 
 
+def _active_lockout_ip(request):
+    """Return the IP only when configuration deliberately uses it for blocking."""
+    if getattr(settings, "AXES_LOCKOUT_PARAMETERS", None) == ["username"]:
+        return None
+    return get_client_ip_address(request)
+
+
 def get_progressive_cooloff() -> timedelta:
     """``AXES_COOLOFF_TIME`` callable.
 
@@ -161,7 +168,7 @@ def get_progressive_cooloff() -> timedelta:
     request = get_current_request()
     if request is None:  # management commands, shell, tests
         return cooloff_for_stage(0)
-    return cooloff_for_stage(current_stage(get_client_username(request), get_client_ip_address(request)))
+    return cooloff_for_stage(current_stage(get_client_username(request), _active_lockout_ip(request)))
 
 
 def clear_escalation(username: str | None = None, ip_address: str | None = None) -> int:
@@ -251,6 +258,8 @@ def _seconds_remaining(request, credentials, username, ip_address, cool_off) -> 
     Live axes attempts are still consulted as a fallback, only for the gap
     between a lockout being detected and our signal handler recording it.
     """
+    if getattr(settings, "AXES_LOCKOUT_PARAMETERS", None) == ["username"]:
+        ip_address = None
     recorded = [record["locked_until"] for record in _live_records(username, ip_address) if record["locked_until"]]
     unlock_at = max(recorded, default=None)
 
@@ -273,7 +282,7 @@ def lockout_response(request, credentials=None):
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         # Keep axes' own JSON contract for non-browser callers.
-        cool_off = cooloff_for_stage(current_stage(username, request.axes_ip_address))
+        cool_off = cooloff_for_stage(current_stage(username, _active_lockout_ip(request)))
         response = JsonResponse(
             {
                 "failure_limit": get_failure_limit(request, credentials),

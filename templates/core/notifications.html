@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Notifications · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Account</div><h1>Notifications</h1><p class="sub">Updates for {{ user.office_label }}. Reading one does not clear it for your colleagues.</p></div></div>
+<div class="card-udm"><div class="card-udm-body">
+{% for notification in notifications %}
+  <div class="d-flex justify-content-between gap-3 py-3 border-bottom{% if notification.pk in read_ids %} text-muted{% endif %}">
+    <div><strong>{{ notification.title }}</strong><p class="mb-1">{{ notification.message }}</p><small class="text-muted">{{ notification.created_at|date:"d M Y, g:i A" }}</small></div>
+    <form method="post" action="{% url 'core:notification_read' notification.pk %}">{% csrf_token %}<button class="btn btn-sm btn-udm-outline" type="submit">{% if notification.pk in read_ids %}Open{% else %}Read{% endif %}</button></form>
+  </div>
+{% empty %}<p class="mb-0 text-muted">There are no notifications yet.</p>{% endfor %}
+</div></div>
+{% endblock %}

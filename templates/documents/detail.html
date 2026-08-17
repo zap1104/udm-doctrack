@@ -42,6 +42,7 @@
             <tr><th class="text-muted fw-normal">Document type</th><td>{{ document.document_type.name|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Document date</th><td>{{ document.document_date|date:"d M Y"|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Year</th><td>{{ document.year }}</td></tr>
+            <tr><th class="text-muted fw-normal">Retention review</th><td>{% if document.retention_until %}{{ document.retention_until|date:"d M Y" }}{% if document.retention_is_due %}<br><strong class="text-danger">Due for records-officer review; not automatically deleted.</strong>{% elif document.retention_is_due_soon %}<br><span class="text-muted">Due within 90 days.</span>{% endif %}{% else %}No schedule set{% endif %}</td></tr>
           </table></div>
           <div class="col-md-6"><table class="table table-sm table-stacked">
             <tr><th class="text-muted fw-normal">From / author</th><td>{{ document.author_name|default:"—" }}</td></tr>
@@ -79,7 +80,7 @@
     <div class="card-udm mt-4">
       <div class="card-udm-head">
         <h2>Extracted Text</h2>
-        <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}</span>
+        <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}{% if document.ocr_confidence != None %} · {{ document.ocr_confidence|floatformat:2 }} confidence{% endif %}</span>
       </div>
       <div class="card-udm-body">
         {% if document.has_text %}
@@ -87,6 +88,8 @@
         {% else %}
           <p class="text-muted mb-2">No text was extracted. This record remains searchable by metadata and tags.</p>
         {% endif %}
+        <p class="small text-muted mt-2 mb-1">Language hint: {{ document.get_ocr_language_display }}. External OCR: {% if document.allow_external_ocr %}allowed when needed{% else %}disabled for this record{% endif %}.</p>
+        {% if document.ocr_notes %}<div class="help-note mt-2" role="status">{{ document.ocr_notes|linebreaksbr }}</div>{% endif %}
         {% if can_edit %}
           <form method="post" action="{% url 'documents:re_extract' document.pk %}" class="mt-2">{% csrf_token %}
             <button class="btn btn-udm-outline btn-sm" type="submit">Run text extraction again</button>

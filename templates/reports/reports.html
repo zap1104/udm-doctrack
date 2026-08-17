@@ -451,9 +451,15 @@
       <div class="card-udm h-100">
         <div class="card-udm-head"><h2>Most used searches</h2></div>
         <div class="card-udm-body">
+          <div class="row g-2 mb-3">
+            <div class="col-6"><div class="report-quality-row"><span>Queries</span><strong class="num">{{ search_analytics.queries }}</strong></div></div>
+            <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
+            <div class="col-6"><div class="report-quality-row"><span>Queries with a click</span><strong class="num">{{ search_analytics.clicked_query_percent }}%</strong></div></div>
+            <div class="col-6"><div class="report-quality-row"><span>Average clicked rank</span><strong class="num">{{ search_analytics.average_rank|default:"—" }}</strong></div></div>
+          </div>
           {% for row in top_searches %}
             <div class="report-series-item report-series-item--wide">
-              <span>{{ row.query|truncatechars:30 }}</span>
+              <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
               <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
             </div>

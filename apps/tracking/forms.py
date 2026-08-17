@@ -309,6 +309,28 @@ class ConfirmReceiptForm(BootstrapFormMixin, forms.Form):
     )
 
 
+class BulkConfirmReceiptForm(BootstrapFormMixin, forms.Form):
+    record_ids = forms.ModelMultipleChoiceField(
+        queryset=TrackingRecord.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        error_messages={"required": "Select at least one document to receive."},
+    )
+    note = forms.CharField(
+        label="Receipt note applied to every selected document (optional)",
+        required=False,
+        max_length=MAX_NOTE_CHARS,
+        widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Add the same custody note to each selected record"}),
+    )
+    confirm_custody = forms.BooleanField(
+        label="I confirm the selected physical or digital documents are present in my office's custody.",
+        required=True,
+    )
+
+    def __init__(self, *args, queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["record_ids"].queryset = queryset if queryset is not None else TrackingRecord.objects.none()
+
+
 class RemarkForm(BootstrapFormMixin, forms.Form):
     # A remark goes into the timeline, which is read as a running account of
     # what each office did. Without a ceiling it accepted a pasted document,

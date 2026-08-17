@@ -356,7 +356,11 @@ if ENABLE_AXES:
     # the body of the failed POST, so the page has a URL that can be reloaded
     # without resending the login or replaying a cached, frozen countdown.
     AXES_LOCKOUT_CALLABLE = "apps.accounts.axes_hooks.lockout_response"
-    AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+    # django-axes 6.5.2 treats a flat list as independent lockout keys. The
+    # campus uses shared NAT, so one person's failures must not lock the whole
+    # building. Username-only is deliberate: it preserves the team's previous
+    # safe behavior; progressive per-account backoff limits password spraying.
+    AXES_LOCKOUT_PARAMETERS = ["username"]
     AXES_ENABLE_ADMIN = True
     AXES_VERBOSE = True
 
@@ -459,18 +463,17 @@ SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
 # ---------------------------------------------------------------------------
 # Background jobs (django-q2, ORM broker: no Redis required)
 # ---------------------------------------------------------------------------
-if ENABLE_BACKGROUND_TASKS:
-    Q_CLUSTER = {
-        "name": "doctrack",
-        "workers": env_int("Q_WORKERS", 2),
-        "timeout": 600,
-        "retry": 900,
-        "queue_limit": 50,
-        "bulk": 5,
-        "orm": "default",
-        "save_limit": 250,
-        "catch_up": False,
-    }
+Q_CLUSTER = {
+    "name": "doctrack",
+    "workers": env_int("Q_WORKERS", 2),
+    "timeout": 600,
+    "retry": 900,
+    "queue_limit": 50,
+    "bulk": 5,
+    "orm": "default",
+    "save_limit": 250,
+    "catch_up": False,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +488,10 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL",
                          "UDM DocTrack <no-reply@udm.edu.ph>")
+EMAIL_CONFIGURED = (
+    EMAIL_BACKEND != "django.core.mail.backends.console.EmailBackend"
+    and bool(EMAIL_HOST)
+)
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +513,7 @@ if not DEBUG:
 # ---------------------------------------------------------------------------
 # DocTrack domain settings
 # ---------------------------------------------------------------------------
+SITE_BASE_URL = env("SITE_BASE_URL", "").rstrip("/")
 TRACKING_NUMBER_PREFIX = env("TRACKING_NUMBER_PREFIX", "UDM-OVPA")
 TRACKING_NUMBER_SEQUENCE_WIDTH = env_int("TRACKING_NUMBER_SEQUENCE_WIDTH", 4)
 DEFAULT_ACTION_DUE_DAYS = env_int("DEFAULT_ACTION_DUE_DAYS", 3)
@@ -528,7 +536,10 @@ OCR_SPACE_ENDPOINT = env("OCR_SPACE_ENDPOINT",
                          "https://api.ocr.space/parse/image")
 AZURE_DOCINT_ENDPOINT = env("AZURE_DOCINT_ENDPOINT", "")
 AZURE_DOCINT_KEY = env("AZURE_DOCINT_KEY", "")
-OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 200000)
+OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 500_000)
+OCR_PROVIDER_TIMEOUT_SECONDS = env_int("OCR_PROVIDER_TIMEOUT_SECONDS", 90)
+OCR_PROVIDER_RETRIES = env_int("OCR_PROVIDER_RETRIES", 2)
+OCR_RETRY_BASE_SECONDS = env_int("OCR_RETRY_BASE_SECONDS", 2)
 
 # Metadata suggestion engine
 # rules | none | ai (future)

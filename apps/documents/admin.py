@@ -9,6 +9,7 @@ from .models import (
     DocumentMetadata,
     MetadataSuggestion,
     SearchQueryLog,
+    SearchResultClick,
 )
 
 
@@ -65,6 +66,18 @@ class SearchQueryLogAdmin(admin.ModelAdmin):
     readonly_fields = tuple(field.name for field in SearchQueryLog._meta.fields)
 
     def has_add_permission(self, request):
+        return False
+
+
+@admin.register(SearchResultClick)
+class SearchResultClickAdmin(admin.ModelAdmin):
+    list_display = ("query_log", "document", "user", "rank", "created_at")
+    readonly_fields = tuple(field.name for field in SearchResultClick._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
 

@@ -286,3 +286,101 @@ Now the manager has a genuine dotted path — `apps.accounts.models.UserManagerF
 migration — which every model does. Always name the result as a real class.
 This is a common enough gotcha that it is called out in Django's own docs for
 `from_queryset()`, and worth remembering for any future custom manager.
+
+
+---
+
+## 12. OCR held a Gunicorn worker and database transaction open
+
+**Files:** `apps/documents/services.py`, `apps/documents/tasks.py`, `templates/documents/review.html`
+
+Scanned uploads called the OCR provider inside `@transaction.atomic`. A 90-second provider timeout could occupy every web worker while an uncommitted document row was invisible to the worker and held database resources.
+
+**Fix:** save the file and a `PENDING` document first, enqueue `extract_document_task` with `transaction.on_commit()`, and keep the synchronous path for installations without background tasks. The review screen polls with HTMX and uses plain language rather than exposing an internal status code.
+
+**Lesson:** network-bound extraction belongs outside the request transaction. A queue is only safe when it cannot see a row before the transaction that created it commits.
+
+---
+
+## 13. A shared campus IP could lock out an office
+
+**Files:** `config/settings.py`, `apps/accounts/axes_hooks.py`
+
+The resolved django-axes 6.5.2 package treats a flat `AXES_LOCKOUT_PARAMETERS` list as independent keys. The previous `username, ip_address` configuration therefore made five failures from a shared NAT address lock the address for everyone.
+
+**Fix:** use the deliberately chosen username-only policy and ensure the custom progressive countdown does not use IP telemetry as an active blocking key. The existing IP rows remain available for operational history and tests, but a colleague behind the same address is not locked by another username.
+
+**Lesson:** lockout scope must be chosen for the network people actually use, not the network diagram one imagines.
+
+---
+
+## 14. Extension-only upload validation accepted disguised content
+
+**Files:** `apps/core/utils.py`, `apps/documents/views.py`, `apps/tracking/views.py`
+
+An HTML payload could be named `memo.pdf` and pass the extension check. Downloads also relied on browser behavior rather than explicitly setting `X-Content-Type-Options: nosniff`.
+
+**Fix:** validate common PDF, Office ZIP, legacy Office, and image signatures with the Python standard library, reject obvious script-bearing text payloads, and set `nosniff` on every application file response.
+
+**Lesson:** filenames are labels supplied by the client. Security validation must inspect bytes and must protect the response path too.
+
+---
+
+## 15. Production could report healthy while its database or storage was broken
+
+**Files:** `apps/core/checks.py`, `apps/core/views.py`, `render.yaml`
+
+The platform probe pointed at the login page, which could return 200 without touching PostgreSQL and also passed through authentication middleware.
+
+**Fix:** add `/healthz/` with database, cache table, migration, storage, and optional worker checks; point Render at it; and add deployment-blocking system checks for insecure defaults.
+
+**Lesson:** a health check must exercise the dependencies that make a request useful, while revealing only a boolean component result to unauthenticated callers.
+
+
+---
+
+## 16. OCR retries existed only as a user pressing the button again
+
+**Files:** `apps/documents/extraction.py`, `apps/documents/tasks.py`, `apps/documents/models.py`
+
+A temporary timeout, rate limit, or provider server error immediately left extraction failed, while image uploads were sent to the configured provider with no per-document privacy choice.
+
+**Fix:** add bounded exponential retry for transient provider failures, in-memory image orientation/grayscale/contrast normalization, language hints, optional provider confidence capture, persisted processing notes, and a per-document external-OCR consent field. Completed tracking records default to local-only extraction.
+
+**Lesson:** a configured provider is not blanket consent. Privacy policy must travel with the queued document, and retries must distinguish temporary transport failures from permanent provider responses.
+
+---
+
+## 17. Receiving many documents required repeating the same action page by page
+
+**Files:** `apps/tracking/forms.py`, `apps/tracking/services.py`, `apps/tracking/views.py`, `templates/tracking/list.html`
+
+Office staff could confirm only one incoming record at a time. A naive bulk update would have been faster but would bypass the routing step, receipt timestamp, activity, audit entry, and notification that make custody defensible.
+
+**Fix:** add explicit per-row selection plus a custody acknowledgment, validate every selected record against the user's live inbox, lock the records in one transaction, and delegate every item to the existing single-record receipt service.
+
+**Lesson:** bulk operations should reuse domain actions, not replace them with a queryset update that erases history.
+
+---
+
+## 18. Retention dates were editable but not operational
+
+**Files:** `apps/documents/models.py`, `apps/documents/views.py`, `templates/documents/repository.html`, `apps/documents/migrations/0004_backfill_retention_dates.py`
+
+Document types carried retention years and documents had a retention date, but blank dates stayed blank and no queue showed records due for disposition review.
+
+**Fix:** compute a default date from document date or year, backfill only missing dates, add due/due-soon/unscheduled repository filters, and show a review queue. No migration or runtime path deletes, hides, or deactivates a due record.
+
+**Lesson:** a retention deadline is a prompt for an authorized human decision, not permission for automatic destruction.
+
+---
+
+## 19. Search logs recorded queries but not whether results were useful
+
+**Files:** `apps/documents/models.py`, `apps/search/services.py`, `apps/search/views.py`, `templates/search/search.html`, `apps/core/views.py`
+
+Reports could rank common queries and timing, but there was no evidence that a user opened a result, so tuning could optimize a metric without measuring navigation.
+
+**Fix:** add append-only result-click events linked to the originating user's query, document, rank, and timestamp; permission-check the redirect; and report clicks, clicked-query rate, and average clicked rank. Document content is never copied into the event.
+
+**Lesson:** search telemetry is useful only when attribution is trustworthy and it obeys the same visibility rules as the document itself.

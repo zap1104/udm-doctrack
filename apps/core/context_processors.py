@@ -28,8 +28,13 @@ def _nav_active(path: str) -> str:
 
 def site_context(request):
     """Values every template needs."""
+    unread_notifications = 0
+    if getattr(request.user, "is_authenticated", False):
+        from .notifications import unread_count
+        unread_notifications = unread_count(request.user)
     return {
         "nav_active": _nav_active(request.path or "/"),
+        "unread_notifications": unread_notifications,
         "PALETTE": PALETTE,
         "SITE_NAME": settings.SITE_NAME,
         "SITE_LONG_NAME": settings.SITE_LONG_NAME,
@@ -37,6 +42,7 @@ def site_context(request):
         "SEARCH_MIN_RELEVANCE_DEFAULT": settings.SEARCH_MIN_RELEVANCE_DEFAULT,
         "MAX_UPLOAD_MB": settings.MAX_UPLOAD_MB,
         "DEBUG": settings.DEBUG,
+        "EMAIL_CONFIGURED": settings.EMAIL_CONFIGURED,
         # The page is rendered inside a request, and the session middleware
         # rewrites the expiry on the way out, so a signed-in reader always has
         # the full window from the moment this page arrives.

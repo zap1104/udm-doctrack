@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.generic import View
 
 from apps.accounts.models import Office
@@ -100,6 +104,14 @@ class RepositoryView(AppLoginRequiredMixin, View):
             documents = documents.filter(tags=data["tag"])
         if data.get("source"):
             documents = documents.filter(source=data["source"])
+        retention = data.get("retention")
+        today = timezone.localdate()
+        if retention == "due":
+            documents = documents.due_for_retention_review(today)
+        elif retention == "soon":
+            documents = documents.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
+        elif retention == "unscheduled":
+            documents = documents.filter(retention_until__isnull=True)
 
         if form.errors:
             messages.warning(
@@ -133,6 +145,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
         )
         pending_filing_more = max(0, len(pending_filing) - PENDING_FILING_SHOWN)
         pending_filing = pending_filing[:PENDING_FILING_SHOWN]
+        retention_due_query = visible.due_for_retention_review(today).with_related().order_by("retention_until")
+        retention_due_count = retention_due_query.count()
+        retention_due = list(retention_due_query[:PENDING_FILING_SHOWN])
         for record in pending_filing:
             # Filing is one click from here; returning to tracking needs a
             # written reason, so that action lives on the record page itself.
@@ -154,6 +169,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "all_count": visible.count(),
                 "pending_filing": pending_filing,
                 "pending_filing_more": pending_filing_more,
+                "retention_due": retention_due,
+                "retention_due_count": retention_due_count,
+                "retention_due_more": max(0, retention_due_count - len(retention_due)),
                 "years": years,
                 "popular_tags": Tag.active.filter(usage_count__gt=0).order_by("-usage_count")[:12],
             },
@@ -182,6 +200,8 @@ class UploadView(OfficeAssignedMixin, View):
                 uploaded_file=uploaded,
                 office=form.cleaned_data["office"],
                 source=form.cleaned_data["source"],
+                ocr_language=form.cleaned_data["ocr_language"],
+                allow_external_ocr=form.cleaned_data["allow_external_ocr"],
             )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
@@ -220,6 +240,8 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             "author_name": suggestion.get("author_name", ""),
             "recipient_name": suggestion.get("recipient_name", ""),
             "access_level": document.access_level,
+            "ocr_language": document.ocr_language,
+            "allow_external_ocr": document.allow_external_ocr,
             "tags": ", ".join(suggestion.get("tags", [])),
             **{f"meta_{key}": value for key, value in (suggestion.get("metadata") or {}).items()},
         }
@@ -237,6 +259,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             self.template_name,
             {
                 "document": document,
+                "is_extraction_pending": document.ocr_status in {"PENDING", "RUNNING"},
                 "form": form,
                 "suggestion": suggestion,
                 "confidence": suggestion.get("confidence", {}),
@@ -258,6 +281,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                 self.template_name,
                 {
                     "document": document,
+                    "is_extraction_pending": document.ocr_status in {"PENDING", "RUNNING"},
                     "form": form,
                     "suggestion": suggestion,
                     "confidence": suggestion.get("confidence", {}),
@@ -384,9 +408,11 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
             request=request,
         )
         try:
-            return FileResponse(
+            response = FileResponse(
                 document_file.file.open("rb"), as_attachment=True, filename=document_file.original_name
             )
+            response["X-Content-Type-Options"] = "nosniff"
+            return response
         except FileNotFoundError as exc:
             raise Http404("The file is missing from storage.") from exc
 
@@ -405,6 +431,13 @@ class ReExtractView(OfficeAssignedMixin, View):
         from .extraction import extract_document_text
         from .models import OcrStatus
 
+        if settings.ENABLE_BACKGROUND_TASKS:
+            document.ocr_status = OcrStatus.PENDING
+            document.save(update_fields=["ocr_status", "updated_at"])
+            services._enqueue_extraction(document, user_id=request.user.pk, file_ids=[primary.pk], replace=True)
+            messages.success(request, "Reading the document in the background. This page will update when it is ready.")
+            return redirect(document.get_absolute_url())
+
         # The download views already answer a vanished file with a 404; this one
         # opened it bare, so a record whose file had gone missing from storage
         # turned the button into a 500 instead of saying what was wrong.
@@ -418,20 +451,37 @@ class ReExtractView(OfficeAssignedMixin, View):
             )
             return redirect(document.get_absolute_url())
         try:
-            result = extract_document_text(primary.file, primary.original_name)
+            result = extract_document_text(
+                primary.file,
+                primary.original_name,
+                language_hint=document.ocr_language,
+                allow_external_ocr=document.allow_external_ocr,
+            )
         finally:
             primary.file.close()
         document.ocr_text = result.text
         document.ocr_status = getattr(OcrStatus, result.status, OcrStatus.EMPTY)
         document.ocr_engine = result.engine[:32]
+        document.ocr_confidence = result.confidence
+        document.ocr_notes = "\n".join(result.notes)[:4000]
         document.page_count = result.pages or document.page_count
-        document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "updated_at"])
+        document.save(
+            update_fields=[
+                "ocr_text", "ocr_status", "ocr_engine", "ocr_confidence", "ocr_notes", "page_count", "updated_at"
+            ]
+        )
         document.rebuild_index()
         messages.success(
             request,
             f"Text extraction finished ({result.engine}): {result.char_count} characters. Search index refreshed.",
         )
         return redirect(document.get_absolute_url())
+
+
+class ExtractionStatusView(AppLoginRequiredMixin, View):
+    def get(self, request, pk):
+        document = _get_document(request, pk)
+        return render(request, "documents/_extraction_status.html", {"document": document})
 
 
 class TagSuggestJsonView(AppLoginRequiredMixin, View):

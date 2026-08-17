@@ -61,11 +61,12 @@
           <a class="btn btn-udm-outline flex-grow-1" href="{% url 'documents:repository' %}">Clear</a>
         </div>
 
-        <div class="col-6 col-lg-3">{{ form.document_type }}</div>
-        <div class="col-6 col-lg-3">{{ form.tag }}</div>
-        <div class="col-12 col-lg-2">{{ form.source }}</div>
+        <div class="col-6 col-lg-2">{{ form.document_type }}</div>
+        <div class="col-6 col-lg-2">{{ form.tag }}</div>
+        <div class="col-6 col-lg-2">{{ form.source }}</div>
         <div class="col-6 col-lg-2">{{ form.year }}</div>
         <div class="col-6 col-lg-2">{{ form.month }}</div>
+        <div class="col-6 col-lg-2">{{ form.retention }}</div>
       </form>
     </div></div>
 
@@ -134,6 +135,21 @@
       </div>
     {% endif %}
 
+    {% if retention_due %}
+      <div class="card-udm mb-3 no-print">
+        <div class="card-udm-head">
+          <div><h2>Retention review due</h2><div class="card-udm-caption">These dates require a records officer's disposition review. Nothing is deleted or hidden automatically.</div></div>
+          <a class="small" href="?retention=due">Show all {{ retention_due_count }}</a>
+        </div>
+        <div class="card-udm-body p-0 table-responsive">
+          <table class="table-udm"><thead><tr><th>Document</th><th>Office</th><th>Retention date</th><th></th></tr></thead><tbody>
+          {% for due_document in retention_due %}<tr><td><a href="{{ due_document.get_absolute_url }}">{{ due_document.title|truncatechars:58 }}</a></td><td>{% include "partials/_office_badge.html" with office=due_document.office %}</td><td>{{ due_document.retention_until|date:"d M Y" }}</td><td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{{ due_document.get_absolute_url }}">Review</a></td></tr>{% endfor %}
+          </tbody></table>
+        </div>
+        {% if retention_due_more %}<div class="card-udm-body pt-0"><p class="text-muted mb-0">and {{ retention_due_more }} more due for review.</p></div>{% endif %}
+      </div>
+    {% endif %}
+
     <div class="d-flex justify-content-between align-items-center mb-2">
       <span class="text-muted" style="font-size:13.5px;">
         {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
@@ -159,6 +175,7 @@
             <div>
               {% for tag in document.tags.all|slice:":3" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
             </div>
+            {% if document.retention_is_due %}<div class="text-danger" style="font-size:12px;">Retention review due {{ document.retention_until|date:"d M Y" }}</div>{% elif document.retention_is_due_soon %}<div class="text-muted" style="font-size:12px;">Retention review by {{ document.retention_until|date:"d M Y" }}</div>{% endif %}
             {% if not document.has_text %}
               <div class="text-muted" style="font-size:12px;">No extracted text — searchable by metadata only</div>
             {% endif %}

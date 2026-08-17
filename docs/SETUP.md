@@ -161,7 +161,7 @@ Press `Ctrl+C` to stop the server.
 
 ## Optional: turn on OCR for scanned documents
 
-Without a key, digital PDFs and Word files still work perfectly — only scanned images are skipped.
+Without a key, digital PDFs and Word files still work locally — only scanned images are skipped. Each upload asks for a language hint and whether its scanned content may be sent to an external provider. Clear the external-OCR checkbox for sensitive records; the file is still saved and any local text layer is still indexed.
 
 1. Register free at <https://ocr.space/ocrapi> (no card required)
 2. Put the key in `.env`:
@@ -170,18 +170,46 @@ Without a key, digital PDFs and Word files still work perfectly — only scanned
    ```
 3. Restart the server
 
-The free tier allows 25,000 pages a month, which is more than a capstone demo will ever use.
+Provider limits can change, so confirm the current allowance and data-processing terms before university use. Transient timeouts, rate limits, and server errors retry with bounded exponential backoff controlled by `OCR_PROVIDER_TIMEOUT_SECONDS`, `OCR_PROVIDER_RETRIES`, and `OCR_RETRY_BASE_SECONDS`. Permanent failures remain visible on the document and can be retried by an authorized user.
 
 ---
 
 ## Optional: background jobs
 
-Extraction runs immediately on upload, which is fine for a demo. For bulk imports, run the worker in a **second terminal**:
+Set `ENABLE_BACKGROUND_TASKS=True` in `.env` for production or for any installation that handles scanned documents. Uploads are saved quickly with a **Reading the document…** state; the worker performs text extraction and OCR after the database transaction commits, then rebuilds the search index. If the setting is false or django-q2 is unavailable, the laptop-safe synchronous path remains available.
+
+Run the worker in a **second terminal** locally:
 
 ```bash
 source .venv/bin/activate
 python manage.py qcluster
 ```
+
+On Render, create a separate worker process with `python manage.py qcluster`. If no worker is running, uploads remain pending and the health endpoint's `?deep=1` check reports the worker as unavailable. The web process still serves existing records. Completed tracking records are archived with external OCR disabled by default; an authorized editor must opt in and deliberately run extraction again.
+
+## Daily custody and retention work
+
+The Incoming queue allows an office user to select several documents, enter one optional shared note, and confirm that all selected physical or digital records are actually present. The service records a separate receipt timestamp, routing activity, audit entry, and sender notification for every selected record. Records that are not currently receivable by that office are rejected rather than silently skipped.
+
+Document types supply retention years. When enough metadata exists, DocTrack computes a retention review date and backfills missing dates during migration. The repository shows due and due-soon records as a human review queue. A due date never deletes, hides, or deactivates a record automatically; disposition remains a records-officer decision under university policy.
+
+Search records query-level timing and permission-checked result-click events. Reports show total clicks, the share of queries with a click, average clicked rank, and per-query clicks. Telemetry stores identifiers and query terms, not document content.
+
+## Optional: password recovery email
+
+Password recovery is offered only when `EMAIL_BACKEND` is not the console backend and `EMAIL_HOST` is set. A university IT department typically needs to provide the SMTP hostname, port, TLS or SSL requirement, an authenticated service account, the approved sender address, and any relay or firewall allow-list entry. Set these values in the Render environment rather than committing them:
+
+```dotenv
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.university.example
+EMAIL_PORT=587
+EMAIL_HOST_USER=doctrack@university.example
+EMAIL_HOST_PASSWORD=use-the-secret-store
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=UDM DocTrack <doctrack@university.example>
+```
+
+Reset requests are rate-limited by source address, never reveal whether an address exists, and write an audit entry. Do not place document content or personal details in email.
 
 ---
 

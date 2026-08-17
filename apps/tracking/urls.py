@@ -7,6 +7,7 @@ app_name = "tracking"
 urlpatterns = [
     path("", views.RecordListView.as_view(), name="list"),
     path("new/", views.RecordCreateView.as_view(), name="create"),
+    path("bulk-receipt/", views.BulkConfirmReceiptView.as_view(), name="bulk_confirm_receipt"),
     path("<int:pk>/review/", views.RecordReviewView.as_view(), name="review"),
     path("<int:pk>/", views.RecordDetailView.as_view(), name="detail"),
     path("<int:pk>/receipt/", views.ConfirmReceiptView.as_view(), name="confirm_receipt"),

@@ -236,3 +236,58 @@ class AuditLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.actor_label} {self.action}"
+
+
+class NotificationQuerySet(models.QuerySet):
+    def unread_for(self, user):
+        if not getattr(user, "is_authenticated", False) or not user.office_id:
+            return self.none()
+        return self.filter(office_id=user.office_id, resolved_at__isnull=True).exclude(reads__user=user)
+
+
+class Notification(models.Model):
+    """One office-level event; read state belongs to each user, not the office."""
+
+    office = models.ForeignKey("accounts.Office", on_delete=models.CASCADE, related_name="notifications")
+    tracking_record = models.ForeignKey(
+        "tracking.TrackingRecord", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
+    )
+    document = models.ForeignKey(
+        "documents.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
+    )
+    kind = models.CharField(max_length=32)
+    title = models.CharField(max_length=160)
+    message = models.CharField(max_length=255)
+    url = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    objects = NotificationQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.office_id})"
+
+
+class NotificationRead(models.Model):
+    notification = models.ForeignKey(Notification, on_delete=models.CASCADE, related_name="reads")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notification_reads")
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["notification", "user"], name="uniq_notification_read_user")]
+
+    def __str__(self):
+        return f"{self.user} read notification {self.notification_id}"
+
+
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notification_preferences")
+    in_app_enabled = models.BooleanField(default=True)
+    email_digest_enabled = models.BooleanField(default=False)
+    email_urgent_enabled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notification preferences for {self.user}"

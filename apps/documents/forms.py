@@ -7,7 +7,7 @@ from apps.accounts.models import Office
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
 
-from .models import AccessLevel, Document, Source
+from .models import AccessLevel, Document, OcrLanguage, Source
 
 
 class UploadForm(BootstrapFormMixin, forms.Form):
@@ -24,6 +24,21 @@ class UploadForm(BootstrapFormMixin, forms.Form):
         choices=[(Source.UPLOAD, "Uploaded file"), (Source.SCAN, "Scanned document")],
         initial=Source.UPLOAD,
         label="How did this arrive?",
+    )
+    ocr_language = forms.ChoiceField(
+        choices=OcrLanguage.choices,
+        initial=OcrLanguage.AUTO,
+        label="Text language",
+        help_text="A hint for scanned pages. Digital text is read locally regardless of this choice.",
+    )
+    allow_external_ocr = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Allow external OCR for scanned pages",
+        help_text=(
+            "Clear this for sensitive records. The file stays stored, and local text layers are still read, "
+            "but images are not sent to OCR.space or Azure."
+        ),
     )
 
     def __init__(self, *args, user=None, **kwargs):
@@ -63,7 +78,7 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
         fields = (
             "title", "description", "office", "document_type", "document_date", "year",
             "reference_number", "author_name", "recipient_name", "signatory",
-            "access_level", "retention_until",
+            "access_level", "retention_until", "ocr_language", "allow_external_ocr",
         )
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences about this document"}),
@@ -76,6 +91,8 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
             "recipient_name": "To / recipient",
             "reference_number": "Tracking or control number",
             "access_level": "Who can open this",
+            "ocr_language": "Text language",
+            "allow_external_ocr": "Allow external OCR for scanned pages",
         }
 
     def __init__(self, *args, user=None, **kwargs):
@@ -185,10 +202,20 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
     source = forms.ChoiceField(required=False, label="", choices=[])
     year = forms.ChoiceField(required=False, label="", choices=[])
     month = forms.ChoiceField(required=False, label="", choices=[])
+    retention = forms.ChoiceField(
+        required=False,
+        label="",
+        choices=[
+            ("", "Any retention status"),
+            ("due", "Due for disposition review"),
+            ("soon", "Due within 90 days"),
+            ("unscheduled", "No retention date"),
+        ],
+    )
 
     #: Declaration order is also the order the row is read in: what you are
     #: looking for, then what kind of thing it is, then when it is from.
-    FIELD_ORDER = ("q", "document_type", "tag", "source", "year", "month")
+    FIELD_ORDER = ("q", "document_type", "tag", "source", "year", "month", "retention")
 
     def __init__(self, *args, years=None, months=None, document_types=None, tags=None,
                  sources=None, **kwargs):
@@ -212,7 +239,7 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
         if tags is not None:
             self.fields["tag"].queryset = tags
 
-        for name in ("year", "month", "document_type", "tag", "source"):
+        for name in ("year", "month", "document_type", "tag", "source", "retention"):
             self.fields[name].widget.attrs.setdefault(
                 "aria-label", self.fields[name].widget.attrs.get("aria-label")
                 or f"Filter by {name.replace('_', ' ')}"
