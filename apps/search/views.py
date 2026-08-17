@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import View
 
 from apps.core.mixins import AppLoginRequiredMixin
-from apps.documents.models import Document
+from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 
 from .forms import SearchForm
 from .services import autocomplete_terms, search_documents
@@ -52,6 +52,24 @@ class SearchView(AppLoginRequiredMixin, View):
     def _has_filters(form) -> bool:
         keys = ("year", "office", "document_type", "tag", "source", "date_from", "date_to")
         return any(form.cleaned_data.get(key) for key in keys)
+
+
+class SearchClickView(AppLoginRequiredMixin, View):
+    def get(self, request, log_id, document_id, rank):
+        query_log = get_object_or_404(SearchQueryLog, pk=log_id, user=request.user)
+        document = get_object_or_404(Document.objects.visible_to(request.user), pk=document_id, is_active=True)
+        rank = max(1, min(int(rank), max(query_log.result_count, 1)))
+        SearchResultClick.objects.create(
+            query_log=query_log,
+            user=request.user,
+            document=document,
+            rank=rank,
+        )
+        if query_log.clicked_document_id is None:
+            SearchQueryLog.objects.filter(pk=query_log.pk, clicked_document__isnull=True).update(
+                clicked_document=document
+            )
+        return redirect(document.get_absolute_url())
 
 
 class AutocompleteView(AppLoginRequiredMixin, View):

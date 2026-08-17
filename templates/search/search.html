@@ -80,7 +80,7 @@
             {% for result in results %}
               <article class="result-item">
                 <div class="flex-grow-1" style="min-width:0;">
-                  <h3><a href="{{ result.document.get_absolute_url }}">{{ result.document.title }}</a></h3>
+                  <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
                   <div class="meta">
                     {% include "partials/_office_badge.html" with office=result.document.office %}
                     {{ result.document.document_type.name|default:"Unclassified" }} ·

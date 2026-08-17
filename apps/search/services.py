@@ -93,6 +93,7 @@ class SearchResponse:
     query: str = ""
     used_fuzzy: bool = False
     explanation: str = ""
+    log_id: int | None = None
 
 
 def tokenize(raw_query: str) -> list[str]:
@@ -242,7 +243,7 @@ def search_documents(
 
     if log:
         try:
-            SearchQueryLog.objects.create(
+            query_log = SearchQueryLog.objects.create(
                 user=user if user.is_authenticated else None,
                 query=raw_query[:255],
                 filters={
@@ -256,6 +257,7 @@ def search_documents(
                 top_score=response.results[0].relevance if response.results else None,
                 duration_ms=response.duration_ms,
             )
+            response.log_id = query_log.pk
         except DatabaseError:  # logging must never break a search
             logger.warning("Could not write the search log entry")
 

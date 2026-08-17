@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from apps.accounts.models import Office
-from apps.documents.models import Document, SearchQueryLog
+from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
 from apps.tracking.models import RoutingStep, Status, TrackingRecord
 
@@ -356,6 +356,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
                 "documents_without_text": documents.filter(ocr_text="").distinct().count(),
                 "top_searches": self._top_searches(),
+                "search_analytics": self._search_analytics(),
             }
         )
         return context
@@ -524,12 +525,26 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
 
     def _top_searches(self):
         rows = list(
-            SearchQueryLog.objects.values("query").annotate(total=Count("id")).order_by("-total")[:8]
+            SearchQueryLog.objects.values("query")
+            .annotate(total=Count("id", distinct=True), clicks=Count("result_clicks"))
+            .order_by("-total")[:8]
         )
         ceiling = max([row["total"] for row in rows], default=0)
         for row in rows:
             row["percent"] = _bar(row["total"], ceiling)
         return rows
+
+    def _search_analytics(self):
+        total_queries = SearchQueryLog.objects.count()
+        clicked_queries = SearchQueryLog.objects.filter(result_clicks__isnull=False).distinct().count()
+        clicks = SearchResultClick.objects.count()
+        average_rank = SearchResultClick.objects.aggregate(value=Avg("rank"))["value"]
+        return {
+            "queries": total_queries,
+            "clicks": clicks,
+            "clicked_query_percent": _percent(clicked_queries, total_queries),
+            "average_rank": round(average_rank, 1) if average_rank is not None else None,
+        }
 
 
 class HealthzView(View):

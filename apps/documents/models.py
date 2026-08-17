@@ -402,3 +402,22 @@ class SearchQueryLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.query} ({self.result_count})"
+
+
+class SearchResultClick(models.Model):
+    """One result navigation event, stored separately so one query may have many clicks."""
+
+    query_log = models.ForeignKey(SearchQueryLog, on_delete=models.CASCADE, related_name="result_clicks")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="search_result_clicks"
+    )
+    document = models.ForeignKey(Document, null=True, on_delete=models.SET_NULL, related_name="search_result_click_events")
+    rank = models.PositiveSmallIntegerField()
+    relevance = models.PositiveSmallIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Query {self.query_log_id} clicked document {self.document_id} at rank {self.rank}"
