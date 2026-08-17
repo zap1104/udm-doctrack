@@ -77,6 +77,12 @@ jobs:
       - name: Run tests
         run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60
 
+      - name: Prepare verification database
+        run: |
+          python manage.py migrate --noinput
+          python manage.py init_db
+          python manage.py seed_demo
+
       - name: Self-check
         run: python manage.py selfcheck
 
