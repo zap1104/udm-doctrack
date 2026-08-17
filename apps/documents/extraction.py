@@ -211,7 +211,11 @@ def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
                 f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode()
             )
 
-        provider_language = language_hint if language_hint in {"eng", "fil"} else "eng"
+        provider_language = "eng"
+        if language_hint == "fil":
+            notes.append(
+                "OCR.space has no Filipino locale mapping in this integration; its English model was used for Filipino/Taglish text."
+            )
         add_field("apikey", api_key)
         add_field("language", provider_language)
         add_field("isOverlayRequired", "true")
@@ -286,10 +290,12 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
         payload, _provider_filename, notes = _prepare_ocr_payload(file_obj, filename)
         client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
         retries = max(0, int(settings.OCR_PROVIDER_RETRIES))
+        locale = {"eng": "en-US", "fil": "fil-PH"}.get(language_hint)
         result = None
         for attempt in range(retries + 1):
             try:
-                poller = client.begin_analyze_document("prebuilt-read", body=payload)
+                options = {"locale": locale} if locale else {}
+                poller = client.begin_analyze_document("prebuilt-read", body=payload, **options)
                 result = poller.result()
                 break
             except (ServiceRequestError, ServiceResponseError, HttpResponseError) as exc:

@@ -155,9 +155,11 @@ def test_ocrspace_retries_one_transient_failure(monkeypatch):
         OCR_RETRY_BASE_SECONDS=0,
         OCR_PROVIDER_TIMEOUT_SECONDS=7,
     ):
-        result = extraction._ocr_space(io.BytesIO(b"%PDF-1.7"), "scan.pdf", language_hint="eng")
+        result = extraction._ocr_space(io.BytesIO(b"%PDF-1.7"), "scan.pdf", language_hint="fil")
     assert result.status == "DONE"
     assert result.confidence == 0.88
+    assert result.engine == "ocr.space:eng"
+    assert any("Filipino/Taglish" in note for note in result.notes)
     assert calls == [7, 7]
     assert any("retry" in note.lower() for note in result.notes)
 
