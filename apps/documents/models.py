@@ -15,6 +15,8 @@ Rebuild with `Document.rebuild_index()` or `manage.py reindex_documents`.
 
 from __future__ import annotations
 
+from datetime import date
+
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
@@ -47,6 +49,12 @@ class OcrStatus(models.TextChoices):
     SKIPPED = "SKIPPED", "Skipped"
 
 
+class OcrLanguage(models.TextChoices):
+    AUTO = "auto", "Automatic (English and Filipino)"
+    ENGLISH = "eng", "English"
+    FILIPINO = "fil", "Filipino"
+
+
 class AccessLevel(models.TextChoices):
     OFFICE = "OFFICE", "Owning office only"
     OVPA = "OVPA", "All OVPA offices"
@@ -73,6 +81,9 @@ class DocumentQuerySet(models.QuerySet):
         return self.select_related("office", "document_type", "uploaded_by", "tracking_record").prefetch_related(
             "tags"
         )
+
+    def due_for_retention_review(self, on_date=None):
+        return self.filter(retention_until__isnull=False, retention_until__lte=on_date or timezone.localdate())
 
 
 class DocumentManager(models.Manager.from_queryset(DocumentQuerySet)):
@@ -125,6 +136,12 @@ class Document(TimeStampedModel):
     ocr_status = models.CharField(max_length=8, choices=OcrStatus.choices, default=OcrStatus.PENDING)
     ocr_engine = models.CharField(max_length=32, blank=True)
     ocr_confidence = models.FloatField(null=True, blank=True)
+    ocr_language = models.CharField(max_length=8, choices=OcrLanguage.choices, default=OcrLanguage.AUTO)
+    allow_external_ocr = models.BooleanField(
+        default=True,
+        help_text="Allow scanned content to be sent to the configured external OCR provider.",
+    )
+    ocr_notes = models.TextField(blank=True, help_text="Operator-visible extraction and retry notes.")
 
     index_title = models.TextField(blank=True, editable=False)
     index_meta = models.TextField(blank=True, editable=False)
@@ -156,7 +173,31 @@ class Document(TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.year:
             self.year = (self.document_date or timezone.localdate()).year
+        if self.retention_until is None:
+            self.retention_until = self.default_retention_until()
+            if self.retention_until and kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = set(kwargs["update_fields"]) | {"retention_until"}
         super().save(*args, **kwargs)
+
+    def default_retention_until(self):
+        if not self.document_type_id or not self.document_type.retention_years:
+            return None
+        base = self.document_date or (date(self.year, 12, 31) if self.year else timezone.localdate())
+        target_year = base.year + self.document_type.retention_years
+        try:
+            return base.replace(year=target_year)
+        except ValueError:
+            return base.replace(year=target_year, month=2, day=28)
+
+    @property
+    def retention_is_due(self) -> bool:
+        return bool(self.retention_until and self.retention_until <= timezone.localdate())
+
+    @property
+    def retention_is_due_soon(self) -> bool:
+        if not self.retention_until or self.retention_is_due:
+            return False
+        return (self.retention_until - timezone.localdate()).days <= 90
 
     # -- indexing ---------------------------------------------------------
     def build_index_blobs(self) -> None:

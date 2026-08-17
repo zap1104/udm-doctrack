@@ -31,12 +31,20 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
     parts = []
     engines = []
     failures = []
+    notes = []
+    statuses = []
+    confidences = []
     page_count = 0
     for document_file in selected.order_by("created_at"):
         try:
             document_file.file.open("rb")
             try:
-                result = extract_document_text(document_file.file, document_file.original_name)
+                result = extract_document_text(
+                    document_file.file,
+                    document_file.original_name,
+                    language_hint=document.ocr_language,
+                    allow_external_ocr=document.allow_external_ocr,
+                )
             finally:
                 document_file.file.close()
         except (FileNotFoundError, OSError) as exc:
@@ -48,6 +56,10 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
         document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
         page_count += result.pages
         engines.append(result.engine)
+        statuses.append(result.status)
+        notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
+        if result.confidence is not None:
+            confidences.append(result.confidence)
         if result.text:
             parts.append(result.text)
         if result.status == OcrStatus.FAILED:
@@ -58,15 +70,29 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
         combined = extracted
     else:
         combined = normalise_text(f"{document.ocr_text}\n\n{extracted}")[:200000]
-    status = OcrStatus.DONE if combined else (OcrStatus.FAILED if failures else OcrStatus.EMPTY)
+    if combined:
+        status = OcrStatus.DONE
+    elif failures:
+        status = OcrStatus.FAILED
+    elif statuses and all(item == OcrStatus.SKIPPED for item in statuses):
+        status = OcrStatus.SKIPPED
+    else:
+        status = OcrStatus.EMPTY
     engine = ", ".join(dict.fromkeys(item for item in engines if item))[:32]
+    confidence = round(sum(confidences) / len(confidences), 4) if confidences else None
     with transaction.atomic():
         document = Document.objects.select_related("office", "uploaded_by").get(pk=document.pk)
         document.ocr_text = combined
         document.ocr_status = status
         document.ocr_engine = engine or ("failed" if failures else "none")
+        document.ocr_confidence = confidence
+        document.ocr_notes = "\n".join((notes + failures)[:20])[:4000]
         document.page_count = page_count or document.page_count
-        document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "updated_at"])
+        document.save(
+            update_fields=[
+                "ocr_text", "ocr_status", "ocr_engine", "ocr_confidence", "ocr_notes", "page_count", "updated_at"
+            ]
+        )
         actor = User.objects.filter(pk=user_id).first() if user_id else None
         suggestion = suggest_metadata(
             text=document.ocr_text, filename=document.title, office=document.office, user=actor
@@ -84,6 +110,6 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
             f"Finished text extraction for “{document.title}”",
             actor=actor,
             target=document,
-            extra={"status": status, "failures": failures[:5]},
+            extra={"status": status, "failures": failures[:5], "notes": notes[:5], "confidence": confidence},
         )
     return {"document_id": document.pk, "status": status, "characters": len(combined), "failures": failures}

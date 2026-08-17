@@ -34,7 +34,10 @@ logger = logging.getLogger("doctrack")
 # Upload → text → suggestion (step 1 of the upload wizard)
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def ingest_upload(*, user, uploaded_file, office=None, source=Source.UPLOAD) -> tuple[Document, object]:
+def ingest_upload(
+    *, user, uploaded_file, office=None, source=Source.UPLOAD,
+    ocr_language="auto", allow_external_ocr=True,
+) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
 
     The synchronous branch is deliberately retained for laptops where django-q2
@@ -46,7 +49,16 @@ def ingest_upload(*, user, uploaded_file, office=None, source=Source.UPLOAD) -> 
     if office is None:
         raise ValidationError("Your account has no office, so it cannot own a document.")
 
-    extraction = extract_document_text(uploaded_file, uploaded_file.name) if not settings.ENABLE_BACKGROUND_TASKS else None
+    extraction = (
+        extract_document_text(
+            uploaded_file,
+            uploaded_file.name,
+            language_hint=ocr_language,
+            allow_external_ocr=allow_external_ocr,
+        )
+        if not settings.ENABLE_BACKGROUND_TASKS
+        else None
+    )
     document = Document.objects.create(
         title=(uploaded_file.name.rsplit(".", 1)[0][:255] or "Untitled document"),
         source=source,
@@ -57,6 +69,9 @@ def ingest_upload(*, user, uploaded_file, office=None, source=Source.UPLOAD) -> 
         ocr_status=getattr(OcrStatus, extraction.status, OcrStatus.PENDING) if extraction else OcrStatus.PENDING,
         ocr_engine=extraction.engine[:32] if extraction else "pending",
         ocr_confidence=extraction.confidence if extraction else None,
+        ocr_language=ocr_language,
+        allow_external_ocr=allow_external_ocr,
+        ocr_notes="\n".join(extraction.notes) if extraction else "",
         page_count=extraction.pages if extraction else 0,
         access_level=AccessLevel.OFFICE,
     )
@@ -147,6 +162,9 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
     document.document_date = data.get("document_date")
     document.year = data.get("year") or (document.document_date or timezone.localdate()).year
     document.retention_until = data.get("retention_until")
+    document.ocr_language = data.get("ocr_language") or document.ocr_language
+    if "allow_external_ocr" in data:
+        document.allow_external_ocr = bool(data["allow_external_ocr"])
     document.save()
 
     set_tags(document, tag_names, user=user)
@@ -211,7 +229,16 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
     validate_upload(uploaded_file)
     use_async = settings.ENABLE_BACKGROUND_TASKS and run_extraction
-    extraction = extract_document_text(uploaded_file, uploaded_file.name) if run_extraction and not use_async else None
+    extraction = (
+        extract_document_text(
+            uploaded_file,
+            uploaded_file.name,
+            language_hint=document.ocr_language,
+            allow_external_ocr=document.allow_external_ocr,
+        )
+        if run_extraction and not use_async
+        else None
+    )
     uploaded_file.seek(0)
     document_file = DocumentFile.objects.create(
         document=document,
@@ -233,7 +260,11 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
         combined = (document.ocr_text + "\n\n" + extraction.text).strip()
         document.ocr_text = combined[:200000]
         document.ocr_status = OcrStatus.DONE
-        document.save(update_fields=["ocr_text", "ocr_status", "updated_at"])
+        document.ocr_confidence = extraction.confidence
+        document.ocr_notes = "\n".join(extraction.notes)[:4000]
+        document.save(
+            update_fields=["ocr_text", "ocr_status", "ocr_confidence", "ocr_notes", "updated_at"]
+        )
         document.rebuild_index()
     return document_file
 
@@ -263,6 +294,8 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
         access_level=AccessLevel.OFFICE,
         uploaded_by=user,
         ocr_status=OcrStatus.PENDING,
+        allow_external_ocr=False,
+        ocr_notes="External OCR is disabled by default for records archived from tracking. An authorized editor may opt in and re-run extraction.",
     )
 
     text_parts = [record.subject, record.instructions, record.remarks, record.completion_note]
@@ -292,7 +325,12 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
         created_file_ids.append(document_file.pk)
         if not settings.ENABLE_BACKGROUND_TASKS:
             buffer = ContentFile(payload)
-            extraction = extract_document_text(buffer, attachment.original_name)
+            extraction = extract_document_text(
+                buffer,
+                attachment.original_name,
+                language_hint=document.ocr_language,
+                allow_external_ocr=document.allow_external_ocr,
+            )
             document_file.page_count = extraction.pages
             document_file.extracted_chars = extraction.char_count
             document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])

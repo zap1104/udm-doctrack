@@ -25,6 +25,8 @@
         <div class="col-md-6">{% include "partials/_field.html" with field=form.signatory %}</div>
         <div class="col-md-6">{% include "partials/_field.html" with field=form.access_level %}</div>
         <div class="col-md-6">{% include "partials/_field.html" with field=form.retention_until %}</div>
+        <div class="col-md-6">{% include "partials/_field.html" with field=form.ocr_language %}</div>
+        <div class="col-12">{% include "partials/_field.html" with field=form.allow_external_ocr %}</div>
       </div>
       {% include "partials/_field.html" with field=form.tags %}
 
@@ -38,7 +40,7 @@
 
     <div class="col-lg-4">
       <div class="help-note">
-        Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters.
+        Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters. Changing OCR privacy or language does not contact a provider until you deliberately run text extraction again.
       </div>
     </div>
   </div>

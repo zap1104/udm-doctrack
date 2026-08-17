@@ -29,6 +29,8 @@
         </div>
         {% include "partials/_field.html" with field=form.office %}
         {% include "partials/_field.html" with field=form.source %}
+        {% include "partials/_field.html" with field=form.ocr_language %}
+        {% include "partials/_field.html" with field=form.allow_external_ocr %}
         <button class="btn btn-udm" type="submit">Read File and Continue</button>
         <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Cancel</a>
       </form>
@@ -40,7 +42,7 @@
       <h2 style="font-size:15px;">What Happens Next</h2>
       <ol class="ps-3" style="font-size:13.5px;color:var(--udm-slate-text);">
         <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
-        <li class="mb-2">Scanned pages use OCR when a provider is configured.</li>
+        <li class="mb-2">Scanned pages use OCR only when a provider is configured and you allow external OCR for this record.</li>
         <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>
         <li class="mb-0"><strong>You review and correct everything</strong> before it is saved. The system suggests; you decide.</li>
       </ol>

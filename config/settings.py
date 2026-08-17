@@ -463,18 +463,17 @@ SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
 # ---------------------------------------------------------------------------
 # Background jobs (django-q2, ORM broker: no Redis required)
 # ---------------------------------------------------------------------------
-if ENABLE_BACKGROUND_TASKS:
-    Q_CLUSTER = {
-        "name": "doctrack",
-        "workers": env_int("Q_WORKERS", 2),
-        "timeout": 600,
-        "retry": 900,
-        "queue_limit": 50,
-        "bulk": 5,
-        "orm": "default",
-        "save_limit": 250,
-        "catch_up": False,
-    }
+Q_CLUSTER = {
+    "name": "doctrack",
+    "workers": env_int("Q_WORKERS", 2),
+    "timeout": 600,
+    "retry": 900,
+    "queue_limit": 50,
+    "bulk": 5,
+    "orm": "default",
+    "save_limit": 250,
+    "catch_up": False,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +536,10 @@ OCR_SPACE_ENDPOINT = env("OCR_SPACE_ENDPOINT",
                          "https://api.ocr.space/parse/image")
 AZURE_DOCINT_ENDPOINT = env("AZURE_DOCINT_ENDPOINT", "")
 AZURE_DOCINT_KEY = env("AZURE_DOCINT_KEY", "")
-OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 200000)
+OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 500_000)
+OCR_PROVIDER_TIMEOUT_SECONDS = env_int("OCR_PROVIDER_TIMEOUT_SECONDS", 90)
+OCR_PROVIDER_RETRIES = env_int("OCR_PROVIDER_RETRIES", 2)
+OCR_RETRY_BASE_SECONDS = env_int("OCR_RETRY_BASE_SECONDS", 2)
 
 # Metadata suggestion engine
 # rules | none | ai (future)
