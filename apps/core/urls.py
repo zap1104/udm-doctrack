@@ -8,6 +8,7 @@ urlpatterns = [
     path("healthz/", views.HealthzView.as_view(), name="healthz"),
     path("notifications/", views.NotificationListView.as_view(), name="notifications"),
     path("notifications/count/", views.NotificationCountView.as_view(), name="notification_count"),
+    path("notifications/read-all/", views.NotificationMarkAllReadView.as_view(), name="notification_mark_all_read"),
     path("notifications/<int:pk>/read/", views.NotificationReadView.as_view(), name="notification_read"),
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("reports/", views.ReportsView.as_view(), name="reports"),

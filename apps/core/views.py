@@ -4,12 +4,14 @@ import csv
 from datetime import datetime, time, timedelta
 
 from django.contrib import messages
-from django.db.models import Avg, Count, DurationField, F, Q
+from django.core.paginator import Paginator
+from django.db.models import Avg, Count, DurationField, Exists, F, OuterRef, Q
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import TemplateView, View
 
 from apps.accounts.models import Office
@@ -20,8 +22,27 @@ from apps.tracking.models import RoutingStep, Status, TrackingRecord
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
-from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, Tag, TagRule
+from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
 from .utils import log_action
+
+NOTIFICATION_KIND_META = {
+    Notification.Kind.ROUTED: {"label": "Needs receipt", "icon": "!", "css": "is-actionable"},
+    Notification.Kind.RECEIVED: {"label": "Receipt confirmed", "icon": "✓", "css": "is-received"},
+    Notification.Kind.COMPLETED: {"label": "Completed", "icon": "✓", "css": "is-completed"},
+    Notification.Kind.SHARED: {"label": "Shared with your office", "icon": "↗", "css": "is-shared"},
+}
+
+
+def decorate_notification(notification):
+    notification.kind_meta = NOTIFICATION_KIND_META.get(
+        notification.kind, {"label": "Update", "icon": "•", "css": ""}
+    )
+    notification.safe_url = (
+        notification.url
+        if url_has_allowed_host_and_scheme(notification.url, allowed_hosts=set(), require_https=False)
+        else ""
+    )
+    return notification
 
 
 # ---------------------------------------------------------------------------
@@ -592,25 +613,95 @@ class HealthzView(View):
 
 
 class NotificationListView(AppLoginRequiredMixin, View):
+    PAGE_SIZE = 25
+
     def get(self, request):
-        notification_query = Notification.objects.filter(office_id=request.user.office_id).select_related("tracking_record", "document")
-        read_ids = set(notification_query.filter(reads__user=request.user).values_list("pk", flat=True))
-        return render(request, "core/notifications.html", {"notifications": notification_query[:50], "read_ids": read_ids})
+        user = request.user
+        read_subquery = NotificationRead.objects.filter(notification_id=OuterRef("pk"), user=user)
+        notification_query = (
+            Notification.objects.filter(office_id=user.office_id)
+            .select_related("tracking_record", "document")
+            .annotate(is_read=Exists(read_subquery))
+        )
+        active_filter = request.GET.get("filter", "all")
+        if active_filter == "unread":
+            notification_query = notification_query.filter(resolved_at__isnull=True, is_read=False)
+        elif active_filter not in {"all", "unread"}:
+            active_filter = "all"
+
+        active_kind = request.GET.get("kind", "")
+        valid_kinds = {value for value, _label in Notification.Kind.choices}
+        if active_kind not in valid_kinds:
+            active_kind = ""
+        if active_kind:
+            notification_query = notification_query.filter(kind=active_kind)
+
+        notification_query = notification_query.order_by("is_read", "-created_at")
+        page_obj = Paginator(notification_query, self.PAGE_SIZE).get_page(request.GET.get("page"))
+        today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
+        previous_day_group = None
+        for notification in page_obj.object_list:
+            decorate_notification(notification)
+            day = timezone.localtime(notification.created_at).date()
+            notification.day_group = "Today" if day == today else "Yesterday" if day == yesterday else day.strftime("%d %B %Y")
+            notification.show_day_header = notification.day_group != previous_day_group
+            previous_day_group = notification.day_group
+
+        return render(
+            request,
+            "core/notifications.html",
+            {
+                "notifications": page_obj.object_list,
+                "page_obj": page_obj,
+                "notification_count": page_obj.paginator.count,
+                "active_filter": active_filter,
+                "active_kind": active_kind,
+                "notification_kinds": Notification.Kind.choices,
+            },
+        )
 
 
 class NotificationCountView(AppLoginRequiredMixin, View):
     def get(self, request):
-        from .notifications import unread_count
-        return JsonResponse({"unread": unread_count(request.user)})
+        from .notifications import in_app_enabled, unread_count
+
+        enabled = in_app_enabled(request.user)
+        unread = unread_count(request.user) if enabled else 0
+        response = render(
+            request,
+            "partials/_notification_badge.html",
+            {"unread_notifications": unread, "notification_in_app_enabled": enabled},
+        )
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 class NotificationReadView(AppLoginRequiredMixin, View):
     def post(self, request, pk):
         from .notifications import mark_read
-        notification = get_object_or_404(Notification, pk=pk)
-        mark_read(notification, request.user)
-        if notification.url:
+
+        notification = get_object_or_404(Notification, pk=pk, office_id=request.user.office_id)
+        if not mark_read(notification, request.user):
+            raise Http404
+        if request.headers.get("HX-Request") == "true":
+            notification.is_read = True
+            decorate_notification(notification)
+            return render(request, "core/_notification_row.html", {"notification": notification})
+        if notification.url and url_has_allowed_host_and_scheme(
+            notification.url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
             return redirect(notification.url)
+        return redirect("core:notifications")
+
+
+class NotificationMarkAllReadView(AppLoginRequiredMixin, View):
+    def post(self, request):
+        from .notifications import mark_all_read
+
+        mark_all_read(request.user, Notification.objects.filter(office_id=request.user.office_id, resolved_at__isnull=True))
         return redirect("core:notifications")
 
 

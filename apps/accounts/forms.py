@@ -131,9 +131,7 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
 class NotificationPreferenceForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = NotificationPreference
-        fields = ("in_app_enabled", "email_digest_enabled", "email_urgent_enabled")
+        fields = ("in_app_enabled",)
         labels = {
             "in_app_enabled": "Show in-app notifications",
-            "email_digest_enabled": "Send a daily email digest when SMTP is configured",
-            "email_urgent_enabled": "Send email for urgent or overdue documents",
         }

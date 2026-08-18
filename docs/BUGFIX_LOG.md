@@ -384,3 +384,64 @@ Reports could rank common queries and timing, but there was no evidence that a u
 **Fix:** add append-only result-click events linked to the originating user's query, document, rank, and timestamp; permission-check the redirect; and report clicks, clicked-query rate, and average clicked rank. Document content is never copied into the event.
 
 **Lesson:** search telemetry is useful only when attribution is trustworthy and it obeys the same visibility rules as the document itself.
+
+
+---
+
+## 20. Notification polling discarded its response and wasted database queries
+
+**Files:** `templates/partials/_topbar.html`, `templates/partials/_notification_badge.html`, `apps/core/views.py`, `apps/core/context_processors.py`
+
+The topbar polled a JSON count every 30 seconds with `hx-swap="none"`, so every response was discarded and the visible badge stayed stale. The context processor also counted notifications eagerly on responses that never rendered the topbar.
+
+**Fix:** return a rendered badge partial, swap it with `outerHTML`, poll every 60 seconds only while the document is visible, send `Cache-Control: no-store`, and wrap the global count in `SimpleLazyObject`. The badge now uses a live count region and updates without custom JavaScript.
+
+**Lesson:** a poll that does not update the DOM is background database load without user value. Prefer a server-rendered partial when HTMX already owns the interaction.
+
+---
+
+## 21. Notification read links could cross office boundaries or leave the site
+
+**Files:** `apps/core/views.py`, `apps/core/notifications.py`, `tests/test_deployment_readiness.py`
+
+The read view looked up notifications by primary key without scoping to the user's office, ignored the service's permission result, and redirected to a stored URL without validating it. A malformed or tampered notification URL could therefore disclose another office's record or leave the application.
+
+**Fix:** scope notification lookup by office, reject cross-office reads with 404, validate notification URLs as relative paths on write, and validate again before redirecting or rendering a link.
+
+**Lesson:** a stored internal URL is still untrusted data at the redirect boundary, and office ownership must be enforced in the view as well as the service.
+
+---
+
+## 22. Notification preferences exposed controls that did nothing
+
+**Files:** `apps/core/models.py`, `apps/accounts/forms.py`, `apps/core/context_processors.py`, `apps/core/notifications.py`
+
+The profile form offered email digest and urgent-email checkboxes even though no email delivery path consumed them. This made the interface promise behavior the system did not provide.
+
+**Fix:** chose the lower-risk in-app-only option. The `in_app_enabled` preference now suppresses the topbar badge and poll while leaving the notifications page directly accessible. The unused email fields were removed with a migration.
+
+**Lesson:** a smaller preference surface that is truthful is safer than a larger one that creates false expectations.
+
+---
+
+## 23. Notification rows accumulated without lifecycle or bulk-read controls
+
+**Files:** `apps/core/models.py`, `apps/core/notifications.py`, `apps/core/tasks.py`, `apps/tracking/services.py`, `apps/core/management/commands/ensure_schedules.py`
+
+Only routed notifications were resolved on receipt; informational received, completed, and shared notifications could remain active forever. Routing also inserted one notification per office in a loop, and staff had no mark-all action.
+
+**Fix:** added typed `Notification.Kind` choices, bulk office notification creation, receipt and completion resolution, a daily django-q2 maintenance schedule, configurable aging and pruning of resolved UI rows, and an idempotent bulk `NotificationRead` service. AuditLog and document history remain untouched.
+
+**Lesson:** notification lifecycle must distinguish actionable alerts from informational updates, and UI convenience rows must never be confused with the append-only record of what happened.
+
+---
+
+## 24. Notifications were a flat, unstyled list with no scalable navigation
+
+**Files:** `templates/core/notifications.html`, `templates/core/_notification_row.html`, `static/css/doctrack.css`, `apps/core/views.py`
+
+The page hard-sliced 50 rows, ran a second read-ID query, provided no filters or grouping, and used an emoji bell with no dedicated visual or keyboard treatment.
+
+**Fix:** added a single-query `Exists()` read annotation, unread-first pagination, All/Unread and kind filters, day grouping, mark-read HTMX rows with a non-JavaScript POST fallback, mark-all-read, an inline SVG bell, capped unread badge, kind-specific visual treatment, and visible keyboard focus styling.
+
+**Lesson:** notification UI must make urgency and ownership legible; otherwise staff learn to ignore a growing counter.

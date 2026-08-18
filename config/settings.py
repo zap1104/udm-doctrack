@@ -463,6 +463,9 @@ SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
 # ---------------------------------------------------------------------------
 # Background jobs (django-q2, ORM broker: no Redis required)
 # ---------------------------------------------------------------------------
+NOTIFICATION_INFO_RESOLVE_DAYS = env_int("NOTIFICATION_INFO_RESOLVE_DAYS", 30)
+NOTIFICATION_RETENTION_DAYS = env_int("NOTIFICATION_RETENTION_DAYS", 90)
+
 Q_CLUSTER = {
     "name": "doctrack",
     "workers": env_int("Q_WORKERS", 2),

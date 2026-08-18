@@ -1,13 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Notifications · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><div class="eyebrow">Account</div><h1>Notifications</h1><p class="sub">Updates for {{ user.office_label }}. Reading one does not clear it for your colleagues.</p></div></div>
-<div class="card-udm"><div class="card-udm-body">
-{% for notification in notifications %}
-  <div class="d-flex justify-content-between gap-3 py-3 border-bottom{% if notification.pk in read_ids %} text-muted{% endif %}">
-    <div><strong>{{ notification.title }}</strong><p class="mb-1">{{ notification.message }}</p><small class="text-muted">{{ notification.created_at|date:"d M Y, g:i A" }}</small></div>
-    <form method="post" action="{% url 'core:notification_read' notification.pk %}">{% csrf_token %}<button class="btn btn-sm btn-udm-outline" type="submit">{% if notification.pk in read_ids %}Open{% else %}Read{% endif %}</button></form>
+<div class="page-head notification-page-head">
+  <div>
+    <div class="eyebrow">Account</div>
+    <h1>Notifications</h1>
+    <p class="sub">Updates for {{ user.office_label }}. Reading one does not clear it for your colleagues.</p>
   </div>
-{% empty %}<p class="mb-0 text-muted">There are no notifications yet.</p>{% endfor %}
-</div></div>
+  {% if notification_count %}
+    <form method="post" action="{% url 'core:notification_mark_all_read' %}">
+      {% csrf_token %}
+      <button class="btn btn-udm-outline" type="submit">Mark all as read</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="notification-toolbar card-udm mb-4">
+  <div class="card-udm-body d-flex flex-wrap align-items-center gap-2">
+    <nav class="notification-filters" aria-label="Notification filters">
+      <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}">All</a>
+      <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}">Unread</a>
+    </nav>
+    <form class="notification-kind-filter ms-auto" method="get">
+      <input type="hidden" name="filter" value="{{ active_filter }}">
+      <label class="visually-hidden" for="notification-kind">Filter by type</label>
+      <select id="notification-kind" name="kind" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All types</option>
+        {% for value, label in notification_kinds %}<option value="{{ value }}"{% if active_kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+<section aria-labelledby="notification-list-heading">
+  <div class="d-flex align-items-baseline justify-content-between gap-3 mb-2">
+    <h2 id="notification-list-heading" class="section-title mb-0">{{ notification_count }} update{{ notification_count|pluralize }}</h2>
+    <span class="text-muted small">Unread updates appear first</span>
+  </div>
+  <div class="notification-list">
+    {% for notification in notifications %}
+      {% if notification.show_day_header %}<h2 class="notification-day-heading">{{ notification.day_group }}</h2>{% endif %}
+      {% include "core/_notification_row.html" %}
+    {% empty %}
+      <div class="card-udm notification-empty"><div class="card-udm-body"><p class="mb-0 text-muted">There are no notifications matching these filters.</p></div></div>
+    {% endfor %}
+  </div>
+</section>
+
+{% include "partials/_pagination.html" %}
 {% endblock %}

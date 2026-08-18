@@ -101,3 +101,10 @@ Before enabling an OCR provider, have the university privacy officer approve the
 Bulk receipt requires an explicit selection and custody confirmation. Every selected record receives its own append-only routing event and audit entry. Search click telemetry stores the user, query-log identifier, document identifier, rank, and timestamp; it does not copy document content. Restrict reports and database access accordingly because search terms themselves can still reveal work context.
 
 The archive contains personal data and is operated by a Philippine university. Apply the principles of the Data Privacy Act of 2012: limit access to the people and offices that need it, protect backups and object storage, avoid putting document content in email, keep audit logs, and follow the university's approved retention and disposal policy. Consult the university privacy officer for the institution's definitive retention schedule and breach-response procedure.
+
+
+## Notification maintenance
+
+Notifications are a user-interface convenience, not the audit trail. `AuditLog` remains append-only and is never removed by notification maintenance. When background tasks are enabled, run `python manage.py ensure_schedules` once after migrations to register the daily `notification-pruning` django-q2 schedule. The task resolves informational notifications older than `NOTIFICATION_INFO_RESOLVE_DAYS` (default 30 days) and deletes only notifications already resolved for longer than `NOTIFICATION_RETENTION_DAYS` (default 90 days). It never deletes routing records, documents, files, activities, receipts, or audit entries.
+
+If the scheduled worker is unavailable, notification rows remain available and the application continues to function. Start `python manage.py qcluster`, then inspect the django-q2 schedule and worker logs. Adjust the two retention settings only after the records owner and privacy officer agree that the shorter or longer UI-history window is appropriate.

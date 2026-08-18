@@ -10,7 +10,7 @@ from django.test import override_settings
 
 from apps.accounts.models import User
 from apps.core.models import Notification
-from apps.core.notifications import mark_read, notify_office, unread_count
+from apps.core.notifications import mark_read, notify_office, unread_count, unread_for
 from apps.core.utils import validate_upload
 from apps.documents import services as document_services
 from apps.tracking import services as tracking_services
@@ -42,7 +42,9 @@ def test_background_upload_enqueues_after_commit(users, monkeypatch):
 def test_notifications_are_read_per_user_not_per_office(offices):
     first = User.objects.create_user(username="first", password="TestPass123!", office=offices["MED"])
     second = User.objects.create_user(username="second", password="TestPass123!", office=offices["MED"])
-    notification = notify_office(offices["MED"], kind="ROUTED", title="Incoming", message="A record is waiting")
+    notification = notify_office(
+        offices["MED"], kind=Notification.Kind.ROUTED, title="Incoming", message="A record is waiting"
+    )
     assert unread_count(first) == 1
     assert unread_count(second) == 1
     assert mark_read(notification, first)
@@ -255,3 +257,123 @@ def test_tracking_archive_defaults_to_external_ocr_disabled(users, offices, memo
     document = document_services.archive_tracking_record(record, user=users["sup"])
     assert document.allow_external_ocr is False
     assert "disabled by default" in document.ocr_notes
+
+
+@pytest.mark.django_db
+def test_notification_count_returns_swappable_badge_and_respects_read_state(client, users, offices):
+    notification = notify_office(
+        offices["MED"],
+        kind=Notification.Kind.ROUTED,
+        title="Incoming",
+        message="A record is waiting",
+        url="/tracking/1/",
+    )
+    client.force_login(users["med"])
+    response = client.get("/notifications/count/")
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "every 60s [document.visibilityState=='visible']" in body
+    assert "hx-swap=\"outerHTML\"" in body
+    assert "notification-count" in body
+    assert response["Cache-Control"] == "no-store"
+
+    client.post(f"/notifications/{notification.pk}/read/")
+    response = client.get("/notifications/count/")
+    assert "notification-count d-none" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_notification_read_is_scoped_to_the_user_office(client, users, offices):
+    notification = notify_office(
+        offices["MED"], kind=Notification.Kind.ROUTED, title="Private office update", message="Not for SUP"
+    )
+    client.force_login(users["sup"])
+    response = client.post(f"/notifications/{notification.pk}/read/")
+    assert response.status_code == 404
+    assert Notification.objects.get(pk=notification.pk).reads.count() == 0
+
+
+@pytest.mark.django_db
+def test_notification_urls_are_relative_only(offices):
+    external = notify_office(
+        offices["MED"], kind=Notification.Kind.SHARED, title="External", message="No redirect", url="https://evil.example/"
+    )
+    relative = notify_office(
+        offices["MED"], kind=Notification.Kind.SHARED, title="Internal", message="Safe redirect", url="/tracking/1/"
+    )
+    assert external.url == ""
+    assert relative.url == "/tracking/1/"
+
+
+@pytest.mark.django_db
+def test_unread_excludes_resolved_and_already_read(users, offices):
+    from django.utils import timezone
+
+    resolved = notify_office(offices["MED"], kind=Notification.Kind.RECEIVED, title="Resolved", message="Done")
+    resolved.resolved_at = timezone.now()
+    resolved.save(update_fields=["resolved_at"])
+    read = notify_office(offices["MED"], kind=Notification.Kind.ROUTED, title="Read", message="Seen")
+    mark_read(read, users["med"])
+    unread = notify_office(offices["MED"], kind=Notification.Kind.ROUTED, title="Unread", message="Open")
+    assert list(unread_for(users["med"])) == [unread]
+
+
+@pytest.mark.django_db
+def test_mark_all_read_is_idempotent(client, users, offices):
+    from apps.core.models import NotificationRead
+    from apps.core.notifications import mark_all_read
+
+    notifications = [
+        notify_office(offices["MED"], kind=Notification.Kind.ROUTED, title=f"N{idx}", message="Open")
+        for idx in range(3)
+    ]
+    assert mark_all_read(users["med"], Notification.objects.filter(pk__in=[n.pk for n in notifications])) == 3
+    assert mark_all_read(users["med"], Notification.objects.filter(pk__in=[n.pk for n in notifications])) == 3
+    assert NotificationRead.objects.filter(user=users["med"], notification__in=notifications).count() == 3
+
+    client.force_login(users["med"])
+    assert client.post("/notifications/read-all/").status_code == 302
+
+
+@pytest.mark.django_db
+def test_non_template_response_does_not_eagerly_count_notifications(client, users):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    client.force_login(users["med"])
+    with CaptureQueriesContext(connection) as captured:
+        response = client.get("/healthz/")
+    assert response.status_code == 200
+    assert not any("notification" in query["sql"].lower() for query in captured.captured_queries)
+
+
+@pytest.mark.django_db
+def test_notification_maintenance_resolves_stale_info_and_prunes_only_old_resolved(users, offices, settings):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.core.tasks import prune_notifications
+
+    settings.NOTIFICATION_INFO_RESOLVE_DAYS = 30
+    settings.NOTIFICATION_RETENTION_DAYS = 90
+    stale_info = notify_office(
+        offices["MED"], kind=Notification.Kind.COMPLETED, title="Old completion", message="Informational"
+    )
+    stale_info.created_at = timezone.now() - timedelta(days=31)
+    stale_info.save(update_fields=["created_at"])
+    old_resolved = notify_office(
+        offices["MED"], kind=Notification.Kind.SHARED, title="Old resolved", message="Prunable"
+    )
+    old_resolved.resolved_at = timezone.now() - timedelta(days=91)
+    old_resolved.save(update_fields=["resolved_at"])
+    active = notify_office(offices["MED"], kind=Notification.Kind.ROUTED, title="Active", message="Keep")
+
+    result = prune_notifications()
+
+    stale_info.refresh_from_db()
+    assert stale_info.resolved_at is not None
+    assert not Notification.objects.filter(pk=old_resolved.pk).exists()
+    assert Notification.objects.filter(pk=active.pk).exists()
+    assert result["resolved"] >= 1
+    assert result["deleted"] >= 1

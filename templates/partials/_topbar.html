@@ -16,10 +16,7 @@
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
-    <a class="topbar-notifications position-relative" href="{% url 'core:notifications' %}" aria-label="Notifications{% if unread_notifications %}, {{ unread_notifications }} unread{% endif %}" hx-get="{% url 'core:notification_count' %}" hx-trigger="every 30s" hx-swap="none">
-      <span aria-hidden="true">&#128276;</span>
-      <span class="notification-count{% if not unread_notifications %} d-none{% endif %}" data-notification-count>{{ unread_notifications }}</span>
-    </a>
+    {% include "partials/_notification_badge.html" %}
     <div class="dropdown">
       <button type="button" class="topbar-account-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu">
         <span class="avatar">{{ user.initials }}</span>
