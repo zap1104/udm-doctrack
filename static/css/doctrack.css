@@ -722,12 +722,22 @@ a:hover { text-decoration: underline; }
 .chart-table table { margin-top:8px; }
 
 /* ---------------------------------------------------------- status by row */
+/* The label column is a fixed width rather than sized to its own content
+   (auto/max-content) because every row here is its own independent grid —
+   sizing to content would let each row's bar start at a different x position
+   and break the one thing a bar chart needs, that lengths are comparable at a
+   glance. 152px is measured, not guessed: the widest pill in the status set,
+   "Pending receipt", renders at ~144px, and 108px — sized for the shorter
+   labels this used to be — clipped it, with the bar painted on top of the
+   overflow. overflow:hidden on the cell is the fallback for a future label
+   longer than this margin: a clean clip at the column edge instead of a pill
+   bleeding into the bar again. */
 .status-row {
-  display:grid; grid-template-columns:108px minmax(0,1fr) 34px 40px;
+  display:grid; grid-template-columns:152px minmax(0,1fr) 34px 40px;
   align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--chart-grid);
 }
 .status-row:last-child { border-bottom:0; }
-.status-row-label { min-width:0; }
+.status-row-label { min-width:0; overflow:hidden; }
 .status-row strong { text-align:right; color:var(--udm-navy); font-size:14px; }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
@@ -750,7 +760,9 @@ a:hover { text-decoration: underline; }
   .reports-tab { flex:0 0 auto; }
   .report-series-item { grid-template-columns:72px minmax(0,1fr) 38px; }
   .report-series-item--wide { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px; }
-  .status-row { grid-template-columns:100px minmax(0,1fr) 30px 36px; gap:8px; }
+  /* Same label width as the desktop rule — the content that has to fit does
+     not shrink on a narrow screen, only the bar column does. */
+  .status-row { grid-template-columns:152px minmax(0,1fr) 30px 36px; gap:8px; }
   .column-chart-plot { height:150px; }
   .column-label { font-size:10px; }
 }
