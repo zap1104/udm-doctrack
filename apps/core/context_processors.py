@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.utils.functional import SimpleLazyObject
 
 from .colors import PALETTE
 
@@ -28,13 +29,26 @@ def _nav_active(path: str) -> str:
 
 def site_context(request):
     """Values every template needs."""
-    unread_notifications = 0
-    if getattr(request.user, "is_authenticated", False):
-        from .notifications import unread_count
-        unread_notifications = unread_count(request.user)
+    def badge_count():
+        if not getattr(request.user, "is_authenticated", False):
+            return 0
+        from .notifications import in_app_enabled, unread_count
+        if not in_app_enabled(request.user):
+            return 0
+        return unread_count(request.user)
+
+    def in_app_preference():
+        if not getattr(request.user, "is_authenticated", False):
+            return False
+        from .notifications import in_app_enabled
+        return in_app_enabled(request.user)
+
+    unread_notifications = SimpleLazyObject(badge_count)
+    notification_in_app_enabled = SimpleLazyObject(in_app_preference)
     return {
         "nav_active": _nav_active(request.path or "/"),
         "unread_notifications": unread_notifications,
+        "notification_in_app_enabled": notification_in_app_enabled,
         "PALETTE": PALETTE,
         "SITE_NAME": settings.SITE_NAME,
         "SITE_LONG_NAME": settings.SITE_LONG_NAME,

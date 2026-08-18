@@ -248,6 +248,12 @@ class NotificationQuerySet(models.QuerySet):
 class Notification(models.Model):
     """One office-level event; read state belongs to each user, not the office."""
 
+    class Kind(models.TextChoices):
+        ROUTED = "ROUTED", "Needs receipt"
+        RECEIVED = "RECEIVED", "Receipt confirmed"
+        COMPLETED = "COMPLETED", "Completed"
+        SHARED = "SHARED", "Shared with your office"
+
     office = models.ForeignKey("accounts.Office", on_delete=models.CASCADE, related_name="notifications")
     tracking_record = models.ForeignKey(
         "tracking.TrackingRecord", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
@@ -255,7 +261,7 @@ class Notification(models.Model):
     document = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
     )
-    kind = models.CharField(max_length=32)
+    kind = models.CharField(max_length=32, choices=Kind.choices)
     title = models.CharField(max_length=160)
     message = models.CharField(max_length=255)
     url = models.CharField(max_length=255, blank=True)
@@ -266,6 +272,12 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["office", "resolved_at", "-created_at"],
+                name="notif_office_resolved_created",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.office_id})"
@@ -278,6 +290,7 @@ class NotificationRead(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["notification", "user"], name="uniq_notification_read_user")]
+        indexes = [models.Index(fields=["user"], name="notif_read_user_idx")]
 
     def __str__(self):
         return f"{self.user} read notification {self.notification_id}"
@@ -286,8 +299,6 @@ class NotificationRead(models.Model):
 class NotificationPreference(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notification_preferences")
     in_app_enabled = models.BooleanField(default=True)
-    email_digest_enabled = models.BooleanField(default=False)
-    email_urgent_enabled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Notification preferences for {self.user}"

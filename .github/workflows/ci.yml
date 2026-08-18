@@ -24,7 +24,7 @@ jobs:
           --health-retries 5
 
     env:
-      DJANGO_SECRET_KEY: test-key-not-used-anywhere-real
+      DJANGO_SECRET_KEY: ci-test-only-secret-key-not-used-in-production-2026
       DJANGO_DEBUG: "False"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       POSTGRES_DB: udm_doctrack

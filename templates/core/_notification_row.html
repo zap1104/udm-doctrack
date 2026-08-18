@@ -1,0 +1,21 @@
+<article class="notification-row {{ notification.kind_meta.css }}{% if notification.is_read %} is-read{% endif %}" data-notification-id="{{ notification.pk }}">
+  <div class="notification-kind-icon" aria-hidden="true">{{ notification.kind_meta.icon }}</div>
+  <div class="notification-row-content">
+    <div class="notification-row-heading">
+      <span class="notification-kind-label">{{ notification.kind_meta.label }}</span>
+      <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"g:i A" }}</time>
+    </div>
+    <h2 class="notification-row-title">{{ notification.title }}</h2>
+    <p class="notification-row-message">{{ notification.message }}</p>
+  </div>
+  <div class="notification-row-action">
+    {% if notification.is_read and notification.safe_url %}
+      <a class="btn btn-sm btn-udm-outline" href="{{ notification.safe_url }}">Open</a>
+    {% else %}
+      <form method="post" action="{% url 'core:notification_read' notification.pk %}"{% if not notification.is_read %} hx-post="{% url 'core:notification_read' notification.pk %}" hx-target="closest .notification-row" hx-swap="outerHTML"{% endif %}>
+        {% csrf_token %}
+        <button class="btn btn-sm {% if notification.is_read %}btn-udm-outline{% else %}btn-udm{% endif %}" type="submit">{% if notification.is_read %}Read{% else %}Mark as read{% endif %}</button>
+      </form>
+    {% endif %}
+  </div>
+</article>
