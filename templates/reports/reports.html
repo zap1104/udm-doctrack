@@ -14,66 +14,6 @@
   </div>
 </div>
 
-{# One filter row above everything it scopes — every panel below re-renders against the same slice. #}
-<section class="card-udm mb-4 no-print" aria-labelledby="report-filters-title">
-  <div class="card-udm-head">
-    <div>
-      <h2 id="report-filters-title">Report Filters</h2>
-      <div class="report-caption">Applied to every figure and chart on this page.</div>
-    </div>
-    {% if has_filters %}
-      <a class="small" href="{% url 'core:reports' %}">Clear filters</a>
-    {% endif %}
-  </div>
-  <div class="card-udm-body">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-sm-6 col-lg-3">
-        <label class="form-label" for="report-office">Office</label>
-        <select class="form-select" id="report-office" name="office">
-          <option value="">All authorized offices</option>
-          {% for office in filter_offices %}
-            <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
-              {{ office.code }} — {{ office.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-sm-6 col-lg-2">
-        <label class="form-label" for="report-year">Year</label>
-        <select class="form-select" id="report-year" name="year">
-          <option value="">All years</option>
-          {% for year in filter_years %}
-            <option value="{{ year }}" {% if filters.year == year %}selected{% endif %}>{{ year }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-sm-6 col-lg-2">
-        <label class="form-label" for="report-status">Status</label>
-        <select class="form-select" id="report-status" name="status">
-          <option value="">All statuses</option>
-          <option value="PENDING_RECEIPT" {% if filters.status == "PENDING_RECEIPT" %}selected{% endif %}>Pending receipt</option>
-          <option value="RECEIVED" {% if filters.status == "RECEIVED" %}selected{% endif %}>Received</option>
-          <option value="IN_PROCESS" {% if filters.status == "IN_PROCESS" %}selected{% endif %}>In process</option>
-          <option value="COMPLETED" {% if filters.status == "COMPLETED" %}selected{% endif %}>Completed</option>
-          <option value="OVERDUE" {% if filters.status == "OVERDUE" %}selected{% endif %}>Overdue</option>
-        </select>
-      </div>
-      <div class="col-sm-8 col-lg-3">
-        <label class="form-label" for="report-document-type">Document type</label>
-        <select class="form-select" id="report-document-type" name="document_type">
-          <option value="">All types</option>
-          {% for type in filter_types %}
-            <option value="{{ type.pk }}" {% if filters.document_type.pk == type.pk %}selected{% endif %}>{{ type.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-sm-4 col-lg-2 d-grid">
-        <button class="btn btn-udm-outline" type="submit">Apply</button>
-      </div>
-    </form>
-  </div>
-</section>
-
 <div class="report-print-header">
   <div>
     <strong>{{ SITE_NAME }} · Reports and Analytics</strong>
@@ -86,6 +26,82 @@
   <button class="reports-tab active" type="button" data-report-tab="tracking" aria-selected="true">Tracking Reports</button>
   <button class="reports-tab" type="button" data-report-tab="documents" aria-selected="false">Document Management Reports</button>
 </div>
+{% comment %}
+  Filters follow the tabs rather than preceding them. Tracking and Document
+  reports are two different readings, and which one you are looking at has to
+  be settled before narrowing it — a filter panel sitting above the choice
+  implied it applied to something already decided.
+
+  Four labelled dropdowns in a bordered card also became one bar, the same
+  control Tracking and the Repository now use, so all three pages filter alike.
+  The summary line states the active slice in words, because a collapsed panel
+  must never let a filtered figure pass for a complete one.
+{% endcomment %}
+{% active_filter_count as filter_count %}
+<form method="get" class="mb-4 no-print">
+  <div class="filterbar">
+    <svg class="filterbar-ic" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+    <span class="filterbar-summary-text">
+      {% if filters.office %}{{ filters.office.code }}{% else %}All offices{% endif %} ·
+      {% if filters.year %}{{ filters.year }}{% else %}All years{% endif %} ·
+      {% if filters.status %}{{ filters.status|status_label }}{% else %}All statuses{% endif %} ·
+      {% if filters.document_type %}{{ filters.document_type.name }}{% else %}All types{% endif %}
+    </span>
+    <details class="filterbar-more">
+      <summary>
+        {% include "partials/_icon.html" with name="sliders" class="btn-ic" %}
+        <span>Filters{% if filter_count %} · {{ filter_count }}{% endif %}</span>
+      </summary>
+      <div class="filterbar-panel">
+        <div class="filterbar-grid">
+          <div>
+            <label for="report-office">Office</label>
+            <select class="form-select" id="report-office" name="office">
+              <option value="">All authorized offices</option>
+              {% for office in filter_offices %}
+                <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>{{ office.code }} — {{ office.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="report-year">Year</label>
+            <select class="form-select" id="report-year" name="year">
+              <option value="">All years</option>
+              {% for year in filter_years %}
+                <option value="{{ year }}" {% if filters.year == year %}selected{% endif %}>{{ year }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="report-status">Status</label>
+            <select class="form-select" id="report-status" name="status">
+              <option value="">All statuses</option>
+              <option value="PENDING_RECEIPT" {% if filters.status == "PENDING_RECEIPT" %}selected{% endif %}>Pending receipt</option>
+              <option value="RECEIVED" {% if filters.status == "RECEIVED" %}selected{% endif %}>Received</option>
+              <option value="IN_PROCESS" {% if filters.status == "IN_PROCESS" %}selected{% endif %}>In process</option>
+              <option value="COMPLETED" {% if filters.status == "COMPLETED" %}selected{% endif %}>Completed</option>
+              <option value="OVERDUE" {% if filters.status == "OVERDUE" %}selected{% endif %}>Overdue</option>
+            </select>
+          </div>
+          <div>
+            <label for="report-document-type">Document type</label>
+            <select class="form-select" id="report-document-type" name="document_type">
+              <option value="">All types</option>
+              {% for type in filter_types %}
+                <option value="{{ type.pk }}" {% if filters.document_type.pk == type.pk %}selected{% endif %}>{{ type.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="filterbar-actions">
+          <a class="btn btn-udm-outline btn-sm" href="{% url 'core:reports' %}">Clear all</a>
+          <button class="btn btn-udm btn-sm" type="submit">Apply</button>
+        </div>
+      </div>
+    </details>
+  </div>
+</form>
+
 
 <!-- ------------------------------------------------------------------ tracking -->
 <section class="report-panel active" data-report-panel="tracking" aria-labelledby="tracking-reports-heading">
@@ -96,34 +112,33 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
-      <a class="stat-card navy" href="{% url 'tracking:list' %}">
-        <div class="label">Tracked documents</div>
-        <div class="value">{{ total_records }}</div>
-        <div class="hint">Active and completed records you can see</div>
-      </a>
-    </div>
-    <div class="col-6 col-lg-3">
-      <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=inbox">
-        <div class="label">Pending receipt</div>
-        <div class="value">{{ awaiting_receipt }}</div>
-        <div class="hint">Sent but not yet acknowledged</div>
-      </a>
-    </div>
-    <div class="col-6 col-lg-3">
-      <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
-        <div class="label">Overdue</div>
-        <div class="value">{{ overdue }}</div>
-        <div class="hint">Past deadline and not completed</div>
-      </a>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="stat-card green">
-        <div class="label">Completed</div>
-        <div class="value">{{ completed_records }}</div>
-        <div class="hint">{{ completion_rate }}% of all tracked documents</div>
-      </div>
+  {% comment %}
+    One fused strip rather than four floating cards. These are four parts of a
+    single reading, and the gaps between separate cards implied they were four
+    unrelated figures. Fusing them also lifts the charts about 150px up the
+    page, which on a laptop is the difference between seeing one on load and
+    scrolling to find it.
+  {% endcomment %}
+  <div class="kpi-strip">
+    <a class="kpi-cell" href="{% url 'tracking:list' %}">
+      <div class="n">{{ total_records }}</div>
+      <div class="k">Tracked documents</div>
+      <div class="h">Active and completed records you can see</div>
+    </a>
+    <a class="kpi-cell" href="{% url 'tracking:list' %}?scope=inbox">
+      <div class="n">{{ awaiting_receipt }}</div>
+      <div class="k">Pending receipt</div>
+      <div class="h">Sent but not yet acknowledged</div>
+    </a>
+    <a class="kpi-cell kpi-cell--alert" href="{% url 'tracking:list' %}?status=OVERDUE">
+      <div class="n">{{ overdue }}</div>
+      <div class="k">Overdue</div>
+      <div class="h">Past deadline and not completed</div>
+    </a>
+    <div class="kpi-cell">
+      <div class="n">{{ completed_records }}</div>
+      <div class="k">Completed</div>
+      <div class="h">{{ completion_rate }}% of all tracked documents</div>
     </div>
   </div>
 
@@ -340,34 +355,26 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
-      <div class="stat-card green">
-        <div class="label">Repository documents</div>
-        <div class="value">{{ total_documents }}</div>
-        <div class="hint">Completed, archived and historical records</div>
-      </div>
+  <div class="kpi-strip">
+    <div class="kpi-cell">
+      <div class="n">{{ total_documents }}</div>
+      <div class="k">Repository documents</div>
+      <div class="h">Completed, archived and historical records</div>
     </div>
-    <div class="col-6 col-lg-3">
-      <div class="stat-card gold">
-        <div class="label">Without tags</div>
-        <div class="value">{{ untagged_documents }}</div>
-        <div class="hint">Metadata cleanup required</div>
-      </div>
+    <div class="kpi-cell">
+      <div class="n">{{ untagged_documents }}</div>
+      <div class="k">Without tags</div>
+      <div class="h">Metadata cleanup required</div>
     </div>
-    <div class="col-6 col-lg-3">
-      <div class="stat-card navy">
-        <div class="label">Without extracted text</div>
-        <div class="value">{{ documents_without_text }}</div>
-        <div class="hint">Searchable by metadata only</div>
-      </div>
+    <div class="kpi-cell">
+      <div class="n">{{ documents_without_text }}</div>
+      <div class="k">Without extracted text</div>
+      <div class="h">Searchable by metadata only</div>
     </div>
-    <div class="col-6 col-lg-3">
-      <div class="stat-card">
-        <div class="label">Document types in use</div>
-        <div class="value">{{ document_types|length }}</div>
-        <div class="hint">Distinct types across the repository</div>
-      </div>
+    <div class="kpi-cell">
+      <div class="n">{{ document_types|length }}</div>
+      <div class="k">Document types in use</div>
+      <div class="h">Distinct types across the repository</div>
     </div>
   </div>
 

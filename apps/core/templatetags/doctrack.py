@@ -36,6 +36,46 @@ def pagination_url(context, page_number) -> str:
     params["page"] = page_number
     return f"?{params.urlencode()}"
 
+@register.simple_tag(takes_context=True)
+def without_param(context, *names) -> str:
+    """The current querystring minus the named parameters.
+
+    Powers the removable filter chips: each chip links to the same page with
+    its own term dropped and everything else — including any other active
+    filters — left in place. Doing this in the template with string surgery
+    would break the moment two filters were active at once.
+
+    `page` is always dropped as well. Removing a filter shrinks the result set,
+    so staying on page four of the old, longer list would usually land the
+    reader on an empty page.
+    """
+    request = context.get("request")
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    for name in (*names, "page"):
+        params.pop(name, None)
+    query = params.urlencode()
+    return f"?{query}" if query else "?"
+
+
+@register.simple_tag(takes_context=True)
+def active_filter_count(context, *ignore) -> int:
+    """How many filters are narrowing the current page.
+
+    Feeds the count on the Filters button, so a collapsed panel still says
+    whether anything is hidden inside it. Without that number a reader has no
+    way to tell a filtered list from a complete one — which is the whole risk
+    of putting filters behind a disclosure in the first place.
+
+    `q` is excluded because the search box sits outside the panel and shows its
+    own value, and `page` because paging is not a filter.
+    """
+    request = context.get("request")
+    if request is None:
+        return 0
+    skip = set(ignore) | {"page", "q"}
+    return sum(1 for key, value in request.GET.items() if key not in skip and value)
+
+
 STATUS_PILL = {
     "DRAFT": "pill-draft",
     "PENDING_RECEIPT": "pill-pending",

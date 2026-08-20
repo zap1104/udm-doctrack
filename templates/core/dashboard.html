@@ -10,36 +10,65 @@
   </div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-12 col-md-4">
-    <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
-      <div class="label">Incoming</div>
-      <div class="value">{{ inbox_count }}</div>
-      <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
-    </a>
-  </div>
-  <div class="col-6 col-md-4">
-    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
-      <div class="label">Outgoing</div>
-      <div class="value">{{ outgoing_count }}</div>
-      <div class="hint">Sent by your office, not yet received</div>
-    </a>
-  </div>
-  <div class="col-6 col-md-4">
-    <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
-      <div class="label">Overdue</div>
-      <div class="value">{{ overdue_count }}</div>
-      <div class="hint">Past the action deadline</div>
-    </a>
-  </div>
+{% comment %}
+  Overdue leads, and it is the only one of the three that is tinted.
+
+  These were three identical cards in source order Incoming, Outgoing, Overdue.
+  Two of them are counts and the third means work has already missed its
+  deadline — giving all three the same weight left the one number worth acting
+  on sitting last and looking like the other two.
+{% endcomment %}
+<div class="attention-row">
+  <a class="attention-card{% if overdue_count %} attention-card--urgent{% endif %}" href="{% url 'tracking:list' %}?status=OVERDUE">
+    <span class="n">{{ overdue_count }}</span>
+    <span class="tx">
+      <span class="k">Overdue</span>
+      <span class="h">Past the action deadline</span>
+    </span>
+    <span class="go" aria-hidden="true">›</span>
+  </a>
+  <a class="attention-card" href="{% url 'tracking:list' %}?scope=inbox">
+    <span class="n">{{ inbox_count }}</span>
+    <span class="tx">
+      <span class="k">Incoming</span>
+      <span class="h">{{ inbox_new_today }} arrived today · pending your receipt</span>
+    </span>
+    <span class="go" aria-hidden="true">›</span>
+  </a>
+  <a class="attention-card" href="{% url 'tracking:list' %}?scope=sent">
+    <span class="n">{{ outgoing_count }}</span>
+    <span class="tx">
+      <span class="k">Outgoing</span>
+      <span class="h">Sent by your office, not yet received</span>
+    </span>
+    <span class="go" aria-hidden="true">›</span>
+  </a>
+</div>
+
+{% comment %}
+  Today's flow, on one line. It was a full card in the right-hand column, as
+  tall as the work list beside it, to report four small numbers that are
+  usually zero at the start of a day. Same figures, a fraction of the space,
+  and the column it vacated goes to the list people actually act on.
+{% endcomment %}
+<div class="flow-strip" aria-label="Office flow today">
+  <div class="flow-cell"><div class="n">{{ received_today }}</div><div class="k">Received today</div></div>
+  <div class="flow-cell"><div class="n">{{ forwarded_today }}</div><div class="k">Forwarded</div></div>
+  <div class="flow-cell"><div class="n">{{ completed_today }}</div><div class="k">Completed</div></div>
+  <div class="flow-cell"><div class="n">{{ custody_count }}</div><div class="k">Held by your office</div></div>
 </div>
 
 <div class="row g-4">
   <div class="col-lg-8">
+    {% comment %}
+      Titled for what it is rather than for the status it filters on. "Pending
+      Receipt" restated the Incoming card immediately above it; what the reader
+      needs to know is that these are theirs to deal with.
+    {% endcomment %}
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>Pending Receipt</h2>
+          <h2>Waiting on you</h2>
           {% if show_office_columns %}
             <div class="card-udm-caption">
               Showing which office sent each document and which has still to confirm it.
@@ -86,7 +115,7 @@
                 <td class="text-end">
                   {% if record.can_confirm_now %}
                     <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
-                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                      {% include "partials/_icon.html" with name="receipt" class="btn-receipt-icon" %}
                       <span>Confirm Receipt</span>
                     </a>
                   {% else %}
@@ -99,7 +128,8 @@
           </table></div>
         {% else %}
           <div class="empty-state">
-            <h3>No incoming documents are waiting</h3>
+            <div class="empty-state-icon">{% include "partials/_icon.html" with name="inbox" class="empty-state-ic" %}</div>
+            <h3>Nothing is waiting on you</h3>
             <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
             <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
           </div>
@@ -149,20 +179,8 @@
 
   <div class="col-lg-4">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Office Flow Today</h2></div>
-      <div class="card-udm-body">
-        <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
-          <span>Held by your office</span><strong>{{ custody_count }}</strong>
-        </div>
-      </div>
-    </div>
-
-    <div class="card-udm mt-4">
       <div class="card-udm-head">
-        <h2>Newest in Document Management</h2>
+        <h2>Newest in Documents</h2>
         <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
           <span>Search</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>

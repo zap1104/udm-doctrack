@@ -25,17 +25,21 @@ from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
 from .utils import log_action
 
+#: `icon` names an entry in templates/partials/_icon.html rather than holding a
+#: glyph. The glyphs it replaced ("!", "✓", "↗") rendered in whatever the system
+#: font had, so they varied by platform, and two different kinds both showed the
+#: same tick — the icon was decoration rather than a way to tell them apart.
 NOTIFICATION_KIND_META = {
-    Notification.Kind.ROUTED: {"label": "Needs receipt", "icon": "!", "css": "is-actionable"},
-    Notification.Kind.RECEIVED: {"label": "Receipt confirmed", "icon": "✓", "css": "is-received"},
-    Notification.Kind.COMPLETED: {"label": "Completed", "icon": "✓", "css": "is-completed"},
-    Notification.Kind.SHARED: {"label": "Shared with your office", "icon": "↗", "css": "is-shared"},
+    Notification.Kind.ROUTED: {"label": "Needs receipt", "icon": "send", "css": "is-actionable"},
+    Notification.Kind.RECEIVED: {"label": "Receipt confirmed", "icon": "receipt", "css": "is-received"},
+    Notification.Kind.COMPLETED: {"label": "Completed", "icon": "check", "css": "is-completed"},
+    Notification.Kind.SHARED: {"label": "Shared with your office", "icon": "share", "css": "is-shared"},
 }
 
 
 def decorate_notification(notification):
     notification.kind_meta = NOTIFICATION_KIND_META.get(
-        notification.kind, {"label": "Update", "icon": "•", "css": ""}
+        notification.kind, {"label": "Update", "icon": "bell", "css": ""}
     )
     notification.safe_url = (
         notification.url

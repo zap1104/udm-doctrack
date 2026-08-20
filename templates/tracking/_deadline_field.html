@@ -15,6 +15,10 @@
       </label>
     {% endfor %}
   </div>
+  <p class="deadline-help">
+    With no deadline the receiving office acts at its own pace, and the record is
+    never counted as overdue.
+  </p>
   {% for error in form.deadline_choice.errors %}<div class="field-errors" role="alert">{{ error }}</div>{% endfor %}
 
   <div class="deadline-date {% if form.due_date.errors %}form-field--error{% endif %}" data-deadline-panel>

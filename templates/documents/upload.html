@@ -32,7 +32,7 @@
         {% include "partials/_field.html" with field=form.ocr_language %}
         {% include "partials/_field.html" with field=form.allow_external_ocr %}
         <button class="btn btn-udm" type="submit">Read File and Continue</button>
-        <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Cancel</a>
+        <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">{% include "partials/_icon.html" with name="cancel" %}<span>Cancel</span></a>
       </form>
     </div></div>
   </div>

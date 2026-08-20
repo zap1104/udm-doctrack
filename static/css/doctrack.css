@@ -1,58 +1,101 @@
-/* UDM DocTrack — visual system taken straight from the UI/UX mockups.
-   Palette: UDM Navy #0B315A · Institutional Gold #C49A2E · Action Teal #16697A
-            Success Green #2E7D5B · Canvas #F5F7FA
-   Type:    Aptos (ships with Microsoft 365) with a system fallback stack. */
+/* UDM DocTrack — visual system.
+   Palette: Brand Emerald #0F6E4C · Champagne Gold #D4AF6A · Status Green #2F9E6B
+            Process Teal #16697A · Canvas #F5F7F5
+   Type:    Inter (body and display), JetBrains Mono (tracking numbers), both
+            open-licence web fonts over a system fallback stack.
+
+   Gold is deliberately scarce. It marks the single most consequential action on
+   a screen — confirming receipt, which is the moment custody actually changes
+   hands — and is never spent as a second general-purpose button colour.
+
+   The token *names* are inherited from the earlier navy palette on purpose.
+   Every rule below already reads them by name, so a repaint happens here and
+   nowhere else; renaming them would mean editing hundreds of call sites for no
+   behavioural gain. Read `--udm-navy` as "the brand chrome colour", not as the
+   hue navy. */
 
 :root {
-  --udm-navy: #0b315a;
-  --udm-navy-700: #0e3c6d;
-  --udm-navy-600: #14477e;
-  --udm-gold: #c49a2e;
-  --udm-gold-soft: #f6edd8;
-  --udm-teal: #16697a;
-  --udm-teal-soft: #e3f0f2;
-  --udm-green: #2e7d5b;
-  --udm-green-soft: #e4f2ea;
-  --udm-red: #b4342b;
-  --udm-red-soft: #fbe7e5;
-  --udm-canvas: #f5f7fa;
-  --udm-line: #dfe5ec;
-  --udm-line-strong: #b9c9da;
-  --udm-line-soft: #cfd8e6;
-  --udm-label-ink: #33415a;
-  --udm-ink: #16202c;
+  /* Brand chrome: sidebar, headings, primary buttons, links, focus. */
+  --udm-navy: #0f6e4c;
+  --udm-navy-700: #0c5a3e;
+  --udm-navy-600: #12805a;
+  /* The navigation plane. Much darker than the brand emerald on purpose: at
+     236px wide, a colour tuned for buttons reads as a wall of saturation. */
+  --udm-chrome: #0c1f18;
+  --udm-gold: #d4af6a;
+  --udm-gold-soft: #fbf0dc;
+  /* Links, focus rings and selected states resolve to the brand colour: this
+     redesign unified "interactive" with "brand" rather than keeping a separate
+     accent hue for them. The teal that used to live here survives only as the
+     In Process status colour below — that is a state, not an interaction. */
+  --udm-teal: #0f6e4c;
+  --udm-teal-soft: #e5f4ec;
+  --udm-green: #2f9e6b;
+  --udm-green-soft: #e3f6ec;
+  --udm-red: #c0392b;
+  --udm-red-soft: #fbe4e1;
+  --udm-canvas: #f5f7f5;
+  --udm-line: #dfe5ea;
+  --udm-line-strong: #b6c2bd;
+  --udm-line-soft: #ccd6d1;
+  --udm-label-ink: #33404f;
+  --udm-ink: #172018;
   --udm-muted: #63718a;
   --udm-slate-text: #41506a;
   --udm-slate-soft: #eceff4;
   --udm-slate-ink: #55637a;
+  /* In Process keeps a hue of its own. It is the one status that is neither a
+     wait (gold), a success (green) nor a failure (red), and lending it the
+     brand emerald would make an in-flight document read as a finished one. */
+  --udm-process: #16697a;
+  --udm-process-soft: #e3f0f2;
+  --udm-process-ink: #10505d;
+  /* Status pills are neutral-bodied and let the dot carry the state, so these
+     two are the body colours every pill wears whatever its status. */
+  /* The tint that pairs with the brand colour. It was referenced by the
+     notification kind-icon before it existed anywhere, so that chip has been
+     rendering with no background at all — an unnoticed miss, not a repaint. */
+  --udm-navy-soft: #e5f4ec;
+  --udm-pill-bg: #eef0f2;
+  --udm-pill-ink: #33404f;
   /* "Ink" tokens: the readable-on-tint text colour paired with each *-soft
      background above (pills, receipt/dashboard-action chips). Named
      separately from the base hue so a repaint can retune contrast on tints
-     without having to touch the solid brand colours. */
-  --udm-green-ink: #1f5a42;
-  --udm-gold-ink: #8a6a12;
-  --udm-gold-ink-dark: #624907;
-  --udm-gold-ink-hover: #4f3a05;
-  --udm-gold-border: #bf9323;
-  --udm-gold-tint: #fffaf0;
-  --udm-gold-tint-strong: #eedcae;
-  --udm-teal-ink: #10505d;
-  --udm-teal-ink-dark: #0f5260;
+     without having to touch the solid brand colours. Champagne gold is a pale
+     hue, so its ink runs much darker than the swatch it sits on. */
+  --udm-green-ink: #1d6b48;
+  --udm-gold-ink: #5c4415;
+  --udm-gold-ink-dark: #4a3610;
+  --udm-gold-ink-hover: #3b2b0c;
+  --udm-gold-border: #c49a52;
+  --udm-gold-tint: #fffdf7;
+  --udm-gold-tint-strong: #f0dcb4;
+  --udm-teal-ink: #0c5a3e;
+  --udm-teal-ink-dark: #0a4c34;
   --udm-red-ink: #8f2a22;
-  /* Chart colours: two validated categorical slots plus the reserved status
-     scale. --chart-one / --chart-two clear the lightness band, chroma floor,
-     protan/deutan separation and 3:1 contrast on white; they are
-     snapped-to-passing steps of UDM teal and institutional gold, which sit
-     just below the chroma floor at their brand values. Series identity is
-     never carried by colour alone — every chart ships a legend or a
-     labelled list, and the column charts a table view. */
-  --chart-one: #0a6e9a;
-  --chart-two: #b58c24;
-  --chart-track: #e8edf3;
-  --chart-grid: #eef1f6;
+  /* Chart colours: two categorical slots plus the reserved status scale.
+     These now carry the brand pair (emerald and champagne gold) at the request
+     of the redesign.
+
+     KNOWN GAP: the previous values were snapped to pass a lightness-band,
+     chroma-floor, protan/deutan-separation and 3:1-on-white check. This pair
+     has NOT been re-validated, and a green/gold pairing is exactly the
+     combination those checks are most likely to fail — deuteranopia collapses
+     the two hues toward each other. Re-run that validation and retune these two
+     values before this ships to real users. Until then the safeguards below are
+     doing the real work: series identity is never carried by colour alone —
+     every chart ships a legend or a labelled list, and the column charts a
+     table view. */
+  --chart-one: #0f6e4c;
+  --chart-two: #d4af6a;
+  --chart-track: #e8ede9;
+  --chart-grid: #eef1ef;
   --sidebar-width: 236px;
   --radius: 10px;
-  --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
+  /* Buttons are fully rounded; cards and inputs keep the moderate radius above.
+     A pill-shaped text input reads as a broken control, so the two stay apart. */
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(15, 110, 76, 0.06), 0 8px 24px rgba(15, 110, 76, 0.05);
 }
 
 * {
@@ -63,17 +106,17 @@ body {
   margin: 0;
   background: var(--udm-canvas);
   color: var(--udm-ink);
-  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, .display-face {
-  font-family: "Aptos Display", "Aptos", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  color: var(--udm-navy);
-  letter-spacing: -0.01em;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: var(--udm-chrome);
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 a {
@@ -93,13 +136,13 @@ a:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .wordmark .udm { color: var(--udm-gold); }
-.wordmark .doctrack { color: var(--udm-navy); }
+.wordmark .doctrack { color: var(--udm-chrome); }
 .wordmark--light .doctrack { color: #ffffff; }
 
 /* ------------------------------------------------------------------ shell */
@@ -108,8 +151,8 @@ a:hover { text-decoration: underline; }
 .app-sidebar {
   width: var(--sidebar-width);
   flex: 0 0 var(--sidebar-width);
-  background: var(--udm-navy);
-  color: #cdd9e8;
+  background: var(--udm-chrome);
+  color: #9db8ab;
   padding: 22px 14px;
   position: sticky;
   top: 0;
@@ -125,7 +168,7 @@ a:hover { text-decoration: underline; }
   gap: 11px;
   padding: 10px 12px;
   border-radius: 8px;
-  color: #cdd9e8;
+  color: #9db8ab;
   font-size: 14.5px;
   margin-bottom: 2px;
 }
@@ -139,7 +182,7 @@ a:hover { text-decoration: underline; }
 .nav-item.active .dot { background: var(--udm-gold); }
 .nav-section {
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: rgba(205, 217, 232, 0.55); padding: 18px 12px 8px;
+  color: rgba(157, 184, 171, 0.62); padding: 18px 12px 8px;
 }
 
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
@@ -173,7 +216,7 @@ a:hover { text-decoration: underline; }
 
 .app-content { padding: 26px; flex: 1 1 auto; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
-.page-head h1 { font-size: 25px; margin: 0 0 4px; }
+.page-head h1 { font-size: 29px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 4px; }
 .page-head .sub { color: var(--udm-muted); font-size: 14px; margin: 0; }
 .eyebrow {
   font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
@@ -204,14 +247,20 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow-card);
   display: block;
   height: 100%;
+  /* Only set on :hover before, so a card that is a link (most are) browser-
+     defaulted to underlining every line of text inside it until you hovered,
+     which is backwards. Off at rest, and .label opts back in below so the
+     one line that reads as the card's clickable label still looks like one. */
+  text-decoration: none;
 }
 .stat-card:hover { text-decoration: none; border-color: var(--udm-teal); }
-.stat-card .label { color: var(--udm-muted); font-size: 13px; }
+.stat-card .label { color: var(--udm-muted); font-size: 13px; text-decoration: underline; }
 .stat-card .value {
-  font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-size: 34px; font-weight: 700; color: var(--udm-navy); line-height: 1.1;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 34px; font-weight: 700; color: var(--udm-chrome); line-height: 1.1;
+  text-decoration: none;
 }
-.stat-card .hint { font-size: 12.5px; color: var(--udm-muted); }
+.stat-card .hint { font-size: 12.5px; color: var(--udm-muted); text-decoration: none; }
 .stat-card.gold { border-left-color: var(--udm-gold); }
 .stat-card.green { border-left-color: var(--udm-green); }
 .stat-card.red { border-left-color: var(--udm-red); }
@@ -224,15 +273,30 @@ a:hover { text-decoration: underline; }
   font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap;
 }
-.pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-forwarded { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-returned  { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
-.pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
-.pill-draft     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
-.pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
+/* Every pill wears the same neutral body and the dot carries the status. A
+   table of records used to be a row of competing tinted blocks; giving them one
+   quiet body puts the colour where the meaning is and lets a long list read as
+   a list. The label is always printed beside the dot, so the colour stays a
+   fast second signal rather than the only one — the same rule the office badges
+   follow, and what keeps these readable in greyscale and to a colour-blind
+   reader.
+
+   Pending, Forwarded and Returned deliberately share the gold dot: all three
+   mean the same thing to whoever is looking at them — somebody owes a receipt. */
+.pill { background: var(--udm-pill-bg); color: var(--udm-pill-ink); }
+.pill-received  .pill-dot { background: var(--udm-green); }
+.pill-completed .pill-dot { background: var(--udm-navy); }
+.pill-pending   .pill-dot { background: var(--udm-gold-border); }
+.pill-forwarded .pill-dot { background: var(--udm-gold-border); }
+.pill-returned  .pill-dot { background: var(--udm-gold-border); }
+.pill-process   .pill-dot { background: var(--udm-process); }
+.pill-overdue   .pill-dot { background: var(--udm-red); }
+.pill-draft     .pill-dot { background: var(--udm-slate-ink); }
+.pill-muted     .pill-dot { background: var(--udm-muted); }
+/* Overdue is the one state worth breaking the neutral rule for: it is the only
+   pill that means something is wrong right now, and a reader scanning for
+   trouble should find it without reading every label. */
+.pill-overdue { background: var(--udm-red-soft); color: var(--udm-red-ink); }
 
 /* ----------------------------------------------------------------- tables */
 .table-udm { width: 100%; border-collapse: collapse; }
@@ -244,7 +308,7 @@ a:hover { text-decoration: underline; }
 .table-udm td { padding: 13px 14px; border-bottom: 1px solid #eef1f6; vertical-align: middle; }
 .table-udm tbody tr:hover { background: #fafbfd; }
 .table-udm .mono {
-  font-family: "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
   font-size: 12.5px; color: var(--udm-navy); font-weight: 600; white-space: nowrap;
 }
 /* Office codes in the records-staff columns: short, scannable, and never the
@@ -269,7 +333,7 @@ a:hover { text-decoration: underline; }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
 .timeline li.is-done::before { border-color: var(--udm-green); }
 .timeline li.is-muted::before { border-color: var(--udm-line); }
-.timeline .t-title { font-weight: 600; color: var(--udm-navy); }
+.timeline .t-title { font-weight: 600; color: var(--udm-chrome); }
 .timeline .t-meta { color: var(--udm-muted); font-size: 13px; }
 .timeline .t-detail {
   margin-top: 6px; background: var(--udm-canvas); border: 1px solid var(--udm-line);
@@ -281,8 +345,8 @@ a:hover { text-decoration: underline; }
   display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 82px;
 }
 .relevance .score {
-  font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-weight: 700; font-size: 19px; color: var(--udm-navy);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700; font-size: 19px; color: var(--udm-chrome);
 }
 .relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: #e7ecf3; overflow: hidden; }
 .relevance-bar span { display: block; height: 100%; background: var(--udm-teal); border-radius: 999px; }
@@ -337,7 +401,7 @@ a:hover { text-decoration: underline; }
 .doc-tile .meta { color: var(--udm-muted); font-size: 12.5px; }
 
 .empty-state { text-align: center; padding: 46px 20px; color: var(--udm-muted); }
-.empty-state h3 { color: var(--udm-navy); margin-bottom: 6px; }
+.empty-state h3 { color: var(--udm-chrome); margin-bottom: 6px; }
 
 .step-indicator { display: flex; gap: 10px; align-items: center; color: var(--udm-muted); font-size: 13px; }
 .step-indicator .step { display: inline-flex; align-items: center; gap: 7px; }
@@ -354,23 +418,55 @@ a:hover { text-decoration: underline; }
   font-size: 13.5px; white-space: pre-wrap; color: #384456;
 }
 
+/* Buttons carry four roles, and the role is the colour rather than the size:
+     .btn-udm         primary   · solid emerald, one per view
+     .btn-udm-outline secondary · emerald on an emerald tint
+     .btn-udm-gold    accent    · reserved for confirming receipt
+     .btn-udm-ghost   tertiary  · no body at all
+
+   The class names predate this redesign and are kept as they were so every
+   template keeps working; only the paint changed. `.btn-udm-outline` in
+   particular is no longer outlined — a tinted secondary sits more quietly
+   beside a solid primary than a bordered white one does, which was competing
+   with it for the same attention. */
 .btn-udm {
   background: var(--udm-navy); border: 1px solid var(--udm-navy); color: #fff;
-  border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px;
+  border-radius: var(--radius-pill); padding: 9px 18px; font-weight: 700; font-size: 13.5px;
 }
 .btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
-.btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
-.btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
-.btn-udm-outline { background: #fff; border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { background: #fff; border-color: var(--udm-navy); color: var(--udm-navy); }
+.btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: var(--udm-gold-ink); }
+.btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: var(--udm-gold-ink-hover); }
+.btn-udm-outline {
+  background: var(--udm-teal-soft); border: 1px solid transparent; color: var(--udm-teal-ink);
+  border-radius: var(--radius-pill); padding: 9px 18px; font-weight: 700; font-size: 13.5px;
+}
+.btn-udm-outline:hover { background: var(--udm-gold-tint-strong); border-color: transparent; color: var(--udm-gold-ink-dark); }
+/* Tertiary. Underlined in gold rather than filled with it: the underline is the
+   one place gold can appear without claiming to be the page's main action. */
+.btn-udm-ghost {
+  background: transparent; border: 1px solid transparent; color: var(--udm-navy);
+  border-radius: var(--radius-pill); padding: 9px 10px; font-weight: 700; font-size: 13.5px;
+  text-decoration: underline; text-decoration-color: var(--udm-gold-border); text-underline-offset: 3px;
+}
+.btn-udm-ghost:hover { background: var(--udm-teal-soft); color: var(--udm-navy-700); text-decoration-color: var(--udm-gold); }
 .btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
 .btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
 .btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
 .btn-udm-green:hover { background: var(--udm-green); border-color: var(--udm-green); filter: brightness(0.94); color: #fff; }
 
+/* Leading icons. `currentColor` on the stroke is what lets one icon partial
+   serve every button role without knowing which role it landed in. The fixed
+   flex basis stops a long label squashing the glyph on a narrow screen. */
+.btn-ic {
+  width: 16px; height: 16px; flex: 0 0 16px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round;
+}
+.btn-sm .btn-ic { width: 14px; height: 14px; flex: 0 0 14px; }
+
 .form-label { font-size: 13px; font-weight: 600; color: var(--udm-label-ink); margin-bottom: 4px; }
 .form-control, .form-select { border-radius: 8px; border-color: var(--udm-line); font-size: 14.5px; padding: 8px 12px; }
-.form-control:focus, .form-select:focus { border-color: var(--udm-teal); box-shadow: 0 0 0 3px rgba(22, 105, 122, 0.12); }
+.form-control:focus, .form-select:focus { border-color: var(--udm-teal); box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.12); }
 .form-text { font-size: 12.5px; color: var(--udm-muted); }
 .required-mark { color: var(--udm-red); }
 
@@ -416,7 +512,7 @@ a:hover { text-decoration: underline; }
 .phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
 .phase2-checklist li { margin-bottom: 10px; }
 .phase2-checklist li:last-child { margin-bottom: 0; }
-.phase2-checklist strong { color: var(--udm-navy); }
+.phase2-checklist strong { color: var(--udm-chrome); }
 .phase2-review-table th {
   width: 190px; color: var(--udm-muted); font-size: 13px; font-weight: 600; vertical-align: top;
 }
@@ -432,24 +528,34 @@ a:hover { text-decoration: underline; }
 @media (max-width: 991.98px) { .phase2-sticky-card { position: static; } }
 
 /* ------------------------------------------------------------------ login */
-.login-wrap { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; }
-.login-art {
-  background: linear-gradient(155deg, #0b315a 0%, #123f70 55%, #16697a 100%);
-  color: #fff; padding: 54px 56px; display: flex; flex-direction: column; justify-content: space-between;
-  position: relative; overflow: hidden;
+.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 20px; background: var(--udm-canvas); }
+.login-form { display: flex; align-items: center; justify-content: center; width: 100%; }
+.login-form .inner { width: 100%; max-width: 392px; }
+/* A card on the canvas rather than a full-bleed white half, so the sign-in box
+   reads as one object on an unfamiliar machine instead of as the whole screen. */
+.login-card {
+  padding: 34px 32px 28px;
+  border: 1px solid var(--udm-line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  text-align: center;
 }
-.login-art h1 { color: #fff; font-size: 42px; line-height: 1.12; margin: 0 0 18px; max-width: 12ch; }
-.login-art p { color: rgba(255, 255, 255, 0.82); max-width: 42ch; font-size: 15.5px; }
-.login-art .rule { width: 96px; height: 4px; background: var(--udm-gold); border-radius: 2px; margin: 26px 0; }
-.login-art .grid-lines {
-  position: absolute; inset: 0; opacity: 0.16; pointer-events: none;
-  background-image: linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(circle at 78% 22%, #000 0%, transparent 62%);
+/* The seal. A ring rather than a filled disc: the favicon already carries its
+   own colour, and a brand-coloured fill behind it muddied the mark. */
+.login-seal {
+  display: flex; align-items: center; justify-content: center;
+  width: 66px; height: 66px; margin: 0 auto 14px;
+  border: 2px solid var(--udm-gold-border);
+  border-radius: 50%;
+  background: var(--udm-teal-soft);
 }
-.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background: #fff; }
-.login-form .inner { width: 100%; max-width: 372px; }
+.login-seal img { width: 36px; height: 36px; }
+/* The form itself reads left-to-right; only the masthead above it is centred. */
+.login-card form,
+.login-card .login-security-note,
+.login-card .app-alert { text-align: left; }
+.login-institution { margin: 14px 0 0; color: var(--udm-muted); font-size: 12px; }
 
 .lockout-timer {
   margin: 6px 0 20px; padding: 18px 20px; border-radius: 10px;
@@ -457,13 +563,10 @@ a:hover { text-decoration: underline; }
 }
 .lockout-timer__clock {
   font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-navy);
+  font-variant-numeric: tabular-nums; color: var(--udm-chrome);
 }
 
 @media (max-width: 900px) {
-  .login-wrap { grid-template-columns: 1fr; }
-  .login-art { padding: 34px 26px; }
-  .login-art h1 { font-size: 32px; }
   .app-sidebar {
     position: static; height: auto; width: 100%; flex: 1 1 100%;
     display: flex; gap: 6px; overflow-x: auto; padding: 10px;
@@ -494,7 +597,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-brand-icon { display:block !important; width:36px !important; height:36px !important; min-width:36px !important; max-width:36px !important; min-height:36px !important; max-height:36px !important; flex:0 0 36px !important; border-radius:9px; object-fit:contain; }
 .app-topbar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:13px; white-space:nowrap; }
 .app-topbar .topbar-search { flex:1 1 auto; min-width:180px; max-width:460px; }
-.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
+.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(15, 110, 76,.12); }
 .app-topbar .topbar-account-button { display:inline-flex; align-items:center; gap:9px; width:auto; min-width:0; max-width:280px; padding:4px 6px; border:0 !important; border-radius:8px; background:transparent !important; color:var(--udm-ink); text-align:left; box-shadow:none !important; }
 .app-topbar .topbar-account-button:hover,.app-topbar .topbar-account-button:focus { background:var(--udm-canvas) !important; color:var(--udm-ink); }
 .app-topbar .topbar-account-copy { flex-direction:column; align-items:flex-start; width:auto; min-width:0; max-width:190px; }
@@ -504,7 +607,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-account-arrow { flex:0 0 auto; color:var(--udm-muted); font-size:12px; }
 	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy); text-decoration:none; }
 	.topbar-notifications:hover { background:var(--udm-canvas); color:var(--udm-teal-ink); }
-	.topbar-notifications:focus-visible { outline:3px solid rgba(22,105,122,.35); outline-offset:2px; }
+	.topbar-notifications:focus-visible { outline:3px solid rgba(15, 110, 76,.35); outline-offset:2px; }
 	.notification-bell { width:21px; height:21px; }
 	.notification-count { position:absolute; top:-4px; right:-6px; display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border:2px solid #fff; border-radius:999px; background:var(--udm-red); color:#fff; font-size:10px; font-weight:700; line-height:1; }
 	.notification-page-head { align-items:flex-start; }
@@ -512,7 +615,7 @@ a:hover { text-decoration: underline; }
 	.notification-filters { display:flex; flex-wrap:wrap; gap:6px; }
 	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy); font-size:13px; font-weight:600; text-decoration:none; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
-	.notification-filter:focus-visible { outline:3px solid rgba(22,105,122,.2); outline-offset:2px; }
+	.notification-filter:focus-visible { outline:3px solid rgba(15, 110, 76,.2); outline-offset:2px; }
 	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -541,16 +644,9 @@ a:hover { text-decoration: underline; }
 .sidebar-brand-content { display:flex; align-items:center; gap:10px; }
 .sidebar-brand-icon { display:block; width:38px; height:38px; min-width:38px; max-width:38px; min-height:38px; max-height:38px; flex:0 0 38px; border-radius:10px; object-fit:contain; }
 .app-sidebar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:14px; white-space:nowrap; }
-.sidebar-office { padding:0 12px; color:#cdd9e8; font-size:13px; }
+.sidebar-office { padding:0 12px; color:#9db8ab; font-size:13px; }
 .sidebar-office-name { color:#fff; font-weight:600; }
-.sidebar-office-role { margin-top:2px; color:rgba(205,217,232,.72); font-size:12.5px; }
-.tracking-subnav { margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-.tracking-subnav-link { display:block; margin:1px 0; padding:6px 10px; border-radius:7px; color:rgba(205,217,232,.76); font-size:12.5px; line-height:1.25; text-decoration:none; }
-.tracking-subnav-link:hover,.tracking-subnav-link:focus { background:rgba(255,255,255,.08); color:#fff; text-decoration:none; }
-.tracking-subnav-link--alert { color:#ffd2cd; }
-/* Which queue you are looking at. Both navs previously gave no indication at
-   all, so every queue looked identical once the page had loaded. */
-.tracking-subnav-link.is-active { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
+.sidebar-office-role { margin-top:2px; color:rgba(157,184,171,.78); font-size:12.5px; }
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
 .tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:#fff; color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
@@ -562,7 +658,7 @@ a:hover { text-decoration: underline; }
 .tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
 .tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
 @media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
-@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } .tracking-subnav { display:flex; flex:0 0 auto; gap:4px; margin:0; padding:0; border-left:0; } .tracking-subnav-link { flex:0 0 auto; padding:8px 10px; white-space:nowrap; } }
+@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } }
 @media (max-width:767.98px) { .app-topbar { min-height:58px; gap:10px; padding:9px 14px; } .app-topbar .topbar-search { max-width:none; } .page-head { flex-direction:column; align-items:stretch; } .page-head > .btn,.page-head > a.btn { align-self:flex-start; } }
 @media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
 @media print { .tracking-queue-nav { display:none !important; } }
@@ -572,13 +668,13 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 .routing-slip-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 .routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); color:var(--udm-ink); }
-.routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:2px solid var(--udm-navy); }
+.routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:4px solid var(--udm-gold-border); }
 .routing-slip-heading { min-width:0; }
 .routing-slip-school { color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
-.routing-slip-heading h1 { margin:3px 0 2px; font-size:25px; }
+.routing-slip-heading h1 { margin:3px 0 2px; font-size:25px; font-weight:800; letter-spacing:-.03em; }
 .routing-slip-office { color:var(--udm-muted); font-size:13px; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
-.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
+.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:2px solid var(--udm-gold-border); background:#fff; text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
    nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
@@ -594,17 +690,17 @@ a:hover { text-decoration: underline; }
 .routing-slip-qr-pattern svg { display:block; width:100%; height:100%; }
 .routing-slip-control { min-width:160px; padding:8px 10px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-control span { display:block; color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-.routing-slip-control strong { display:block; margin-top:8px; font-family:"Cascadia Mono","Consolas",monospace; font-size:13px; letter-spacing:.04em; }
+.routing-slip-control strong { display:block; margin-top:8px; font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size:13px; letter-spacing:.04em; }
 .routing-slip-number-block { position:relative; margin:18px 0; padding:14px 18px; border:2px solid var(--udm-navy); border-radius:8px; background:#f8fbfe; text-align:center; }
 .routing-slip-number-label { color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
-.routing-slip-number { margin-top:2px; color:var(--udm-navy); font-size:24px; font-weight:800; letter-spacing:.035em; overflow-wrap:anywhere; }
+.routing-slip-number { margin-top:2px; color:var(--udm-chrome); font-size:24px; font-weight:800; letter-spacing:.035em; overflow-wrap:anywhere; }
 .routing-slip-status { position:absolute; top:50%; right:16px; transform:translateY(-50%); }
 .routing-slip-summary { border:1px solid var(--udm-line); border-radius:8px; overflow:hidden; }
 .routing-slip-summary-row { display:grid; grid-template-columns:190px minmax(0,1fr); border-bottom:1px solid var(--udm-line); }
 .routing-slip-summary-row:last-child { border-bottom:0; }
 .routing-slip-summary-label { padding:10px 13px; background:var(--udm-canvas); color:var(--udm-label-ink); font-size:12px; font-weight:700; }
 .routing-slip-summary-value { padding:10px 13px; }
-.routing-slip-summary-row--subject .routing-slip-summary-value { color:var(--udm-navy); font-size:16px; font-weight:700; }
+.routing-slip-summary-row--subject .routing-slip-summary-value { color:var(--udm-chrome); font-size:16px; font-weight:700; }
 .routing-slip-notes { white-space:normal; }
 .routing-slip-privacy { margin:16px 0; padding:10px 13px; border-left:3px solid var(--udm-gold); background:#fffdf6; color:#665224; font-size:11px; line-height:1.45; }
 .routing-slip-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:20px 0 8px; }
@@ -623,12 +719,12 @@ a:hover { text-decoration: underline; }
 .routing-slip-receipt-note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--udm-line); }
 .routing-slip-empty { padding:24px !important; color:var(--udm-muted); text-align:center; }
 .routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:#fff; font-size:11px; }
-.routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-navy); }
+.routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-chrome); }
 .routing-slip-action-pending { margin:7px 0 0; color:var(--udm-muted); font-size:10px; }
 .routing-slip-attachments { margin-top:20px; padding-top:2px; }
 .routing-slip-attachments ol { margin:8px 0 0; padding-left:22px; font-size:12px; }
 .routing-slip-attachments p { margin:8px 0 0; color:var(--udm-muted); font-size:12px; }
-.routing-slip-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-top:22px; padding-top:10px; border-top:1px solid var(--udm-line); color:var(--udm-muted); font-size:9.5px; }
+.routing-slip-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-top:22px; padding-top:10px; border-top:1px solid var(--udm-line); color:var(--udm-slate-text); font-size:11.5px; }
 .routing-slip-page-number { white-space:nowrap; }
 .routing-slip-current-page::after { content:counter(page); }
 @media (max-width:767.98px) {
@@ -669,16 +765,27 @@ a:hover { text-decoration: underline; }
    Clickable text visibility
    ================================================================ */
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip),
-.app-sidebar a:not(.nav-item):not(.brand):not(.tracking-subnav-link) {
+.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.kpi-cell):not(.smart-folder):not(.tag-chip):not(.filter-chip):not(.search-suggest):not(.doc-row):not(.attention-card):not(.page-link):not(.notification-filter):not(.tracking-queue-link),
+.app-sidebar a:not(.nav-item):not(.brand):not(.queue-link) {
   font-weight: 700;
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
 }
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):hover,
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):focus {
+/* This rule underlines any plain <a> in the content area by default (good —
+   it's how you can tell a link from bold text) and relies on every "obviously
+   clickable" component — a card, a pill, a button-shaped link — adding
+   itself to the :not() list below so it isn't ALSO underlined on top of its
+   own styling. That list had drifted out of date: .kpi-cell (Reports),
+   .page-link (pagination's Previous/Next), .notification-filter and
+   .tracking-queue-link (the pill-nav components) all set their own
+   `text-decoration: none`, but none of them were listed here, so this rule's
+   higher specificity silently overrode all four and force-underlined them
+   anyway. Whenever a new link-styled component is added, it needs adding to
+   both selectors below or it will quietly get the same treatment. */
+.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.kpi-cell):not(.smart-folder):not(.tag-chip):not(.filter-chip):not(.search-suggest):not(.doc-row):not(.attention-card):not(.page-link):not(.notification-filter):not(.tracking-queue-link):hover,
+.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.kpi-cell):not(.smart-folder):not(.tag-chip):not(.filter-chip):not(.search-suggest):not(.doc-row):not(.attention-card):not(.page-link):not(.notification-filter):not(.tracking-queue-link):focus {
   color: var(--udm-navy);
   text-decoration-thickness: 2px;
 }
@@ -699,7 +806,7 @@ a:hover { text-decoration: underline; }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
-.report-section-head h2 { margin:0; font-size:19px; }
+.report-section-head h2 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.02em; }
 .report-section-head p { margin:3px 0 0; color:var(--udm-muted); font-size:13px; }
 .report-empty { padding:24px 10px; color:var(--udm-muted); text-align:center; }
 
@@ -717,13 +824,13 @@ a:hover { text-decoration: underline; }
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
-.report-office-label { margin-bottom:7px; color:var(--udm-navy); font-size:13px; font-weight:700; }
+.report-office-label { margin-bottom:7px; color:var(--udm-chrome); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
 .report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.report-series-item strong { text-align:right; color:var(--udm-navy); }
+.report-series-item strong { text-align:right; color:var(--udm-chrome); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
@@ -769,17 +876,17 @@ a:hover { text-decoration: underline; }
 }
 .status-row:last-child { border-bottom:0; }
 .status-row-label { min-width:0; overflow:hidden; }
-.status-row strong { text-align:right; color:var(--udm-navy); font-size:14px; }
+.status-row strong { text-align:right; color:var(--udm-chrome); font-size:14px; }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
 /* -------------------------------------------------------------- metrics */
 .report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
-.report-metric strong { color:var(--udm-navy); font-size:14px; text-align:right; white-space:nowrap; }
+.report-metric strong { color:var(--udm-chrome); font-size:14px; text-align:right; white-space:nowrap; }
 .report-metric small { display:block; font-size:11.5px; }
 
 .meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
-.meter-head strong { color:var(--udm-navy); font-size:17px; }
+.meter-head strong { color:var(--udm-chrome); font-size:17px; }
 /* Unfilled track is a lighter step of the fill's own ramp, so state reads
    across the whole bar. */
 .meter-track { height:10px; border-radius:2px; background:var(--udm-green-soft); }
@@ -824,14 +931,30 @@ body.sidebar-open { overflow:hidden; }
 .skip-link:focus { top:14px; }
 .app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:#fff; color:var(--udm-muted); font-size:12.5px; }
 .sidebar-toggle,.sidebar-close,.sidebar-backdrop { display:none; }
-.sidebar-mobile-head { display:block; }
+/* This is the off-canvas drawer's own header (brand + close button) — named
+   "mobile" because it only ever needs to exist there. `display:block` with
+   no guard is also a <div>'s default, so it was never actually hidden at any
+   width, including desktop, where it duplicated whatever the topbar was
+   showing. Hidden by default now; the max-width:900px block further down
+   re-enables it (as a flex row) for the off-canvas drawer, its only home. */
+.sidebar-mobile-head { display:none; }
 .app-content:focus { outline:none; }
 .card-udm { overflow:hidden; }
 .card-udm-head > div { min-width:0; }
-.btn { transition:transform 100ms ease,box-shadow 100ms ease,background-color 100ms ease,border-color 100ms ease; }
+/* inline-flex so a leading icon centres against the label instead of sitting on
+   the text baseline; the pill radius is set here too, which catches Bootstrap's
+   own .btn variants (.btn-sm, .btn-link) that never pass through .btn-udm. */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  border-radius:var(--radius-pill);
+  transition:transform 100ms ease,box-shadow 100ms ease,background-color 100ms ease,border-color 100ms ease;
+}
 .btn:active { transform:translateY(1px); }
 .btn:disabled { cursor:not-allowed; opacity:.65; }
-.pill-dot { width:6px; height:6px; flex:0 0 6px; border-radius:50%; background:currentColor; opacity:.75; }
+/* The dot is the status channel now that the pill body is neutral, so it holds
+   its own colour at full strength rather than a faded currentColor. Each
+   .pill-* rule below sets that colour; this is the shape and the fallback. */
+.pill-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:var(--udm-muted); }
 .form-field--error .form-control,.form-field--error .form-select { border-color:var(--udm-red); }
 .field-errors { margin-top:5px; color:var(--udm-red); font-size:12.5px; font-weight:600; }
 .message-stack { display:grid; gap:9px; margin-bottom:16px; }
@@ -841,19 +964,16 @@ body.sidebar-open { overflow:hidden; }
 .app-pagination .page-item:not(.disabled) .page-link:hover { border-color:var(--udm-teal); background:var(--udm-teal-soft); }
 .account-facts th { width:130px; color:var(--udm-muted); font-weight:500; }
 .account-sticky-note { position:sticky; top:86px; }
-.login-brand { position:relative; z-index:1; display:inline-flex; align-items:center; gap:11px; color:#fff; text-decoration:none; }
-.login-brand:hover { text-decoration:none; }
-.login-brand img { width:42px; height:42px; border-radius:10px; }
-.login-institution { position:relative; z-index:1; margin:0; color:rgba(255,255,255,.68); font-size:13px; }
 .login-form-heading { margin-bottom:20px; }
-.login-form-heading h2 { margin:2px 0 5px; font-size:27px; }
+.login-form-heading .wordmark { justify-content:center; font-size:13px; }
+.login-form-heading h1 { margin:8px 0 5px; font-size:26px; font-weight:800; letter-spacing:-.03em; }
 .login-form-heading p { margin:0; color:var(--udm-muted); font-size:14px; }
 .login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
 .login-account-note { margin:16px 0 0; color:var(--udm-muted); font-size:12.5px; }
 .lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
 .error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); text-align:center; }
-.error-code { color:var(--udm-gold); font-family:"Aptos Display","Segoe UI",sans-serif; font-size:54px; font-weight:800; line-height:1; }
-.error-page h1 { margin:10px 0 6px; font-size:26px; }
+.error-code { color:var(--udm-gold); font-family:"Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size:54px; font-weight:800; line-height:1; }
+.error-page h1 { margin:10px 0 6px; font-size:26px; font-weight:800; letter-spacing:-.03em; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
 .table-responsive { max-width: 100%; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 .table-responsive > .table-udm { min-width: 720px; }
@@ -884,8 +1004,6 @@ body.sidebar-open { overflow:hidden; }
   .sidebar-toggle span { display:block; width:17px; height:2px; border-radius:2px; background:var(--udm-navy); }
   .app-sidebar nav { display:block; }
   .app-sidebar .brand { padding:2px 5px 20px; }
-  .tracking-subnav { display:block; margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-  .tracking-subnav-link { display:block; padding:7px 10px; }
   .nav-section { display:block; }
   .app-topbar { position:sticky; top:0; }
   .app-footer { padding:16px; }
@@ -897,9 +1015,7 @@ body.sidebar-open { overflow:hidden; }
   .card-udm .card-udm-head,.card-udm .card-udm-body { padding-left:15px; padding-right:15px; }
   .stat-card { padding:13px 14px; }
   .stat-card .value { font-size:29px; }
-  .login-form { padding:28px 20px; }
-  .login-art { padding:28px 22px; }
-  .login-art h1 { font-size:29px; }
+  .login-card { padding:26px 20px 22px; }
   .error-page { margin:3vh auto; padding:36px 20px; }
 }
 @media print {
@@ -921,7 +1037,7 @@ body.sidebar-open { overflow:hidden; }
   min-height: 38px;
   padding: 8px 13px;
   border: 1px solid var(--udm-gold-border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: var(--udm-gold-tint);
   color: var(--udm-gold-ink-dark);
   font-size: 13px;
@@ -929,7 +1045,7 @@ body.sidebar-open { overflow:hidden; }
   line-height: 1;
   white-space: nowrap;
   text-decoration: none !important;
-  box-shadow: 0 1px 2px rgba(11, 49, 90, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 110, 76, 0.06);
   transition: background-color 120ms ease, border-color 120ms ease,
               color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -939,7 +1055,7 @@ body.sidebar-open { overflow:hidden; }
   background: var(--udm-gold-soft);
   color: var(--udm-gold-ink-hover);
   text-decoration: none !important;
-  box-shadow: 0 3px 8px rgba(196, 154, 46, 0.16);
+  box-shadow: 0 3px 8px rgba(212, 175, 106, 0.16);
   transform: translateY(-1px);
 }
 
@@ -950,7 +1066,7 @@ body.sidebar-open { overflow:hidden; }
 
 .btn-receipt:focus-visible {
   border-color: var(--udm-gold);
-  outline: 3px solid rgba(196, 154, 46, 0.25);
+  outline: 3px solid rgba(212, 175, 106, 0.25);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -962,12 +1078,11 @@ body.sidebar-open { overflow:hidden; }
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  border-radius: 50%;
-  background: var(--udm-gold);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .btn-receipt.btn-sm {
@@ -1009,7 +1124,7 @@ body.sidebar-open { overflow:hidden; }
   min-height: 34px;
   padding: 6px 11px;
   border: 1px solid var(--udm-line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: #ffffff;
   color: var(--udm-navy);
   font-size: 12.5px;
@@ -1017,7 +1132,7 @@ body.sidebar-open { overflow:hidden; }
   line-height: 1;
   white-space: nowrap;
   text-decoration: none !important;
-  box-shadow: 0 1px 2px rgba(11, 49, 90, 0.05);
+  box-shadow: 0 1px 2px rgba(15, 110, 76, 0.05);
   transition: background-color 120ms ease, border-color 120ms ease,
               color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -1027,7 +1142,7 @@ body.sidebar-open { overflow:hidden; }
   background: var(--udm-teal-soft);
   color: var(--udm-teal-ink-dark);
   text-decoration: none !important;
-  box-shadow: 0 3px 8px rgba(22, 105, 122, 0.12);
+  box-shadow: 0 3px 8px rgba(15, 110, 76, 0.12);
   transform: translateY(-1px);
 }
 
@@ -1037,7 +1152,7 @@ body.sidebar-open { overflow:hidden; }
 
 .btn-dashboard-action:focus-visible {
   border-color: var(--udm-teal);
-  outline: 3px solid rgba(22, 105, 122, 0.2);
+  outline: 3px solid rgba(15, 110, 76, 0.2);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -1084,7 +1199,7 @@ body.sidebar-open { overflow:hidden; }
   border-radius: 8px;
   background: #ffffff;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(11, 49, 90, 0.05);
+  box-shadow: 0 1px 2px rgba(15, 110, 76, 0.05);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -1092,7 +1207,7 @@ body.sidebar-open { overflow:hidden; }
    control reads as one field rather than a box of loose checkboxes. */
 .multiselect:focus-within {
   border-color: var(--udm-teal);
-  box-shadow: 0 0 0 3px rgba(22, 105, 122, 0.12);
+  box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.12);
 }
 
 .multiselect-search {
@@ -1227,7 +1342,7 @@ body.sidebar-open { overflow:hidden; }
   width: min(420px, calc(100vw - 32px));
   max-width: 420px; padding: 26px 28px; border: 1px solid var(--udm-line);
   border-radius: 12px; background: #fff; color: var(--udm-ink);
-  box-shadow: 0 18px 44px rgba(11, 49, 90, 0.22);
+  box-shadow: 0 18px 44px rgba(15, 110, 76, 0.22);
 }
 @media (max-width: 400px) {
   .session-dialog { padding: 20px 18px; }
@@ -1235,11 +1350,11 @@ body.sidebar-open { overflow:hidden; }
   .session-dialog__actions { flex-direction: column; }
 }
 .session-dialog::backdrop { background: rgba(11, 32, 56, 0.55); }
-.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; color: var(--udm-navy); }
+.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; color: var(--udm-chrome); }
 .session-dialog p { margin: 0; font-size: 14px; color: var(--udm-slate-text); }
 .session-dialog__clock {
   margin: 16px 0 20px; font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-navy); text-align: center;
+  font-variant-numeric: tabular-nums; color: var(--udm-chrome); text-align: center;
 }
 .session-dialog__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .session-dialog__actions .btn { flex: 1 1 auto; }
@@ -1257,10 +1372,17 @@ body.sidebar-open { overflow:hidden; }
 .office-badge {
   display: inline-flex; align-items: center; gap: 6px;
   max-width: 100%; padding: 2px 8px 2px 4px;
-  border: 1px solid color-mix(in srgb, var(--office-ink, #63718a) 22%, transparent);
+  /* The office colour is spent once, on the key bar below, and nowhere else.
+     It used to paint the background and the text as well, which made a column
+     of badges the loudest thing in a table and — after the repaint — let a
+     green office read as a green status. --office-tint and --office-ink are
+     still emitted by the template and still derived by Office.badge; they are
+     simply no longer spent here, and remain available if a future surface
+     wants the fuller treatment. */
+  border: 1px solid var(--udm-line);
   border-radius: 6px;
-  background: var(--office-tint, #eceff4);
-  color: var(--office-ink, #55637a);
+  background: #fff;
+  color: var(--udm-pill-ink);
   font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5;
   vertical-align: baseline; white-space: nowrap;
 }
@@ -1382,3 +1504,425 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .table-stacked th { color: var(--udm-muted); font-size: 12px; font-weight: 400; }
   .table-stacked td { font-size: 14px; }
 }
+
+
+/* ==========================================================================
+   Redesign components
+   Appended deliberately: these rules restyle markup that already exists
+   further up this file, and relying on source order keeps each override next
+   to its explanation instead of scattered through the original blocks.
+   ========================================================================== */
+
+/* --------------------------------------------------------------- icons */
+/* The shared icon partial paints with whatever colour it lands in. These are
+   the size variants; `.btn-ic` (the default) lives up with the buttons. */
+.notification-kind-ic,
+.empty-state-ic,
+.error-ic {
+  fill: none; stroke: currentColor;
+  stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round;
+}
+.notification-kind-ic { width: 15px; height: 15px; }
+.empty-state-ic { width: 24px; height: 24px; }
+.error-ic { width: 26px; height: 26px; }
+
+/* ------------------------------------------------- deadline: segmented */
+/* One control with two halves rather than two separate cards. The choice is
+   binary and mutually exclusive, which is exactly what a segmented control
+   says at a glance — and it takes a third of the vertical space the stacked
+   cards did on the busiest form in the app.
+
+   The radios stay in the DOM and keep doing the work; they are visually
+   hidden, not removed, so keyboard focus, arrow-key selection between radios
+   in a group, and screen-reader semantics all still behave. Anything built
+   out of <div>s here would have thrown that away. */
+.deadline-options {
+  display: inline-flex;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--udm-line);
+  border-radius: var(--radius-pill);
+  background: #fff;
+}
+.deadline-option {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--udm-muted);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.deadline-option:hover { border-color: transparent; background: var(--udm-teal-soft); color: var(--udm-teal-ink); }
+/* Clipped rather than display:none — a hidden input is skipped by the tab
+   order and by some screen readers, which would strand keyboard users. */
+.deadline-option input {
+  position: absolute;
+  width: 1px; height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.deadline-option:has(input:checked) { background: var(--udm-navy); color: #fff; }
+/* The ring has to be drawn on the label: the input it belongs to is clipped to
+   a pixel, so its own focus ring would be invisible. */
+.deadline-option:has(input:focus-visible) { outline: 3px solid var(--udm-gold); outline-offset: 2px; }
+.deadline-help { margin-top: 8px; color: var(--udm-muted); font-size: 12.5px; }
+
+/* ------------------------------------------------------- empty states */
+.empty-state-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; margin: 0 auto 14px;
+  border: 1px solid var(--udm-teal-soft);
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--udm-teal-soft), #fff);
+  color: var(--udm-navy);
+}
+
+/* -------------------------------------------------------- error pages */
+/* The status code becomes a watermark behind the message instead of a headline
+   above it. The number is the least useful thing on the page to a records
+   officer — what they need is what broke and where to go next — but it is
+   still the fastest way for an administrator reading a screenshot to tell a
+   403 from a 404, so it stays legible rather than being dropped. */
+.error-page { position: relative; overflow: hidden; }
+.error-watermark {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--udm-teal-soft);
+  font-size: 210px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+/* Everything real sits above the watermark. */
+.error-page > *:not(.error-watermark) { position: relative; z-index: 1; }
+.error-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 62px; height: 62px; margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--udm-gold-soft);
+  color: var(--udm-gold-ink);
+}
+@media (max-width: 575.98px) { .error-watermark { font-size: 130px; } }
+/* A giant pale numeral is decoration; it should not be spent on ink, and at
+   this size it prints as a grey slab across the message. */
+@media print { .error-watermark { display: none !important; } }
+
+
+/* Two greens, on purpose — do not collapse them into one.
+     --udm-chrome  text you read: headings, figures, printed slip values
+     --udm-navy    things you press: buttons, links, active states
+   Losing that split is what made every important element on a page the same
+   colour, and colour then ranked nothing. */
+.stat-card.red .value { color: var(--udm-red); }
+
+/* ------------------------------------------------- checkboxes and radios */
+/* Bootstrap paints a checked box with its own #0d6efd, which the token
+   repaint never touched — so every tick box in the app (bulk receipt being the
+   most visible) stayed default blue while everything around it went emerald.
+
+   accent-color covers plain browser-drawn controls; the two Bootstrap rules
+   cover .form-check-input, which sets appearance:none and paints itself, so
+   accent-color alone has no effect on it. Both are needed. */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
+.form-check-input:checked {
+  background-color: var(--udm-navy);
+  border-color: var(--udm-navy);
+}
+.form-check-input:focus {
+  border-color: var(--udm-navy);
+  box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.15);
+}
+
+
+/* ==========================================================================
+   Navigation rail
+   Desktop only. Below 901px the sidebar stays the off-canvas drawer it was —
+   hover is not a gesture a finger has, so none of this applies there.
+   ========================================================================== */
+
+/* ---- shared by both shapes ---- */
+.nav-ic { width:19px; height:19px; flex:0 0 19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.nav-item--disclosure { width:100%; border:0; background:transparent; font:inherit; text-align:left; cursor:pointer; }
+.nav-chevron { width:14px; height:14px; flex:0 0 14px; margin-left:auto; opacity:.7; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; transition:transform 160ms ease; }
+.nav-item--disclosure[aria-expanded="true"] .nav-chevron { transform:rotate(90deg); }
+
+/* The queue list is a disclosure at every width. max-height rather than display
+   so it can animate; the value only has to exceed the natural height. */
+.queue-list { max-height:0; overflow:hidden; transition:max-height 200ms ease; background:rgba(0,0,0,.20); }
+.queue-list.is-open { max-height:340px; }
+.queue-link { display:flex; align-items:center; gap:10px; padding:7px 12px 7px 44px; color:rgba(157,184,171,.92); font-size:12.5px; font-weight:600; text-decoration:none; }
+.queue-link:hover,.queue-link:focus { background:rgba(255,255,255,.07); color:#fff; text-decoration:none; }
+.queue-link.is-active { background:rgba(255,255,255,.11); color:#fff; font-weight:700; box-shadow:inset 3px 0 0 var(--udm-gold); }
+.queue-link--alert { color:#ffd2cd; }
+.queue-count { margin-left:auto; padding:1px 8px; border-radius:999px; background:rgba(255,255,255,.13); color:#cfe3d8; font-size:10.5px; font-weight:700; }
+.queue-link--alert .queue-count { background:rgba(192,57,43,.36); color:#ffd9d4; }
+.queue-divider { height:1px; margin:6px 12px 6px 44px; background:rgba(255,255,255,.10); }
+
+/* Tooltips and the pin are rail-only; the drawer shows real labels already. */
+.nav-tip { display:none; }
+.nav-pin { display:none; }
+
+/* ---- the rail proper ---- */
+@media (min-width:901px) {
+  .app-shell { position:relative; }
+
+  /* Fixed, and the content is inset by the collapsed width, so widening the
+     rail floats it over the page instead of reflowing every table on it. */
+  .app-sidebar {
+    position:fixed; top:0; bottom:0; left:0; z-index:1030;
+    width:56px; flex:0 0 56px;
+    padding:14px 0;
+    display:flex; flex-direction:column;
+    /* Clipped rather than scrollable, by request. Both axes have to be hidden
+       together — a box cannot hide one and leave the other visible; the browser
+       promotes the visible one to auto and the scrollbar returns. */
+    overflow:hidden;
+    transition:width 170ms ease, box-shadow 170ms ease;
+  }
+  .app-sidebar:hover,
+  .app-sidebar.is-pinned,
+  .app-sidebar.is-focus-open { width:var(--sidebar-width); box-shadow:7px 0 26px rgba(0,0,0,.20); }
+  .app-main { margin-left:56px; }
+
+  /* Hover and keyboard focus-open are both transient — the mouse or focus
+     moves on a moment later, so the rail floating over the page for that
+     instant is the trade the comment above already accepted. Pinned
+     ("Keep menu open") is a standing choice that can sit there for a whole
+     session, and permanently covering a ~180px strip of every page for as
+     long as it's on is a worse trade than the reflow this design was built
+     to avoid. Only the pinned state pushes the content over; a hover still
+     just floats on top the way it always has. */
+  .app-shell:has(.app-sidebar.is-pinned) .app-main { margin-left: var(--sidebar-width); }
+
+  .app-sidebar .brand { padding:2px 0 14px; }
+  .sidebar-brand-content { display:flex; align-items:center; gap:14px; padding:0 18px; white-space:nowrap; }
+  .sidebar-brand-icon { width:20px; height:20px; flex:0 0 20px; }
+
+  .nav-item {
+    gap:14px; margin:0; padding:10px 18px;
+    border-radius:0; font-size:13px; font-weight:600;
+    white-space:nowrap; position:relative;
+  }
+  .nav-item.active { box-shadow:inset 3px 0 0 var(--udm-gold); }
+
+  /* Labels fade in slightly behind the width so nothing flashes while the rail
+     is still too narrow to hold the text. */
+  .nav-label { opacity:0; transition:opacity 120ms ease 40ms; }
+  .app-sidebar:hover .nav-label,
+  .app-sidebar.is-pinned .nav-label,
+  .app-sidebar.is-focus-open .nav-label { opacity:1; }
+
+  /* A collapsed rail is six unlabelled glyphs, so each needs its name on hover.
+     Once expanded the real labels are there and a tooltip would just be the
+     same word twice, trailing the cursor. */
+  .nav-tip {
+    display:block; position:absolute; left:100%; margin-left:10px;
+    padding:4px 9px; border-radius:6px;
+    background:var(--udm-ink); color:#fff;
+    font-size:11px; font-weight:600; white-space:nowrap;
+    opacity:0; pointer-events:none; transition:opacity 100ms ease; z-index:40;
+    box-shadow:0 3px 10px rgba(0,0,0,.25);
+  }
+  .nav-item:hover .nav-tip,
+  .nav-pin:hover .nav-tip { opacity:1; }
+  .app-sidebar:hover .nav-tip,
+  .app-sidebar.is-pinned .nav-tip,
+  .app-sidebar.is-focus-open .nav-tip { opacity:0 !important; }
+
+  .nav-pin {
+    display:flex; align-items:center; gap:14px;
+    margin:auto 0 2px; padding:10px 18px;
+    border:0; background:transparent; color:rgba(157,184,171,.82);
+    font:inherit; font-size:12.5px; font-weight:600;
+    white-space:nowrap; cursor:pointer; position:relative;
+  }
+  .nav-pin:hover { background:rgba(255,255,255,.07); color:#fff; }
+  .nav-pin-ic { transition:transform 160ms ease; }
+  .app-sidebar.is-pinned .nav-pin-ic { transform:rotate(180deg); }
+
+  .sidebar-office { padding:10px 18px 0; margin-top:0; white-space:nowrap; }
+}
+
+/* Both the drawer and the rail hide it, but the drawer needs the labels back. */
+@media (max-width:900px) {
+  .nav-label { opacity:1 !important; }
+}
+
+
+/* ==========================================================================
+   Page components
+   Shared by Dashboard, Tracking, Repository, Search and Reports. Built once
+   here so the five pages stop each inventing their own filter chrome.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ filter bar */
+/* One control replacing four-to-six loose dropdowns per page. Search stays
+   visible because it is what people actually reach for; everything else lives
+   behind a disclosure that says how many are active.
+
+   A native <details> rather than a JS dropdown: it is keyboard operable and
+   screen-reader announced for free, it survives the strict CSP with no inline
+   script, and it still opens if JavaScript fails. */
+.filterbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px 5px 14px;
+  border: 1px solid var(--udm-line);
+  border-radius: var(--radius-pill);
+  background: #fff;
+}
+.filterbar-ic { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: var(--udm-muted); stroke-width: 2; stroke-linecap: round; }
+/* The input carries no chrome of its own — the bar around it is the control. */
+.filterbar .form-control {
+  flex: 1; min-width: 0;
+  padding: 4px 0; border: 0; border-radius: 0; background: transparent;
+  font-size: 14px;
+}
+.filterbar .form-control:focus { border: 0; box-shadow: none; outline: none; }
+/* The ring goes on the bar instead, so focus is visible without a box inside a box. */
+.filterbar:focus-within { border-color: var(--udm-navy); box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.13); }
+
+/* Reports has no free-text search, so the space the input would occupy states
+   the active slice in words instead. A collapsed panel must never let a
+   filtered figure pass for a complete one. */
+.filterbar-summary-text { flex: 1; min-width: 0; color: var(--udm-pill-ink); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filterbar-more { position: relative; flex: 0 0 auto; }
+.filterbar-more > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--radius-pill);
+  background: var(--udm-teal-soft); color: var(--udm-teal-ink);
+  font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  cursor: pointer; list-style: none;
+}
+.filterbar-more > summary::-webkit-details-marker { display: none; }
+.filterbar-more > summary::marker { content: ""; }
+.filterbar-more[open] > summary { background: var(--udm-navy); color: #fff; }
+.filterbar-more > summary:focus-visible { outline: 3px solid var(--udm-gold); outline-offset: 2px; }
+.filterbar-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  width: min(560px, 78vw);
+  padding: 14px;
+  border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background: #fff; box-shadow: 0 14px 38px rgba(15, 110, 76, 0.16);
+}
+.filterbar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.filterbar-grid label { display: block; margin-bottom: 3px; font-size: 11.5px; font-weight: 700; color: var(--udm-label-ink); }
+.filterbar-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+@media (max-width: 767.98px) {
+  .filterbar-panel { width: min(94vw, 420px); }
+  .filterbar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Active filters, stated in the open so the narrowing is visible without
+   opening the panel that caused it. Each is a link that drops its own term. */
+.filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 10px; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 11px; border-radius: var(--radius-pill);
+  background: var(--udm-pill-bg); color: var(--udm-pill-ink);
+  font-size: 11.5px; font-weight: 700; text-decoration: none;
+}
+.filter-chip:hover { background: var(--udm-red-soft); color: var(--udm-red-ink); text-decoration: none; }
+.filter-chip .x { font-size: 13px; line-height: 1; opacity: .55; }
+.filter-chip:hover .x { opacity: 1; }
+.filter-chips .clear-all { font-size: 11.5px; font-weight: 700; }
+
+/* ------------------------------------------------------- attention row */
+/* Replaces the three equal stat cards. Equal weight was the problem: one of
+   these numbers means something is wrong and the other two are just counts. */
+.attention-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.attention-card {
+  flex: 1 1 210px;
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 16px;
+  border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background: #fff; color: inherit; text-decoration: none;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.attention-card:hover { border-color: var(--udm-navy); transform: translateY(-1px); text-decoration: none; }
+.attention-card .n { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--udm-chrome); }
+.attention-card .k { font-size: 13px; font-weight: 700; color: var(--udm-ink); }
+.attention-card .h { font-size: 11.5px; color: var(--udm-muted); margin-top: 1px; }
+.attention-card .go { margin-left: auto; color: var(--udm-navy); font-size: 17px; font-weight: 700; }
+.attention-card--urgent { border-color: #f0c9c4; background: linear-gradient(100deg, var(--udm-red-soft), #fff 62%); }
+.attention-card--urgent .n { color: var(--udm-red); }
+.attention-card--urgent:hover { border-color: var(--udm-red); }
+
+/* --------------------------------------------------------- flow strip */
+/* Four figures on one line, where four figures previously filled a card the
+   height of the work list beside it. */
+.flow-strip {
+  display: flex; flex-wrap: wrap;
+  border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background: #fff; overflow: hidden; margin-bottom: 14px;
+}
+.flow-cell { flex: 1 1 120px; padding: 10px 14px; border-right: 1px solid var(--udm-line); }
+.flow-cell:last-child { border-right: 0; }
+.flow-cell .n { font-size: 19px; font-weight: 800; line-height: 1.1; color: var(--udm-chrome); }
+.flow-cell .k { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--udm-muted); margin-top: 2px; }
+
+/* ------------------------------------------------------ document rows */
+/* Cards earn their space when they carry a thumbnail. These carry text, so a
+   short archive rendered as cards left most of the page empty and read as
+   broken rather than as small. */
+.doc-row {
+  display: flex; align-items: flex-start; gap: 13px;
+  padding: 11px 14px; border-bottom: 1px solid var(--udm-line);
+  color: inherit; text-decoration: none;
+}
+.doc-row:last-child { border-bottom: 0; }
+.doc-row:hover { background: var(--udm-canvas); text-decoration: none; }
+.doc-row-type {
+  flex: 0 0 auto; padding: 3px 8px; border-radius: 5px;
+  background: var(--udm-pill-bg); color: var(--udm-pill-ink);
+  font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+}
+.doc-row-main { flex: 1; min-width: 0; }
+.doc-row-title { font-size: 14px; font-weight: 600; color: var(--udm-navy); overflow-wrap: anywhere; }
+.doc-row:hover .doc-row-title { text-decoration: underline; text-underline-offset: 3px; }
+.doc-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: 11.5px; color: var(--udm-muted); }
+.doc-row-flags { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+
+/* ---------------------------------------------------------- kpi strip */
+/* Four fused cells rather than four floating cards: they are one reading, and
+   the gaps between separate cards implied they were four separate things. */
+.kpi-strip {
+  display: flex; flex-wrap: wrap;
+  border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background: #fff; overflow: hidden; margin-bottom: 16px;
+}
+.kpi-cell { flex: 1 1 150px; padding: 13px 16px; border-right: 1px solid var(--udm-line); color: inherit; text-decoration: none; }
+.kpi-cell:last-child { border-right: 0; }
+a.kpi-cell:hover { background: var(--udm-canvas); text-decoration: none; }
+.kpi-cell .n { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; color: var(--udm-chrome); text-decoration: none; }
+/* Underlined on purpose — this is the one line of the three that reads as
+   the cell's clickable label, same idea as .stat-card .label elsewhere. */
+.kpi-cell .k { font-size: 12px; font-weight: 700; color: var(--udm-ink); margin-top: 2px; text-decoration: underline; }
+.kpi-cell .h { font-size: 11px; color: var(--udm-muted); margin-top: 1px; text-decoration: none; }
+.kpi-cell--alert .n { color: var(--udm-red); }
+
+/* ------------------------------------------------------ search start */
+/* An empty search page that offers a way in, instead of restating its own
+   title in a large box. */
+.search-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.search-start .lb { font-size: 12px; font-weight: 700; color: var(--udm-muted); }
+.search-suggest {
+  padding: 5px 12px; border: 1px solid var(--udm-line); border-radius: var(--radius-pill);
+  background: #fff; color: var(--udm-navy);
+  font-size: 12px; font-weight: 600; text-decoration: none;
+}
+.search-suggest:hover { border-color: var(--udm-navy); background: var(--udm-teal-soft); text-decoration: none; }
+.search-suggest .mono { font-size: 11.5px; }
+
+/* Queue counts on the Tracking page's own tabs. */
+.queue-tab-count {
+  margin-left: 7px; padding: 0 7px; border-radius: var(--radius-pill);
+  background: var(--udm-pill-bg); color: var(--udm-pill-ink);
+  font-size: 10.5px; font-weight: 700;
+}
+.tracking-queue-link.is-active .queue-tab-count { background: rgba(255,255,255,.24); color: #fff; }
+.tracking-queue-link--alert .queue-tab-count { background: var(--udm-red-soft); color: var(--udm-red-ink); }
+.tracking-queue-link--alert.is-active .queue-tab-count { background: rgba(255,255,255,.26); color: #fff; }

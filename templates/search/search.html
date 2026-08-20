@@ -4,36 +4,69 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Search documents</h1>
+    <div class="eyebrow">Search</div>
+    <h1>Search Documents</h1>
     <p class="sub">Metadata first, then the words inside the file. You do not need the tracking number.</p>
   </div>
 </div>
 
 <form method="get">
   {% include "partials/_form_errors.html" %}
-  <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
-    <div class="row g-2">
-      <div class="col-md-10">{{ form.q }}</div>
-      <div class="col-md-2 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
+
+  {% comment %}
+    The search field runs the full width rather than sharing a row with a
+    sidebar. Filters sit under it as a grid instead of in a left column: they
+    are the most useful thing on this page and were the least visible part of
+    it, collapsed into a third of the width beside an empty result area.
+  {% endcomment %}
+  <div class="card-udm mb-3">
+    <div class="card-udm-body">
+      <div class="d-flex gap-2 align-items-start">
+        <div class="flex-grow-1" style="min-width:0;">{{ form.q }}</div>
+        <button class="btn btn-udm" type="submit">
+          {% include "partials/_icon.html" with name="search" %}
+          <span>Search</span>
+        </button>
+      </div>
+      {% if not has_searched %}
+        <div class="search-start">
+          <span class="lb">Try:</span>
+          <a class="search-suggest" href="?q=%22work+order%22">a phrase in quotes</a>
+          <a class="search-suggest" href="?source=DTS">documents from tracking</a>
+          <a class="search-suggest" href="?source=UPLOAD">historical uploads</a>
+        </div>
+      {% endif %}
     </div>
-    <datalist id="search-suggestions"></datalist>
-  </div></div>
+  </div>
 
-  <div class="row g-4">
-    <div class="col-lg-3">
-      <div class="card-udm search-filters-card">
-        <div class="card-udm-head"><h2>Filters</h2></div>
-        <div class="card-udm-body">
-          {% include "partials/_field.html" with field=form.year %}
-          {% include "partials/_field.html" with field=form.office %}
-          {% include "partials/_field.html" with field=form.document_type %}
-          {% include "partials/_field.html" with field=form.tag %}
-          {% include "partials/_field.html" with field=form.source %}
-          <div class="row g-2 search-date-range">
-            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_from %}</div>
-            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_to %}</div>
-          </div>
+  <div class="card-udm mb-3">
+    <div class="card-udm-head">
+      <div>
+        <h2>Narrow it down</h2>
+        <div class="card-udm-caption">Any of these work on their own — you do not have to type anything above.</div>
+      </div>
+    </div>
+    <div class="card-udm-body">
+      <div class="filterbar-grid">
+        <div>{% include "partials/_field.html" with field=form.year %}</div>
+        <div>{% include "partials/_field.html" with field=form.office %}</div>
+        <div>{% include "partials/_field.html" with field=form.document_type %}</div>
+        <div>{% include "partials/_field.html" with field=form.tag %}</div>
+        <div>{% include "partials/_field.html" with field=form.source %}</div>
+        <div>{% include "partials/_field.html" with field=form.date_from %}</div>
+        <div>{% include "partials/_field.html" with field=form.date_to %}</div>
+      </div>
 
+      {% comment %}
+        Relevance is a power tool. It was occupying prime space above the fold
+        with a slider most people never move, so it now sits behind a
+        disclosure — still one click away, no longer the third thing you read.
+        It has to stay in the DOM either way: doctrack.js reads its id from the
+        marker at the foot of this page to wire the live readout.
+      {% endcomment %}
+      <details class="mt-3">
+        <summary class="btn btn-udm-ghost" style="display:inline-flex;">Advanced</summary>
+        <div class="mt-3" style="max-width:420px;">
           <label class="form-label" for="{{ form.min_relevance.id_for_label }}">
             Minimum relevance: <span id="relevance-value" data-relevance-value>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
           </label>
@@ -42,92 +75,109 @@
             {{ form.show_all }}
             <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
           </div>
-
-          <button class="btn btn-udm-outline w-100 mt-3" type="submit">Apply filters</button>
-          <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}">Clear</a>
+          <div class="help-note mt-3">
+            <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% is a <strong>display filter</strong>, not a universal truth. The percentage means
+            “how well this record matches your words”, not “how accurate the system is”.
+          </div>
         </div>
+      </details>
+
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-udm" type="submit">Apply filters</button>
+        <a class="btn btn-udm-outline" href="{% url 'search:index' %}">Clear</a>
       </div>
-
-      <div class="help-note mt-3">
-        <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% is a <strong>display filter</strong>, not a universal truth. The percentage means
-        “how well this record matches your words”, not “how accurate the system is”.
-      </div>
-    </div>
-
-    <div class="col-lg-9">
-      {% if has_searched %}
-        <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
-          <div>
-            <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
-            {% if response.total_matches > response.results|length %}
-              of {{ response.total_matches }} matched
-            {% endif %}
-            <span class="text-muted">· {{ response.duration_ms }} ms</span>
-          </div>
-          <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
-        </div>
-
-        {% if response.hidden_count %}
-          <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
-            {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
-            <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
-            Tick “Include results below the threshold” to see them.
-          </div>
-        {% endif %}
-
-        <div class="card-udm">
-          <div class="card-udm-body p-0">
-            {% for result in results %}
-              <article class="result-item">
-                <div class="flex-grow-1" style="min-width:0;">
-                  <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
-                  <div class="meta">
-                    {% include "partials/_office_badge.html" with office=result.document.office %}
-                    {{ result.document.document_type.name|default:"Unclassified" }} ·
-                    {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
-                    {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
-                  </div>
-                  {% if result.snippet_html %}
-                    <p class="mt-2 mb-1" style="font-size:14px;color:var(--udm-slate-text);">{{ result.snippet_html|safe }}</p>
-                  {% endif %}
-                  <div>
-                    {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
-                  </div>
-                  {% if result.matched_in %}
-                    <div class="text-muted mt-1" style="font-size:12.5px;">
-                      Matched in: {% for where in result.matched_in %}{{ where }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                    </div>
-                  {% endif %}
-                </div>
-                <div class="relevance">
-                  <span class="score">{{ result.relevance }}%</span>
-                  {% relevance_bar result.relevance %}
-                  <span class="text-muted" style="font-size:11px;">relevance</span>
-                </div>
-              </article>
-            {% empty %}
-              <div class="empty-state">
-                <h3>No records matched “{{ response.query }}”</h3>
-                <p>Try fewer words, drop a filter, or lower the minimum relevance.
-                   Office codes (MED, HR, REC) and tags work well on their own.</p>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-
-        <p class="text-muted mt-3" style="font-size:12.5px;">
-          {{ response.explanation }}
-          {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
-        </p>
-      {% else %}
-        <div class="card-udm"><div class="card-udm-body empty-state">
-          <h3>Search the whole archive</h3>
-          <p>Try an office code, a subject word, a tag, a year, or a phrase in quotes.<br>
-             Example: <code>preventive maintenance MED</code> or <code>"work order"</code>.</p>
-        </div></div>
-      {% endif %}
     </div>
   </div>
+
+  {% if has_searched %}
+    <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
+      <div>
+        <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
+        {% if response.total_matches > response.results|length %}
+          of {{ response.total_matches }} matched
+        {% endif %}
+        <span class="text-muted">· {{ response.duration_ms }} ms</span>
+      </div>
+      <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
+    </div>
+
+    {% if response.hidden_count %}
+      <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
+        {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
+        <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
+        Tick “Include results below the threshold” under Advanced to see them.
+      </div>
+    {% endif %}
+
+    <div class="card-udm">
+      <div class="card-udm-body p-0">
+        {% for result in results %}
+          <article class="result-item">
+            <div class="flex-grow-1" style="min-width:0;">
+              <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
+              <div class="meta">
+                {% include "partials/_office_badge.html" with office=result.document.office %}
+                {{ result.document.document_type.name|default:"Unclassified" }} ·
+                {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
+                {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
+              </div>
+              {% if result.snippet_html %}
+                <p class="mt-2 mb-1" style="font-size:14px;color:var(--udm-slate-text);">{{ result.snippet_html|safe }}</p>
+              {% endif %}
+              <div>
+                {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
+              </div>
+              {% if result.matched_in %}
+                <div class="text-muted mt-1" style="font-size:12.5px;">
+                  Matched in: {% for where in result.matched_in %}{{ where }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="relevance">
+              <span class="score">{{ result.relevance }}%</span>
+              {% relevance_bar result.relevance %}
+              <span class="text-muted" style="font-size:11px;">relevance</span>
+            </div>
+          </article>
+        {% empty %}
+          <div class="empty-state">
+            <div class="empty-state-icon">{% include "partials/_icon.html" with name="file-x" class="empty-state-ic" %}</div>
+            <h3>No records matched “{{ response.query }}”</h3>
+            <p>Try fewer words, drop a filter, or lower the minimum relevance.
+               Office codes and tags work well on their own.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <p class="text-muted mt-3" style="font-size:12.5px;">
+      {{ response.explanation }}
+      {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
+    </p>
+  {% elif recent_searches %}
+    {% comment %}
+      An empty search page used to restate its own title in a large box. Your
+      own last few searches are a far better way back in, and they are the one
+      thing here nobody has to be taught to read.
+    {% endcomment %}
+    <div class="card-udm">
+      <div class="card-udm-head"><h2>Your recent searches</h2></div>
+      <div class="card-udm-body p-0">
+        {% for log in recent_searches %}
+          <a class="doc-row" href="?q={{ log.query|urlencode }}">
+            <span class="doc-row-type">Search</span>
+            <span class="doc-row-main">
+              <span class="doc-row-title">{{ log.query }}</span>
+              <span class="doc-row-meta">
+                <span>{{ log.result_count }} result{{ log.result_count|pluralize }}</span>
+                <span>{{ log.created_at|timesince }} ago</span>
+              </span>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
 </form>
 
 {% comment %}

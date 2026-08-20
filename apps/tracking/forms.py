@@ -27,9 +27,13 @@ MAX_DEADLINE_DAYS = 365
 
 DEADLINE_NONE = "none"
 DEADLINE_DATE = "date"
+#: Short by design: these are rendered as a two-segment control, and a label
+#: that wraps turns the segment into a paragraph. What the old long-form labels
+#: explained now sits beneath the control as help text, where it can be a full
+#: sentence without deforming the widget.
 DEADLINE_CHOICES = [
-    (DEADLINE_NONE, "No deadline — the receiving office acts at its own pace"),
-    (DEADLINE_DATE, "Set a deadline date"),
+    (DEADLINE_NONE, "No deadline"),
+    (DEADLINE_DATE, "Set a date"),
 ]
 
 

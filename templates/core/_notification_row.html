@@ -1,5 +1,5 @@
 <article class="notification-row {{ notification.kind_meta.css }}{% if notification.is_read %} is-read{% endif %}" data-notification-id="{{ notification.pk }}">
-  <div class="notification-kind-icon" aria-hidden="true">{{ notification.kind_meta.icon }}</div>
+  <div class="notification-kind-icon" aria-hidden="true">{% include "partials/_icon.html" with name=notification.kind_meta.icon class="notification-kind-ic" %}</div>
   <div class="notification-row-content">
     <div class="notification-row-heading">
       <span class="notification-kind-label">{{ notification.kind_meta.label }}</span>

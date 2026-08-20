@@ -9,7 +9,7 @@
   <form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
     {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
     <button class="btn btn-udm" type="submit">Save office</button>
-    <a class="btn btn-udm-outline" href="{% url 'accounts:office_list' %}">Cancel</a>
+    <a class="btn btn-udm-outline" href="{% url 'accounts:office_list' %}">{% include "partials/_icon.html" with name="cancel" %}<span>Cancel</span></a>
   </form>
 </div></div></div>
 <div class="col-lg-5"><div class="help-note">

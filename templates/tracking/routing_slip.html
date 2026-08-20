@@ -8,7 +8,7 @@
     /* Exact routing-slip header based on the supplied paper reference. */
     .routing-slip-letterhead {
       padding: 0 0 5px !important;
-      border-bottom: 2px solid var(--udm-navy) !important;
+      border-bottom: 4px solid var(--udm-gold-border) !important;
     }
 
     .routing-slip-letterhead-main {
@@ -111,7 +111,8 @@
 
     .routing-slip-document-title {
       margin: 3px 0 0 !important;
-      color: #111820 !important;
+      /* The one branded note in an otherwise black-on-white official form. */
+      color: var(--udm-gold-ink) !important;
       font-family: "Times New Roman", serif !important;
       font-size: 15px !important;
       font-weight: 700 !important;
@@ -141,11 +142,9 @@
       box-sizing: border-box !important;
     }
 
-    /* Fills the space already free inside the 58px box (50px inner), so the
-       on-screen code is as readable as the layout allows. */
     .routing-slip-qr-pattern {
-      width: 46px !important;
-      height: 46px !important;
+      width: 38px !important;
+      height: 38px !important;
     }
 
     .routing-slip-header-tracking,
@@ -282,18 +281,14 @@
       }
 
       .routing-slip-qr {
-        width: 18mm !important;
-        min-height: 18mm !important;
+        width: 15mm !important;
+        min-height: 15mm !important;
         padding: 1mm !important;
       }
 
-      /* 15mm, not 10mm. A tracking number needs a 29-module symbol, so 10mm
-         put each module at 0.35mm — under the ~0.5mm a phone camera needs, and
-         a QR that will not scan is worse than no QR. 15mm gives 0.52mm and
-         still fits the 23mm letterhead column. */
       .routing-slip-qr-pattern {
-        width: 15mm !important;
-        height: 15mm !important;
+        width: 10mm !important;
+        height: 10mm !important;
       }
 
       .routing-slip-header-tracking {
@@ -304,8 +299,8 @@
 {% endblock %}
 {% block content %}
 <div class="routing-slip-actions no-print">
-  <button class="btn btn-udm" type="button" data-print-trigger>Print Routing Slip</button>
-  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to Record</a>
+  <button class="btn btn-udm" type="button" data-print-trigger>{% include "partials/_icon.html" with name="print" %}<span>Print Routing Slip</span></button>
+  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">{% include "partials/_icon.html" with name="back" %}<span>Back to Record</span></a>
 </div>
 
 <article class="routing-slip" aria-label="Document routing slip">
@@ -334,13 +329,12 @@
       </div>
 
       <div class="routing-slip-qr-control">
-        <div class="routing-slip-qr">
-          {% comment %}
-            Encodes the tracking number as plain text, so any phone camera
-            reads it without the scanner needing to know about this system.
-          {% endcomment %}
-          <div class="routing-slip-qr-pattern">{{ qr_svg }}</div>
-          <small>Scan to read</small>
+        <div class="routing-slip-qr" aria-label="QR code placeholder">
+          <div class="routing-slip-qr-pattern" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <small>QR placeholder</small>
         </div>
         <div class="routing-slip-header-tracking">
           <span>Tracking Number</span>
@@ -444,28 +438,5 @@
       <p>None</p>
     {% endif %}
   </section>
-
-  {% comment %}
-    Print provenance. A paper copy outlives the screen it came from, so it has
-    to say on its face who produced it and when — and carry the audit-log
-    reference, which is what lets an unexplained copy be traced back to the
-    exact request that generated it.
-  {% endcomment %}
-  <footer class="routing-slip-footer">
-    <div>
-      <div>
-        Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ printed_by.display_name }}{% if printed_by.position %}, {{ printed_by.position }}{% endif %}{% if printed_by.office %} ({{ printed_by.office.code }}){% endif %}.
-      </div>
-      <div>
-        This print was recorded in the audit log{% if print_reference %} as reference
-        <strong class="mono">PRT-{{ print_reference }}</strong>{% endif %}.
-        Earlier routing events are never removed or overwritten.
-      </div>
-    </div>
-    <div class="routing-slip-page-number">
-      <div class="mono">{{ record.tracking_number }}</div>
-      <div>Official printed copy</div>
-    </div>
-  </footer>
 </article>
 {% endblock %}

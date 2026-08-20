@@ -1,3 +1,10 @@
+{% load static %}
+{% comment %}
+  doctrack.css already had `.topbar-brand` / `.topbar-brand-icon` rules with
+  nothing in the markup using them — the topbar had no brand mark of its own
+  at all, only the off-canvas drawer's header did (see _sidebar.html), which
+  is mobile-only. This is the desktop counterpart.
+{% endcomment %}
 <header class="app-topbar no-print">
   <button
     class="sidebar-toggle"
@@ -9,6 +16,11 @@
   >
     <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
   </button>
+
+  <a class="topbar-brand" href="{% url 'core:dashboard' %}" aria-label="{{ SITE_NAME }} dashboard">
+    <img class="topbar-brand-icon" src="{% static 'img/favicon.svg' %}" alt="">
+    <span class="wordmark"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span>
+  </a>
 
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
     <label class="visually-hidden" for="topbar-search-input">Search records</label>

@@ -68,7 +68,7 @@
 
           <div class="d-flex flex-wrap gap-2 mt-4">
             <button class="btn btn-udm" type="submit">Review</button>
-            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Cancel</a>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">{% include "partials/_icon.html" with name="cancel" %}<span>Cancel</span></a>
           </div>
         </div>
       </div>

@@ -371,8 +371,14 @@ if ENABLE_AXES:
 if ENABLE_CSP:
     CSP_DEFAULT_SRC = ("'self'",)
     CSP_SCRIPT_SRC = ("'self'", "cdn.jsdelivr.net", "unpkg.com")
-    CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net")
-    CSP_FONT_SRC = ("'self'", "cdn.jsdelivr.net", "data:")
+    # fonts.googleapis.com serves the @font-face stylesheet and fonts.gstatic.com
+    # the font files themselves, so the two hosts have to be allowed in different
+    # directives. Without the gstatic entry the stylesheet loads and every glyph
+    # request is then blocked, which silently drops the page to its fallback
+    # stack — the failure looks like "the font just didn't apply", so it is worth
+    # keeping these two lines together.
+    CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "fonts.googleapis.com")
+    CSP_FONT_SRC = ("'self'", "cdn.jsdelivr.net", "fonts.gstatic.com", "data:")
     CSP_IMG_SRC = ("'self'", "data:", "blob:")
     CSP_CONNECT_SRC = ("'self'",)
     CSP_FRAME_ANCESTORS = ("'none'",)

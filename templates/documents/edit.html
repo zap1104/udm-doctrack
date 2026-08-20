@@ -35,7 +35,7 @@
       {% endfor %}
 
       <button class="btn btn-udm" type="submit">Save and Re-index</button>
-      <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">Cancel</a>
+      <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">{% include "partials/_icon.html" with name="cancel" %}<span>Cancel</span></a>
     </div></div></div>
 
     <div class="col-lg-4">

@@ -8,39 +8,78 @@
     <h1>Active Document Tracking</h1>
     <p class="sub">Current documents only. Completed records remain available in Document Management.</p>
   </div>
-  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
+  <a class="btn btn-udm" href="{% url 'tracking:create' %}">
+    {% include "partials/_icon.html" with name="send" %}
+    <span>New Tracking Slip</span>
+  </a>
 </div>
+
+{% comment %}
+  Each queue now carries its count, so you can see where the work is before
+  clicking into it. "All Active" deliberately has none: `total` counts the list
+  as currently filtered, so it would report the filtered figure while claiming
+  to describe everything, and the queues overlap so they cannot simply be added.
+{% endcomment %}
 {% with scope=request.GET.scope status=request.GET.status %}
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">
     <a class="tracking-queue-link{% if not scope and not status %} is-active{% endif %}"
        href="{% url 'tracking:list' %}">All Active</a>
     <a class="tracking-queue-link{% if scope == 'inbox' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
+       href="{% url 'tracking:list' %}?scope=inbox">Incoming{% if queue_counts.inbox %}<span class="queue-tab-count">{{ queue_counts.inbox }}</span>{% endif %}</a>
     <a class="tracking-queue-link{% if scope == 'sent' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
+       href="{% url 'tracking:list' %}?scope=sent">Outgoing{% if queue_counts.sent %}<span class="queue-tab-count">{{ queue_counts.sent }}</span>{% endif %}</a>
     <a class="tracking-queue-link{% if scope == 'awaiting' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt</a>
+       href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt{% if queue_counts.awaiting %}<span class="queue-tab-count">{{ queue_counts.awaiting }}</span>{% endif %}</a>
     <a class="tracking-queue-link{% if status == 'RECEIVED' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
+       href="{% url 'tracking:list' %}?status=RECEIVED">Received{% if queue_counts.received %}<span class="queue-tab-count">{{ queue_counts.received }}</span>{% endif %}</a>
     <a class="tracking-queue-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
+       href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process{% if queue_counts.in_process %}<span class="queue-tab-count">{{ queue_counts.in_process }}</span>{% endif %}</a>
     <a class="tracking-queue-link tracking-queue-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
+       href="{% url 'tracking:list' %}?status=OVERDUE">Overdue{% if queue_counts.overdue %}<span class="queue-tab-count">{{ queue_counts.overdue }}</span>{% endif %}</a>
   </div>
 </nav>
 {% endwith %}
-<div class="card-udm mb-3">
-  <div class="card-udm-body">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-5">{{ form.q }}</div>
-      <div class="col-6 col-md-2">{{ form.status }}</div>
-      <div class="col-6 col-md-2">{{ form.office }}</div>
-      <div class="col-8 col-md-2">{{ form.scope }}</div>
-      <div class="col-4 col-md-1 d-grid"><button class="btn btn-udm-outline" type="submit">Filter</button></div>
-    </form>
+
+{% comment %}
+  Search stays visible; status, office and scope move into the panel. They are
+  the three that are usually empty, and a row of empty dropdowns was taking the
+  width of the table to say nothing.
+
+  `scope` and `status` are excluded from the button's count because the queue
+  tabs above already show which one is set — counting them would put a "1" on
+  the button merely for having clicked Incoming.
+{% endcomment %}
+{% active_filter_count "scope" "status" as filter_count %}
+<form method="get" class="mb-3">
+  <div class="filterbar">
+    <svg class="filterbar-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    {{ form.q }}
+    <details class="filterbar-more">
+      <summary>
+        {% include "partials/_icon.html" with name="sliders" class="btn-ic" %}
+        <span>Filters{% if filter_count %} · {{ filter_count }}{% endif %}</span>
+      </summary>
+      <div class="filterbar-panel">
+        <div class="filterbar-grid">
+          <div><label for="{{ form.status.id_for_label }}">Status</label>{{ form.status }}</div>
+          <div><label for="{{ form.office.id_for_label }}">Office</label>{{ form.office }}</div>
+          <div><label for="{{ form.scope.id_for_label }}">Scope</label>{{ form.scope }}</div>
+        </div>
+        <div class="filterbar-actions">
+          <a class="btn btn-udm-outline btn-sm" href="{% url 'tracking:list' %}">Clear all</a>
+          <button class="btn btn-udm btn-sm" type="submit">Apply</button>
+        </div>
+      </div>
+    </details>
+    <button class="btn btn-udm" type="submit">Search</button>
   </div>
-</div>
+  {% if request.GET.office %}
+    <div class="filter-chips">
+      <a class="filter-chip" href="{% without_param 'office' %}">Office filter <span class="x" aria-hidden="true">×</span><span class="visually-hidden">remove</span></a>
+    </div>
+  {% endif %}
+</form>
 
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
@@ -78,7 +117,7 @@
             <td class="text-end">
               {% if record.can_confirm_now %}
                 <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
-                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                      {% include "partials/_icon.html" with name="receipt" class="btn-receipt-icon" %}
                       <span>Confirm Receipt</span>
                     </a>
               {% else %}
@@ -89,6 +128,7 @@
         {% empty %}
           <tr><td colspan="{% if can_bulk_receive %}7{% else %}6{% endif %}">
             <div class="empty-state">
+              <div class="empty-state-icon">{% include "partials/_icon.html" with name="inbox" class="empty-state-ic" %}</div>
               <h3>No active records match this view</h3>
               <p>Clear the filters or choose another queue above to see more records.</p>
             </div>
@@ -105,7 +145,7 @@
         <input class="form-check-input" type="checkbox" name="confirm_custody" id="bulk-confirm-custody" required>
         <label class="form-check-label" for="bulk-confirm-custody">I confirm the selected physical or digital documents are present in my office's custody.</label>
       </div>
-      <button class="btn btn-receipt mt-3" type="submit">Confirm Receipt for Selected</button>
+      <button class="btn btn-receipt mt-3" type="submit">{% include "partials/_icon.html" with name="receipt" class="btn-receipt-icon" %}<span>Confirm Receipt for Selected</span></button>
     </div>
   {% endif %}
 </div>

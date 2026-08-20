@@ -1,37 +1,109 @@
 {% load static %}
+{% comment %}
+  Navigation. One markup tree serving two different shapes:
+
+  * Desktop (≥901px) it is a 56px icon rail that widens to 236px on hover, as an
+    overlay so the page beneath never reflows. Labels and counts fade in with
+    the width.
+  * Below 901px it is the off-canvas drawer it has always been, opened by the
+    topbar button. Hover means nothing on a touch screen, so none of the rail
+    behaviour applies there — the CSS for it is scoped to a min-width query.
+
+  The Tracking queues used to render only while you were already on a Tracking
+  page, which made them invisible from everywhere else. They are now always in
+  the tree and revealed by the disclosure button, so a queue is reachable in one
+  click from any page. The button is a real <button> with aria-expanded rather
+  than a styled <a>: it toggles something on the page rather than navigating,
+  and a screen reader has to be told which.
+{% endcomment %}
 <aside id="main-sidebar" class="app-sidebar no-print" aria-label="Application navigation">
   <div class="sidebar-mobile-head">
     <a class="brand" href="{% url 'core:dashboard' %}" aria-label="{{ SITE_NAME }} dashboard">
-      <span class="sidebar-brand-content"><img class="sidebar-brand-icon" src="{% static 'img/favicon.svg' %}" alt=""><span class="wordmark wordmark--light"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span></span>
+      <span class="sidebar-brand-content"><img class="sidebar-brand-icon" src="{% static 'img/favicon.svg' %}" alt=""><span class="wordmark wordmark--light nav-label"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span></span>
     </a>
     <button class="sidebar-close" type="button" data-sidebar-close aria-label="Close navigation">×</button>
   </div>
+
   <nav aria-label="Main navigation">
-    <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}><span class="dot"></span> Dashboard</a>
-    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="dot"></span> Tracking</a>
-    {% if nav_active == "tracking" %}
+    <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}>
+      {% include "partials/_icon.html" with name="grid" class="nav-ic" %}
+      <span class="nav-label">Dashboard</span>
+      <span class="nav-tip" aria-hidden="true">Dashboard</span>
+    </a>
+
+    <button class="nav-item nav-item--disclosure {% if nav_active == 'tracking' %}active{% endif %}"
+            type="button"
+            data-queue-toggle
+            aria-expanded="false"
+            aria-controls="tracking-queues">
+      {% include "partials/_icon.html" with name="send" class="nav-ic" %}
+      <span class="nav-label">Tracking</span>
+      {% include "partials/_icon.html" with name="chevron" class="nav-chevron" %}
+      <span class="nav-tip" aria-hidden="true">Tracking</span>
+    </button>
+
+    {% comment %}
+      Two groups with a rule between them. The first three are work waiting on
+      somebody; the last three describe where a document has reached. They read
+      as one flat list of six otherwise, which hides that difference.
+    {% endcomment %}
+    <div class="queue-list" id="tracking-queues" data-queue-list>
       {% with scope=request.GET.scope status=request.GET.status %}
-      <div class="tracking-subnav" aria-label="Tracking queues">
-        <a class="tracking-subnav-link{% if scope == 'inbox' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
-        <a class="tracking-subnav-link{% if scope == 'sent' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
-        <a class="tracking-subnav-link{% if scope == 'awaiting' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt</a>
-        <a class="tracking-subnav-link{% if status == 'RECEIVED' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
-        <a class="tracking-subnav-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
-        <a class="tracking-subnav-link tracking-subnav-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
-      </div>
+        <a class="queue-link{% if nav_active == 'tracking' and not scope and not status %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}"><span class="nav-label">All records</span></a>
+        <a class="queue-link{% if scope == 'inbox' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?scope=inbox"><span class="nav-label">Incoming</span>{% if queue_counts.inbox %}<span class="queue-count nav-label">{{ queue_counts.inbox }}</span>{% endif %}</a>
+        <a class="queue-link{% if scope == 'sent' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?scope=sent"><span class="nav-label">Outgoing</span>{% if queue_counts.sent %}<span class="queue-count nav-label">{{ queue_counts.sent }}</span>{% endif %}</a>
+        <a class="queue-link{% if scope == 'awaiting' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?scope=awaiting"><span class="nav-label">Pending Receipt</span>{% if queue_counts.awaiting %}<span class="queue-count nav-label">{{ queue_counts.awaiting }}</span>{% endif %}</a>
+        <div class="queue-divider" role="presentation"></div>
+        <a class="queue-link{% if status == 'RECEIVED' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?status=RECEIVED"><span class="nav-label">Received</span>{% if queue_counts.received %}<span class="queue-count nav-label">{{ queue_counts.received }}</span>{% endif %}</a>
+        <a class="queue-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?status=IN_PROCESS"><span class="nav-label">In Process</span>{% if queue_counts.in_process %}<span class="queue-count nav-label">{{ queue_counts.in_process }}</span>{% endif %}</a>
+        <a class="queue-link queue-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
+           href="{% url 'tracking:list' %}?status=OVERDUE"><span class="nav-label">Overdue</span>{% if queue_counts.overdue %}<span class="queue-count nav-label">{{ queue_counts.overdue }}</span>{% endif %}</a>
       {% endwith %}
+    </div>
+
+    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}>
+      {% include "partials/_icon.html" with name="file" class="nav-ic" %}
+      <span class="nav-label">Document Management</span>
+      <span class="nav-tip" aria-hidden="true">Document Management</span>
+    </a>
+    <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}>
+      {% include "partials/_icon.html" with name="search" class="nav-ic" %}
+      <span class="nav-label">Search</span>
+      <span class="nav-tip" aria-hidden="true">Search</span>
+    </a>
+    <a class="nav-item {% if nav_active == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}" {% if nav_active == 'reports' %}aria-current="page"{% endif %}>
+      {% include "partials/_icon.html" with name="chart" class="nav-ic" %}
+      <span class="nav-label">Reports</span>
+      <span class="nav-tip" aria-hidden="true">Reports</span>
+    </a>
+    {% if user.is_system_admin %}
+      <a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}>
+        {% include "partials/_icon.html" with name="sliders" class="nav-ic" %}
+        <span class="nav-label">Administration</span>
+        <span class="nav-tip" aria-hidden="true">Administration</span>
+      </a>
     {% endif %}
-    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="dot"></span> Document Management</a>
-    <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}><span class="dot"></span> Search</a>
-    <a class="nav-item {% if nav_active == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}" {% if nav_active == 'reports' %}aria-current="page"{% endif %}><span class="dot"></span> Reports</a>
-    {% if user.is_system_admin %}<a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="dot"></span> Administration</a>{% endif %}
   </nav>
-  <div class="nav-section">Your Office</div>
-  <div class="sidebar-office"><div class="sidebar-office-name">{{ user.office.name|default:"No office assigned" }}</div><div class="sidebar-office-role">{{ user.get_role_display }}</div></div>
+
+  {% comment %}
+    Hover cannot be performed with a keyboard or a finger, so the rail needs a
+    control that does the same job by click. It is also what someone who simply
+    dislikes the hover behaviour will reach for.
+  {% endcomment %}
+  <button class="nav-pin" type="button" data-rail-pin aria-pressed="false">
+    {% include "partials/_icon.html" with name="chevron" class="nav-ic nav-pin-ic" %}
+    <span class="nav-label" data-rail-pin-label>Keep menu open</span>
+    <span class="nav-tip" aria-hidden="true">Keep menu open</span>
+  </button>
+
+  <div class="sidebar-office nav-label">
+    <div class="sidebar-office-name">{{ user.office.name|default:"No office assigned" }}</div>
+    <div class="sidebar-office-role">{{ user.get_role_display }}</div>
+  </div>
 </aside>

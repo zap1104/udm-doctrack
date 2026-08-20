@@ -45,8 +45,35 @@ class SearchView(AppLoginRequiredMixin, View):
                 "response": response,
                 "results": response.results if response else [],
                 "has_searched": response is not None,
+                "recent_searches": self._recent_searches(request.user) if response is None else [],
             },
         )
+
+    @staticmethod
+    def _recent_searches(user, limit: int = 5):
+        """This user's last few distinct searches, for the empty state.
+
+        Only built when there is nothing to show instead — a result page never
+        pays for it. Deduplicated in Python rather than with DISTINCT ON so the
+        query stays portable; the slice bounds the work whatever the log holds,
+        since somebody who searched the same phrase forty times running should
+        still get four other suggestions rather than one.
+        """
+        seen, recent = set(), []
+        logs = (
+            SearchQueryLog.objects.filter(user=user)
+            .exclude(query="")
+            .order_by("-created_at")[:40]
+        )
+        for log in logs:
+            key = log.query.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            recent.append(log)
+            if len(recent) == limit:
+                break
+        return recent
 
     @staticmethod
     def _has_filters(form) -> bool:

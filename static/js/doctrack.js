@@ -758,6 +758,92 @@
     });
   }
 
+  /* ----------------------------------------------------------------------
+     Navigation rail: the Tracking queue disclosure, and the pin.
+
+     The rail widens on hover in CSS alone. JavaScript is only here for the two
+     things CSS cannot express: a disclosure that reports its state to assistive
+     technology, and a pin that survives the pointer leaving.
+  ---------------------------------------------------------------------- */
+  (function () {
+    var rail = document.getElementById("main-sidebar");
+    if (!rail) return;
+
+    var queueToggle = rail.querySelector("[data-queue-toggle]");
+    var queueList = rail.querySelector("[data-queue-list]");
+    var pin = rail.querySelector("[data-rail-pin]");
+    var pinLabel = rail.querySelector("[data-rail-pin-label]");
+    var desktop = window.matchMedia("(min-width: 901px)");
+
+    function setQueuesOpen(open) {
+      if (!queueList || !queueToggle) return;
+      queueList.classList.toggle("is-open", open);
+      queueToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    if (queueToggle && queueList) {
+      queueToggle.addEventListener("click", function () {
+        setQueuesOpen(!queueList.classList.contains("is-open"));
+      });
+    }
+
+    if (pin) {
+      pin.addEventListener("click", function () {
+        var pinned = rail.classList.toggle("is-pinned");
+        pin.setAttribute("aria-pressed", pinned ? "true" : "false");
+        if (pinLabel) pinLabel.textContent = pinned ? "Collapse menu" : "Keep menu open";
+      });
+    }
+
+    // Leaving the rail resets the disclosure, so the nav always comes back in
+    // the same state rather than in whatever state it was abandoned in. A
+    // pinned rail is exempt: it is not collapsing, so there is nothing for an
+    // open list to be out of step with. Mobile is exempt too — the drawer does
+    // not collapse on mouseout, and closing the list there would fight the user.
+    rail.addEventListener("mouseleave", function () {
+      if (!desktop.matches) return;
+      // Two separate reasons to stay open, and neither is "hovering": an
+      // explicit pin, or keyboard focus sitting inside where collapsing would
+      // strand it.
+      if (rail.classList.contains("is-pinned")) return;
+      if (rail.classList.contains("is-focus-open")) return;
+      setQueuesOpen(false);
+    });
+
+    // Focus can reach a queue link by keyboard while the rail is collapsed, and
+    // a focused element nobody can see is worse than no keyboard support at
+    // all. So keyboard focus holds the rail open — but under its own class,
+    // not the pin's.
+    //
+    // This used to add `is-pinned`, which meant clicking anything in the rail
+    // pinned it: a mouse click fires focusin too, so pressing Tracking left the
+    // rail stuck open and mouseleave then declined to collapse a "pinned" rail.
+    // :focus-visible is the browser's own answer to "did this focus come from
+    // the keyboard", which is exactly the question being asked. Older engines
+    // throw on an unknown pseudo-class in matches(), hence the guard.
+    rail.addEventListener("focusin", function (event) {
+      if (!desktop.matches) return;
+      var target = event.target;
+      var keyboard = false;
+      try {
+        keyboard = !!(target && target.matches && target.matches(":focus-visible"));
+      } catch (error) {
+        keyboard = false;
+      }
+      if (keyboard) rail.classList.add("is-focus-open");
+    });
+    rail.addEventListener("focusout", function () {
+      if (!desktop.matches) return;
+      // Deferred a tick: at focusout time activeElement is still the element
+      // being left, so asking immediately always says focus is inside.
+      window.setTimeout(function () {
+        if (rail.contains(document.activeElement)) return;
+        rail.classList.remove("is-focus-open");
+        if (!rail.classList.contains("is-pinned")) setQueuesOpen(false);
+      }, 0);
+    });
+  })();
+
   document.querySelectorAll(".form-field--error input, .form-field--error select, .form-field--error textarea").forEach(function (field) {
     field.setAttribute("aria-invalid", "true");
   });

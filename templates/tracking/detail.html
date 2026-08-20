@@ -14,7 +14,7 @@
     </p>
   </div>
   <div class="d-flex gap-2 no-print">
-    <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">{% include "partials/_icon.html" with name="print" %}<span>Print routing slip</span></a>
     {% if archived_document %}
       <a class="btn btn-udm-teal" href="{{ archived_document.get_absolute_url }}">Open archived record</a>
     {% endif %}
@@ -141,7 +141,7 @@
             {% csrf_token %}
             {% include "partials/_field.html" with field=receipt_form.note %}
             <button class="btn btn-receipt" type="submit">
-              <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+              {% include "partials/_icon.html" with name="receipt" class="btn-receipt-icon" %}
               <span>Confirm Receipt</span>
             </button>
           </form>
@@ -183,7 +183,7 @@
                 {% include "partials/_field.html" with field=route_form.instructions %}
                 {% include "tracking/_deadline_field.html" with form=route_form %}
                 {% include "partials/_field.html" with field=route_form.attachments %}
-                <button class="btn btn-udm" type="submit">Send Document</button>
+                <button class="btn btn-udm" type="submit">{% include "partials/_icon.html" with name="send" %}<span>Send Document</span></button>
               </form>
             </div>
 

@@ -89,8 +89,8 @@
           {% endif %}
 
           <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-udm-outline" type="button" data-back-to-edit>Back to Edit</button>
-            <button class="btn btn-udm" type="submit">Send Document</button>
+            <button class="btn btn-udm-outline" type="button" data-back-to-edit>{% include "partials/_icon.html" with name="back" %}<span>Back to Edit</span></button>
+            <button class="btn btn-udm" type="submit">{% include "partials/_icon.html" with name="send" %}<span>Send Document</span></button>
             <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as Draft</a>
           </div>
         </form>
