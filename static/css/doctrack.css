@@ -528,34 +528,120 @@ a:hover { text-decoration: underline; }
 @media (max-width: 991.98px) { .phase2-sticky-card { position: static; } }
 
 /* ------------------------------------------------------------------ login */
-.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 20px; background: var(--udm-canvas); }
+/* Four soft colour glows plus a dot grid, all as background layers on the
+   wrap itself — the margin around the card was a plain grey field on every
+   side; this gives it something happening in every corner without needing
+   extra elements or fighting the card's own contrast. */
+.login-wrap {
+  display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 20px;
+  background-color: var(--udm-canvas);
+  background-image:
+    radial-gradient(circle at 6% 10%, rgba(15, 110, 76, 0.20) 0%, transparent 30%),
+    radial-gradient(circle at 95% 90%, rgba(212, 175, 106, 0.22) 0%, transparent 32%),
+    radial-gradient(circle at 92% 8%, rgba(15, 110, 76, 0.12) 0%, transparent 24%),
+    radial-gradient(circle at 4% 92%, rgba(212, 175, 106, 0.12) 0%, transparent 24%),
+    radial-gradient(rgba(15, 110, 76, 0.09) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, 18px 18px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+}
 .login-form { display: flex; align-items: center; justify-content: center; width: 100%; }
-.login-form .inner { width: 100%; max-width: 392px; }
-/* A card on the canvas rather than a full-bleed white half, so the sign-in box
-   reads as one object on an unfamiliar machine instead of as the whole screen. */
+.login-form .inner { width: 100%; max-width: 880px; }
+/* Split card: a dark institutional panel carries the seal, wordmark and
+   attribution; the white panel carries the actual task. The gold spine down
+   the left edge is the one loud accent; everything else stays flat so it
+   doesn't have to compete with it. */
 .login-card {
-  padding: 34px 32px 28px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
   border: 1px solid var(--udm-line);
+  border-left: 4px solid var(--udm-gold);
   border-radius: 18px;
   background: #fff;
   box-shadow: var(--shadow-card);
-  text-align: center;
+  text-align: left;
 }
-/* The seal. A ring rather than a filled disc: the favicon already carries its
-   own colour, and a brand-coloured fill behind it muddied the mark. */
-.login-seal {
-  display: flex; align-items: center; justify-content: center;
-  width: 66px; height: 66px; margin: 0 auto 14px;
-  border: 2px solid var(--udm-gold-border);
+.login-brand-panel {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 0 0 38%;
+  min-width: 220px;
+  padding: 40px 32px;
+  background: var(--udm-chrome);
+}
+/* A dot grid and a soft gold ring keep the panel from reading as a slab of
+   empty colour once the seal and wordmark are done at the top — decoration
+   that stays behind the content rather than competing with it. */
+.login-brand-panel::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.login-brand-panel::after {
+  content: "";
+  position: absolute; right: -60px; bottom: -60px;
+  width: 340px; height: 340px;
   border-radius: 50%;
-  background: var(--udm-teal-soft);
+  background:
+    radial-gradient(circle, transparent 52%, rgba(212, 175, 106, 0.12) 53%, rgba(212, 175, 106, 0.12) 54%, transparent 55%),
+    radial-gradient(circle, transparent 66%, rgba(212, 175, 106, 0.09) 67%, rgba(212, 175, 106, 0.09) 68%, transparent 69%),
+    radial-gradient(circle, transparent 80%, rgba(212, 175, 106, 0.07) 81%, rgba(212, 175, 106, 0.07) 82%, transparent 83%),
+    radial-gradient(circle, transparent 94%, rgba(212, 175, 106, 0.05) 95%, rgba(212, 175, 106, 0.05) 96%, transparent 97%);
 }
-.login-seal img { width: 36px; height: 36px; }
-/* The form itself reads left-to-right; only the masthead above it is centred. */
-.login-card form,
-.login-card .login-security-note,
-.login-card .app-alert { text-align: left; }
-.login-institution { margin: 14px 0 0; color: var(--udm-muted); font-size: 12px; }
+.login-brand-panel > * { position: relative; z-index: 1; }
+/* The seal. The favicon already carries its own rounded-square mark and
+   colour, so on the dark panel it needs nothing but size and a little lift
+   off the background — no ring, no fill, unlike the old single-column card. */
+.login-brand-panel .login-seal { display: block; margin: 0 0 20px; }
+.login-brand-panel .login-seal img {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.login-brand-panel .wordmark { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 15px; }
+.login-brand-panel .login-institution {
+  margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.14); background: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.login-institution-code { display: block; margin-top: 2px; color: var(--udm-gold); font-weight: 700; }
+
+.login-form-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 44px 40px;
+}
+/* Slightly roomier than the app-wide default and small-caps labels instead
+   of sentence case — this is the one form most people type into with the
+   least urgency, not a dense data-entry table. */
+.login-form-panel .form-label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--udm-label-ink);
+}
+.login-form-panel .form-control,
+.login-form-panel .form-select { padding: 11px 14px 11px 40px; }
+/* Username / password get a leading glyph so the two fields read apart from
+   each other at a glance instead of as two identical grey boxes. */
+.login-form-panel form .form-field:nth-of-type(1) .form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2363718a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 13px center;
+  background-size: 16px 16px;
+}
+.login-form-panel form .form-field:nth-of-type(2) .form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2363718a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 13px center;
+  background-size: 16px 16px;
+}
 
 .lockout-timer {
   margin: 6px 0 20px; padding: 18px 20px; border-radius: 10px;
@@ -965,11 +1051,10 @@ body.sidebar-open { overflow:hidden; }
 .account-facts th { width:130px; color:var(--udm-muted); font-weight:500; }
 .account-sticky-note { position:sticky; top:86px; }
 .login-form-heading { margin-bottom:20px; }
-.login-form-heading .wordmark { justify-content:center; font-size:13px; }
-.login-form-heading h1 { margin:8px 0 5px; font-size:26px; font-weight:800; letter-spacing:-.03em; }
-.login-form-heading p { margin:0; color:var(--udm-muted); font-size:14px; }
+.login-form-heading h1 { margin:0 0 8px; font-size:26px; font-weight:800; letter-spacing:-.03em; }
+.login-form-heading p { margin:0; color:var(--udm-muted); font-size:14.5px; }
 .login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
-.login-account-note { margin:16px 0 0; color:var(--udm-muted); font-size:12.5px; }
+.login-account-note { margin:18px 0 0; padding-top:16px; border-top:1px solid var(--udm-line); color:var(--udm-muted); font-size:12.5px; }
 .lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
 .error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); text-align:center; }
 .error-code { color:var(--udm-gold); font-family:"Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size:54px; font-weight:800; line-height:1; }
@@ -985,6 +1070,15 @@ body.sidebar-open { overflow:hidden; }
   .table-responsive > .table-udm { min-width: 660px; }
   .search-results-head { align-items: flex-start !important; flex-direction: column; }
   .search-filters-card .card-udm-body { padding-top: 14px; }
+  /* The two-panel split needs real width to read as a split; stacked, the
+     dark panel becomes a header band instead of a sidebar. */
+  .login-form .inner { max-width: 440px; }
+  .login-card { flex-direction: column; }
+  .login-brand-panel { flex-direction: row; align-items: center; gap: 14px; padding: 22px 24px; }
+  .login-brand-panel .login-seal { margin: 0; }
+  .login-brand-panel .wordmark { flex-direction: row; align-items: baseline; gap: 8px; }
+  .login-brand-panel .login-institution { display: none; }
+  .login-form-panel { padding: 28px 24px 26px; }
 }
 
 @media (max-width: 575.98px) {
@@ -1015,7 +1109,6 @@ body.sidebar-open { overflow:hidden; }
   .card-udm .card-udm-head,.card-udm .card-udm-body { padding-left:15px; padding-right:15px; }
   .stat-card { padding:13px 14px; }
   .stat-card .value { font-size:29px; }
-  .login-card { padding:26px 20px 22px; }
   .error-page { margin:3vh auto; padding:36px 20px; }
 }
 @media print {
