@@ -1202,6 +1202,63 @@ a:hover { text-decoration: underline; }
    PHASE 3: routing slip and print presentation
    ================================================================ */
 .routing-slip-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+
+/* The routing slip is a facsimile of the approved paper form, and it is
+   pinned to the institutional palette in every theme — it is the one screen
+   in the app that is not really a screen.
+
+   Three things forced this rather than merely arguing for it. The two
+   largest lines on the form ("Universidad de Manila" and the Republic of
+   the Philippines block) are set in near-black with !important inside the
+   template's own <style>, so on a dark slip they disappear entirely. The
+   three official seals are JPEGs with white baked into the file — on a dark
+   ground they render as three white tiles whatever the CSS says. And the
+   print rules already force this palette, so a themed slip meant the thing
+   on screen and the thing that came out of the printer disagreed.
+
+   Declaring the tokens on the container is what keeps this to one block:
+   every rule inside already reads them, so nothing below needs touching,
+   and a token added to the slip later inherits the same treatment.
+
+   Only the slip itself is pinned. The Print / Back buttons above it are
+   ordinary app chrome and stay on the active theme. */
+.routing-slip {
+  --surface: #fff;
+  --udm-canvas: #f5f7f5;
+  --udm-ink: #172018;
+  --udm-heading: #0c1f18;
+  --udm-muted: #63718a;
+  --udm-label-ink: #33404f;
+  --udm-slate-text: #41506a;
+  --udm-line: #dfe5ea;
+  --udm-line-strong: #b6c2bd;
+  --udm-navy: #0f6e4c;
+  --udm-gold: #d4af6a;
+  --udm-gold-border: #c49a52;
+  --udm-gold-ink: #5c4415;
+  --udm-gold-tint: #fffdf7;
+  /* The status pill rides along in the header, so its body and every dot
+     colour are pinned too — a pill is meaningless if "overdue" reads as a
+     different red on paper than it does on screen. */
+  --udm-pill-bg: #eef0f2;
+  --udm-pill-ink: #33404f;
+  --udm-red: #c0392b;
+  --udm-green: #2f9e6b;
+  --udm-process: #16697a;
+  --shadow-card: 0 1px 2px rgba(15, 110, 76, 0.06), 0 8px 24px rgba(15, 110, 76, 0.05);
+  /* The slip's own letterhead is set in Times New Roman by the template.
+     Its section headings ("Movement History", "Attachments") would otherwise
+     inherit whatever display face the active theme carries — Playfair under
+     Maroon, JetBrains Mono under Midnight — putting two unrelated faces on
+     one official form. Radius is pinned for the same reason: an approved
+     government form does not have 18px corners under one theme and 3px
+     under another. */
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --display-tracking: -0.015em;
+  --display-weight: 700;
+  --radius: 10px;
+  color-scheme: light;
+}
 .routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow-card); color:var(--udm-ink); }
 .routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:4px solid var(--udm-gold-border); }
 .routing-slip-heading { min-width:0; }

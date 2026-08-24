@@ -13,7 +13,10 @@
 
     .routing-slip-letterhead-main {
       display: grid !important;
-      grid-template-columns: minmax(0, 1fr) 96px !important;
+      /* Widened from 96px: the column is now the QR code's size, and the
+         tracking number underneath has to clear 25 monospaced characters on
+         a single line without shrinking to unreadability. */
+      grid-template-columns: minmax(0, 1fr) 122px !important;
       align-items: start !important;
       gap: 8px !important;
       width: 100% !important;
@@ -127,53 +130,52 @@
       align-items: stretch !important;
       justify-content: flex-start !important;
       justify-self: end !important;
-      width: 96px !important;
+      width: 122px !important;
       max-width: 100% !important;
-      gap: 4px !important;
+      gap: 3px !important;
       padding-top: 0 !important;
       box-sizing: border-box !important;
     }
 
+    /* Square, and the full width of the column — roughly four times the area
+       the placeholder had. A QR needs the size: the encoded URL is long
+       enough that the symbol has a fair number of modules, and each one has
+       to survive being printed and then read off paper by a phone camera. */
     .routing-slip-qr {
-      width: 58px !important;
-      min-height: 58px !important;
+      width: 122px !important;
+      height: 122px !important;
+      min-height: 0 !important;
       margin: 0 auto !important;
-      padding: 4px !important;
+      padding: 5px !important;
       box-sizing: border-box !important;
     }
 
     .routing-slip-qr-pattern {
-      width: 38px !important;
-      height: 38px !important;
+      width: 100% !important;
+      height: 100% !important;
     }
 
-    .routing-slip-header-tracking,
-    .routing-slip-header-status {
+    .routing-slip-header-tracking {
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 !important;
+      padding: 2px 0 0 !important;
       box-sizing: border-box !important;
       text-align: center !important;
     }
 
-    .routing-slip-header-tracking {
-      padding: 4px !important;
-    }
-
-    .routing-slip-header-tracking span,
+    /* One line, never wrapped. The old rule broke the number across two lines
+       with word-break, which is what was eating the vertical space the code
+       now uses. Sized to fit the column exactly: 25 characters of JetBrains
+       Mono at 0.6em advance plus its letter-spacing. */
     .routing-slip-header-tracking strong {
       display: block !important;
-    }
-
-    .routing-slip-header-tracking span {
-      font-size: 8px !important;
-    }
-
-    .routing-slip-header-tracking strong {
-      font-size: 8px !important;
-      line-height: 1.2 !important;
-      overflow-wrap: anywhere !important;
-      word-break: break-word !important;
+      font-size: 7.5px !important;
+      line-height: 1.25 !important;
+      letter-spacing: 0 !important;
+      white-space: nowrap !important;
+      overflow-wrap: normal !important;
+      word-break: normal !important;
     }
 
     @media (max-width: 767.98px) {
@@ -224,13 +226,22 @@
       }
     }
 
+    /* The code is the point of the block, so on a narrow screen it grows
+       rather than shrinks — there is a full-width column to spend once the
+       letterhead stacks. */
+    @media (max-width: 767.98px) {
+      .routing-slip-qr-control { width: 150px !important; }
+      .routing-slip-qr { width: 150px !important; height: 150px !important; }
+      .routing-slip-header-tracking strong { font-size: 9.2px !important; }
+    }
+
     @media print {
       .routing-slip-letterhead {
         padding: 0 0 1mm !important;
       }
 
       .routing-slip-letterhead-main {
-        grid-template-columns: minmax(0, 1fr) 23mm !important;
+        grid-template-columns: minmax(0, 1fr) 33mm !important;
         gap: 3mm !important;
       }
 
@@ -274,25 +285,38 @@
       }
 
       .routing-slip-qr-control {
-        width: 23mm !important;
-        max-width: 23mm !important;
-        gap: 1mm !important;
+        width: 33mm !important;
+        max-width: 33mm !important;
+        gap: 0.8mm !important;
         padding-top: 0 !important;
       }
 
+      /* 33mm square on paper. The old 15mm box was near the floor for a code
+         holding a full URL — at that size a mid-range phone camera has to be
+         held still and close to resolve the modules. This is comfortably
+         scannable while still leaving the letterhead its width. */
       .routing-slip-qr {
-        width: 15mm !important;
-        min-height: 15mm !important;
-        padding: 1mm !important;
+        width: 33mm !important;
+        height: 33mm !important;
+        min-height: 0 !important;
+        padding: 1.2mm !important;
       }
 
       .routing-slip-qr-pattern {
-        width: 10mm !important;
-        height: 10mm !important;
+        width: 100% !important;
+        height: 100% !important;
       }
 
       .routing-slip-header-tracking {
-        padding: 0.9mm !important;
+        padding: 0.6mm 0 0 !important;
+      }
+
+      /* Same one-line rule in print units: 33mm across 25 monospaced
+         characters lands just under 6pt. */
+      .routing-slip-header-tracking strong {
+        font-size: 5.9pt !important;
+        letter-spacing: 0 !important;
+        white-space: nowrap !important;
       }
     }
   </style>
@@ -329,18 +353,24 @@
       </div>
 
       <div class="routing-slip-qr-control">
-        <div class="routing-slip-qr" aria-label="QR code placeholder">
-          <div class="routing-slip-qr-pattern" aria-hidden="true">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-          </div>
-          <small>QR placeholder</small>
+        {% comment %}
+          The real code, not a placeholder. RoutingSlipView already builds it
+          (apps/core/utils.py → qr_svg) and has done all along — it encodes the
+          record's absolute URL, so scanning a printed slip opens the record it
+          came from. It arrives as an inline <svg> with its own viewBox, which
+          is what lets it scale to whatever size the CSS below asks for, on
+          screen and at print millimetres alike.
+
+          The status pill and the "Tracking Number" caption that used to sit
+          under here are gone, and the number is held to one line, so the code
+          can take the whole column instead of a third of it.
+        {% endcomment %}
+        <div class="routing-slip-qr">
+          <div class="routing-slip-qr-pattern">{{ qr_svg }}</div>
         </div>
         <div class="routing-slip-header-tracking">
-          <span>Tracking Number</span>
           <strong class="mono">{{ record.tracking_number }}</strong>
         </div>
-        <div class="routing-slip-header-status">{% include "partials/_status_pill.html" with status=record.display_status %}</div>
       </div>
     </div>
   </header>
@@ -361,6 +391,27 @@
     <div class="routing-slip-summary-row">
       <div class="routing-slip-summary-label">Requested Action</div>
       <div class="routing-slip-summary-value">{{ record.get_requested_action_display|default:"Not specified" }}</div>
+    </div>
+    {% comment %}
+      Placed here rather than first: the four rows above are fixed facts about
+      the document, and Instructions below is the long free-text field that
+      reads best last. Status is the one field on this slip that expires — it
+      is true at the moment of printing and not necessarily after — so it sits
+      with the short labelled fields where it can be read at a glance against
+      the movement history further down.
+
+      Plain text, not the status pill. A coloured chip with a dot is app
+      furniture; on an approved paper form it reads as a widget that wandered
+      in from the screen, and it prints as a grey lozenge anyway. Rendered
+      like every other value in this table.
+
+      display_status_label, not get_status_display: it resolves OVERDUE the
+      same way the rest of the app does, so a slip cannot say "In process"
+      for a record every other screen is calling overdue.
+    {% endcomment %}
+    <div class="routing-slip-summary-row">
+      <div class="routing-slip-summary-label">Status</div>
+      <div class="routing-slip-summary-value">{{ record.display_status_label }}</div>
     </div>
     <div class="routing-slip-summary-row">
       <div class="routing-slip-summary-label">Instructions / Remarks</div>
