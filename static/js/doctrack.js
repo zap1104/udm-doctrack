@@ -919,4 +919,88 @@
     tick();
     if (seconds > 0) timer = window.setInterval(tick, 1000);
   })();
+
+  /* ----------------------------------------------------------------------
+     7. Colour theme picker (topbar).
+     Applying data-theme early enough to avoid a flash is theme-init.js's
+     job (loaded in <head>, before doctrack.css) — this section only has to
+     agree with it on STORAGE_KEY and handle picking a *new* theme, plus
+     keep the menu's checkmark and the browser-chrome meta tags in sync.
+  ---------------------------------------------------------------------- */
+  (function () {
+    /* theme-init.js publishes both of these; falling back keeps this
+       section working even if that file failed to load, in which case the
+       picker still switches themes — it just cannot pre-empt the flash or
+       fetch a display face. */
+    var shared = window.DocTrackTheme || {};
+    var STORAGE_KEY = shared.STORAGE_KEY || "doctrack-theme";
+    var loadThemeFont = shared.loadFont || function () {};
+    var menu = document.querySelector("[data-theme-menu]");
+    if (!menu) return;
+
+    /* Only used to keep <meta name="theme-color"> (the mobile browser-chrome
+       tint) roughly matching whichever theme is active — not read anywhere
+       else, so it does not need to track every token, just the one colour
+       that meta tag cares about. */
+    var THEME_COLORS = {
+      default: "#0f6e4c", navy: "#1c3f66", maroon: "#7a1f2b", slate: "#2b3544",
+      burgundy: "#5c2340", ocean: "#0d6e8f", midnight: "#050a08"
+    };
+
+    var root = document.documentElement;
+    var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+
+    function currentTheme() {
+      return root.getAttribute("data-theme") || "default";
+    }
+
+    function markActive(theme) {
+      menu.querySelectorAll("[data-theme-option]").forEach(function (button) {
+        var isActive = button.dataset.themeOption === theme;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function applyTheme(theme, persist) {
+      if (theme === "default") {
+        root.removeAttribute("data-theme");
+      } else {
+        root.setAttribute("data-theme", theme);
+        /* Fetched at pick time rather than upfront. The theme's colours and
+           shapes apply instantly either way; only the display face waits on
+           the network, and the fallback stack covers that gap. */
+        loadThemeFont(theme);
+      }
+      root.style.colorScheme = theme === "midnight" ? "dark" : "light";
+      if (colorSchemeMeta) colorSchemeMeta.setAttribute("content", theme === "midnight" ? "dark light" : "light");
+      if (themeColorMeta) themeColorMeta.setAttribute("content", THEME_COLORS[theme] || THEME_COLORS.default);
+      markActive(theme);
+      if (persist) {
+        try { window.localStorage.setItem(STORAGE_KEY, theme); } catch (e) { /* storage blocked — the pick still applies for this page view */ }
+      }
+    }
+
+    var toggle = document.querySelector("[data-theme-toggle]");
+
+    menu.querySelectorAll("[data-theme-option]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        applyTheme(button.dataset.themeOption, true);
+        /* Bootstrap only auto-closes a dropdown for elements it recognises
+           as items (.dropdown-item); these are plain buttons so it does
+           not, and the menu would otherwise sit open over the swatch you
+           just picked. */
+        if (toggle && window.bootstrap && window.bootstrap.Dropdown) {
+          var instance = window.bootstrap.Dropdown.getInstance(toggle);
+          if (instance) instance.hide();
+        }
+      });
+    });
+
+    /* The page already rendered in the right theme (theme-init.js saw to
+       that) — this just reads it back so the menu opens with the correct
+       item checked. */
+    markActive(currentTheme());
+  })();
 })();

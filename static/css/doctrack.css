@@ -34,12 +34,37 @@
   --udm-green-soft: #e3f6ec;
   --udm-red: #c0392b;
   --udm-red-soft: #fbe4e1;
+  /* Border for the urgent attention card — a step stronger than the tint
+     but short of the solid hue. Its own token because a dark theme needs a
+     different value here, not a different opacity of the same one. */
+  --udm-red-border: #f0c9c4;
   --udm-canvas: #f5f7f5;
+  /* Card/panel surface, separate from --udm-canvas (the page behind them).
+     Every rule that used to write a literal `background: #fff` for a card,
+     dropdown or table now reads this instead — the one variable a dark theme
+     needs to flip for every one of those to follow, without hunting down
+     each rule individually. */
+  --surface: #fff;
+  /* Text that sits ON a solid brand fill (primary buttons, the avatar, an
+     active pill). White everywhere the brand colour is dark — but Midnight's
+     accent is a bright mint, where white text falls to about 2:1. Naming the
+     pairing lets that one theme flip it without touching a button rule. */
+  --on-accent: #fff;
+  /* Search-result highlight. Needs a body and an ink of its own: the light
+     wash that reads as "highlighted" on paper is invisible on a dark card. */
+  --mark-bg: #fdf3d4;
+  --mark-ink: #4a3610;
   --udm-line: #dfe5ea;
   --udm-line-strong: #b6c2bd;
   --udm-line-soft: #ccd6d1;
   --udm-label-ink: #33404f;
   --udm-ink: #172018;
+  /* Headings and "strong value" numerals (KPI figures, tracking numbers).
+     These used to read --udm-chrome, which is the *navigation plane* colour —
+     fine while every theme was light, but a dark theme needs its sidebar
+     near-black and its headings near-white, and one token cannot be both.
+     Splitting them is what lets Midnight be readable at all. */
+  --udm-heading: #0c1f18;
   --udm-muted: #63718a;
   --udm-slate-text: #41506a;
   --udm-slate-soft: #eceff4;
@@ -96,6 +121,355 @@
      A pill-shaped text input reads as a broken control, so the two stay apart. */
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px rgba(15, 110, 76, 0.06), 0 8px 24px rgba(15, 110, 76, 0.05);
+
+  /* ---- personality tokens -------------------------------------------
+     The four levers a theme pulls beyond colour. Every one has a value
+     here that reproduces exactly what the app looked like before themes
+     existed, so the default palette is unchanged by their introduction
+     and an unthemed page can never end up with a missing font or a
+     zero-length transition. */
+
+  /* Display face for headings and strong numerals. Alternate themes load
+     their own family lazily (see static/js/theme-init.js) — the fallback
+     stack after it is what paints if that request is slow or blocked. */
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --display-tracking: -0.015em;
+  --display-weight: 700;
+
+  /* Interaction timing. Split in two because a button press and a panel
+     opening should not share a duration even within one theme. */
+  --motion-fast: 100ms;
+  --motion-slow: 180ms;
+  --motion-ease: ease;
+  /* How far an interactive card lifts on hover. Themes that want to feel
+     flat set this to 0 rather than having to re-declare the transform. */
+  --lift: -1px;
+
+  /* Painted onto the page behind the cards. `none` keeps the default
+     palette's plain canvas. */
+  --canvas-texture: none;
+  --canvas-texture-size: auto;
+}
+
+/* -------------------------------------------------------------- theming --
+   Alternate palettes, picked from the topbar's theme button and remembered
+   per-browser (see doctrack.js). Every rule elsewhere in this file already
+   reads colour, radius and shadow through the tokens above — a theme is
+   nothing but a second `:root` block that overrides some of those token
+   values, the same trick the file's own header comment describes for the
+   navy→emerald repaint. Status colours (red/green/process-teal) are left
+   alone in every LIGHT theme on purpose: overdue, received and in-process
+   need to mean the same thing regardless of which brand palette is active.
+   Beyond colour each alternate theme also carries a *signature*: its own
+   display face, its own interaction timing, a canvas texture and one
+   structural tell (an accent rule, a header wash, the absence of shadow).
+   The default palette deliberately has none of these — it is the plain
+   institutional baseline the others are variations on.
+
+   Signatures are built only from tokens plus a handful of scoped rules at
+   the bottom of this section. None of them change layout: no theme moves,
+   resizes or hides anything, so a screenshot of one theme maps onto any
+   other. */
+
+/* Navy & Champagne — the official file copy. Sharp corners, a champagne
+   rule across the top of every card like a letterhead, an institutional
+   serif, and crisp near-instant motion. */
+:root[data-theme="navy"] {
+  --udm-navy: #1c3f66; --udm-navy-700: #15304e; --udm-navy-600: #25547f;
+  --udm-chrome: #0a1a2c;
+  --udm-heading: #0a1a2c;
+  --udm-teal: #1c3f66; --udm-teal-soft: #e2eaf2; --udm-teal-ink: #15304e; --udm-teal-ink-dark: #112640;
+  --udm-navy-soft: #e2eaf2;
+  --udm-gold: #c9a545; --udm-gold-soft: #f7eece; --udm-gold-border: #b3902e;
+  --udm-gold-tint: #fffcf3; --udm-gold-tint-strong: #efdba0;
+  --udm-gold-ink: #5c4a12; --udm-gold-ink-dark: #493a0d; --udm-gold-ink-hover: #382c09;
+  --udm-canvas: #f4f6f8;
+  --chart-one: #1c3f66; --chart-two: #c9a545;
+  --radius: 4px;
+  --shadow-card: 0 1px 2px rgba(28, 63, 102, 0.07), 0 8px 24px rgba(28, 63, 102, 0.06);
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --display-tracking: -0.005em;
+  --motion-fast: 80ms; --motion-slow: 130ms; --motion-ease: ease-out;
+  --canvas-texture: repeating-linear-gradient(0deg, rgba(28, 63, 102, 0.035) 0 1px, transparent 1px 28px);
+}
+
+/* Maroon & Gold — the ceremonial one. A gold hairline inset inside every
+   card edge, a high-contrast didone display face, and unhurried motion. */
+:root[data-theme="maroon"] {
+  --udm-navy: #7a1f2b; --udm-navy-700: #5f1620; --udm-navy-600: #932530;
+  --udm-chrome: #210a0d;
+  --udm-heading: #2b0d11;
+  --udm-teal: #7a1f2b; --udm-teal-soft: #f5e3e5; --udm-teal-ink: #5f1620; --udm-teal-ink-dark: #4a1119;
+  --udm-navy-soft: #f5e3e5;
+  --udm-gold: #d4af6a; --udm-gold-soft: #fbf0dc; --udm-gold-border: #c49a52;
+  --udm-gold-tint: #fffdf7; --udm-gold-tint-strong: #f0dcb4;
+  --udm-gold-ink: #5c4415; --udm-gold-ink-dark: #4a3610; --udm-gold-ink-hover: #3b2b0c;
+  --udm-canvas: #f7f4f4;
+  --chart-one: #7a1f2b; --chart-two: #d4af6a;
+  --radius: 12px;
+  --shadow-card: 0 1px 2px rgba(122, 31, 43, 0.08), 0 8px 24px rgba(122, 31, 43, 0.06);
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  --display-tracking: -0.01em;
+  --display-weight: 800;
+  --motion-fast: 150ms; --motion-slow: 240ms; --motion-ease: ease-in-out;
+  --canvas-texture: repeating-linear-gradient(135deg, rgba(122, 31, 43, 0.03) 0 2px, transparent 2px 9px);
+}
+
+/* Slate & Teal — the technical one, and the only theme with no shadow and
+   no hover lift anywhere. Flatness *is* its signature: structure is carried
+   entirely by borders, the way a schematic is. */
+:root[data-theme="slate"] {
+  --udm-navy: #2b3544; --udm-navy-700: #1f2731; --udm-navy-600: #3a4657;
+  --udm-chrome: #12161c;
+  --udm-heading: #12161c;
+  --udm-teal: #2b3544; --udm-teal-soft: #e7e9ec; --udm-teal-ink: #1f2731; --udm-teal-ink-dark: #171d24;
+  --udm-navy-soft: #e7e9ec;
+  --udm-gold: #2f9e9e; --udm-gold-soft: #e2f5f5; --udm-gold-border: #227a7a;
+  --udm-gold-tint: #f5fdfd; --udm-gold-tint-strong: #bfe8e8;
+  --udm-gold-ink: #155050; --udm-gold-ink-dark: #0f3d3d; --udm-gold-ink-hover: #0b2e2e;
+  --udm-canvas: #f4f5f6;
+  --chart-one: #2b3544; --chart-two: #2f9e9e;
+  --radius: 3px;
+  --shadow-card: none;
+  --font-display: "Archivo", "Inter", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --display-tracking: -0.025em;
+  --display-weight: 700;
+  --motion-fast: 1ms; --motion-slow: 1ms; --motion-ease: linear;
+  --lift: 0px;
+  --canvas-texture: none;
+}
+
+/* Burgundy & Bronze — the editorial one. Softest corners in the set, the
+   deepest shadow, a warm paper grain, and slow generous easing. */
+:root[data-theme="burgundy"] {
+  --udm-navy: #5c2340; --udm-navy-700: #461a31; --udm-navy-600: #733056;
+  --udm-chrome: #1c0b15;
+  --udm-heading: #2a1020;
+  --udm-teal: #5c2340; --udm-teal-soft: #f0e2ea; --udm-teal-ink: #461a31; --udm-teal-ink-dark: #371427;
+  --udm-navy-soft: #f0e2ea;
+  --udm-gold: #b7793f; --udm-gold-soft: #f6e9da; --udm-gold-border: #a1652c;
+  --udm-gold-tint: #fdf8f2; --udm-gold-tint-strong: #e8c99e;
+  --udm-gold-ink: #5a3814; --udm-gold-ink-dark: #472b0f; --udm-gold-ink-hover: #37210b;
+  --udm-canvas: #f7f4f5;
+  --chart-one: #5c2340; --chart-two: #b7793f;
+  --radius: 18px;
+  --shadow-card: 0 2px 4px rgba(92, 35, 64, 0.07), 0 16px 40px rgba(92, 35, 64, 0.13);
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --display-tracking: -0.02em;
+  --display-weight: 700;
+  --motion-fast: 200ms; --motion-slow: 320ms; --motion-ease: cubic-bezier(.25, .8, .3, 1);
+  --lift: -3px;
+  --canvas-texture: radial-gradient(rgba(92, 35, 64, 0.05) 1px, transparent 1px);
+  --canvas-texture-size: 13px 13px;
+}
+
+/* Ocean & Sand — the airy one. Card headers carry a gradient wash, corners
+   are wide, the display face is a rounded geometric, and motion overshoots
+   very slightly so things feel buoyant rather than mechanical. */
+:root[data-theme="ocean"] {
+  --udm-navy: #0d6e8f; --udm-navy-700: #0a5570; --udm-navy-600: #1287ac;
+  --udm-chrome: #082430;
+  --udm-heading: #082430;
+  --udm-teal: #0d6e8f; --udm-teal-soft: #e0f0f5; --udm-teal-ink: #0a5570; --udm-teal-ink-dark: #084258;
+  --udm-navy-soft: #e0f0f5;
+  --udm-gold: #dba463; --udm-gold-soft: #fbeedb; --udm-gold-border: #c48a44;
+  --udm-gold-tint: #fffaf2; --udm-gold-tint-strong: #f0d6ab;
+  --udm-gold-ink: #5c3e17; --udm-gold-ink-dark: #4a3111; --udm-gold-ink-hover: #3b260c;
+  --udm-canvas: #f4f8f9;
+  --chart-one: #0d6e8f; --chart-two: #dba463;
+  --radius: 16px;
+  --shadow-card: 0 1px 2px rgba(13, 110, 143, 0.07), 0 10px 30px rgba(13, 110, 143, 0.09);
+  --font-display: "Outfit", "Inter", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --display-tracking: -0.03em;
+  --display-weight: 600;
+  --motion-fast: 170ms; --motion-slow: 280ms; --motion-ease: cubic-bezier(.34, 1.4, .64, 1);
+  --lift: -2px;
+  --canvas-texture: radial-gradient(circle at 0% 0%, rgba(13, 110, 143, 0.07) 0%, transparent 38%), radial-gradient(circle at 100% 100%, rgba(219, 164, 99, 0.09) 0%, transparent 34%);
+}
+
+/* Midnight is the one theme that inverts surfaces rather than just
+   re-tinting them, so unlike the five above it overrides the full neutral
+   scale too — background, borders, body text, pill bodies, chart neutrals —
+   plus its own status colours, since the light-mode overdue/received/
+   in-process tints are pale washes that only read correctly on a light
+   card. */
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+  --udm-navy: #2fbf87; --udm-navy-700: #1e9a6c; --udm-navy-600: #4fd9a0;
+  --udm-chrome: #050a08;
+  --udm-teal: #2fbf87; --udm-teal-soft: #173129; --udm-teal-ink: #8fe0bf; --udm-teal-ink-dark: #b0f0d5;
+  --udm-navy-soft: #173129;
+  --udm-gold: #e0bd7c; --udm-gold-soft: #3a2f18; --udm-gold-border: #b98f4a;
+  --udm-gold-tint: #2a2210; --udm-gold-tint-strong: #4a3a1a;
+  --udm-gold-ink: #f0dcb0; --udm-gold-ink-dark: #f7e8c8; --udm-gold-ink-hover: #fff3da;
+  --udm-green: #3ecf8e; --udm-green-soft: #173226; --udm-green-ink: #8fe6bd;
+  --udm-red: #e2685c; --udm-red-soft: #3a1e1a; --udm-red-ink: #f5a89c; --udm-red-border: #6b3029;
+  /* Every accent in this theme is a bright tint meant to glow against a dark
+     ground, so text on top of one has to go dark rather than white. */
+  --on-accent: #06231a;
+  --mark-bg: #4a3a12; --mark-ink: #ffe9b8;
+  --udm-process: #3fb8d1; --udm-process-soft: #173139; --udm-process-ink: #8fdcec;
+  --udm-canvas: #12181a;
+  --surface: #1b2326;
+  --udm-line: #2c363a; --udm-line-strong: #3d494e; --udm-line-soft: #232c2f;
+  --udm-label-ink: #c7d1cc; --udm-ink: #e7edea; --udm-muted: #8a9691;
+  --udm-slate-text: #a8b3b8; --udm-slate-soft: #232c30; --udm-slate-ink: #c2ccd0;
+  --udm-pill-bg: #232c2f; --udm-pill-ink: #c7d1cc;
+  /* Headings go near-white here. This is the whole reason --udm-heading
+     was split out of --udm-chrome: the sidebar above still has to be
+     #050a08, and headings cannot also be. */
+  --udm-heading: #f2f7f4;
+  --chart-one: #2fbf87; --chart-two: #e0bd7c; --chart-track: #232c2f; --chart-grid: #1e2629;
+  --radius: 8px;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px rgba(0, 0, 0, 0.45);
+  /* JetBrains Mono is already loaded for tracking numbers, so Midnight's
+     display face costs no extra request — and a terminal face is the one
+     that belongs on a dark console-looking screen anyway. */
+  --font-display: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --display-tracking: -0.02em;
+  --display-weight: 600;
+  --motion-fast: 120ms; --motion-slow: 200ms; --motion-ease: ease-out;
+  --canvas-texture:
+    repeating-linear-gradient(0deg, rgba(47, 191, 135, 0.045) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(47, 191, 135, 0.045) 0 1px, transparent 1px 32px);
+}
+
+/* ---- structural signatures ------------------------------------------
+   The one tell per theme that a token cannot express. Each is a single
+   scoped rule against a component that already exists — nothing here
+   adds an element or changes a size, so every theme still lays out
+   identically. */
+
+/* Navy: a champagne rule across the head of every card, like the ruled
+   line under a letterhead. */
+:root[data-theme="navy"] .card-udm { border-top: 3px solid var(--udm-gold); }
+
+/* Maroon: a gold hairline set just inside the card edge — the printed
+   certificate border, at 1px. */
+:root[data-theme="maroon"] .card-udm { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(212, 175, 106, 0.35); }
+
+/* Slate: borders do all the work, so they are drawn a step stronger to
+   compensate for the shadow this theme refuses to use. */
+:root[data-theme="slate"] .card-udm,
+:root[data-theme="slate"] .stat-card { border-color: var(--udm-line-strong); }
+
+/* Burgundy: the card head is washed in the palette's own tint rather than
+   sitting on plain surface — warmer, more editorial. */
+:root[data-theme="burgundy"] .card-udm .card-udm-head { background: linear-gradient(180deg, var(--udm-teal-soft), transparent); }
+
+/* Ocean: same idea, angled and carried across into the bronze so the head
+   reads as a horizon rather than a tint. */
+:root[data-theme="ocean"] .card-udm .card-udm-head { background: linear-gradient(100deg, var(--udm-teal-soft), var(--udm-gold-soft) 140%); }
+
+/* Midnight: cards lift on an emerald edge-glow instead of a drop shadow —
+   the only light source on a dark screen is the accent colour itself. */
+:root[data-theme="midnight"] .card-udm { border-color: var(--udm-line); }
+:root[data-theme="midnight"] .attention-card:hover,
+:root[data-theme="midnight"] .doc-tile:hover { box-shadow: 0 0 0 1px var(--udm-navy), 0 0 22px rgba(47, 191, 135, 0.22); }
+
+/* ---- Bootstrap bridge -----------------------------------------------
+   Bootstrap 5.3 paints its utilities and components from its own custom
+   properties, which default to a light palette none of our tokens reach.
+   `.text-muted` alone appears about seventy times across the templates and
+   resolves to --bs-secondary-color — a near-black that simply vanished on a
+   dark card. That is why the sub-line under every tracking subject was
+   unreadable in Midnight while the subject above it was fine.
+
+   Mapping Bootstrap's variables onto ours once, here, fixes all of them at
+   the source and keeps any Bootstrap component added later on the theme
+   automatically. The light themes are unaffected: every value below
+   resolves to what Bootstrap was already painting. */
+:root {
+  --bs-body-color: var(--udm-ink);
+  --bs-body-bg: var(--udm-canvas);
+  --bs-emphasis-color: var(--udm-heading);
+  --bs-heading-color: var(--udm-heading);
+  /* .text-muted and .text-body-secondary both resolve to this one. */
+  --bs-secondary-color: var(--udm-muted);
+  --bs-tertiary-color: var(--udm-muted);
+  --bs-secondary-bg: var(--udm-canvas);
+  --bs-tertiary-bg: var(--udm-canvas);
+  --bs-border-color: var(--udm-line);
+  --bs-border-color-translucent: var(--udm-line);
+  --bs-link-color: var(--udm-teal);
+  --bs-link-hover-color: var(--udm-teal-ink);
+  --bs-code-color: var(--udm-red-ink);
+  --bs-highlight-bg: var(--mark-bg);
+}
+
+/* ---- Midnight: Bootstrap leftovers ----------------------------------
+   Components Bootstrap paints from its own hardcoded light values, which
+   no variable of ours reaches. Scoped to the one theme that needs them
+   rather than restyled globally, so the light themes keep stock Bootstrap
+   behaviour exactly as before. */
+
+/* The select chevron is a background-image SVG with a dark stroke baked
+   into the data URI — invisible against a dark field, and not something a
+   colour property can reach. Redrawn light. */
+:root[data-theme="midnight"] .form-select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23c7d1cc' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+/* Same problem, same cause: a black X drawn into a data URI. */
+:root[data-theme="midnight"] .btn-close { filter: invert(1) grayscale(100%) brightness(1.6); }
+:root[data-theme="midnight"] .modal-content,
+:root[data-theme="midnight"] .offcanvas { background: var(--surface); color: var(--udm-ink); }
+:root[data-theme="midnight"] .table { --bs-table-color: var(--udm-ink); --bs-table-bg: transparent; }
+:root[data-theme="midnight"] .nav-tabs { border-bottom-color: var(--udm-line); }
+:root[data-theme="midnight"] .nav-tabs .nav-link { color: var(--udm-muted); }
+:root[data-theme="midnight"] .nav-tabs .nav-link.active {
+  background: var(--surface); border-color: var(--udm-line) var(--udm-line) var(--surface); color: var(--udm-ink);
+}
+/* Alerts are built from Bootstrap's *-bg-subtle / *-text-emphasis scale,
+   a separate set from the variables bridged above. Left alone they stay
+   pale pastel panels — readable, but a block of daylight in the middle of
+   a dark page. These are the same hues at dark-ground weight. */
+:root[data-theme="midnight"] {
+  --bs-warning-bg-subtle: #3a2f18; --bs-warning-border-subtle: #6b5526; --bs-warning-text-emphasis: #f0d9a0;
+  --bs-danger-bg-subtle: #3a1e1a; --bs-danger-border-subtle: #6b3029; --bs-danger-text-emphasis: #f5a89c;
+  --bs-success-bg-subtle: #173226; --bs-success-border-subtle: #24603f; --bs-success-text-emphasis: #8fe6bd;
+  --bs-info-bg-subtle: #173139; --bs-info-border-subtle: #245a68; --bs-info-text-emphasis: #8fdcec;
+  --bs-primary-bg-subtle: #173129; --bs-primary-border-subtle: #24604a; --bs-primary-text-emphasis: #8fe0bf;
+  --bs-light-bg-subtle: #232c2f; --bs-light-border-subtle: #3d494e;
+  --bs-secondary-bg-subtle: #232c2f; --bs-secondary-border-subtle: #3d494e; --bs-secondary-text-emphasis: #c2ccd0;
+}
+/* An unchecked box is drawn with a translucent *black* border, which on a
+   dark field leaves no visible box at all until it is ticked. */
+:root[data-theme="midnight"] .form-check-input { border-color: var(--udm-line-strong); }
+/* Office badge keys are administrator-chosen colours picked to read against
+   white (OFFICE_COLOURS in apps/accounts/models.py) — the darker ones, navy
+   and brown especially, all but disappear on a dark card. Lifted at paint
+   time rather than by restricting which colours an administrator may pick. */
+:root[data-theme="midnight"] .office-badge-key { filter: brightness(1.75) saturate(1.1); }
+
+/* Somebody who has asked their OS to reduce motion gets that honoured over
+   whatever timing the active theme prefers — Burgundy's long easing and
+   Ocean's overshoot are exactly the kind of thing that setting is for. */
+@media (prefers-reduced-motion: reduce) {
+  :root, :root[data-theme] {
+    --motion-fast: 1ms; --motion-slow: 1ms; --motion-ease: linear; --lift: 0px;
+  }
+}
+
+/* Paper has no theme. Printing while Midnight is active would otherwise put
+   near-white ink and pale hairlines onto white paper — browsers drop the
+   dark *backgrounds* by default but keep the light text, so a routing slip
+   would come out very nearly blank. Resetting the ink and line tokens for
+   print is what keeps a slip legible whatever is on screen. */
+@media print {
+  :root, :root[data-theme] {
+    --surface: #fff;
+    --udm-canvas: #fff;
+    --udm-ink: #172018;
+    --udm-heading: #0c1f18;
+    --udm-muted: #55606d;
+    --udm-label-ink: #33404f;
+    --udm-line: #cfd6e0;
+    --udm-line-soft: #e2e7ee;
+    --udm-line-strong: #aab4c0;
+    --udm-gold-tint: #fffdf6;
+    --udm-gold-ink: #5c4415;
+    --canvas-texture: none;
+  }
 }
 
 * {
@@ -104,7 +478,9 @@
 
 body {
   margin: 0;
-  background: var(--udm-canvas);
+  background-color: var(--udm-canvas);
+  background-image: var(--canvas-texture);
+  background-size: var(--canvas-texture-size);
   color: var(--udm-ink);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-size: 15px;
@@ -112,11 +488,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Body copy stays Inter in every theme — only the display face changes.
+   Swapping both would cost legibility in the dense tables this app is
+   mostly made of, and the heading is where a theme's voice is heard. */
 h1, h2, h3, h4, h5, .display-face {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  color: var(--udm-chrome);
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  color: var(--udm-heading);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
 }
 
 a {
@@ -142,7 +521,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 .wordmark .udm { color: var(--udm-gold); }
-.wordmark .doctrack { color: var(--udm-chrome); }
+.wordmark .doctrack { color: var(--udm-heading); }
 .wordmark--light .doctrack { color: #ffffff; }
 
 /* ------------------------------------------------------------------ shell */
@@ -188,7 +567,7 @@ a:hover { text-decoration: underline; }
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
 
 .app-topbar {
-  background: #fff;
+  background: var(--surface);
   border-bottom: 1px solid var(--udm-line);
   padding: 12px 26px;
   display: flex;
@@ -209,7 +588,7 @@ a:hover { text-decoration: underline; }
 }
 .avatar {
   width: 34px; height: 34px; border-radius: 50%;
-  background: var(--udm-navy); color: #fff;
+  background: var(--udm-navy); color: var(--on-accent);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
 }
@@ -225,7 +604,7 @@ a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------------ cards */
 .card-udm {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--udm-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
@@ -239,7 +618,7 @@ a:hover { text-decoration: underline; }
 .card-udm .card-udm-body { padding: 18px 20px; }
 
 .stat-card {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--udm-line);
   border-left: 4px solid var(--udm-teal);
   border-radius: var(--radius);
@@ -257,7 +636,7 @@ a:hover { text-decoration: underline; }
 .stat-card .label { color: var(--udm-muted); font-size: 13px; text-decoration: underline; }
 .stat-card .value {
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  font-size: 34px; font-weight: 700; color: var(--udm-chrome); line-height: 1.1;
+  font-size: 34px; font-weight: 700; color: var(--udm-heading); line-height: 1.1;
   text-decoration: none;
 }
 .stat-card .hint { font-size: 12.5px; color: var(--udm-muted); text-decoration: none; }
@@ -305,8 +684,10 @@ a:hover { text-decoration: underline; }
   color: var(--udm-muted); font-weight: 700;
   padding: 10px 14px; border-bottom: 1px solid var(--udm-line); white-space: nowrap;
 }
-.table-udm td { padding: 13px 14px; border-bottom: 1px solid #eef1f6; vertical-align: middle; }
-.table-udm tbody tr:hover { background: #fafbfd; }
+/* Row rule and hover were literal light greys, so in a dark theme the
+   table kept faint white hairlines and lit up rows on hover. */
+.table-udm td { padding: 13px 14px; border-bottom: 1px solid var(--udm-line-soft); vertical-align: middle; }
+.table-udm tbody tr:hover { background: var(--udm-canvas); }
 .table-udm .mono {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
   font-size: 12.5px; color: var(--udm-navy); font-weight: 600; white-space: nowrap;
@@ -328,12 +709,12 @@ a:hover { text-decoration: underline; }
 .timeline li::before {
   content: ""; position: absolute; left: -25px; top: 4px;
   width: 14px; height: 14px; border-radius: 50%;
-  background: #fff; border: 3px solid var(--udm-teal);
+  background: var(--surface); border: 3px solid var(--udm-teal);
 }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
 .timeline li.is-done::before { border-color: var(--udm-green); }
 .timeline li.is-muted::before { border-color: var(--udm-line); }
-.timeline .t-title { font-weight: 600; color: var(--udm-chrome); }
+.timeline .t-title { font-weight: 600; color: var(--udm-heading); }
 .timeline .t-meta { color: var(--udm-muted); font-size: 13px; }
 .timeline .t-detail {
   margin-top: 6px; background: var(--udm-canvas); border: 1px solid var(--udm-line);
@@ -346,18 +727,18 @@ a:hover { text-decoration: underline; }
 }
 .relevance .score {
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 700; font-size: 19px; color: var(--udm-chrome);
+  font-weight: 700; font-size: 19px; color: var(--udm-heading);
 }
-.relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: #e7ecf3; overflow: hidden; }
+.relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: var(--chart-track); overflow: hidden; }
 .relevance-bar span { display: block; height: 100%; background: var(--udm-teal); border-radius: 999px; }
 .relevance-bar.high span { background: var(--udm-green); }
 .relevance-bar.low span { background: var(--udm-gold); }
 
-.result-item { padding: 16px 20px; border-bottom: 1px solid #eef1f6; display: flex; gap: 18px; }
+.result-item { padding: 16px 20px; border-bottom: 1px solid var(--udm-line-soft); display: flex; gap: 18px; }
 .result-item:last-child { border-bottom: 0; }
 .result-item h3 { font-size: 16px; margin: 0 0 3px; }
 .result-item .meta { color: var(--udm-muted); font-size: 13px; }
-.result-item mark { background: #fdf3d4; padding: 0 2px; border-radius: 3px; }
+.result-item mark { background: var(--mark-bg); color: var(--mark-ink); padding: 0 2px; border-radius: 3px; }
 
 /* ------------------------------------------------------------------ misc */
 .tag-chip {
@@ -375,11 +756,11 @@ a:hover { text-decoration: underline; }
 
 .file-chip {
   display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background: #fff;
+  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background: var(--surface);
 }
 .file-chip .ext {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-  background: var(--udm-navy); color: #fff; border-radius: 5px; padding: 3px 6px;
+  background: var(--udm-navy); color: var(--on-accent); border-radius: 5px; padding: 3px 6px;
 }
 
 .smart-folder {
@@ -391,7 +772,7 @@ a:hover { text-decoration: underline; }
 .smart-folder .count { color: var(--udm-muted); font-size: 12.5px; }
 
 .doc-tile {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--udm-line); border-radius: var(--radius);
   padding: 16px; height: 100%; display: flex; flex-direction: column; gap: 8px;
   box-shadow: var(--shadow-card);
 }
@@ -401,21 +782,21 @@ a:hover { text-decoration: underline; }
 .doc-tile .meta { color: var(--udm-muted); font-size: 12.5px; }
 
 .empty-state { text-align: center; padding: 46px 20px; color: var(--udm-muted); }
-.empty-state h3 { color: var(--udm-chrome); margin-bottom: 6px; }
+.empty-state h3 { color: var(--udm-heading); margin-bottom: 6px; }
 
 .step-indicator { display: flex; gap: 10px; align-items: center; color: var(--udm-muted); font-size: 13px; }
 .step-indicator .step { display: inline-flex; align-items: center; gap: 7px; }
 .step-indicator .num {
-  width: 22px; height: 22px; border-radius: 50%; background: #e7ecf3; color: var(--udm-muted);
+  width: 22px; height: 22px; border-radius: 50%; background: var(--udm-slate-soft); color: var(--udm-muted);
   display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
 }
-.step-indicator .step.active .num { background: var(--udm-navy); color: #fff; }
+.step-indicator .step.active .num { background: var(--udm-navy); color: var(--on-accent); }
 .step-indicator .step.active { color: var(--udm-navy); font-weight: 600; }
 
 .text-preview {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--udm-line); border-radius: 8px;
   padding: 16px; max-height: 430px; overflow: auto;
-  font-size: 13.5px; white-space: pre-wrap; color: #384456;
+  font-size: 13.5px; white-space: pre-wrap; color: var(--udm-ink);
 }
 
 /* Buttons carry four roles, and the role is the colour rather than the size:
@@ -430,10 +811,10 @@ a:hover { text-decoration: underline; }
    beside a solid primary than a bordered white one does, which was competing
    with it for the same attention. */
 .btn-udm {
-  background: var(--udm-navy); border: 1px solid var(--udm-navy); color: #fff;
+  background: var(--udm-navy); border: 1px solid var(--udm-navy); color: var(--on-accent);
   border-radius: var(--radius-pill); padding: 9px 18px; font-weight: 700; font-size: 13.5px;
 }
-.btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
+.btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: var(--on-accent); }
 .btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: var(--udm-gold-ink); }
 .btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: var(--udm-gold-ink-hover); }
 .btn-udm-outline {
@@ -449,10 +830,10 @@ a:hover { text-decoration: underline; }
   text-decoration: underline; text-decoration-color: var(--udm-gold-border); text-underline-offset: 3px;
 }
 .btn-udm-ghost:hover { background: var(--udm-teal-soft); color: var(--udm-navy-700); text-decoration-color: var(--udm-gold); }
-.btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
-.btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
-.btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
-.btn-udm-green:hover { background: var(--udm-green); border-color: var(--udm-green); filter: brightness(0.94); color: #fff; }
+.btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: var(--on-accent); }
+.btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: var(--on-accent); }
+.btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: var(--on-accent); }
+.btn-udm-green:hover { background: var(--udm-green); border-color: var(--udm-green); filter: brightness(0.94); color: var(--on-accent); }
 
 /* Leading icons. `currentColor` on the stroke is what lets one icon partial
    serve every button role without knowing which role it landed in. The fixed
@@ -465,14 +846,27 @@ a:hover { text-decoration: underline; }
 .btn-sm .btn-ic { width: 14px; height: 14px; flex: 0 0 14px; }
 
 .form-label { font-size: 13px; font-weight: 600; color: var(--udm-label-ink); margin-bottom: 4px; }
-.form-control, .form-select { border-radius: 8px; border-color: var(--udm-line); font-size: 14.5px; padding: 8px 12px; }
-.form-control:focus, .form-select:focus { border-color: var(--udm-teal); box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.12); }
+/* Background and text colour are set explicitly, not left to Bootstrap.
+   Bootstrap's own defaults are a hardcoded white field with near-black
+   text, which a dark theme cannot override from a variable — every input
+   on the page stayed a bright white slab while everything around it went
+   dark. Naming them here routes the whole form layer through the theme. */
+.form-control, .form-select {
+  border-radius: 8px; border-color: var(--udm-line); font-size: 14.5px; padding: 8px 12px;
+  background-color: var(--surface); color: var(--udm-ink);
+}
+.form-control::placeholder { color: var(--udm-muted); opacity: 1; }
+.form-control:focus, .form-select:focus {
+  border-color: var(--udm-teal); box-shadow: 0 0 0 3px rgba(15, 110, 76, 0.12);
+  background-color: var(--surface); color: var(--udm-ink);
+}
+.form-control:disabled, .form-control[readonly], .form-select:disabled { background-color: var(--udm-canvas); color: var(--udm-muted); }
 .form-text { font-size: 12.5px; color: var(--udm-muted); }
 .required-mark { color: var(--udm-red); }
 
 .help-note {
-  border-left: 3px solid var(--udm-gold); background: #fffdf6;
-  padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; color: #5a4a20;
+  border-left: 3px solid var(--udm-gold); background: var(--udm-gold-tint);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; color: var(--udm-gold-ink);
 }
 
 /* --------------------------------------------------------------- deadline */
@@ -487,7 +881,7 @@ a:hover { text-decoration: underline; }
 .deadline-option {
   display: inline-flex; align-items: center; gap: 9px; flex: 1 1 220px;
   border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 13px;
-  background: #fff; font-size: 14px; cursor: pointer;
+  background: var(--surface); font-size: 14px; cursor: pointer;
 }
 .deadline-option:hover { border-color: var(--udm-teal); }
 .deadline-option input { margin: 0; flex: 0 0 auto; }
@@ -506,13 +900,13 @@ a:hover { text-decoration: underline; }
 }
 .phase2-upload-box {
   border: 1px dashed var(--udm-line-soft); border-radius: var(--radius);
-  background: #fafbfd; padding: 16px;
+  background: var(--udm-canvas); padding: 16px;
 }
 .phase2-sticky-card { position: sticky; top: 84px; }
 .phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
 .phase2-checklist li { margin-bottom: 10px; }
 .phase2-checklist li:last-child { margin-bottom: 0; }
-.phase2-checklist strong { color: var(--udm-chrome); }
+.phase2-checklist strong { color: var(--udm-heading); }
 .phase2-review-table th {
   width: 190px; color: var(--udm-muted); font-size: 13px; font-weight: 600; vertical-align: top;
 }
@@ -557,7 +951,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--udm-line);
   border-left: 4px solid var(--udm-gold);
   border-radius: 18px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: var(--shadow-card);
   text-align: left;
 }
@@ -649,7 +1043,7 @@ a:hover { text-decoration: underline; }
 }
 .lockout-timer__clock {
   font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-chrome);
+  font-variant-numeric: tabular-nums; color: var(--udm-heading);
 }
 
 @media (max-width: 900px) {
@@ -665,6 +1059,8 @@ a:hover { text-decoration: underline; }
 
 @media print {
   .app-sidebar, .app-topbar, .no-print { display: none !important; }
+  /* Paper is white regardless of the on-screen theme — printed pages don't
+     get to be dark mode. */
   body { background: #fff; }
   .app-content { padding: 0; }
   .card-udm { box-shadow: none; border: 1px solid #cfd6e0; }
@@ -683,7 +1079,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-brand-icon { display:block !important; width:36px !important; height:36px !important; min-width:36px !important; max-width:36px !important; min-height:36px !important; max-height:36px !important; flex:0 0 36px !important; border-radius:9px; object-fit:contain; }
 .app-topbar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:13px; white-space:nowrap; }
 .app-topbar .topbar-search { flex:1 1 auto; min-width:180px; max-width:460px; }
-.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(15, 110, 76,.12); }
+.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:var(--surface); outline:none; box-shadow:0 0 0 3px rgba(15, 110, 76,.12); }
 .app-topbar .topbar-account-button { display:inline-flex; align-items:center; gap:9px; width:auto; min-width:0; max-width:280px; padding:4px 6px; border:0 !important; border-radius:8px; background:transparent !important; color:var(--udm-ink); text-align:left; box-shadow:none !important; }
 .app-topbar .topbar-account-button:hover,.app-topbar .topbar-account-button:focus { background:var(--udm-canvas) !important; color:var(--udm-ink); }
 .app-topbar .topbar-account-copy { flex-direction:column; align-items:flex-start; width:auto; min-width:0; max-width:190px; }
@@ -694,22 +1090,75 @@ a:hover { text-decoration: underline; }
 	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy); text-decoration:none; }
 	.topbar-notifications:hover { background:var(--udm-canvas); color:var(--udm-teal-ink); }
 	.topbar-notifications:focus-visible { outline:3px solid rgba(15, 110, 76,.35); outline-offset:2px; }
+
+/* ------------------------------------------------------------ theme menu --
+   Bootstrap's dropdown ships with its own hardcoded white/black defaults, so
+   without this a dark theme would pop a bright white box on an otherwise
+   dark page. This makes every dropdown in the app — not just the theme
+   picker below — read its surface from the active theme. */
+.dropdown-menu {
+  background: var(--surface);
+  color: var(--udm-ink);
+  border-color: var(--udm-line);
+}
+.dropdown-item, .dropdown-item-text { color: var(--udm-ink); }
+.dropdown-item:hover, .dropdown-item:focus { background: var(--udm-canvas); color: var(--udm-ink); }
+.dropdown-divider { border-top-color: var(--udm-line); }
+
+.topbar-icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 8px;
+  background: transparent; color: var(--udm-navy);
+}
+.topbar-icon-button:hover, .topbar-icon-button:focus { background: var(--udm-canvas); color: var(--udm-teal-ink); }
+.topbar-icon-button:focus-visible { outline: 3px solid rgba(15, 110, 76, .35); outline-offset: 2px; }
+.topbar-icon-button svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.theme-menu { min-width: 268px; padding: 8px; border-radius: 10px; box-shadow: var(--shadow-card); }
+.theme-menu-label { padding: 4px 8px 8px; color: var(--udm-muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.theme-option {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--udm-ink); font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.theme-option:hover, .theme-option:focus-visible { background: var(--udm-canvas); }
+.theme-option-copy { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; line-height: 1.3; }
+.theme-option-name { font-weight: 600; }
+/* Names each theme's signature, since the swatch can only show its colours
+   — the shape, face and timing differences are invisible until picked. */
+.theme-option-desc { color: var(--udm-muted); font-size: 11px; }
+.theme-option-check { width: 15px; height: 15px; flex: 0 0 15px; stroke: var(--udm-navy); fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.theme-option.is-active .theme-option-check { opacity: 1; }
+.theme-menu-note { margin-top: 4px; padding: 8px 8px 2px; border-top: 1px solid var(--udm-line); color: var(--udm-muted); font-size: 11.5px; }
+
+/* Each swatch is hardcoded to its theme's own two colours rather than reading
+   the live custom properties — the whole point is showing every option at
+   once regardless of which one is currently active. */
+.theme-swatch { display: block; width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .08); }
+.theme-swatch[data-theme-swatch="default"] { background: linear-gradient(135deg, #0f6e4c 50%, #d4af6a 50%); }
+.theme-swatch[data-theme-swatch="navy"] { background: linear-gradient(135deg, #1c3f66 50%, #c9a545 50%); }
+.theme-swatch[data-theme-swatch="maroon"] { background: linear-gradient(135deg, #7a1f2b 50%, #d4af6a 50%); }
+.theme-swatch[data-theme-swatch="slate"] { background: linear-gradient(135deg, #2b3544 50%, #2f9e9e 50%); }
+.theme-swatch[data-theme-swatch="burgundy"] { background: linear-gradient(135deg, #5c2340 50%, #b7793f 50%); }
+.theme-swatch[data-theme-swatch="ocean"] { background: linear-gradient(135deg, #0d6e8f 50%, #dba463 50%); }
+.theme-swatch[data-theme-swatch="midnight"] { background: linear-gradient(135deg, #050a08 50%, #2fbf87 50%); border-color: rgba(255, 255, 255, .15); }
 	.notification-bell { width:21px; height:21px; }
-	.notification-count { position:absolute; top:-4px; right:-6px; display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border:2px solid #fff; border-radius:999px; background:var(--udm-red); color:#fff; font-size:10px; font-weight:700; line-height:1; }
+	.notification-count { position:absolute; top:-4px; right:-6px; display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border:2px solid var(--surface); border-radius:999px; background:var(--udm-red); color:var(--on-accent); font-size:10px; font-weight:700; line-height:1; }
 	.notification-page-head { align-items:flex-start; }
 	.notification-toolbar { border-radius:var(--radius); }
 	.notification-filters { display:flex; flex-wrap:wrap; gap:6px; }
 	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy); font-size:13px; font-weight:600; text-decoration:none; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-filter:focus-visible { outline:3px solid rgba(15, 110, 76,.2); outline-offset:2px; }
-	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:var(--on-accent); }
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); }
+	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow-card); }
 	.notification-row.is-actionable { border-left-color:var(--udm-red); }
 	.notification-row.is-received { border-left-color:var(--udm-teal); }
 	.notification-row.is-completed { border-left-color:var(--udm-navy); }
-	.notification-row.is-shared { border-left-color:#96743a; }
+	.notification-row.is-shared { border-left-color:var(--udm-gold-border); }
 	.notification-row.is-read { background:var(--udm-canvas); box-shadow:none; }
 	.notification-kind-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--udm-navy-soft); color:var(--udm-navy); font-size:15px; font-weight:700; }
 	.notification-row.is-actionable .notification-kind-icon { background:var(--udm-red-soft); color:var(--udm-red); }
@@ -735,13 +1184,13 @@ a:hover { text-decoration: underline; }
 .sidebar-office-role { margin-top:2px; color:rgba(157,184,171,.78); font-size:12.5px; }
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
-.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:#fff; color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
+.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:var(--surface); color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
 .tracking-queue-link:hover,.tracking-queue-link:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
-.tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
-.tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:#fff; }
-.tracking-queue-link--alert { border-color:#efc6c2; color:var(--udm-red); }
-.tracking-queue-link--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
-.tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
+.tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:var(--on-accent); }
+.tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:var(--on-accent); }
+.tracking-queue-link--alert { border-color:var(--udm-red-border); color:var(--udm-red); }
+.tracking-queue-link--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:var(--on-accent); }
+.tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:var(--udm-red); filter:brightness(0.9); color:var(--on-accent); }
 .tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
 @media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
 @media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } }
@@ -753,14 +1202,14 @@ a:hover { text-decoration: underline; }
    PHASE 3: routing slip and print presentation
    ================================================================ */
 .routing-slip-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); color:var(--udm-ink); }
+.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow-card); color:var(--udm-ink); }
 .routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:4px solid var(--udm-gold-border); }
 .routing-slip-heading { min-width:0; }
 .routing-slip-school { color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
 .routing-slip-heading h1 { margin:3px 0 2px; font-size:25px; font-weight:800; letter-spacing:-.03em; }
 .routing-slip-office { color:var(--udm-muted); font-size:13px; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
-.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:2px solid var(--udm-gold-border); background:#fff; text-align:center; }
+.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:2px solid var(--udm-gold-border); background:var(--surface); text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
    nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
@@ -772,29 +1221,29 @@ a:hover { text-decoration: underline; }
 }
 /* Holds the generated QR svg. No border or padding: the code carries its own
    quiet zone (QR_BORDER), and framing it again would eat scannable area. */
-.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:#fff; }
+.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:var(--surface); }
 .routing-slip-qr-pattern svg { display:block; width:100%; height:100%; }
 .routing-slip-control { min-width:160px; padding:8px 10px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-control span { display:block; color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 .routing-slip-control strong { display:block; margin-top:8px; font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size:13px; letter-spacing:.04em; }
-.routing-slip-number-block { position:relative; margin:18px 0; padding:14px 18px; border:2px solid var(--udm-navy); border-radius:8px; background:#f8fbfe; text-align:center; }
+.routing-slip-number-block { position:relative; margin:18px 0; padding:14px 18px; border:2px solid var(--udm-navy); border-radius:8px; background:var(--udm-canvas); text-align:center; }
 .routing-slip-number-label { color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
-.routing-slip-number { margin-top:2px; color:var(--udm-chrome); font-size:24px; font-weight:800; letter-spacing:.035em; overflow-wrap:anywhere; }
+.routing-slip-number { margin-top:2px; color:var(--udm-heading); font-size:24px; font-weight:800; letter-spacing:.035em; overflow-wrap:anywhere; }
 .routing-slip-status { position:absolute; top:50%; right:16px; transform:translateY(-50%); }
 .routing-slip-summary { border:1px solid var(--udm-line); border-radius:8px; overflow:hidden; }
 .routing-slip-summary-row { display:grid; grid-template-columns:190px minmax(0,1fr); border-bottom:1px solid var(--udm-line); }
 .routing-slip-summary-row:last-child { border-bottom:0; }
 .routing-slip-summary-label { padding:10px 13px; background:var(--udm-canvas); color:var(--udm-label-ink); font-size:12px; font-weight:700; }
 .routing-slip-summary-value { padding:10px 13px; }
-.routing-slip-summary-row--subject .routing-slip-summary-value { color:var(--udm-chrome); font-size:16px; font-weight:700; }
+.routing-slip-summary-row--subject .routing-slip-summary-value { color:var(--udm-heading); font-size:16px; font-weight:700; }
 .routing-slip-notes { white-space:normal; }
-.routing-slip-privacy { margin:16px 0; padding:10px 13px; border-left:3px solid var(--udm-gold); background:#fffdf6; color:#665224; font-size:11px; line-height:1.45; }
+.routing-slip-privacy { margin:16px 0; padding:10px 13px; border-left:3px solid var(--udm-gold); background:var(--udm-gold-tint); color:var(--udm-gold-ink); font-size:11px; line-height:1.45; }
 .routing-slip-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:20px 0 8px; }
 .routing-slip-section-head h2 { margin:0; font-size:16px; }
 .routing-slip-section-head span { color:var(--udm-muted); font-size:11px; }
 .routing-slip-table { width:100%; border-collapse:collapse; table-layout:fixed; }
-.routing-slip-table th,.routing-slip-table td { padding:9px 8px; border:1px solid #aeb8c5; vertical-align:top; }
-.routing-slip-table th { background:#eef3f8; color:var(--udm-navy); font-size:10px; font-weight:800; letter-spacing:.06em; text-align:center; text-transform:uppercase; }
+.routing-slip-table th,.routing-slip-table td { padding:9px 8px; border:1px solid var(--udm-line-strong); vertical-align:top; }
+.routing-slip-table th { background:var(--udm-canvas); color:var(--udm-navy); font-size:10px; font-weight:800; letter-spacing:.06em; text-align:center; text-transform:uppercase; }
 .routing-slip-table td { font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
 .routing-slip-col-date { width:22%; }
 .routing-slip-col-office { width:11%; }
@@ -804,8 +1253,8 @@ a:hover { text-decoration: underline; }
 .routing-slip-signature-line { display:block; height:24px; margin-top:7px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-receipt-note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--udm-line); }
 .routing-slip-empty { padding:24px !important; color:var(--udm-muted); text-align:center; }
-.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:#fff; font-size:11px; }
-.routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-chrome); }
+.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:var(--surface); font-size:11px; }
+.routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-heading); }
 .routing-slip-action-pending { margin:7px 0 0; color:var(--udm-muted); font-size:10px; }
 .routing-slip-attachments { margin-top:20px; padding-top:2px; }
 .routing-slip-attachments ol { margin:8px 0 0; padding-left:22px; font-size:12px; }
@@ -885,10 +1334,10 @@ a:hover { text-decoration: underline; }
 .report-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .card-udm-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .report-print-header,.report-print-footer { display:none; }
-.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:#fff; box-shadow:var(--shadow-card); }
+.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy); }
-.reports-tab.active { background:var(--udm-navy); color:#fff; }
+.reports-tab.active { background:var(--udm-navy); color:var(--on-accent); }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
@@ -910,13 +1359,13 @@ a:hover { text-decoration: underline; }
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
-.report-office-label { margin-bottom:7px; color:var(--udm-chrome); font-size:13px; font-weight:700; }
+.report-office-label { margin-bottom:7px; color:var(--udm-heading); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
 .report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.report-series-item strong { text-align:right; color:var(--udm-chrome); }
+.report-series-item strong { text-align:right; color:var(--udm-heading); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
@@ -962,17 +1411,17 @@ a:hover { text-decoration: underline; }
 }
 .status-row:last-child { border-bottom:0; }
 .status-row-label { min-width:0; overflow:hidden; }
-.status-row strong { text-align:right; color:var(--udm-chrome); font-size:14px; }
+.status-row strong { text-align:right; color:var(--udm-heading); font-size:14px; }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
 /* -------------------------------------------------------------- metrics */
 .report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
-.report-metric strong { color:var(--udm-chrome); font-size:14px; text-align:right; white-space:nowrap; }
+.report-metric strong { color:var(--udm-heading); font-size:14px; text-align:right; white-space:nowrap; }
 .report-metric small { display:block; font-size:11.5px; }
 
 .meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
-.meter-head strong { color:var(--udm-chrome); font-size:17px; }
+.meter-head strong { color:var(--udm-heading); font-size:17px; }
 /* Unfilled track is a lighter step of the fill's own ramp, so state reads
    across the whole bar. */
 .meter-track { height:10px; border-radius:2px; background:var(--udm-green-soft); }
@@ -1013,9 +1462,9 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 html { scroll-behavior:smooth; }
 body.sidebar-open { overflow:hidden; }
-.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:#fff; color:var(--udm-navy); font-weight:700; }
+.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:var(--surface); color:var(--udm-navy); font-weight:700; }
 .skip-link:focus { top:14px; }
-.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:#fff; color:var(--udm-muted); font-size:12.5px; }
+.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:var(--surface); color:var(--udm-muted); font-size:12.5px; }
 .sidebar-toggle,.sidebar-close,.sidebar-backdrop { display:none; }
 /* This is the off-canvas drawer's own header (brand + close button) — named
    "mobile" because it only ever needs to exist there. `display:block` with
@@ -1033,7 +1482,7 @@ body.sidebar-open { overflow:hidden; }
 .btn {
   display:inline-flex; align-items:center; justify-content:center; gap:7px;
   border-radius:var(--radius-pill);
-  transition:transform 100ms ease,box-shadow 100ms ease,background-color 100ms ease,border-color 100ms ease;
+  transition:transform var(--motion-fast) var(--motion-ease),box-shadow var(--motion-fast) var(--motion-ease),background-color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease);
 }
 .btn:active { transform:translateY(1px); }
 .btn:disabled { cursor:not-allowed; opacity:.65; }
@@ -1055,8 +1504,8 @@ body.sidebar-open { overflow:hidden; }
 .login-form-heading p { margin:0; color:var(--udm-muted); font-size:14.5px; }
 .login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
 .login-account-note { margin:18px 0 0; padding-top:16px; border-top:1px solid var(--udm-line); color:var(--udm-muted); font-size:12.5px; }
-.lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
-.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); text-align:center; }
+.lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:var(--udm-gold-ink); font-size:23px; font-weight:800; }
+.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow-card); text-align:center; }
 .error-code { color:var(--udm-gold); font-family:"Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size:54px; font-weight:800; line-height:1; }
 .error-page h1 { margin:10px 0 6px; font-size:26px; font-weight:800; letter-spacing:-.03em; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
@@ -1094,7 +1543,7 @@ body.sidebar-open { overflow:hidden; }
   .sidebar-close { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:25px; line-height:1; }
   .sidebar-backdrop { position:fixed; inset:0; z-index:1040; display:block; border:0; background:rgba(6,20,36,.5); opacity:0; pointer-events:none; transition:opacity 180ms ease; }
   body.sidebar-open .sidebar-backdrop { opacity:1; pointer-events:auto; }
-  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:#fff; }
+  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:var(--surface); }
   .sidebar-toggle span { display:block; width:17px; height:2px; border-radius:2px; background:var(--udm-navy); }
   .app-sidebar nav { display:block; }
   .app-sidebar .brand { padding:2px 5px 20px; }
@@ -1139,8 +1588,8 @@ body.sidebar-open { overflow:hidden; }
   white-space: nowrap;
   text-decoration: none !important;
   box-shadow: 0 1px 2px rgba(15, 110, 76, 0.06);
-  transition: background-color 120ms ease, border-color 120ms ease,
-              color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease),
+              color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
 }
 
 .btn-receipt:hover {
@@ -1149,7 +1598,7 @@ body.sidebar-open { overflow:hidden; }
   color: var(--udm-gold-ink-hover);
   text-decoration: none !important;
   box-shadow: 0 3px 8px rgba(212, 175, 106, 0.16);
-  transform: translateY(-1px);
+  transform: translateY(var(--lift));
 }
 
 .btn-receipt:active {
@@ -1218,7 +1667,7 @@ body.sidebar-open { overflow:hidden; }
   padding: 6px 11px;
   border: 1px solid var(--udm-line-strong);
   border-radius: var(--radius-pill);
-  background: #ffffff;
+  background: var(--surface);
   color: var(--udm-navy);
   font-size: 12.5px;
   font-weight: 700;
@@ -1226,8 +1675,8 @@ body.sidebar-open { overflow:hidden; }
   white-space: nowrap;
   text-decoration: none !important;
   box-shadow: 0 1px 2px rgba(15, 110, 76, 0.05);
-  transition: background-color 120ms ease, border-color 120ms ease,
-              color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease),
+              color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
 }
 
 .btn-dashboard-action:hover {
@@ -1236,7 +1685,7 @@ body.sidebar-open { overflow:hidden; }
   color: var(--udm-teal-ink-dark);
   text-decoration: none !important;
   box-shadow: 0 3px 8px rgba(15, 110, 76, 0.12);
-  transform: translateY(-1px);
+  transform: translateY(var(--lift));
 }
 
 .btn-dashboard-action:active {
@@ -1255,7 +1704,7 @@ body.sidebar-open { overflow:hidden; }
   font-size: 14px;
   font-weight: 800;
   line-height: 1;
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .btn-dashboard-action:hover .btn-dashboard-action-arrow {
@@ -1290,10 +1739,10 @@ body.sidebar-open { overflow:hidden; }
 .multiselect {
   border: 1px solid var(--udm-line);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--surface);
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 110, 76, 0.05);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
 }
 
 /* Matches the focus treatment on .form-control / .form-select so the
@@ -1317,7 +1766,7 @@ body.sidebar-open { overflow:hidden; }
 }
 
 .multiselect-search::placeholder { color: var(--udm-muted); }
-.multiselect-search:focus { outline: none; background: #ffffff; }
+.multiselect-search:focus { outline: none; background: var(--surface); }
 
 .multiselect-list {
   max-height: 232px;
@@ -1331,15 +1780,15 @@ body.sidebar-open { overflow:hidden; }
   gap: 10px;
   margin: 0;
   padding: 9px 12px;
-  border-bottom: 1px solid #eef1f6;
+  border-bottom: 1px solid var(--udm-line-soft);
   color: var(--udm-ink);
   font-size: 14px;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease);
 }
 
 .multiselect-option:last-child { border-bottom: 0; }
-.multiselect-option:hover { background: #f7f9fc; }
+.multiselect-option:hover { background: var(--udm-canvas); }
 
 .multiselect-option input {
   flex: 0 0 15px;
@@ -1434,7 +1883,7 @@ body.sidebar-open { overflow:hidden; }
      to its text on a narrow phone, and the two buttons then wrap awkwardly. */
   width: min(420px, calc(100vw - 32px));
   max-width: 420px; padding: 26px 28px; border: 1px solid var(--udm-line);
-  border-radius: 12px; background: #fff; color: var(--udm-ink);
+  border-radius: 12px; background: var(--surface); color: var(--udm-ink);
   box-shadow: 0 18px 44px rgba(15, 110, 76, 0.22);
 }
 @media (max-width: 400px) {
@@ -1443,11 +1892,11 @@ body.sidebar-open { overflow:hidden; }
   .session-dialog__actions { flex-direction: column; }
 }
 .session-dialog::backdrop { background: rgba(11, 32, 56, 0.55); }
-.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; color: var(--udm-chrome); }
+.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; color: var(--udm-heading); }
 .session-dialog p { margin: 0; font-size: 14px; color: var(--udm-slate-text); }
 .session-dialog__clock {
   margin: 16px 0 20px; font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-chrome); text-align: center;
+  font-variant-numeric: tabular-nums; color: var(--udm-heading); text-align: center;
 }
 .session-dialog__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .session-dialog__actions .btn { flex: 1 1 auto; }
@@ -1474,7 +1923,7 @@ body.sidebar-open { overflow:hidden; }
      wants the fuller treatment. */
   border: 1px solid var(--udm-line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
   color: var(--udm-pill-ink);
   font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5;
   vertical-align: baseline; white-space: nowrap;
@@ -1538,7 +1987,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .fold { margin: 0 0 14px; }
 .fold > summary {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
-  border: 1px solid var(--udm-line); border-radius: 999px; background: #fff;
+  border: 1px solid var(--udm-line); border-radius: 999px; background: var(--surface);
   color: var(--udm-navy); cursor: pointer; font-size: 12.5px; font-weight: 600;
   list-style: none;
 }
@@ -1635,7 +2084,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   padding: 3px;
   border: 1px solid var(--udm-line);
   border-radius: var(--radius-pill);
-  background: #fff;
+  background: var(--surface);
 }
 .deadline-option {
   flex: 0 0 auto;
@@ -1647,7 +2096,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   color: var(--udm-muted);
   font-size: 13px; font-weight: 700;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 .deadline-option:hover { border-color: transparent; background: var(--udm-teal-soft); color: var(--udm-teal-ink); }
 /* Clipped rather than display:none — a hidden input is skipped by the tab
@@ -1659,7 +2108,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   overflow: hidden;
   white-space: nowrap;
 }
-.deadline-option:has(input:checked) { background: var(--udm-navy); color: #fff; }
+.deadline-option:has(input:checked) { background: var(--udm-navy); color: var(--on-accent); }
 /* The ring has to be drawn on the label: the input it belongs to is clipped to
    a pixel, so its own focus ring would be invisible. */
 .deadline-option:has(input:focus-visible) { outline: 3px solid var(--udm-gold); outline-offset: 2px; }
@@ -1671,7 +2120,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   width: 56px; height: 56px; margin: 0 auto 14px;
   border: 1px solid var(--udm-teal-soft);
   border-radius: 18px;
-  background: linear-gradient(160deg, var(--udm-teal-soft), #fff);
+  background: linear-gradient(160deg, var(--udm-teal-soft), var(--surface));
   color: var(--udm-navy);
 }
 
@@ -1740,12 +2189,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
 /* ---- shared by both shapes ---- */
 .nav-ic { width:19px; height:19px; flex:0 0 19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .nav-item--disclosure { width:100%; border:0; background:transparent; font:inherit; text-align:left; cursor:pointer; }
-.nav-chevron { width:14px; height:14px; flex:0 0 14px; margin-left:auto; opacity:.7; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; transition:transform 160ms ease; }
+.nav-chevron { width:14px; height:14px; flex:0 0 14px; margin-left:auto; opacity:.7; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; transition:transform var(--motion-slow) var(--motion-ease); }
 .nav-item--disclosure[aria-expanded="true"] .nav-chevron { transform:rotate(90deg); }
 
 /* The queue list is a disclosure at every width. max-height rather than display
    so it can animate; the value only has to exceed the natural height. */
-.queue-list { max-height:0; overflow:hidden; transition:max-height 200ms ease; background:rgba(0,0,0,.20); }
+.queue-list { max-height:0; overflow:hidden; transition:max-height var(--motion-slow) var(--motion-ease); background:rgba(0,0,0,.20); }
 .queue-list.is-open { max-height:340px; }
 .queue-link { display:flex; align-items:center; gap:10px; padding:7px 12px 7px 44px; color:rgba(157,184,171,.92); font-size:12.5px; font-weight:600; text-decoration:none; }
 .queue-link:hover,.queue-link:focus { background:rgba(255,255,255,.07); color:#fff; text-decoration:none; }
@@ -1774,7 +2223,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
        together — a box cannot hide one and leave the other visible; the browser
        promotes the visible one to auto and the scrollbar returns. */
     overflow:hidden;
-    transition:width 170ms ease, box-shadow 170ms ease;
+    transition:width var(--motion-slow) var(--motion-ease), box-shadow var(--motion-slow) var(--motion-ease);
   }
   .app-sidebar:hover,
   .app-sidebar.is-pinned,
@@ -1804,7 +2253,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
 
   /* Labels fade in slightly behind the width so nothing flashes while the rail
      is still too narrow to hold the text. */
-  .nav-label { opacity:0; transition:opacity 120ms ease 40ms; }
+  .nav-label { opacity:0; transition:opacity var(--motion-fast) var(--motion-ease) 40ms; }
   .app-sidebar:hover .nav-label,
   .app-sidebar.is-pinned .nav-label,
   .app-sidebar.is-focus-open .nav-label { opacity:1; }
@@ -1815,9 +2264,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
   .nav-tip {
     display:block; position:absolute; left:100%; margin-left:10px;
     padding:4px 9px; border-radius:6px;
-    background:var(--udm-ink); color:#fff;
+    background:var(--udm-heading); color:var(--surface);
     font-size:11px; font-weight:600; white-space:nowrap;
-    opacity:0; pointer-events:none; transition:opacity 100ms ease; z-index:40;
+    opacity:0; pointer-events:none; transition:opacity var(--motion-fast) var(--motion-ease); z-index:40;
     box-shadow:0 3px 10px rgba(0,0,0,.25);
   }
   .nav-item:hover .nav-tip,
@@ -1834,7 +2283,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
     white-space:nowrap; cursor:pointer; position:relative;
   }
   .nav-pin:hover { background:rgba(255,255,255,.07); color:#fff; }
-  .nav-pin-ic { transition:transform 160ms ease; }
+  .nav-pin-ic { transition:transform var(--motion-slow) var(--motion-ease); }
   .app-sidebar.is-pinned .nav-pin-ic { transform:rotate(180deg); }
 
   .sidebar-office { padding:10px 18px 0; margin-top:0; white-space:nowrap; }
@@ -1865,7 +2314,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
   padding: 5px 6px 5px 14px;
   border: 1px solid var(--udm-line);
   border-radius: var(--radius-pill);
-  background: #fff;
+  background: var(--surface);
 }
 .filterbar-ic { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: var(--udm-muted); stroke-width: 2; stroke-linecap: round; }
 /* The input carries no chrome of its own — the bar around it is the control. */
@@ -1892,14 +2341,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
 }
 .filterbar-more > summary::-webkit-details-marker { display: none; }
 .filterbar-more > summary::marker { content: ""; }
-.filterbar-more[open] > summary { background: var(--udm-navy); color: #fff; }
+.filterbar-more[open] > summary { background: var(--udm-navy); color: var(--on-accent); }
 .filterbar-more > summary:focus-visible { outline: 3px solid var(--udm-gold); outline-offset: 2px; }
 .filterbar-panel {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
   width: min(560px, 78vw);
   padding: 14px;
   border: 1px solid var(--udm-line); border-radius: var(--radius);
-  background: #fff; box-shadow: 0 14px 38px rgba(15, 110, 76, 0.16);
+  background: var(--surface); box-shadow: 0 14px 38px rgba(15, 110, 76, 0.16);
 }
 .filterbar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .filterbar-grid label { display: block; margin-bottom: 3px; font-size: 11.5px; font-weight: 700; color: var(--udm-label-ink); }
@@ -1932,15 +2381,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
   display: flex; align-items: center; gap: 13px;
   padding: 13px 16px;
   border: 1px solid var(--udm-line); border-radius: var(--radius);
-  background: #fff; color: inherit; text-decoration: none;
-  transition: border-color 120ms ease, transform 120ms ease;
+  background: var(--surface); color: inherit; text-decoration: none;
+  transition: border-color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
 }
-.attention-card:hover { border-color: var(--udm-navy); transform: translateY(-1px); text-decoration: none; }
-.attention-card .n { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--udm-chrome); }
+.attention-card:hover { border-color: var(--udm-navy); transform: translateY(var(--lift)); text-decoration: none; }
+.attention-card .n { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--udm-heading); }
 .attention-card .k { font-size: 13px; font-weight: 700; color: var(--udm-ink); }
 .attention-card .h { font-size: 11.5px; color: var(--udm-muted); margin-top: 1px; }
 .attention-card .go { margin-left: auto; color: var(--udm-navy); font-size: 17px; font-weight: 700; }
-.attention-card--urgent { border-color: #f0c9c4; background: linear-gradient(100deg, var(--udm-red-soft), #fff 62%); }
+.attention-card--urgent { border-color: var(--udm-red-border); background: linear-gradient(100deg, var(--udm-red-soft), var(--surface) 62%); }
 .attention-card--urgent .n { color: var(--udm-red); }
 .attention-card--urgent:hover { border-color: var(--udm-red); }
 
@@ -1950,11 +2399,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
 .flow-strip {
   display: flex; flex-wrap: wrap;
   border: 1px solid var(--udm-line); border-radius: var(--radius);
-  background: #fff; overflow: hidden; margin-bottom: 14px;
+  background: var(--surface); overflow: hidden; margin-bottom: 14px;
 }
 .flow-cell { flex: 1 1 120px; padding: 10px 14px; border-right: 1px solid var(--udm-line); }
 .flow-cell:last-child { border-right: 0; }
-.flow-cell .n { font-size: 19px; font-weight: 800; line-height: 1.1; color: var(--udm-chrome); }
+.flow-cell .n { font-size: 19px; font-weight: 800; line-height: 1.1; color: var(--udm-heading); }
 .flow-cell .k { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--udm-muted); margin-top: 2px; }
 
 /* ------------------------------------------------------ document rows */
@@ -1985,12 +2434,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--udm-navy); }
 .kpi-strip {
   display: flex; flex-wrap: wrap;
   border: 1px solid var(--udm-line); border-radius: var(--radius);
-  background: #fff; overflow: hidden; margin-bottom: 16px;
+  background: var(--surface); overflow: hidden; margin-bottom: 16px;
 }
 .kpi-cell { flex: 1 1 150px; padding: 13px 16px; border-right: 1px solid var(--udm-line); color: inherit; text-decoration: none; }
 .kpi-cell:last-child { border-right: 0; }
 a.kpi-cell:hover { background: var(--udm-canvas); text-decoration: none; }
-.kpi-cell .n { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; color: var(--udm-chrome); text-decoration: none; }
+.kpi-cell .n { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; color: var(--udm-heading); text-decoration: none; }
 /* Underlined on purpose — this is the one line of the three that reads as
    the cell's clickable label, same idea as .stat-card .label elsewhere. */
 .kpi-cell .k { font-size: 12px; font-weight: 700; color: var(--udm-ink); margin-top: 2px; text-decoration: underline; }
@@ -2004,7 +2453,7 @@ a.kpi-cell:hover { background: var(--udm-canvas); text-decoration: none; }
 .search-start .lb { font-size: 12px; font-weight: 700; color: var(--udm-muted); }
 .search-suggest {
   padding: 5px 12px; border: 1px solid var(--udm-line); border-radius: var(--radius-pill);
-  background: #fff; color: var(--udm-navy);
+  background: var(--surface); color: var(--udm-navy);
   font-size: 12px; font-weight: 600; text-decoration: none;
 }
 .search-suggest:hover { border-color: var(--udm-navy); background: var(--udm-teal-soft); text-decoration: none; }
@@ -2016,6 +2465,6 @@ a.kpi-cell:hover { background: var(--udm-canvas); text-decoration: none; }
   background: var(--udm-pill-bg); color: var(--udm-pill-ink);
   font-size: 10.5px; font-weight: 700;
 }
-.tracking-queue-link.is-active .queue-tab-count { background: rgba(255,255,255,.24); color: #fff; }
+.tracking-queue-link.is-active .queue-tab-count { background: rgba(255,255,255,.24); color: var(--on-accent); }
 .tracking-queue-link--alert .queue-tab-count { background: var(--udm-red-soft); color: var(--udm-red-ink); }
-.tracking-queue-link--alert.is-active .queue-tab-count { background: rgba(255,255,255,.26); color: #fff; }
+.tracking-queue-link--alert.is-active .queue-tab-count { background: rgba(255,255,255,.26); color: var(--on-accent); }

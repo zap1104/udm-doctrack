@@ -28,6 +28,59 @@
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
+    {% comment %}
+      Client-side only: the choice lives in localStorage, not on the user's
+      account, so it follows this browser rather than this person (see
+      doctrack.js). Every option here is a `:root[data-theme="…"]` block in
+      doctrack.css that overrides the tokens the rest of the app already
+      reads — colour, radius, shadow, display face, motion and canvas
+      texture — plus one scoped structural rule each. Nothing about this
+      menu itself is theme-specific.
+    {% endcomment %}
+    <div class="dropdown theme-picker no-print">
+      <button type="button" class="topbar-icon-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Change colour theme" data-theme-toggle>
+        {% include "partials/_icon.html" with name="palette" %}
+      </button>
+      <div class="dropdown-menu dropdown-menu-end theme-menu" data-theme-menu>
+        <div class="theme-menu-label">Colour theme</div>
+        <button type="button" class="theme-option" data-theme-option="default">
+          <span class="theme-swatch" data-theme-swatch="default" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Emerald &amp; Gold</span><span class="theme-option-desc">Institutional baseline</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="navy">
+          <span class="theme-swatch" data-theme-swatch="navy" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Navy &amp; Champagne</span><span class="theme-option-desc">Letterhead rule · serif · crisp</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="maroon">
+          <span class="theme-swatch" data-theme-swatch="maroon" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Maroon &amp; Gold</span><span class="theme-option-desc">Gold inset · didone · stately</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="slate">
+          <span class="theme-swatch" data-theme-swatch="slate" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Slate &amp; Teal</span><span class="theme-option-desc">Flat, no shadow · instant</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="burgundy">
+          <span class="theme-swatch" data-theme-swatch="burgundy" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Burgundy &amp; Bronze</span><span class="theme-option-desc">Soft &amp; deep · warm grain</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="ocean">
+          <span class="theme-swatch" data-theme-swatch="ocean" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Ocean &amp; Sand</span><span class="theme-option-desc">Gradient heads · buoyant</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <button type="button" class="theme-option" data-theme-option="midnight">
+          <span class="theme-swatch" data-theme-swatch="midnight" aria-hidden="true"></span>
+          <span class="theme-option-copy"><span class="theme-option-name">Midnight</span><span class="theme-option-desc">Dark · terminal face · glow</span></span>
+          {% include "partials/_icon.html" with name="check" class="theme-option-check" %}
+        </button>
+        <div class="theme-menu-note">Saved to this browser only.</div>
+      </div>
+    </div>
     {% include "partials/_notification_badge.html" %}
     <div class="dropdown">
       <button type="button" class="topbar-account-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu">

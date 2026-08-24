@@ -8,6 +8,13 @@
   <meta name="theme-color" content="{{ PALETTE.navy }}">
   <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
   <meta name="description" content="{{ SITE_LONG_NAME }}">
+  {% comment %}
+    Deliberately not deferred/async and deliberately before doctrack.css:
+    this has to finish setting data-theme on <html> before the stylesheet
+    below paints, or a saved theme flashes the default palette first on
+    every load. See the file itself for why this can't just be inline.
+  {% endcomment %}
+  <script src="{% static 'js/theme-init.js' %}"></script>
   {% if USE_LOCAL_VENDOR %}
     <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
   {% else %}
