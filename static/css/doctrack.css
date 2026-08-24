@@ -1047,12 +1047,20 @@ a:hover { text-decoration: underline; }
 }
 
 @media (max-width: 900px) {
-  .app-sidebar {
-    position: static; height: auto; width: 100%; flex: 1 1 100%;
-    display: flex; gap: 6px; overflow-x: auto; padding: 10px;
-  }
-  .app-shell { flex-direction: column; }
-  .nav-section { display: none; }
+  /* What used to live here was an earlier mobile design: the rail became a
+     horizontally-scrolling strip of nav items across the top. That design is
+     gone — the off-canvas drawer further down this file replaced it — and
+     the block below overrode most of these rules, which is why nothing
+     looked broken.
+
+     Two survived, because the drawer block never redeclares them:
+     `overflow-x: auto` and (with .sidebar-brand-content's min-width:max-content)
+     they let the drawer scroll sideways against its own brand header. The
+     rest were inert: `display:flex`, `gap` and `flex` do nothing once the
+     drawer sets `display:block`, and `position:static` / `width:100%` /
+     `height:auto` are all overridden outright.
+
+     Only the two rules that still do real work at this width are kept. */
   .nav-item { white-space: nowrap; }
   .app-content { padding: 16px; }
 }
@@ -1193,9 +1201,44 @@ a:hover { text-decoration: underline; }
 .tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:var(--udm-red); filter:brightness(0.9); color:var(--on-accent); }
 .tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
 @media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
-@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } }
+/* More of the same horizontal-strip leftovers. `.app-sidebar nav`'s flex row
+   and `.brand`'s padding are both overridden by the drawer block below; the
+   brand icon's size is not, so that one stays. `min-width:max-content` on the
+   brand content is dropped for the reason given above — inside a 286px drawer
+   it is a standing instruction to be wider than the drawer. */
+@media (max-width:900px) { .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } }
 @media (max-width:767.98px) { .app-topbar { min-height:58px; gap:10px; padding:9px 14px; } .app-topbar .topbar-search { max-width:none; } .page-head { flex-direction:column; align-items:stretch; } .page-head > .btn,.page-head > a.btn { align-self:flex-start; } }
 @media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
+
+/* ---- topbar: keep the account menu reachable on a phone -------------------
+   .app-topbar is one flex row that cannot wrap, and two of its children were
+   refusing to shrink at any width: the brand carried `min-width:max-content`
+   and the search box `min-width:180px`. Neither was ever relaxed for mobile —
+   the 767px rule above only clears the search box's *max*-width.
+
+   On a 390px phone that totals roughly 540px of content: 38 toggle + ~147
+   brand + 180 search + ~124 controls + gaps and padding. Because `.ms-auto`
+   puts the controls last, they were the part that landed past the right
+   edge. They rendered fine; they were simply off-screen, which meant that on
+   a phone there was no way to reach notifications, the theme picker, the
+   profile page — or Sign Out, which is the one that matters.
+
+   The controls are pinned as the one thing that never shrinks and never
+   wraps; whatever room is left over goes to the search box. */
+@media (max-width: 767.98px) {
+  .app-topbar > .ms-auto { flex: 0 0 auto; gap: 10px !important; }
+  .app-topbar .topbar-brand { min-width: 0; }
+  .app-topbar .topbar-search { min-width: 0; flex: 1 1 60px; }
+}
+
+@media (max-width: 575.98px) {
+  /* The wordmark is what makes the search box unusable at this width, and
+     the drawer carries the brand in its own header the moment it opens, so
+     the mark on its own is enough to hold the identity here. */
+  .app-topbar .topbar-brand .wordmark { display: none; }
+  .app-topbar .topbar-brand-icon { width: 32px !important; height: 32px !important; min-width: 32px !important; max-width: 32px !important; min-height: 32px !important; max-height: 32px !important; flex: 0 0 32px !important; }
+  .topbar-icon-button, .topbar-notifications { width: 32px; height: 32px; }
+}
 @media print { .tracking-queue-nav { display:none !important; } }
 
 /* ================================================================
