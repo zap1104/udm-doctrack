@@ -179,9 +179,23 @@ class User(AbstractUser):
     """Custom user. `role` decides what the dashboard and menus show."""
 
     class Role(models.TextChoices):
-        ADMIN = "ADMIN", "System administrator"
-        SECRETARY = "SECRETARY", "Secretary / records personnel"
+        """Four roles, on two axes: how much you may do, and where.
+
+        SYSTEM_ADMIN is the only role whose reach crosses office boundaries.
+        ADMIN used to be that role, which is why the migration promotes existing
+        ADMIN accounts to SYSTEM_ADMIN rather than leaving them holding a name
+        that has quietly shrunk underneath them.
+
+        SECRETARY is gone, folded into ADMIN. A records secretary is the office's
+        records person with elevated rights inside their own office, which is
+        exactly what ADMIN now means; keeping it as a fifth role would have left
+        two names for one set of powers.
+        """
+
+        SYSTEM_ADMIN = "SYSTEM_ADMIN", "System administrator (all offices)"
+        ADMIN = "ADMIN", "Office administrator"
         USER = "USER", "Office user"
+        VIEWER = "VIEWER", "Viewer (read-only)"
 
     office = models.ForeignKey(
         Office, null=True, blank=True, on_delete=models.PROTECT, related_name="members"
@@ -222,11 +236,56 @@ class User(AbstractUser):
 
     @property
     def is_system_admin(self) -> bool:
-        return self.role == self.Role.ADMIN or self.is_superuser
+        """Reach across every office. The one role that is not office-scoped."""
+        return self.role == self.Role.SYSTEM_ADMIN or self.is_superuser
+
+    @property
+    def is_office_admin(self) -> bool:
+        """Administrator powers — over their own office unless also a system
+        administrator. True for SYSTEM_ADMIN too: everything an office
+        administrator may do, a system administrator may do everywhere.
+
+        This is only half a permission check. It says the user holds admin
+        rights; it does not say over whom. Every caller must still compare
+        offices unless `is_system_admin` is true.
+        """
+        return self.role == self.Role.ADMIN or self.is_system_admin
+
+    @property
+    def is_viewer(self) -> bool:
+        """Read-only. May open records and print a routing slip, nothing else."""
+        return self.role == self.Role.VIEWER and not self.is_superuser
 
     @property
     def is_records_staff(self) -> bool:
-        return self.role in {self.Role.ADMIN, self.Role.SECRETARY} or self.is_superuser
+        """Kept as the name the rest of the code already uses for "holds records
+        duties beyond an ordinary user". Since SECRETARY folded into ADMIN this
+        is the same population as `is_office_admin`.
+        """
+        return self.is_office_admin
+
+    def can_administer(self, other) -> bool:
+        """May this user create or edit `other`'s account?
+
+        The office comparison is the whole point: before this existed, any
+        administrator could edit every account in the university, because the
+        only check was "is an admin at all".
+        """
+        if not self.is_office_admin:
+            return False
+        if self.is_system_admin:
+            return True
+        other_office_id = getattr(other, "office_id", None)
+        return bool(self.office_id) and self.office_id == other_office_id
+
+    def assignable_roles(self):
+        """Roles this user may hand out. Only a system administrator can mint
+        another one — otherwise an office administrator could promote itself out
+        of its own office scope.
+        """
+        if self.is_system_admin:
+            return list(self.Role.choices)
+        return [(value, label) for value, label in self.Role.choices if value != self.Role.SYSTEM_ADMIN]
 
     @property
     def office_label(self) -> str:

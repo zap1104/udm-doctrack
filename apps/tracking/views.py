@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,7 +16,6 @@ from django.views.generic import View
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.utils import log_action, qr_svg
-from apps.documents.services import archive_tracking_record
 
 from . import services
 from .forms import (
@@ -33,9 +32,18 @@ from .forms import (
     RouteForm,
     TrackingFilterForm,
 )
-from .models import Attachment, RoutingStep, Status, TrackingRecord
+from .models import (
+    COMPLETED_STATUSES,
+    QUIET_EVENTS,
+    Attachment,
+    RoutingStep,
+    Status,
+    TrackingRecord,
+)
 
 PAGE_SIZE = 20
+#: Rows of the pending-upload queue shown before it collapses to a link.
+PENDING_UPLOAD_SHOWN = 5
 
 #: Session key holding the deadline chosen on step 1, as an ISO date or "" for
 #: none. Deliberately not the old `draft_due_<pk>` name — that key held a day
@@ -82,7 +90,7 @@ class RecordListView(AppLoginRequiredMixin, View):
                 | Q(current_office__name__icontains=query)
             )
         if status == "OVERDUE":
-            records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+            records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
         elif status:
             records = records.filter(status=status)
         if office:
@@ -102,6 +110,24 @@ class RecordListView(AppLoginRequiredMixin, View):
         # the template iterates, not on a throwaway copy of the queryset.
         page_records = list(page.object_list)
         services.annotate_can_confirm(page_records, request.user)
+
+        # The completed-but-unapproved queue. It sits on this page rather than
+        # on the repository page because these records have not reached the
+        # repository — approving them is the act that puts them there — and
+        # because approval is now a stage of the tracking lifecycle.
+        pending_upload = list(
+            services.pending_upload_for(request.user)
+            # nulls_last because Postgres sorts NULLs first on DESC, which would
+            # float a record with no completion time to the top of the queue.
+            .order_by(F("completed_at").desc(nulls_last=True))[: PENDING_UPLOAD_SHOWN + 1]
+        )
+        pending_upload_more = max(0, len(pending_upload) - PENDING_UPLOAD_SHOWN)
+        pending_upload = pending_upload[:PENDING_UPLOAD_SHOWN]
+        for record in pending_upload:
+            # Approval is one click from here; returning a record to tracking
+            # needs a written reason, so that action stays on the record page.
+            record.can_approve = record.can_user_approve_upload(request.user)
+
         return render(
             request,
             self.template_name,
@@ -109,6 +135,8 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "form": form,
                 "page_obj": page,
                 "records": page_records,
+                "pending_upload": pending_upload,
+                "pending_upload_more": pending_upload_more,
                 "can_bulk_receive": any(record.can_confirm_now for record in page_records),
                 # The paginator has already counted this queryset; calling
                 # .count() again would run the same DISTINCT-over-joins query
@@ -268,6 +296,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
+        services.log_view(record, user=request.user)
         # Split here rather than with |slice in the template. Django's slice
         # filter fails *silently* on a queryset — negative indexing is
         # unsupported, and the filter swallows the error and returns the whole
@@ -278,15 +307,13 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             ).order_by("sequence")
         )
         activities = list(
-            record.activities.select_related("actor", "actor_office").order_by("created_at", "id")
+            record.activities.select_related("actor", "actor_office")
+            .exclude(event__in=QUIET_EVENTS)
+            .order_by("created_at", "id")
         )
         attachments = list(record.attachments.select_related("uploaded_by"))
         archived_document = getattr(record, "archived_document", None)
-        can_archive_now = (
-            record.status == Status.COMPLETED
-            and archived_document is None
-            and record.can_user_archive(request.user)
-        )
+        can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
         can_reopen = record.can_user_reopen(request.user)
         return render(
             request,
@@ -427,34 +454,56 @@ class CompleteRecordView(OfficeAssignedMixin, View):
         services.complete_record(record, user=request.user, note=form.cleaned_data.get("note", ""))
         message = f"{record.tracking_number} is complete."
 
-        if form.cleaned_data.get("archive_now"):
+        # "File it now" is only on offer to somebody who may also approve it.
+        # For everyone else completion ends here and the record waits in the
+        # pending-upload queue, which is the point of the stage: the person who
+        # declared the work done is not the person who files it.
+        if form.cleaned_data.get("archive_now") and record.can_user_approve_upload(request.user):
             try:
-                document = archive_tracking_record(record, user=request.user)
-                message += " It is now searchable in Document Management."
+                document = services.approve_upload(record, user=request.user)
+                message += " It is now searchable in the Document Repository."
                 messages.success(request, message)
                 return redirect(document.get_absolute_url())
-            except ValidationError as exc:
-                messages.warning(request, f"Completed, but archiving failed: {'; '.join(exc.messages)}")
+            except (ValidationError, PermissionDenied) as exc:
+                messages.warning(
+                    request,
+                    f"Completed, but approving it into the repository failed: "
+                    f"{'; '.join(getattr(exc, 'messages', [str(exc)]))}",
+                )
                 return redirect(record.get_absolute_url())
 
-        messages.success(request, message)
+        messages.success(
+            request, f"{message} It is waiting for an administrator to approve it into the repository."
+        )
         return redirect(record.get_absolute_url())
 
 
-class ArchiveRecordView(OfficeAssignedMixin, View):
+class ApproveUploadView(OfficeAssignedMixin, View):
+    """Approve a finished record into the Document Repository.
+
+    Reachable two ways, both landing here: from the record page after reviewing
+    it, and straight from the pending-upload queue on the tracking list. The
+    queue form posts `next` so a one-click approval returns to the queue rather
+    than dropping the administrator into the document they just filed.
+    """
+
     def post(self, request, pk):
         record = _get_record(request, pk)
-        if not record.can_user_archive(request.user):
+        if not record.can_user_approve_upload(request.user):
             raise PermissionDenied(
-                "Only records personnel or the offices that handled this document "
-                "can file it into Document Management."
+                "Only an administrator for this document's office can approve it "
+                "into the Document Repository."
             )
         try:
-            document = archive_tracking_record(record, user=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
+            document = services.approve_upload(record, user=request.user)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
             return redirect(record.get_absolute_url())
-        messages.success(request, "Record archived into Document Management.")
+        messages.success(
+            request, f"{record.tracking_number} was approved into the Document Repository."
+        )
+        if request.POST.get("next") == "queue":
+            return redirect(f"{reverse('tracking:list')}?scope={services.SCOPE_PENDING_UPLOAD}")
         return redirect(document.get_absolute_url())
 
 
@@ -512,8 +561,10 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
-        # A paper slip leaves the system entirely, so the audit trail records
-        # who generated one before the browser ever opens the print dialog.
+        # A paper slip leaves the system entirely, so both trails record who
+        # generated one before the browser ever opens the print dialog: the
+        # audit log for the administrator's view, and the record's own timeline
+        # so the print shows up beside the movements it documents.
         entry = log_action(
             AuditLog.Action.PRINT,
             f"Generated the routing slip for {record.tracking_number}",
@@ -521,6 +572,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
             target=record,
             request=request,
         )
+        services.log_print(record, user=request.user)
         return render(
             request,
             self.template_name,

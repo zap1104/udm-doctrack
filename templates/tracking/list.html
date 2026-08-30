@@ -15,18 +15,23 @@
   <div class="tracking-queue-list">
     <a class="tracking-queue-link{% if not scope and not status %} is-active{% endif %}"
        href="{% url 'tracking:list' %}">All Active</a>
-    <a class="tracking-queue-link{% if scope == 'inbox' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
-    <a class="tracking-queue-link{% if scope == 'sent' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
-    <a class="tracking-queue-link{% if scope == 'awaiting' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt</a>
-    <a class="tracking-queue-link{% if status == 'RECEIVED' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
-    <a class="tracking-queue-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
-    <a class="tracking-queue-link tracking-queue-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
+    {% comment %}
+      Each queue is now one `scope`, computed in tracking.services.apply_scope.
+      Incoming and Received used to be a mix of `scope` and `status`, which made
+      them mean different things from each other: Received filtered on the
+      record's status regardless of which office held it, so a document another
+      office had received showed up in your Received queue.
+    {% endcomment %}
+    <a class="tracking-queue-link{% if scope == 'incoming' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=incoming">Incoming</a>
+    <a class="tracking-queue-link{% if scope == 'outgoing' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=outgoing">Outgoing</a>
+    <a class="tracking-queue-link{% if scope == 'pending-receipt' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=pending-receipt">Pending Receipt</a>
+    <a class="tracking-queue-link{% if scope == 'received' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=received">Received</a>
+    <a class="tracking-queue-link tracking-queue-link--alert{% if scope == 'overdue' %} is-active{% endif %}"
+       href="{% url 'tracking:list' %}?scope=overdue">Overdue</a>
   </div>
 </nav>
 {% endwith %}
@@ -41,6 +46,71 @@
     </form>
   </div>
 </div>
+
+{% if pending_upload %}
+  {% comment %}
+    Completed work waiting for an administrator to approve it into the
+    repository. It lives here rather than on the repository page because these
+    records have not reached the repository — approving one is the act that puts
+    it there. Above the list because it is a to-do, not part of the list.
+  {% endcomment %}
+  <div class="card-udm mb-3 no-print">
+    <div class="card-udm-head">
+      <div>
+        <h2>Completed - pending upload</h2>
+        <div class="card-udm-caption">
+          The work is finished. Review each one and approve it into the Document
+          Repository — or send it back to tracking if it was finished too early.
+        </div>
+      </div>
+    </div>
+    <div class="card-udm-body p-0 table-responsive">
+      <table class="table-udm">
+        <thead>
+          <tr>
+            <th>Tracking number</th><th>Subject</th><th>Office</th><th>Completed</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in pending_upload %}
+            <tr>
+              <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+              <td>{{ record.subject|truncatechars:52 }}</td>
+              <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+              <td style="white-space:nowrap;">{{ record.completed_at|date:"d M Y" }}</td>
+              <td class="text-end">
+                {% comment %}
+                  Two approval paths, both here: Review opens the record first,
+                  Approve files it in one click. `next=queue` brings a one-click
+                  approval back to this queue rather than dropping the
+                  administrator into the document they just filed.
+                {% endcomment %}
+                <div class="d-inline-flex align-items-center justify-content-end gap-2 flex-wrap">
+                  <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Review</a>
+                  {% if record.can_approve %}
+                    <form method="post" action="{% url 'tracking:archive' record.pk %}" class="d-flex m-0">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="queue">
+                      <button class="btn btn-udm btn-sm" type="submit">Approve</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pending_upload_more %}
+      <div class="card-udm-body pt-0">
+        <p class="text-muted mb-0" style="font-size:13px;">
+          and {{ pending_upload_more }} more waiting for approval —
+          <a href="{% url 'tracking:list' %}?scope=pending-upload">see them all</a>.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
 
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">

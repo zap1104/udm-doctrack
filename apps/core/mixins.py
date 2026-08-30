@@ -36,17 +36,55 @@ class RoleRequiredMixin(AppLoginRequiredMixin):
 
 
 class AdminRequiredMixin(RoleRequiredMixin):
-    allowed_roles = ("ADMIN",)
-    permission_message = "Only system administrators can open the administration area."
+    """Any administrator. What they may then *see* is still office-scoped —
+    this only says they may open the administration area at all, and a view
+    that lists other people's accounts must narrow the queryset itself.
+    """
+
+    allowed_roles = ("ADMIN", "SYSTEM_ADMIN")
+    permission_message = "Only administrators can open the administration area."
+
+
+class SystemAdminRequiredMixin(RoleRequiredMixin):
+    """For settings that are not any one office's to change."""
+
+    allowed_roles = ("SYSTEM_ADMIN",)
+    permission_message = "Only system administrators can change this."
 
 
 class RecordsStaffRequiredMixin(RoleRequiredMixin):
-    allowed_roles = ("ADMIN", "SECRETARY")
+    allowed_roles = ("ADMIN", "SYSTEM_ADMIN")
     permission_message = "Only records personnel and administrators can do this."
 
 
-class OfficeAssignedMixin(AppLoginRequiredMixin):
-    """Blocks users whose account has no office yet — they cannot route anything."""
+class WriteAccessRequiredMixin(AppLoginRequiredMixin):
+    """Refuses VIEWER accounts.
+
+    Hiding a button is not a permission — the endpoint stays reachable to anyone
+    who knows the URL, and view-only accounts exist precisely because somebody
+    should not be able to write. The service layer refuses them too
+    (`apps.tracking.services.refuse_viewers`); this is the outer of the two so
+    the user gets a page rather than a stack trace.
+    """
+
+    permission_message = (
+        "Your account has view-only access. Ask your office administrator if you "
+        "need to make changes."
+    )
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and request.user.is_viewer:
+            raise PermissionDenied(self.permission_message)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class OfficeAssignedMixin(WriteAccessRequiredMixin):
+    """Blocks users whose account has no office yet — they cannot route anything.
+
+    Extends WriteAccessRequiredMixin because the two questions have the same
+    answer everywhere they are asked: this mixin guards the views that change a
+    record, and those are exactly the views a viewer must not reach.
+    """
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated and request.user.office_id is None and not request.user.is_superuser:

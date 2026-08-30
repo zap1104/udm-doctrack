@@ -28,6 +28,49 @@ class CurrentRequestMiddleware:
             _state.request = None
 
 
+def idle_seconds_for(user) -> int:
+    """How long this account may sit idle before it is signed out.
+
+    One function so the middleware that enforces the window, the keep-alive
+    endpoint that reports it, and the countdown the template renders cannot
+    disagree — a warning timed off a different number than the expiry is how a
+    "you are about to be signed out" banner ends up appearing after the fact.
+    """
+    admin_age = getattr(settings, "SESSION_COOKIE_AGE_ADMIN", settings.SESSION_COOKIE_AGE)
+    if user is not None and user.is_authenticated and getattr(user, "is_office_admin", False):
+        return admin_age
+    return settings.SESSION_COOKIE_AGE
+
+
+class RoleIdleTimeoutMiddleware:
+    """Gives administrators a shorter idle window than ordinary users.
+
+    SESSION_COOKIE_AGE is one number for the whole project, so the per-role
+    window has to be applied to the session itself. SESSION_SAVE_EVERY_REQUEST
+    is on, which means the expiry set here is rewritten on every request the
+    user makes — that is what keeps the window *idle* rather than absolute,
+    exactly as it works for the project-wide default.
+
+    Must run after AuthenticationMiddleware: it reads request.user.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            seconds = idle_seconds_for(user)
+            if seconds != settings.SESSION_COOKIE_AGE:
+                request.session.set_expiry(seconds)
+            elif request.session.get_expiry_age() != settings.SESSION_COOKIE_AGE:
+                # Back to the default if the account stopped being an
+                # administrator mid-session; without this the shorter window
+                # would stick to the session until the next sign-in.
+                request.session.set_expiry(seconds)
+        return self.get_response(request)
+
+
 class ForcePasswordChangeMiddleware:
     """Makes `User.must_change_password` mean what its help text says.
 

@@ -152,6 +152,8 @@ MIDDLEWARE += [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
+    # After auth: reads request.user to pick the role's idle window.
+    "apps.core.middleware.RoleIdleTimeoutMiddleware",
     # After auth and messages: it reads request.user and adds a message.
     "apps.core.middleware.ForcePasswordChangeMiddleware",
 ]
@@ -307,8 +309,17 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 # get worked around, which is worse than a longer one that is respected.
 # ---------------------------------------------------------------------------
 SESSION_IDLE_MINUTES = env_int("SESSION_IDLE_MINUTES", 30)
+#: Administrators idle out sooner. An administrator session can create accounts,
+#: reset other people's passwords and change access control, so an unattended
+#: one is worth more to whoever sits down at it than an ordinary clerk's is —
+#: and there are far fewer administrators, so the cost of the shorter window
+#: falls on the people best placed to absorb it.
+SESSION_IDLE_MINUTES_ADMIN = env_int("SESSION_IDLE_MINUTES_ADMIN", 15)
 #: Explicit SESSION_COOKIE_AGE still wins, for a deployment that already set it.
+#: This stays the ordinary-user figure and the project-wide default; the shorter
+#: administrator window is applied per request by RoleIdleTimeoutMiddleware.
 SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", SESSION_IDLE_MINUTES * 60)
+SESSION_COOKIE_AGE_ADMIN = env_int("SESSION_COOKIE_AGE_ADMIN", SESSION_IDLE_MINUTES_ADMIN * 60)
 SESSION_SAVE_EVERY_REQUEST = True
 #: How long the "you are about to be signed out" warning is on screen. Two
 #: minutes is enough to read it and save a half-typed remark.

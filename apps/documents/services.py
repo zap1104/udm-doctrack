@@ -274,9 +274,25 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def archive_tracking_record(record, *, user, tag_names=None, description="") -> Document:
-    """Move a completed DTS record into the repository without changing its identity."""
-    if record.status != Status.COMPLETED:
-        raise ValidationError("Only completed records can be archived.")
+    """Approve a finished DTS record into the repository, keeping its identity.
+
+    This is the act that files the document, and it is what moves the record
+    from COMPLETED_PENDING_UPLOAD to COMPLETED at the end. Before this stage
+    existed, completing a record set COMPLETED straight away and filing was an
+    optional afterthought, so "completed" told a reader nothing about whether
+    the document had actually reached the repository.
+
+    Call it through `apps.tracking.services.approve_upload`, which applies the
+    permission rule. This function checks the record's state, not the user's
+    rights — the tracking layer owns who may approve.
+    """
+    if record.status == Status.COMPLETED:
+        raise ValidationError("This record has already been approved into the repository.")
+    if record.status != Status.COMPLETED_PENDING_UPLOAD:
+        raise ValidationError(
+            "Only a completed record can be approved into the repository. "
+            "Mark the document complete first."
+        )
     existing = getattr(record, "archived_document", None)
     if existing:
         return existing
@@ -360,18 +376,22 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
     set_tags(document, tag_names or suggestion.tags, user=user)
     document.rebuild_index()
 
+    # Only now does the record become COMPLETED: the status and the Document
+    # are written in the same transaction, so "completed" and "in the
+    # repository" can never disagree.
+    record.status = Status.COMPLETED
     record.is_archived = True
     record.archived_at = timezone.now()
-    record.save(update_fields=["is_archived", "archived_at", "updated_at"])
+    record.save(update_fields=["status", "is_archived", "archived_at", "updated_at"])
     add_activity(
         record,
         RecordActivity.Event.ARCHIVED,
-        f"Archived to Document Management by {user.display_name}",
+        f"Approved into the Document Repository by {user.display_name}",
         actor=user,
     )
     log_action(
         AuditLog.Action.ARCHIVE,
-        f"Archived {record.tracking_number} into the repository",
+        f"Approved {record.tracking_number} into the repository",
         actor=user,
         target=document,
     )

@@ -56,14 +56,21 @@ STATIC_PAGES = [
     ("core:reports", ()),
     ("core:report_export", ()),
     ("tracking:list", ()),
-    ("tracking:create", ()),
     ("documents:repository", ()),
-    ("documents:upload", ()),
     ("documents:tag_suggest", ()),
     ("search:index", ()),
     ("search:autocomplete", ()),
     ("accounts:profile", ()),
     ("accounts:password_change", ()),
+]
+
+#: Pages that begin a change, so a view-only account is refused them by design.
+#: Kept apart from STATIC_PAGES rather than given a wider `expected`: a 403 here
+#: is correct for a viewer and a regression for everybody else, and one shared
+#: expectation could not tell those apart.
+WRITE_PAGES = [
+    ("tracking:create", ()),
+    ("documents:upload", ()),
 ]
 
 ADMIN_PAGES = [
@@ -76,9 +83,26 @@ ADMIN_PAGES = [
 ]
 
 MASTER_DATA_SLUGS = ["document-types", "tags", "metadata-rules", "metadata-fields"]
+#: Sections only a system administrator may open. Kept apart so the office-admin
+#: pass can exercise the rest without tripping over a deliberate 403.
+SYSTEM_ADMIN_SLUGS = ["offices"]
+
+#: Administration pages an office administrator reaches too, over their own
+#: office. The office screens are not here: offices are system-admin territory.
+OFFICE_ADMIN_PAGES = [
+    ("core:administration", ()),
+    ("accounts:user_list", ()),
+    ("accounts:user_create", ()),
+]
 
 # Query strings worth exercising: every filter branch a stale bookmark can hit.
 QUERY_PAGES = [
+    ("tracking:list", "?scope=incoming"),
+    ("tracking:list", "?scope=outgoing"),
+    ("tracking:list", "?scope=pending-receipt"),
+    ("tracking:list", "?scope=received"),
+    ("tracking:list", "?scope=overdue"),
+    ("tracking:list", "?scope=pending-upload"),
     ("tracking:list", "?scope=inbox"),
     ("tracking:list", "?scope=awaiting"),
     ("tracking:list", "?scope=custody"),
@@ -137,10 +161,16 @@ def main() -> int:
 def _run() -> int:
     smoke = Smoke()
 
-    admin = pick_user(role="ADMIN") or User.objects.filter(is_superuser=True).first()
-    staff = pick_user(role="SECRETARY")
+    admin = pick_user(role="SYSTEM_ADMIN") or User.objects.filter(is_superuser=True).first()
+    office_admin = pick_user(role="ADMIN")
     plain = pick_user(role="USER")
-    roles = [("admin", admin), ("secretary", staff), ("user", plain)]
+    viewer = pick_user(role="VIEWER")
+    roles = [
+        ("system admin", admin),
+        ("office admin", office_admin),
+        ("user", plain),
+        ("viewer", viewer),
+    ]
     present = [(label, person) for label, person in roles if person]
     if not present:
         print("No active users with an office — run: python manage.py seed_demo")
@@ -161,16 +191,35 @@ def _run() -> int:
                 smoke.named(client, name, args, who=label)
             for name, query in QUERY_PAGES:
                 smoke.named(client, name, suffix=query, who=label)
+            for name, args in WRITE_PAGES:
+                # A viewer must be refused these, and being refused is the thing
+                # worth checking — so the expectation flips rather than relaxes.
+                smoke.named(
+                    client, name, args, who=label,
+                    expected=(403,) if person.is_viewer else (200, 302),
+                )
 
             if person.is_system_admin:
                 for name, args in ADMIN_PAGES:
                     smoke.named(client, name, args, who=label)
-                for slug in MASTER_DATA_SLUGS:
+                for slug in MASTER_DATA_SLUGS + SYSTEM_ADMIN_SLUGS:
                     smoke.named(client, "core:masterdata_list", (slug,), who=label)
                     smoke.named(client, "core:masterdata_create", (slug,), who=label)
                 other = User.objects.exclude(pk=person.pk).first()
                 if other:
                     smoke.named(client, "accounts:user_edit", (other.pk,), who=label)
+            elif person.is_office_admin:
+                for name, args in OFFICE_ADMIN_PAGES:
+                    smoke.named(client, name, args, who=label)
+                for slug in MASTER_DATA_SLUGS:
+                    smoke.named(client, "core:masterdata_list", (slug,), who=label)
+                # Only within their own office — anyone else is a deliberate 404,
+                # which is the behaviour worth exercising here.
+                same_office = User.objects.filter(office_id=person.office_id).exclude(
+                    pk=person.pk
+                ).first()
+                if same_office:
+                    smoke.named(client, "accounts:user_edit", (same_office.pk,), who=label)
 
             # -- object pages, restricted to what this person may actually see
             records = list(TrackingRecord.objects.visible_to(person)[:4])
@@ -182,7 +231,9 @@ def _run() -> int:
             # slip only exists while a record is unrouted, so a database whose
             # drafts have all been sent leaves that page — and the deadline
             # widget on it — untested exactly when it looks well covered.
-            if person.office_id:
+            # A viewer is refused by create_draft_record, which is the point of
+            # the role — so there is no draft to exercise those two pages with.
+            if person.office_id and not person.is_viewer:
                 draft = create_draft_record(
                     user=person,
                     subject=f"Smoke test draft for {person.username}",

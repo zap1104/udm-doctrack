@@ -4,6 +4,7 @@ import csv
 from datetime import datetime, time, timedelta
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, DurationField, Exists, F, OuterRef, Q
 from django.db.models.functions import TruncMonth
@@ -806,6 +807,22 @@ def _model_form(model_class, field_names):
 
 
 MASTER_DATA = {
+    "offices": {
+        "model": Office,
+        "label": "Offices",
+        "singular": "office",
+        "fields": [
+            "code", "name", "short_name", "cluster", "parent", "head_name", "email",
+            "location", "colour", "sort_order", "is_active",
+        ],
+        "columns": [("name", "Office"), ("code", "Code"), ("cluster", "Cluster"), ("is_active", "Active")],
+        "help": "Every office that can send or receive a document. The code appears inside "
+                "every tracking number, so changing one does not rewrite numbers already issued.",
+        # Offices are not any one office's to edit, and the system is meant to
+        # reach past OVPA later — so new offices must be addable without a code
+        # change, but only by somebody whose remit is the whole institution.
+        "system_admin_only": True,
+    },
     "document-types": {
         "model": DocumentType,
         "label": "Document types",
@@ -848,6 +865,38 @@ MASTER_DATA = {
 }
 
 
+def master_data_for(user):
+    """The master-data sections this user may open.
+
+    Filtered rather than shown-and-refused, so an office administrator is not
+    offered a tile that answers with a permission error.
+    """
+    return {
+        slug: config
+        for slug, config in MASTER_DATA.items()
+        if not config.get("system_admin_only") or user.is_system_admin
+    }
+
+
+class MasterDataAccessMixin:
+    """Refuse a section this user may not open.
+
+    The gate is on the section config, not on the URL, so adding a restricted
+    section to MASTER_DATA is enough to restrict it — there is no second list to
+    keep in step.
+    """
+
+    def config_or_404(self, slug):
+        config = MASTER_DATA.get(slug)
+        if not config:
+            raise Http404("Unknown master data section")
+        if config.get("system_admin_only") and not self.request.user.is_system_admin:
+            raise PermissionDenied(
+                f"Only system administrators can change {config['label'].lower()}."
+            )
+        return config
+
+
 class AdministrationHomeView(AdminRequiredMixin, TemplateView):
     template_name = "administration/home.html"
 
@@ -864,19 +913,17 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
                 "rule_count": TagRule.objects.filter(is_active=True).count(),
                 "field_count": MetadataFieldDefinition.objects.filter(is_active=True).count(),
                 "recent_audit": AuditLog.objects.all()[:10],
-                "master_data": MASTER_DATA,
+                "master_data": master_data_for(self.request.user),
             }
         )
         return context
 
 
-class MasterDataListView(AdminRequiredMixin, View):
+class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
     template_name = "administration/masterdata_list.html"
 
     def get(self, request, slug):
-        config = MASTER_DATA.get(slug)
-        if not config:
-            raise Http404("Unknown master data section")
+        config = self.config_or_404(slug)
         objects = config["model"].objects.all()
         query = request.GET.get("q", "").strip()
         if query:
@@ -885,17 +932,20 @@ class MasterDataListView(AdminRequiredMixin, View):
         return render(
             request,
             self.template_name,
-            {"slug": slug, "config": config, "objects": objects, "query": query, "master_data": MASTER_DATA},
+            {"slug": slug, "config": config, "objects": objects, "query": query,
+             "master_data": master_data_for(request.user)},
         )
 
 
-class MasterDataEditView(AdminRequiredMixin, View):
+class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
     template_name = "administration/masterdata_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.config = MASTER_DATA.get(kwargs.get("slug"))
-        if not self.config:
-            raise Http404("Unknown master data section")
+        # Resolved before dispatch so both GET and POST are gated by one check.
+        # AdminRequiredMixin runs first (it is later in the MRO), so an
+        # unauthenticated request is still redirected rather than 404'd.
+        if request.user.is_authenticated:
+            self.config = self.config_or_404(kwargs.get("slug"))
         return super().dispatch(request, *args, **kwargs)
 
     def _instance(self, pk):
@@ -907,7 +957,8 @@ class MasterDataEditView(AdminRequiredMixin, View):
         return render(
             request,
             self.template_name,
-            {"slug": slug, "config": self.config, "form": form, "object": self._instance(pk), "master_data": MASTER_DATA},
+            {"slug": slug, "config": self.config, "form": form, "object": self._instance(pk),
+             "master_data": master_data_for(request.user)},
         )
 
     def post(self, request, slug, pk=None):
@@ -931,7 +982,8 @@ class MasterDataEditView(AdminRequiredMixin, View):
         return render(
             request,
             self.template_name,
-            {"slug": slug, "config": self.config, "form": form, "object": instance, "master_data": MASTER_DATA},
+            {"slug": slug, "config": self.config, "form": form, "object": instance,
+             "master_data": master_data_for(request.user)},
         )
 
 

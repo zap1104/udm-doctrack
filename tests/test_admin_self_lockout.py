@@ -73,4 +73,28 @@ def test_the_view_blocks_self_demotion_end_to_end(client, users):
     client.post(f"/accounts/users/{admin.pk}/", _payload(admin, role=User.Role.USER))
 
     admin.refresh_from_db()
-    assert admin.role == User.Role.ADMIN
+    assert admin.role == User.Role.SYSTEM_ADMIN
+
+
+@pytest.mark.django_db
+def test_the_last_system_admin_cannot_step_down_to_office_admin(users):
+    """Demoting yourself one rung is still a demotion nobody is left to undo."""
+    admin = users["admin"]
+    form = AdminUserUpdateForm(
+        _payload(admin, role=User.Role.ADMIN), instance=admin, editing_self=True, actor=admin
+    )
+    assert form.is_valid() is False
+    assert "role" in form.errors
+
+
+@pytest.mark.django_db
+def test_stepping_down_is_allowed_once_somebody_else_can_take_over(users, offices):
+    admin = users["admin"]
+    User.objects.create_user(
+        username="second-sysadmin", password="TestPass123!",
+        office=offices["REC"], role=User.Role.SYSTEM_ADMIN,
+    )
+    form = AdminUserUpdateForm(
+        _payload(admin, role=User.Role.ADMIN), instance=admin, editing_self=True, actor=admin
+    )
+    assert form.is_valid() is True, form.errors

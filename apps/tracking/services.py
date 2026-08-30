@@ -21,6 +21,7 @@ from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
     ACTIVE_STATUSES,
+    COMPLETED_STATUSES,
     MAX_INSTRUCTIONS_CHARS,
     MAX_NOTE_CHARS,
     MAX_REMARK_CHARS,
@@ -39,6 +40,36 @@ logger = logging.getLogger("doctrack")
 #: from "caller explicitly said there is no deadline" (due_at=None). A plain
 #: None default would silently turn the latter into the former.
 _UNSET = object()
+
+
+def refuse_viewers(user, action: str) -> None:
+    """Stop a read-only account writing anything.
+
+    Enforced here rather than only in the views, because hiding a button is not
+    a permission: the endpoints stay reachable by anyone who knows the URL, and
+    a service function is what every path — view, management command, background
+    task — actually goes through.
+    """
+    if getattr(user, "is_viewer", False):
+        raise PermissionDenied(
+            f"Your account has view-only access and cannot {action}. "
+            "Ask your office administrator if you need to make changes."
+        )
+
+
+def ensure_received(record) -> None:
+    """Refuse a transition that presumes the document is in somebody's hands.
+
+    A document nobody has confirmed receiving is not being worked on, whatever
+    a dropdown says. Without this the status could be driven ahead of the
+    custody chain, so the timeline claimed an office was processing a document
+    that was, on the record's own evidence, still in transit to it.
+    """
+    if not record.current_step_queryset.filter(received_at__isnull=False).exists():
+        raise ValidationError(
+            "This document has not been received yet. Confirm receipt before "
+            "marking it In process."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +106,47 @@ def add_activity(record, event, message, *, actor=None, detail="", batch=None) -
     )
 
 
+def log_view(record, *, user) -> RecordActivity | None:
+    """Record that somebody opened this document.
+
+    Reading is an act on a confidential record, and for a view-only account it
+    is the *only* act — without this, the people whose access is limited to
+    looking are the people the history says nothing about.
+
+    Collapsed to one entry per person per window, because the alternative is a
+    row per page load: a clerk refreshing while they work would bury the
+    movement history under their own footprints, and the timeline is rendered on
+    the page being opened, so each read would lengthen the thing being read.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return None
+    window = getattr(settings, "VIEW_LOG_WINDOW_MINUTES", 30)
+    already = record.activities.filter(
+        event=RecordActivity.Event.VIEWED,
+        actor=user,
+        created_at__gte=timezone.now() - timedelta(minutes=window),
+    ).exists()
+    if already:
+        return None
+    return add_activity(
+        record, RecordActivity.Event.VIEWED, f"{user.display_name} opened the document", actor=user
+    )
+
+
+def log_print(record, *, user) -> RecordActivity:
+    """Record that a paper copy of the routing slip was produced.
+
+    Never collapsed the way `log_view` is: each print puts another copy of a
+    confidential document outside the system, so each one is its own entry.
+    """
+    return add_activity(
+        record,
+        RecordActivity.Event.PRINTED,
+        f"{user.display_name} printed the routing slip",
+        actor=user,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Create / attach
 # ---------------------------------------------------------------------------
@@ -101,6 +173,7 @@ def _one_of(value, choices, field_name: str, default: str) -> str:
 def create_draft_record(*, user, subject, instructions, document_type=None, remarks="",
                         classification=None, priority=None, due_at=None, originating_office=None,
                         requested_action=""):
+    refuse_viewers(user, "create documents")
     office = originating_office or user.office
     if office is None:
         raise ValidationError("Your account has no office, so it cannot originate a document.")
@@ -136,6 +209,8 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
 
 @transaction.atomic
 def attach_files(record, files, *, user, note="", routing_step=None) -> list[Attachment]:
+    if files:
+        refuse_viewers(user, "upload files")
     created: list[Attachment] = []
     for uploaded in files:
         validate_upload(uploaded)
@@ -195,10 +270,11 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     from a calendar (pass None for "no deadline"), `due_days` is the older
     relative form. `due_at` wins when both are given.
     """
+    refuse_viewers(user, "route documents")
     offices = [office for office in offices if office is not None]
     if not offices:
         raise ValidationError("Select at least one receiving office.")
-    if record.status == Status.COMPLETED:
+    if record.status in COMPLETED_STATUSES:
         raise ValidationError("This record is completed. Reopen it before routing again.")
 
     if action == RoutingStep.Action.SEND:
@@ -301,6 +377,7 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
 @transaction.atomic
 def confirm_receipt(record, *, user, note="") -> RoutingStep:
     """Explicit receipt. Server time only — never a value typed by the user."""
+    refuse_viewers(user, "confirm receipt")
     if not user.office_id:
         raise PermissionDenied("Your account has no office, so it cannot receive documents.")
 
@@ -367,6 +444,7 @@ def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
 
 @transaction.atomic
 def add_remark(record, *, user, remark) -> RecordActivity:
+    refuse_viewers(user, "add remarks")
     remark = (remark or "").strip()
     if not remark:
         raise ValidationError("Write the remark before saving.")
@@ -390,10 +468,54 @@ def add_remark(record, *, user, remark) -> RecordActivity:
 
 
 @transaction.atomic
-def complete_record(record, *, user, note="") -> TrackingRecord:
-    if record.status == Status.COMPLETED:
+def mark_in_process(record, *, user, note="") -> TrackingRecord:
+    """Declare that the office holding the document has started work on it.
+
+    Separate from the automatic promotion in `recalculate_status()` — which
+    infers In process from a remark or an attachment — so that an office with
+    nothing yet to add can still say it has picked the document up.
+    """
+    refuse_viewers(user, "change the status of documents")
+    if record.status in COMPLETED_STATUSES:
+        raise ValidationError("This record is completed and its status can no longer change.")
+    if record.status == Status.DRAFT:
+        raise ValidationError("A draft has not been sent yet, so it cannot be In process.")
+    ensure_received(record)
+
+    if record.status == Status.IN_PROCESS:
         return record
-    record.status = Status.COMPLETED
+    record.status = Status.IN_PROCESS
+    record.save(update_fields=["status", "updated_at"])
+    add_activity(
+        record,
+        RecordActivity.Event.REMARK,
+        f"{user.display_name} marked the document In process",
+        actor=user,
+        detail=note or "",
+    )
+    record.touch_movement()
+    log_action(
+        AuditLog.Action.UPDATE,
+        f"{record.tracking_number} marked In process",
+        actor=user,
+        target=record,
+    )
+    return record
+
+
+@transaction.atomic
+def complete_record(record, *, user, note="") -> TrackingRecord:
+    """Finish the work. The record stays in Tracking awaiting approval.
+
+    This no longer files anything. Completion is now a claim by the office that
+    did the work, and COMPLETED_PENDING_UPLOAD is where that claim waits for an
+    administrator to check it — `approve_upload` is what turns it into a
+    repository record.
+    """
+    refuse_viewers(user, "complete documents")
+    if record.status in COMPLETED_STATUSES:
+        return record
+    record.status = Status.COMPLETED_PENDING_UPLOAD
     record.completed_at = timezone.now()
     record.completed_by = user
     record.completion_note = (note or "")[:MAX_NOTE_CHARS]
@@ -420,6 +542,28 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
     return record
 
 
+def approve_upload(record, *, user, tag_names=None, description=""):
+    """Approve a finished record into the Document Repository.
+
+    Thin on purpose: the work is `apps.documents.services.archive_tracking_record`,
+    which owns the repository side. This exists so that Tracking has the verb —
+    approval is a tracking-lifecycle act, and callers here should not have to
+    know that filing lives in another app. Imported inside the function because
+    the documents app imports this module.
+    """
+    from apps.documents.services import archive_tracking_record
+
+    refuse_viewers(user, "approve documents into the repository")
+    if not record.can_user_approve_upload(user):
+        raise PermissionDenied(
+            "Only an administrator for this document's office can approve it "
+            "into the Document Repository."
+        )
+    return archive_tracking_record(
+        record, user=user, tag_names=tag_names, description=description
+    )
+
+
 @transaction.atomic
 def reopen_record(record, *, user, reason="") -> TrackingRecord:
     """Send a completed record back into active tracking. History is kept intact.
@@ -434,13 +578,14 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
     completion that genuinely happened, and this timeline does not rewrite
     itself; the reopening is recorded as its own entry beneath it.
     """
-    if record.status != Status.COMPLETED:
-        return record
-    if record.is_archived or getattr(record, "archived_document", None):
+    refuse_viewers(user, "return documents to tracking")
+    if record.status == Status.COMPLETED or record.is_archived or getattr(record, "archived_document", None):
         raise ValidationError(
-            "This record has already been filed into Document Management and "
-            "cannot be returned to tracking."
+            "This record has already been approved into the Document Repository "
+            "and cannot be returned to tracking."
         )
+    if record.status != Status.COMPLETED_PENDING_UPLOAD:
+        return record
     record.status = Status.RECEIVED
     record.completed_at = None
     record.completed_by = None
@@ -475,6 +620,7 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
 
 @transaction.atomic
 def grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
+    refuse_viewers(user, "share documents")
     grant, created = RecordAccessGrant.objects.get_or_create(
         record=record,
         office=office,
@@ -518,7 +664,7 @@ def inbox_for(user):
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )
-        .exclude(status=Status.COMPLETED)
+        .exclude(status__in=COMPLETED_STATUSES)
         .with_related()
         .distinct()
     )
@@ -559,7 +705,7 @@ def outgoing_for(user):
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )
-        .exclude(status=Status.COMPLETED)
+        .exclude(status__in=COMPLETED_STATUSES)
         .with_related()
         .distinct()
     )
@@ -570,11 +716,20 @@ def overdue_for(user):
 
 
 def completed_this_year_for(user):
+    """Counts the work finished this year, whether or not it has been approved
+    into the repository yet — approval is an administrative step that can lag by
+    weeks, and a count of completed work that waits on it would understate the
+    year every time somebody is slow to file."""
     return (
         TrackingRecord.objects.visible_to(user)
-        .filter(status=Status.COMPLETED, completed_at__year=timezone.localdate().year)
+        .filter(status__in=COMPLETED_STATUSES, completed_at__year=timezone.localdate().year)
         .distinct()
     )
+
+
+def pending_upload_for(user):
+    """Finished records waiting for an administrator to approve them."""
+    return TrackingRecord.objects.visible_to(user).pending_filing().with_related().distinct()
 
 
 def active_for(user):
@@ -582,11 +737,33 @@ def active_for(user):
 
 
 #: Queue names the Tracking page's `?scope=` links use.
+#:
+#: Incoming and Outgoing are derived here rather than stored on the record,
+#: because direction is not a property of a document — it is a property of a
+#: document *and an office*. The batch that is outgoing for Supply is incoming
+#: for HR at the same instant, so there is no single value a status column could
+#: hold. Keeping them out of the enum also keeps the audit trail honest: the
+#: timeline records acts, and "incoming" is not an act anybody performed.
+SCOPE_INCOMING = "incoming"
+SCOPE_OUTGOING = "outgoing"
+SCOPE_PENDING_RECEIPT = "pending-receipt"
+SCOPE_RECEIVED = "received"
+SCOPE_OVERDUE = "overdue"
+#: The completed-but-unapproved queue. It lives on this page rather than on the
+#: repository page because the records in it have not reached the repository —
+#: approving them is what puts them there.
+SCOPE_PENDING_UPLOAD = "pending-upload"
+#: Older names, still linked to from saved bookmarks and the dashboard tiles.
 SCOPE_INBOX = "inbox"
 SCOPE_AWAITING = "awaiting"
 SCOPE_CUSTODY = "custody"
 SCOPE_SENT = "sent"
 SCOPE_MINE = "mine"
+
+#: Statuses that count as "the document is here, with us" for the Received
+#: queue. In process belongs to Incoming, per the queue definitions, so it is
+#: not a separate top-level queue of its own.
+_HELD_STATUSES = (Status.RECEIVED, Status.IN_PROCESS)
 
 
 def apply_scope(records, scope, user):
@@ -601,11 +778,55 @@ def apply_scope(records, scope, user):
         return awaiting_receipt(records, user)
     if scope == SCOPE_MINE:
         return records.filter(created_by=user)
-    if scope not in {SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT}:
-        return records
+    if scope == SCOPE_OVERDUE:
+        # Not office-scoped: `visible_to` has already limited the set to records
+        # this user has something to do with, and an overdue document sitting in
+        # another office is precisely what the person who sent it needs to see.
+        return records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+    if scope == SCOPE_PENDING_UPLOAD:
+        return records.filter(
+            status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True
+        )
 
+    office_scoped = {
+        SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT,
+        SCOPE_INCOMING, SCOPE_OUTGOING, SCOPE_PENDING_RECEIPT, SCOPE_RECEIVED,
+    }
+    if scope not in office_scoped:
+        return records
     if not user.office_id:
         return records.none()
+
+    if scope == SCOPE_INCOMING:
+        # Everything addressed to this office in the current batch, whether or
+        # not the receipt has been confirmed — Pending receipt, Received and
+        # In process together, which is what "our incoming" means to a clerk.
+        return records.filter(
+            routing_steps__to_office_id=user.office_id,
+            routing_steps__batch=F("current_batch"),
+        ).exclude(status__in=COMPLETED_STATUSES)
+    if scope == SCOPE_OUTGOING:
+        # Everything this office sent onward in the current batch. Unlike the
+        # older "sent" queue this does not drop a document the moment somebody
+        # confirms it: what left the office is still what left the office.
+        return records.filter(
+            routing_steps__from_office_id=user.office_id,
+            routing_steps__batch=F("current_batch"),
+        ).exclude(status__in=COMPLETED_STATUSES)
+    if scope == SCOPE_PENDING_RECEIPT:
+        return records.filter(
+            status=Status.PENDING_RECEIPT,
+            routing_steps__to_office_id=user.office_id,
+            routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        )
+    if scope == SCOPE_RECEIVED:
+        return records.filter(
+            status__in=_HELD_STATUSES,
+            routing_steps__to_office_id=user.office_id,
+            routing_steps__received_at__isnull=False,
+            routing_steps__batch=F("current_batch"),
+        )
     if scope == SCOPE_INBOX:
         return records.filter(
             routing_steps__to_office_id=user.office_id,
@@ -645,7 +866,7 @@ def awaiting_receipt(records, user):
     return records.filter(
         routing_steps__received_at__isnull=True,
         routing_steps__batch=F("current_batch"),
-    ).exclude(status=Status.COMPLETED)
+    ).exclude(status__in=COMPLETED_STATUSES)
 
 
 def annotate_can_confirm(records, user) -> None:

@@ -70,70 +70,13 @@
       </form>
     </div></div>
 
-    {% if pending_filing %}
-      {% comment %}
-        Completed records that were never filed belong to neither module's
-        list — out of active tracking, not yet a document — so without this
-        queue the only way to reach one was a direct link. It sits above the
-        repository because it is a to-do list, not part of the archive.
-      {% endcomment %}
-      <div class="card-udm mb-3 no-print">
-        <div class="card-udm-head">
-          <div>
-            <h2>Pending filing</h2>
-            <div class="card-udm-caption">
-              Completed, but not yet in Document Management. Review each one, then file it
-              here — or send it back to tracking if it was finished too early.
-            </div>
-          </div>
-        </div>
-        <div class="card-udm-body p-0 table-responsive">
-          <table class="table-udm">
-            <thead>
-              <tr>
-                <th>Tracking number</th><th>Subject</th><th>Office</th><th>Completed</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for record in pending_filing %}
-                <tr>
-                  <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
-                  <td>{{ record.subject|truncatechars:52 }}</td>
-                  <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                  <td style="white-space:nowrap;">{{ record.completed_at|date:"d M Y" }}</td>
-                  <td class="text-end">
-                    {% comment %}
-                      align-items-center, and the form is a flex box of its own:
-                      as a plain block inside a stretch-aligned row the button
-                      sat at the top of a taller cell and did not line up with
-                      the link beside it. Navy is the primary action everywhere
-                      else in the app — the solid teal this used to be appears
-                      on no other table row.
-                    {% endcomment %}
-                    <div class="d-inline-flex align-items-center justify-content-end gap-2 flex-wrap">
-                      <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Review</a>
-                      {% if record.can_file %}
-                        <form method="post" action="{% url 'tracking:archive' record.pk %}" class="d-flex m-0">
-                          {% csrf_token %}
-                          <button class="btn btn-udm btn-sm" type="submit">File</button>
-                        </form>
-                      {% endif %}
-                    </div>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% if pending_filing_more %}
-          <div class="card-udm-body pt-0">
-            <p class="text-muted mb-0" style="font-size:13px;">
-              and {{ pending_filing_more }} more waiting to be filed.
-            </p>
-          </div>
-        {% endif %}
-      </div>
-    {% endif %}
+    {% comment %}
+      The "Pending filing" queue used to sit here. It has moved to the Document
+      Tracking page: those records are completed but not yet approved into the
+      repository, so they are still tracking's business, and approving one is
+      what puts it on this page in the first place. See the comment on
+      TrackingRecordQuerySet.pending_filing for why it was ever here.
+    {% endcomment %}
 
     {% if retention_due %}
       <div class="card-udm mb-3 no-print">

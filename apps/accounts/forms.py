@@ -28,6 +28,52 @@ class SignInForm(BootstrapFormMixin, AuthenticationForm):
     }
 
 
+def _offices_for(actor):
+    """The offices this administrator may place an account in.
+
+    An office administrator restricted to their own office in the *queryset*
+    cannot post another office's id either: a ModelChoiceField validates the
+    submitted value against its queryset, so the restriction is a real one and
+    not just a shorter dropdown.
+    """
+    if actor is None or actor.is_system_admin:
+        return Office.active.all()
+    return Office.active.filter(pk=actor.office_id)
+
+
+def _roles_for(actor):
+    if actor is None:
+        return list(User.Role.choices)
+    return actor.assignable_roles()
+
+
+def _validated_role(role, actor):
+    """Refuse a role the actor may not hand out.
+
+    The choice list is already narrowed, but a ChoiceField's own validation is
+    built from the choices present when the form was constructed, and this form
+    is constructed per request from a mutable attribute. Re-checking against the
+    actor is the version that cannot be out-manoeuvred by a crafted POST — and
+    the thing being guarded is an office administrator minting a system
+    administrator, which is the whole role split undone in one request.
+    """
+    if actor is None or actor.is_system_admin:
+        return role
+    if role == User.Role.SYSTEM_ADMIN:
+        raise forms.ValidationError(
+            "Only a system administrator can grant the system administrator role."
+        )
+    return role
+
+
+def _validated_office(office, actor):
+    if actor is None or actor.is_system_admin:
+        return office
+    if office is not None and actor.office_id and office.pk != actor.office_id:
+        raise forms.ValidationError("You can only manage accounts in your own office.")
+    return office
+
+
 class AdminUserCreateForm(BootstrapFormMixin, UserCreationForm):
     """Accounts are created here — there is no public registration page."""
 
@@ -40,14 +86,24 @@ class AdminUserCreateForm(BootstrapFormMixin, UserCreationForm):
         fields = ("username", "first_name", "last_name",
                   "email", "office", "role", "position", "phone")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["office"].queryset = Office.active.all()
+        self.actor = actor
+        self.fields["office"].queryset = _offices_for(actor)
         self.fields["office"].required = True
+        if actor is not None and not actor.is_system_admin and actor.office_id:
+            self.fields["office"].initial = actor.office_id
+        self.fields["role"].choices = _roles_for(actor)
         self.fields["must_change_password"] = forms.BooleanField(
             required=False, initial=True, label="Ask the user to change this password at first sign-in"
         )
         self.fields["must_change_password"].widget.attrs["class"] = "form-check-input"
+
+    def clean_role(self):
+        return _validated_role(self.cleaned_data.get("role"), self.actor)
+
+    def clean_office(self):
+        return _validated_office(self.cleaned_data.get("office"), self.actor)
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -65,11 +121,19 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
             "first_name", "last_name", "email", "office", "role", "position", "phone", "is_active",
         )
 
-    def __init__(self, *args, editing_self: bool = False, **kwargs):
+    def __init__(self, *args, editing_self: bool = False, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.editing_self = editing_self
-        self.fields["office"].queryset = Office.active.all()
+        self.actor = actor
+        self.fields["office"].queryset = _offices_for(actor)
+        self.fields["role"].choices = _roles_for(actor)
         self.fields["is_active"].label = "Account is active"
+
+    def clean_role(self):
+        return _validated_role(self.cleaned_data.get("role"), self.actor)
+
+    def clean_office(self):
+        return _validated_office(self.cleaned_data.get("office"), self.actor)
 
     def clean(self):
         """Stop an administrator locking everyone out of administration.
@@ -83,11 +147,26 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         cleaned = super().clean()
         if not self.editing_self:
             return cleaned
-        if cleaned.get("role") != User.Role.ADMIN:
+        role = cleaned.get("role")
+        if role not in {User.Role.ADMIN, User.Role.SYSTEM_ADMIN}:
             self.add_error(
                 "role",
                 "You cannot remove your own administrator role. Ask another "
                 "administrator to change it for you.",
+            )
+        elif (
+            role == User.Role.ADMIN
+            and self.instance.role == User.Role.SYSTEM_ADMIN
+            and not User.objects.filter(role=User.Role.SYSTEM_ADMIN)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        ):
+            # Stepping down to office administrator is a demotion like any
+            # other, except when you are the last account that can undo it.
+            self.add_error(
+                "role",
+                "You are the only system administrator. Promote somebody else "
+                "before stepping down, or there will be nobody who can.",
             )
         if not cleaned.get("is_active"):
             self.add_error("is_active", "You cannot deactivate your own account.")

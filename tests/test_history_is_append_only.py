@@ -27,7 +27,12 @@ def test_forwarding_adds_a_step_and_keeps_the_old_one(users, offices, memo_type)
     assert record.routing_steps.count() == 2
     # The original receipt timestamp is untouched by the later forward.
     assert first_step.received_at == first_received_at
-    assert record.status == "FORWARDED"
+    # A forward is a document sent on with a receipt outstanding, which is what
+    # Pending receipt means. The fact that it was a *forward* rather than a
+    # first send is kept on the step and in the timeline, not in the status.
+    assert record.status == "PENDING_RECEIPT"
+    assert record.routing_steps.order_by("sequence").last().action == "FORWARD"
+    assert record.activities.filter(event="FORWARDED").exists()
 
 
 @pytest.mark.django_db

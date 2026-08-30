@@ -39,10 +39,9 @@ def pagination_url(context, page_number) -> str:
 STATUS_PILL = {
     "DRAFT": "pill-draft",
     "PENDING_RECEIPT": "pill-pending",
-    "FORWARDED": "pill-forwarded",
-    "RETURNED": "pill-returned",
     "RECEIVED": "pill-received",
     "IN_PROCESS": "pill-process",
+    "COMPLETED_PENDING_UPLOAD": "pill-process",
     "COMPLETED": "pill-completed",
     "OVERDUE": "pill-overdue",
 }
@@ -50,10 +49,9 @@ STATUS_PILL = {
 STATUS_LABEL = {
     "DRAFT": "Draft",
     "PENDING_RECEIPT": "Pending receipt",
-    "FORWARDED": "Forwarded",
-    "RETURNED": "Returned",
     "RECEIVED": "Received",
     "IN_PROCESS": "In process",
+    "COMPLETED_PENDING_UPLOAD": "Completed - pending upload",
     "COMPLETED": "Completed",
     "OVERDUE": "Overdue",
 }

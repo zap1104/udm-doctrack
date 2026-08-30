@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Q
+from django.db.models import Count, Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -16,7 +16,6 @@ from apps.accounts.models import Office
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, DocumentType, Tag
 from apps.core.utils import log_action
-from apps.tracking.models import TrackingRecord
 
 from . import services
 from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
@@ -27,7 +26,10 @@ PAGE_SIZE = 24
 
 #: Rows of the pending-filing queue shown before it collapses to a count. It is
 #: a to-do list that should be worked down, not another table to page through.
-PENDING_FILING_SHOWN = 8
+#: Rows of the retention-review queue shown before it collapses to a link.
+#: Was PENDING_FILING_SHOWN, which also sized the completed-but-unapproved
+#: queue until that moved to the Document Tracking page.
+RETENTION_DUE_SHOWN = 8
 
 
 def _get_document(request, pk) -> Document:
@@ -131,27 +133,18 @@ class RepositoryView(AppLoginRequiredMixin, View):
             .order_by("office__name")
         )
 
-        # Completed records that never made it into the repository. They are in
-        # neither module's list until somebody files them, so this is the only
-        # place they can be found — and the reason the queue is on this page
-        # rather than in Tracking is that filing them is what it is for.
-        pending_filing = list(
-            TrackingRecord.objects.visible_to(request.user)
-            .pending_filing()
-            .with_related()
-            # nulls_last because Postgres sorts NULLs first on DESC, which would
-            # float a record with no completion time to the top of the queue.
-            .order_by(F("completed_at").desc(nulls_last=True))[: PENDING_FILING_SHOWN + 1]
-        )
-        pending_filing_more = max(0, len(pending_filing) - PENDING_FILING_SHOWN)
-        pending_filing = pending_filing[:PENDING_FILING_SHOWN]
+        # The completed-but-unapproved queue used to live here. It has moved to
+        # the Document Tracking page, and the reason it was ever on this one no
+        # longer holds: completing a record set COMPLETED immediately, which
+        # dropped it out of Tracking, so a record finished but never filed was
+        # in neither module and this page was the only place left to surface it
+        # from. Approval is now a stage of the tracking lifecycle
+        # (COMPLETED_PENDING_UPLOAD is in ACTIVE_STATUSES), so those records
+        # never leave Tracking until the act that files them has happened, and
+        # the queue belongs beside them. See TrackingRecordQuerySet.pending_filing.
         retention_due_query = visible.due_for_retention_review(today).with_related().order_by("retention_until")
         retention_due_count = retention_due_query.count()
-        retention_due = list(retention_due_query[:PENDING_FILING_SHOWN])
-        for record in pending_filing:
-            # Filing is one click from here; returning to tracking needs a
-            # written reason, so that action lives on the record page itself.
-            record.can_file = record.can_user_archive(request.user)
+        retention_due = list(retention_due_query[:RETENTION_DUE_SHOWN])
 
         return render(
             request,
@@ -167,8 +160,6 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 # every page load.
                 "total": page.paginator.count,
                 "all_count": visible.count(),
-                "pending_filing": pending_filing,
-                "pending_filing_more": pending_filing_more,
                 "retention_due": retention_due,
                 "retention_due_count": retention_due_count,
                 "retention_due_more": max(0, retention_due_count - len(retention_due)),

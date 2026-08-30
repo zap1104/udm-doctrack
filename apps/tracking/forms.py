@@ -409,8 +409,18 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     scope = forms.ChoiceField(
         required=False,
         label="",
+        # The four queues the offices actually work from come first — incoming,
+        # pending receipt, received and overdue — then outgoing, then the older
+        # narrower cuts, which stay because dashboard tiles and saved bookmarks
+        # still link to them.
         choices=[
             ("", "All I can see"),
+            ("incoming", "Incoming"),
+            ("pending-receipt", "Pending receipt"),
+            ("received", "Received"),
+            ("overdue", "Overdue"),
+            ("outgoing", "Outgoing"),
+            ("pending-upload", "Completed - pending upload"),
             ("inbox", "Waiting for my receipt"),
             ("awaiting", "Awaiting anyone's receipt"),
             ("custody", "In my office"),

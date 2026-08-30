@@ -224,17 +224,17 @@
 
     {% if show_filing_panel %}
       <div class="card-udm mt-4 no-print">
-        <div class="card-udm-head"><h2>This record is completed but not yet filed</h2></div>
+        <div class="card-udm-head"><h2>This record is completed but not yet approved</h2></div>
         <div class="card-udm-body">
           <p class="text-muted" style="font-size:14px;">
-            Until it is filed it sits in the <strong>Pending filing</strong> queue in
-            Document Management: out of the active tracking list, but not yet searchable
-            as a document.
+            The work is finished. Until an administrator approves it, the record stays in
+            the <strong>Completed - pending upload</strong> queue on the Document Tracking
+            page — still tracked, not yet searchable as a repository document.
           </p>
           {% if can_archive_now %}
-            {# Navy, matching "File" in the pending-filing queue: one action, one look. #}
+            {# Navy, matching "Approve" in the pending-upload queue: one action, one look. #}
             <form method="post" action="{% url 'tracking:archive' record.pk %}">{% csrf_token %}
-              <button class="btn btn-udm" type="submit">Archive into Document Management</button>
+              <button class="btn btn-udm" type="submit">Approve into Document Repository</button>
             </form>
           {% endif %}
           {% if can_reopen %}

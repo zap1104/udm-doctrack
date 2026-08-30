@@ -19,7 +19,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import TemplateView, View
 
-from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
+from apps.core.middleware import idle_seconds_for
+from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, SystemAdminRequiredMixin
 from apps.core.models import AuditLog, NotificationPreference
 from apps.core.utils import log_action
 
@@ -128,8 +129,10 @@ class SessionKeepAliveView(AppLoginRequiredMixin, View):
     """
 
     def post(self, request):
+        # The role's own window, not the project default — an administrator's
+        # countdown must not be reset to a figure longer than their session.
         return JsonResponse(
-            {"seconds_remaining": settings.SESSION_COOKIE_AGE, "authenticated": True}
+            {"seconds_remaining": idle_seconds_for(request.user), "authenticated": True}
         )
 
 
@@ -155,12 +158,43 @@ class ProfileView(AppLoginRequiredMixin, View):
 # ---------------------------------------------------------------------------
 # Administration — users
 # ---------------------------------------------------------------------------
-class UserListView(AdminRequiredMixin, TemplateView):
+class OfficeScopedUserMixin:
+    """Every account screen sees only the accounts its user may administer.
+
+    Without this the administration area was scoped by role and by nothing
+    else: an office administrator could list, edit, rename, reset the password
+    of, and suspend every account in the university, including the system
+    administrators. The role split in this change is what makes that a live
+    problem rather than a latent one — before it, everyone who could reach these
+    screens was global by definition.
+
+    Scoping the *queryset* rather than adding a check to each view is deliberate:
+    a missed check is a silent hole, whereas a missed queryset is a 404.
+    """
+
+    def administrable_users(self):
+        users = User.objects.select_related("office")
+        if self.request.user.is_system_admin:
+            return users
+        # An office administrator with no office of their own administers
+        # nobody. `filter(office_id=None)` would instead hand them every
+        # unassigned account in the system.
+        if not self.request.user.office_id:
+            return users.none()
+        return users.filter(office_id=self.request.user.office_id)
+
+    def selectable_offices(self):
+        if self.request.user.is_system_admin:
+            return Office.active.all()
+        return Office.active.filter(pk=self.request.user.office_id)
+
+
+class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
     template_name = "administration/users.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        users = User.objects.select_related("office")
+        users = self.administrable_users()
         query = self.request.GET.get("q", "").strip()
         office = self.request.GET.get("office", "")
         if query:
@@ -172,22 +206,27 @@ class UserListView(AdminRequiredMixin, TemplateView):
         context.update(
             {
                 "users": users,
-                "offices": Office.active.all(),
+                "offices": self.selectable_offices(),
                 "query": query,
                 "selected_office": office,
+                "is_office_scoped": not self.request.user.is_system_admin,
             }
         )
         return context
 
 
-class UserCreateView(AdminRequiredMixin, View):
+class UserCreateView(OfficeScopedUserMixin, AdminRequiredMixin, View):
     template_name = "administration/user_form.html"
 
     def get(self, request):
-        return render(request, self.template_name, {"form": AdminUserCreateForm(), "is_new": True})
+        return render(
+            request,
+            self.template_name,
+            {"form": AdminUserCreateForm(actor=request.user), "is_new": True},
+        )
 
     def post(self, request):
-        form = AdminUserCreateForm(request.POST)
+        form = AdminUserCreateForm(request.POST, actor=request.user)
         if form.is_valid():
             user = form.save()
             log_action(
@@ -206,21 +245,24 @@ class UserCreateView(AdminRequiredMixin, View):
         return render(request, self.template_name, {"form": form, "is_new": True})
 
 
-class UserUpdateView(AdminRequiredMixin, View):
+class UserUpdateView(OfficeScopedUserMixin, AdminRequiredMixin, View):
     template_name = "administration/user_form.html"
 
     def get(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
+        # Scoped queryset, so an account outside the administrator's office is a
+        # 404 rather than an editable form.
+        user = get_object_or_404(self.administrable_users(), pk=pk)
         return render(
             request,
             self.template_name,
-            {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk),
+            {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk,
+                                         actor=request.user),
              "edited_user": user, "is_new": False,
              "password_form": AdminSetPasswordForm(user)},
         )
 
     def post(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
+        user = get_object_or_404(self.administrable_users(), pk=pk)
         if "set_password" in request.POST:
             password_form = AdminSetPasswordForm(user, request.POST)
             if password_form.is_valid():
@@ -238,13 +280,15 @@ class UserUpdateView(AdminRequiredMixin, View):
             return render(
                 request,
                 self.template_name,
-                {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk),
+                {"form": AdminUserUpdateForm(instance=user, editing_self=user.pk == request.user.pk,
+                                             actor=request.user),
                  "edited_user": user, "is_new": False,
                  "password_form": password_form},
             )
 
         form = AdminUserUpdateForm(
-            request.POST, instance=user, editing_self=user.pk == request.user.pk
+            request.POST, instance=user, editing_self=user.pk == request.user.pk,
+            actor=request.user,
         )
         if form.is_valid():
             form.save()
@@ -261,9 +305,9 @@ class UserUpdateView(AdminRequiredMixin, View):
         )
 
 
-class UserToggleActiveView(AdminRequiredMixin, View):
+class UserToggleActiveView(OfficeScopedUserMixin, AdminRequiredMixin, View):
     def post(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
+        user = get_object_or_404(self.administrable_users(), pk=pk)
         if user.pk == request.user.pk:
             messages.error(request, "You cannot deactivate your own account.")
             return redirect("accounts:user_list")
@@ -283,7 +327,13 @@ class UserToggleActiveView(AdminRequiredMixin, View):
 # ---------------------------------------------------------------------------
 # Administration — offices
 # ---------------------------------------------------------------------------
-class OfficeListView(AdminRequiredMixin, TemplateView):
+class OfficeListView(SystemAdminRequiredMixin, TemplateView):
+    """Offices are not any one office's to edit — see SystemAdminRequiredMixin.
+
+    This screen was open to every administrator, which after the role split
+    would have let an office head rename or deactivate other offices.
+    """
+
     template_name = "administration/offices.html"
 
     def get_context_data(self, **kwargs):
@@ -292,7 +342,7 @@ class OfficeListView(AdminRequiredMixin, TemplateView):
         return context
 
 
-class OfficeEditView(AdminRequiredMixin, View):
+class OfficeEditView(SystemAdminRequiredMixin, View):
     template_name = "administration/office_form.html"
 
     def get(self, request, pk=None):

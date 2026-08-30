@@ -445,3 +445,37 @@ The page hard-sliced 50 rows, ran a second read-ID query, provided no filters or
 **Fix:** added a single-query `Exists()` read annotation, unread-first pagination, All/Unread and kind filters, day grouping, mark-read HTMX rows with a non-JavaScript POST fallback, mark-all-read, an inline SVG bell, capped unread badge, kind-specific visual treatment, and visible keyboard focus styling.
 
 **Lesson:** notification UI must make urgency and ownership legible; otherwise staff learn to ignore a growing counter.
+
+---
+
+## 25. The administration area was scoped by role and by nothing else
+
+**Files:** `apps/accounts/views.py`, `apps/accounts/forms.py`, `apps/core/mixins.py`
+
+`UserListView` ran `User.objects.select_related("office")` with no office
+filter, and the edit, password-reset and suspend views each did
+`get_object_or_404(User, pk=pk)`. Any account that could reach the
+administration area could therefore list, rename, reset the password of, and
+suspend **every account in the university** — including the administrators.
+
+It was latent rather than exploitable while `ADMIN` was a single global role:
+everyone who could open those screens was global by definition, so the missing
+filter never showed. Splitting `ADMIN` (head of one office) from `SYSTEM_ADMIN`
+(all offices) is what turns it live, because it introduces administrators who
+are supposed to have a boundary.
+
+**Fix:** `OfficeScopedUserMixin.administrable_users()` narrows the base queryset
+to the requester's own office unless they are a system administrator, and every
+account screen resolves its object from that queryset. An administrator with no
+office of their own matches nobody, rather than matching every unassigned
+account the way `filter(office_id=None)` would. The forms were closed too: the
+`office` and `role` fields are narrowed *and* re-validated against the actor, so
+an office administrator cannot post another office's id or mint a
+`SYSTEM_ADMIN`.
+
+Scoping the queryset rather than adding a check per view is deliberate: a missed
+check is a silent hole, a missed queryset is a 404.
+
+**Lesson:** "who may open this page" and "what may they act on once inside" are
+two questions. A role mixin only answers the first, and a role that gains a
+boundary turns every unscoped queryset behind it into a privilege escalation.

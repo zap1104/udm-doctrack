@@ -83,10 +83,18 @@ METADATA_FIELDS = [
     ("confidential", "Contains personal data", "BOOLEAN", "", "Tick for anything covered by the Data Privacy Act.", False, True, 60),
 ]
 
+# Roles: SYSTEM_ADMIN reaches every office; ADMIN is the head of one office and
+# administers only its accounts; USER does the day's work; VIEWER may read the
+# office's documents and print a slip, nothing more. The two former SECRETARY
+# accounts are office administrators now — a records secretary is the office's
+# records person with elevated rights inside their own office, which is what
+# ADMIN means since the role split.
 USERS = [
-    ("admin", "System", "Administrator", "REC", "ADMIN", "Records Officer IV", True),
-    ("records", "Maricel", "Lorenzo", "REC", "SECRETARY", "Records Officer III", False),
-    ("ovpa.sec", "Angeline", "Reyes", "OVPA", "SECRETARY", "Executive Assistant", False),
+    ("admin", "System", "Administrator", "REC", "SYSTEM_ADMIN", "Records Officer IV", True),
+    ("records", "Maricel", "Lorenzo", "REC", "ADMIN", "Records Officer III", False),
+    ("ovpa.sec", "Angeline", "Reyes", "OVPA", "ADMIN", "Executive Assistant", False),
+    ("med.head", "Rodrigo", "Bautista", "MED", "ADMIN", "Department Head", False),
+    ("med.viewer", "Ana", "Cruz", "MED", "VIEWER", "Administrative Aide", False),
     ("med.staff", "Liza", "Fernandez", "MED", "USER", "Engineer II", False),
     ("hr.staff", "Carmela", "Villanueva", "HR", "USER", "HR Management Officer II", False),
     ("supply.staff", "Grace", "Ramos", "SUP", "USER", "Supply Officer II", False),

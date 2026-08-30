@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 
 from .colors import PALETTE
+from .middleware import idle_seconds_for
 
 _VENDOR_DIR = Path(settings.BASE_DIR) / "static" / "vendor"
 _LOCAL_VENDOR = (_VENDOR_DIR / "bootstrap.min.css").exists() and (_VENDOR_DIR / "bootstrap.bundle.min.js").exists()
@@ -45,6 +46,7 @@ def site_context(request):
 
     unread_notifications = SimpleLazyObject(badge_count)
     notification_in_app_enabled = SimpleLazyObject(in_app_preference)
+    idle_seconds = idle_seconds_for(getattr(request, "user", None))
     return {
         "nav_active": _nav_active(request.path or "/"),
         "unread_notifications": unread_notifications,
@@ -60,10 +62,14 @@ def site_context(request):
         # The page is rendered inside a request, and the session middleware
         # rewrites the expiry on the way out, so a signed-in reader always has
         # the full window from the moment this page arrives.
-        "SESSION_IDLE_SECONDS": settings.SESSION_COOKIE_AGE,
+        #
+        # Per role, not per project: administrators get a shorter window, and a
+        # countdown quoting the project-wide figure would tick past the moment
+        # their session actually ended. See core.middleware.idle_seconds_for.
+        "SESSION_IDLE_SECONDS": idle_seconds,
         "SESSION_WARNING_SECONDS": settings.SESSION_WARNING_SECONDS,
         # Derived from the real cookie age, not from SESSION_IDLE_MINUTES, so
         # the sign-in page cannot quote a figure the server is not enforcing
         # when a deployment overrides SESSION_COOKIE_AGE directly.
-        "SESSION_IDLE_MINUTES": max(1, round(settings.SESSION_COOKIE_AGE / 60)),
+        "SESSION_IDLE_MINUTES": max(1, round(idle_seconds / 60)),
     }

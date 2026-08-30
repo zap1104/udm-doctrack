@@ -59,17 +59,29 @@ def offices(db):
 
 @pytest.fixture
 def users(db, offices):
+    """One account per role that matters to a permission test.
+
+    `admin` is the system administrator (all offices). `med_admin` is an office
+    administrator — the role that may run the administration screens but only
+    over its own office — and `viewer` is read-only. Having all three here means
+    a test that cares about scope does not have to build its own users, which is
+    how the office-scoping hole went unnoticed: every test in the suite was
+    written with a global administrator because that was the only kind there was.
+    """
     made = {}
     for username, code, role in [
         ("med", "MED", "USER"),
         ("sup", "SUP", "USER"),
         ("hr", "HR", "USER"),
-        ("admin", "REC", "ADMIN"),
+        ("med_admin", "MED", "ADMIN"),
+        ("sup_admin", "SUP", "ADMIN"),
+        ("viewer", "MED", "VIEWER"),
+        ("admin", "REC", "SYSTEM_ADMIN"),
     ]:
         user = User.objects.create_user(
             username=username, password="TestPass123!", office=offices[code], role=role
         )
-        if role == "ADMIN":
+        if role == "SYSTEM_ADMIN":
             user.is_staff = user.is_superuser = True
             user.save()
         made[username] = user
