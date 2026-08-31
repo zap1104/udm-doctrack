@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import F, Q
+from django.db.models import F
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -76,26 +76,27 @@ class RecordListView(AppLoginRequiredMixin, View):
         # the wrong answer presented as the right one.
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
-        query = data.get("q")
         status = data.get("status")
-        office = data.get("office")
         scope = data.get("scope")
+        offices = data.get("offices")
+        owner = data.get("owner")
 
-        if query:
-            records = records.filter(
-                Q(tracking_number__icontains=query)
-                | Q(subject__icontains=query)
-                | Q(originating_office__name__icontains=query)
-                | Q(originating_office__code__icontains=query)
-                | Q(current_office__name__icontains=query)
-            )
         if status == "OVERDUE":
             records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
         elif status:
             records = records.filter(status=status)
-        if office:
-            records = records.filter(Q(originating_office=office) | Q(current_office=office))
+        if offices:
+            # Originating office only — see TrackingFilterForm.offices for why
+            # this no longer also matches current_office.
+            records = records.filter(originating_office__in=offices)
         records = services.apply_scope(records, scope, request.user)
+        # A second, independent scope so the filter panel narrows *within* the
+        # queue the pill selected rather than replacing it: "Office files" while
+        # on Overdue means overdue records in your office, not one or the other.
+        # apply_scope no-ops on an empty value, so calling it twice is safe, and
+        # the .distinct() below absorbs any duplication from the stacked joins.
+        if owner:
+            records = services.apply_scope(records, owner, request.user)
 
         if form.errors:
             messages.warning(

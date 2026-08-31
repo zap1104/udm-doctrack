@@ -133,3 +133,230 @@ def test_a_partly_received_batch_still_counts_as_pending(users, offices, memo_ty
     assert record in apply_scope(visible, "awaiting", users["med"]), (
         "HR has not confirmed, so the record is still pending a receipt"
     )
+
+
+# ---------------------------------------------------------------------------
+# The simplified filter panel
+#
+# The free-text box is gone, the queues are pills rather than a dropdown, and
+# what is left is the two questions the pills cannot answer: which office raised
+# it, and whose files am I looking at.
+# ---------------------------------------------------------------------------
+def test_the_free_text_box_is_gone_from_the_form():
+    """Tracking searches records; the repository's search is the one that
+    indexes file text. Two boxes doing different things under the same name is
+    what this removes."""
+    assert "q" not in TrackingFilterForm().fields
+
+
+def test_the_pill_driven_fields_are_still_validated():
+    """No longer rendered, but the pills arrive as query parameters and
+    something has to reject `?scope=bogus` before apply_scope sees it."""
+    fields = TrackingFilterForm().fields
+    assert "status" in fields
+    assert "scope" in fields
+
+    form = TrackingFilterForm({"scope": "bogus"})
+    assert form.is_valid() is False
+    assert "scope" in form.errors
+
+
+def test_the_office_filter_is_a_checkbox_group():
+    from django import forms
+
+    field = TrackingFilterForm().fields["offices"]
+    assert isinstance(field, forms.ModelMultipleChoiceField)
+    assert isinstance(field.widget, forms.CheckboxSelectMultiple)
+
+
+def test_the_owner_filter_offers_exactly_three_choices():
+    from django import forms
+
+    field = TrackingFilterForm().fields["owner"]
+    assert isinstance(field.widget, forms.RadioSelect)
+    assert {value for value, _label in field.choices} == {"", "custody", "mine"}
+
+
+def test_the_owner_values_are_the_scope_names_apply_scope_already_knows():
+    """Chosen to match so apply_scope needs no change. If they ever drift the
+    filter silently stops filtering, because apply_scope no-ops on a value it
+    does not recognise."""
+    from apps.tracking import services
+
+    values = {value for value, _label in TrackingFilterForm().fields["owner"].choices if value}
+    assert values == {services.SCOPE_CUSTODY, services.SCOPE_MINE}
+
+
+def test_the_checkbox_and_radio_widgets_are_not_styled_as_dropdowns():
+    """CheckboxSelectMultiple subclasses SelectMultiple and RadioSelect
+    subclasses Select, so the Bootstrap mixin used to stamp both form-select."""
+    form = TrackingFilterForm()
+
+    for name in ("offices", "owner"):
+        classes = form.fields[name].widget.attrs.get("class", "")
+        assert "form-check-input" in classes, name
+        assert "form-select" not in classes, name
+
+
+# --- originating office only ------------------------------------------------
+@pytest.fixture
+def med_record_at_sup(users, offices, memo_type):
+    """MED raised it; SUP is holding it."""
+    record = create_draft_record(
+        user=users["med"], subject="Raised by MED, held by SUP", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    record.refresh_from_db()
+    return record
+
+
+@pytest.mark.django_db
+def test_filtering_by_office_matches_who_raised_it_not_who_holds_it(
+    client, med_record_at_sup, users, offices
+):
+    """A real behaviour change: the old dropdown matched originating OR current
+    office, so picking SUP returned documents merely passing through it. The
+    control is labelled "originating office" and now means it."""
+    client.force_login(users["admin"])
+
+    by_originator = client.get(f"/tracking/?offices={offices['MED'].pk}")
+    assert med_record_at_sup in by_originator.context["records"]
+
+    by_holder = client.get(f"/tracking/?offices={offices['SUP'].pk}")
+    assert med_record_at_sup not in by_holder.context["records"], (
+        "SUP is holding it, but SUP did not raise it"
+    )
+
+
+@pytest.mark.django_db
+def test_checking_two_offices_shows_records_from_either(
+    client, med_record_at_sup, users, offices, memo_type
+):
+    hr_record = create_draft_record(
+        user=users["hr"], subject="Raised by HR", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(hr_record, [offices["SUP"]], user=users["hr"])
+
+    client.force_login(users["admin"])
+    response = client.get(
+        f"/tracking/?offices={offices['MED'].pk}&offices={offices['HR'].pk}"
+    )
+    found = set(response.context["records"])
+
+    assert med_record_at_sup in found
+    assert hr_record in found
+
+
+# --- owner, and composing with a pill ---------------------------------------
+@pytest.mark.django_db
+def test_files_created_by_me_returns_only_mine(client, users, offices, memo_type):
+    mine = create_draft_record(
+        user=users["med"], subject="Mine", instructions="x", document_type=memo_type,
+    )
+    route_record(mine, [offices["SUP"]], user=users["med"])
+    theirs = create_draft_record(
+        user=users["hr"], subject="Theirs", instructions="x", document_type=memo_type,
+    )
+    route_record(theirs, [offices["MED"]], user=users["hr"])
+
+    client.force_login(users["med"])
+    found = set(client.get("/tracking/?owner=mine").context["records"])
+
+    assert mine in found
+    assert theirs not in found
+
+
+@pytest.mark.django_db
+def test_office_files_returns_what_your_office_is_holding(client, users, offices, memo_type):
+    held = create_draft_record(
+        user=users["med"], subject="Held by SUP", instructions="x", document_type=memo_type,
+    )
+    route_record(held, [offices["SUP"]], user=users["med"])
+    confirm_receipt(held, user=users["sup"])
+    held.refresh_from_db()
+
+    client.force_login(users["sup"])
+    found = set(client.get("/tracking/?owner=custody").context["records"])
+
+    assert held in found
+
+
+@pytest.mark.django_db
+def test_the_owner_filter_narrows_within_the_pill_rather_than_replacing_it(
+    client, users, offices, memo_type
+):
+    """The composability the hidden inputs in the template preserve."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    mine_overdue = create_draft_record(
+        user=users["med"], subject="Mine and late", instructions="x", document_type=memo_type,
+    )
+    route_record(mine_overdue, [offices["SUP"]], user=users["med"])
+    mine_overdue.due_at = timezone.now() - timedelta(days=2)
+    mine_overdue.save(update_fields=["due_at"])
+
+    mine_on_time = create_draft_record(
+        user=users["med"], subject="Mine and fine", instructions="x", document_type=memo_type,
+    )
+    route_record(mine_on_time, [offices["SUP"]], user=users["med"])
+    mine_on_time.due_at = None
+    mine_on_time.save(update_fields=["due_at"])
+
+    theirs_overdue = create_draft_record(
+        user=users["hr"], subject="Theirs and late", instructions="x", document_type=memo_type,
+    )
+    route_record(theirs_overdue, [offices["MED"]], user=users["hr"])
+    theirs_overdue.due_at = timezone.now() - timedelta(days=2)
+    theirs_overdue.save(update_fields=["due_at"])
+
+    client.force_login(users["med"])
+    found = set(client.get("/tracking/?scope=overdue&owner=mine").context["records"])
+
+    assert mine_overdue in found, "overdue and mine"
+    assert mine_on_time not in found, "mine, but not overdue"
+    assert theirs_overdue not in found, "overdue, but not mine"
+
+
+# --- what the page renders --------------------------------------------------
+@pytest.mark.django_db
+def test_the_page_has_no_search_box_and_no_in_process_pill(client, users):
+    client.force_login(users["admin"])
+    body = client.get("/tracking/").content.decode()
+    # The page's own markup, not the chrome around it. The topbar carries the
+    # repository's archive search — also name="q" — on every page, and that one
+    # is deliberately untouched: it searches documents, which is the job the
+    # tracking box was confusingly duplicating.
+    content = body.split('<main id="main-content"', 1)[1]
+
+    assert 'name="q"' not in content
+    assert "?status=IN_PROCESS" not in content, "In Process is not one of the pills"
+
+    for label in ("All Active", "Incoming", "Outgoing", "Pending Receipt", "Received", "Overdue"):
+        assert label in body, label
+
+
+@pytest.mark.django_db
+def test_the_filter_panel_carries_the_active_pill_through_a_submit(client, users):
+    """Without the hidden inputs a GET submit would post neither scope nor
+    status, dropping the reader back to All Active."""
+    client.force_login(users["admin"])
+    body = client.get("/tracking/?scope=overdue").content.decode()
+
+    assert '<input type="hidden" name="scope" value="overdue">' in body
+
+
+@pytest.mark.django_db
+def test_the_panel_renders_both_groups(client, users):
+    client.force_login(users["admin"])
+    body = client.get("/tracking/").content.decode()
+
+    assert "Originating office" in body
+    assert "Office files" in body
+    assert "Files created by me only" in body
+    assert 'name="offices"' in body
+    assert 'name="owner"' in body

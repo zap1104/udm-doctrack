@@ -24,7 +24,16 @@ class BootstrapFormMixin:
         for field in self.fields.values():
             widget = field.widget
             existing = widget.attrs.get("class", "")
-            if isinstance(widget, forms.CheckboxInput):
+            # CheckboxSelectMultiple subclasses SelectMultiple and RadioSelect
+            # subclasses Select, so both would fall into the branch below and be
+            # stamped `form-select` — dropdown styling on a list of checkboxes.
+            # They are tested first because they are the more specific types;
+            # this is a latent bug in its own right, not something this form
+            # introduced, and it would catch any future multi-checkbox or radio
+            # field the same way.
+            if isinstance(widget, forms.CheckboxSelectMultiple | forms.RadioSelect):
+                widget.attrs["class"] = f"{existing} form-check-input".strip()
+            elif isinstance(widget, forms.CheckboxInput):
                 widget.attrs["class"] = f"{existing} form-check-input".strip()
             elif isinstance(widget, forms.Select | forms.SelectMultiple):
                 widget.attrs["class"] = f"{existing} form-select".strip()

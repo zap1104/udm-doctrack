@@ -387,11 +387,15 @@ class GrantAccessForm(BootstrapFormMixin, forms.Form):
 
 
 class TrackingFilterForm(BootstrapFormMixin, forms.Form):
-    q = forms.CharField(
-        required=False,
-        label="",
-        widget=forms.TextInput(attrs={"placeholder": "Search tracking no., subject or office…"}),
-    )
+    """Filters for the Document Tracking list.
+
+    `status` and `scope` are no longer rendered as controls — the queue pills
+    above the table set them by link, which is the point of the pills. Both
+    fields stay here regardless, because those links arrive as query parameters
+    and something still has to validate them: without the field, `?scope=bogus`
+    would sail past the form and be handed to `apply_scope` unchecked.
+    """
+
     status = forms.ChoiceField(
         required=False,
         label="",
@@ -403,8 +407,35 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         choices=[("", "All statuses"), ("OVERDUE", "Overdue")]
         + [(value, label) for value, label in Status.choices if value in ACTIVE_STATUSES],
     )
-    office = forms.ModelChoiceField(
-        required=False, label="", queryset=Office.active.all(), empty_label="All offices"
+    #: Originating office, and only originating office.
+    #:
+    #: The single dropdown this replaces matched `originating_office OR
+    #: current_office`, so picking Supply returned both the documents Supply
+    #: raised and the ones merely passing through it. Those are two different
+    #: questions and the control now answers the one it is labelled with:
+    #: "which office raised this". A document MED raised and Supply is holding
+    #: appears under MED, not Supply.
+    offices = forms.ModelMultipleChoiceField(
+        required=False,
+        label="",
+        queryset=Office.active.all(),
+        widget=forms.CheckboxSelectMultiple,
+    )
+    #: Deliberately a different parameter from `scope`, which the pills own.
+    #: Sharing one parameter would mean choosing "Office files" replaced
+    #: whichever queue you were looking at instead of narrowing it.
+    #:
+    #: The values match services.SCOPE_CUSTODY and services.SCOPE_MINE exactly,
+    #: so `apply_scope` can be handed this field's value with no changes.
+    owner = forms.ChoiceField(
+        required=False,
+        label="",
+        widget=forms.RadioSelect,
+        choices=[
+            ("", "All I can see"),
+            ("custody", "Office files"),
+            ("mine", "Files created by me only"),
+        ],
     )
     scope = forms.ChoiceField(
         required=False,

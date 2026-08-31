@@ -576,6 +576,20 @@ a:hover { text-decoration: underline; }
 @media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
 @media print { .tracking-queue-nav { display:none !important; } }
 
+/* ------------------------------------------------- tracking filter panel */
+/* Sits under the queue pills and narrows within whichever one is active. */
+.tracking-filter-cols { display:flex; flex-wrap:wrap; gap:20px; }
+.tracking-filter-group { border:0; padding:0; margin:0; min-width:220px; }
+.tracking-filter-label { font-size:12.5px; font-weight:700; color:var(--udm-navy); padding:0 0 6px; }
+.tracking-filter-checks { display:flex; flex-wrap:wrap; gap:4px 16px; }
+/* The label wraps the input, so the whole thing is the hit target rather than
+   the 13px box alone. */
+.tracking-filter-check { display:flex; align-items:center; gap:6px; margin:0; padding:0; font-size:13.5px; }
+.tracking-filter-check .form-check-input { margin:0; float:none; }
+.tracking-filter-check .form-check-label { cursor:pointer; }
+.tracking-filter-actions { display:flex; align-items:center; gap:6px; margin-top:14px; }
+@media print { .tracking-filter-form { display:none !important; } }
+
 /* ================================================================
    PHASE 3: routing slip and print presentation
    ================================================================ */

@@ -39,14 +39,60 @@
   </div>
 </nav>
 {% endwith %}
+{% comment %}
+  The queue is chosen by the pills above; this panel narrows within it.
+
+  The hidden status/scope inputs are what make that true. A GET form submits
+  only the fields inside it, so without them, applying an office filter while
+  on the Overdue pill would post neither `scope` nor `status` and silently drop
+  you back to All Active — the filter would look like it had reset the page.
+
+  No inline onchange handler: a plain submit button does the job, and the CSP
+  already has one inline-handler violation elsewhere without this adding a
+  second.
+{% endcomment %}
 <div class="card-udm mb-3">
   <div class="card-udm-body">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-5">{{ form.q }}</div>
-      <div class="col-6 col-md-2">{{ form.status }}</div>
-      <div class="col-6 col-md-2">{{ form.office }}</div>
-      <div class="col-8 col-md-2">{{ form.scope }}</div>
-      <div class="col-4 col-md-1 d-grid"><button class="btn btn-udm-outline" type="submit">Filter</button></div>
+    <form method="get" class="tracking-filter-form">
+      {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+      {% if request.GET.scope %}<input type="hidden" name="scope" value="{{ request.GET.scope }}">{% endif %}
+
+      <div class="tracking-filter-cols">
+        <fieldset class="tracking-filter-group">
+          <legend class="tracking-filter-label">Originating office</legend>
+          <div class="tracking-filter-checks">
+            {% for checkbox in form.offices %}
+              <label class="form-check tracking-filter-check">
+                {{ checkbox.tag }}
+                <span class="form-check-label">{{ checkbox.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset class="tracking-filter-group">
+          <legend class="tracking-filter-label">Show</legend>
+          <div class="tracking-filter-checks">
+            {% for radio in form.owner %}
+              <label class="form-check tracking-filter-check">
+                {{ radio.tag }}
+                <span class="form-check-label">{{ radio.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="tracking-filter-actions">
+        <button class="btn btn-udm-outline btn-sm" type="submit">Apply filters</button>
+        {% if form.offices.value or form.owner.value %}
+          {# Back to the same queue with the panel cleared, not back to All Active. #}
+          <a class="btn btn-link btn-sm"
+             href="{% url 'tracking:list' %}{% if request.GET.scope %}?scope={{ request.GET.scope }}{% elif request.GET.status %}?status={{ request.GET.status }}{% endif %}">
+            Clear filters
+          </a>
+        {% endif %}
+      </div>
     </form>
   </div>
 </div>
