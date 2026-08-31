@@ -7,7 +7,7 @@ from django.views.generic import View
 from apps.core.mixins import AppLoginRequiredMixin
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 
-from .forms import SearchForm
+from .forms import ADVANCED, QUICK, SearchForm
 from .services import autocomplete_terms, search_documents
 
 
@@ -45,6 +45,12 @@ class SearchView(AppLoginRequiredMixin, View):
                 "response": response,
                 "results": response.results if response else [],
                 "has_searched": response is not None,
+                # Which of the two searches this is, said on the page rather
+                # than left implicit in which box the reader happened to use.
+                "mode": form.mode_in_use,
+                "is_advanced": form.mode_in_use == ADVANCED,
+                "quick_mode": QUICK,
+                "advanced_mode": ADVANCED,
             },
         )
 

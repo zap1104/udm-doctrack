@@ -116,7 +116,8 @@
       <span class="text-muted" style="font-size:13.5px;">
         {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
       </span>
-      <a class="small" href="{% url 'search:index' %}">Advanced relevance search →</a>
+      {# The repository search *is* the detailed one, so it opens in that mode. #}
+      <a class="small" href="{% url 'search:index' %}?mode=advanced">Advanced relevance search →</a>
     </div>
 
     <div class="row g-3">

@@ -458,6 +458,15 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
         kind=Notification.Kind.ROUTED,
         resolved_at__isnull=True,
     ).update(resolved_at=timezone.now())
+    # The sender's "still not received" nudge is answered by this receipt, so it
+    # is resolved here rather than left for somebody to dismiss. A chase that
+    # stays on screen after the thing was chased is how a queue stops being read.
+    Notification.objects.filter(
+        tracking_record=record,
+        office=step.from_office,
+        kind=Notification.Kind.UNRECEIVED,
+        resolved_at__isnull=True,
+    ).update(resolved_at=timezone.now())
     notify_office(
         step.from_office, kind=Notification.Kind.RECEIVED, title="A document you sent was received",
         message=f"{record.tracking_number} was received by {user.office.name}.",
@@ -572,7 +581,16 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
         detail=note or "",
     )
     log_action(AuditLog.Action.COMPLETE, f"Completed {record.tracking_number}", actor=user, target=record)
-    resolve_for_record(record, kinds=[Notification.Kind.RECEIVED])
+    # Finishing the work answers the deadline and the chase alike: neither is
+    # outstanding any more, whoever they were addressed to.
+    resolve_for_record(
+        record,
+        kinds=[
+            Notification.Kind.RECEIVED,
+            Notification.Kind.OVERDUE,
+            Notification.Kind.UNRECEIVED,
+        ],
+    )
     notify_office(
         record.originating_office, kind=Notification.Kind.COMPLETED, title="A document you originated is complete",
         message=f"{record.tracking_number} has been marked completed.",

@@ -37,6 +37,10 @@ NOTIFICATION_KIND_META = {
     Notification.Kind.RECEIVED: {"label": "Receipt confirmed", "icon": "✓", "css": "is-received"},
     Notification.Kind.COMPLETED: {"label": "Completed", "icon": "✓", "css": "is-completed"},
     Notification.Kind.SHARED: {"label": "Shared with your office", "icon": "↗", "css": "is-shared"},
+    # Both are things somebody has to act on, so they wear the actionable
+    # treatment rather than the informational one.
+    Notification.Kind.UNRECEIVED: {"label": "Still not received", "icon": "!", "css": "is-actionable"},
+    Notification.Kind.OVERDUE: {"label": "Past its deadline", "icon": "!", "css": "is-actionable"},
 }
 
 

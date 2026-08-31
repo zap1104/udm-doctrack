@@ -503,6 +503,12 @@ SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
 # ---------------------------------------------------------------------------
 # Background jobs (django-q2, ORM broker: no Redis required)
 # ---------------------------------------------------------------------------
+#: How long a document may sit unconfirmed before the office that sent it is
+#: nudged. Two working days: long enough that a receiving office which is simply
+#: busy is not chased on the same afternoon, short enough that a document lost
+#: between desks surfaces in the same week it went missing.
+UNRECEIVED_NUDGE_DAYS = env_int("UNRECEIVED_NUDGE_DAYS", 2)
+
 NOTIFICATION_INFO_RESOLVE_DAYS = env_int("NOTIFICATION_INFO_RESOLVE_DAYS", 30)
 NOTIFICATION_RETENTION_DAYS = env_int("NOTIFICATION_RETENTION_DAYS", 90)
 

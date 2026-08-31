@@ -4,13 +4,47 @@
 {% block content %}
 <div class="page-head">
   <div>
+    <div class="eyebrow">Search</div>
     <h1>Search documents</h1>
     <p class="sub">Metadata first, then the words inside the file. You do not need the tracking number.</p>
   </div>
 </div>
 
+{% comment %}
+  Two modes, named on the page. Which search you were using used to be implicit
+  in which box you happened to open — the topbar field, the repository filters
+  and this page were three different searches with three different capabilities
+  and nothing on screen said so, so a reader who wanted to narrow by office had
+  no way to know whether the box in front of them could.
+
+  Quick is the query alone. Advanced is the repository's detailed search: the
+  same query plus every filter. Tracking's own list search stays minimal and is
+  not one of these — it searches records, not the repository.
+{% endcomment %}
+<div class="reports-tabs no-print" role="tablist" aria-label="Search modes">
+  <a class="reports-tab {% if not is_advanced %}active{% endif %}" role="tab"
+     aria-selected="{% if not is_advanced %}true{% else %}false{% endif %}"
+     href="{% url 'search:index' %}?mode={{ quick_mode }}{% if form.q.value %}&q={{ form.q.value|urlencode }}{% endif %}">
+    Quick search
+  </a>
+  <a class="reports-tab {% if is_advanced %}active{% endif %}" role="tab"
+     aria-selected="{% if is_advanced %}true{% else %}false{% endif %}"
+     href="{% url 'search:index' %}?mode={{ advanced_mode }}{% if form.q.value %}&q={{ form.q.value|urlencode }}{% endif %}">
+    Advanced search
+  </a>
+</div>
+<p class="sub mb-3">
+  {% if is_advanced %}
+    Every filter below narrows the same search. Relevance is a display filter — nothing is discarded.
+  {% else %}
+    Words only. Switch to advanced search to narrow by office, type, tag, origin or date.
+  {% endif %}
+</p>
+
 <form method="get">
   {% include "partials/_form_errors.html" %}
+  {# Carried so the mode survives a submit rather than being inferred again. #}
+  <input type="hidden" name="mode" value="{{ mode }}">
   <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
     <div class="row g-2">
       <div class="col-md-10">{{ form.q }}</div>
@@ -20,6 +54,7 @@
   </div></div>
 
   <div class="row g-4">
+    {% if is_advanced %}
     <div class="col-lg-3">
       <div class="card-udm search-filters-card">
         <div class="card-udm-head"><h2>Filters</h2></div>
@@ -53,8 +88,9 @@
         “how well this record matches your words”, not “how accurate the system is”.
       </div>
     </div>
+    {% endif %}
 
-    <div class="col-lg-9">
+    <div class="{% if is_advanced %}col-lg-9{% else %}col-12{% endif %}">
       {% if has_searched %}
         <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
           <div>
