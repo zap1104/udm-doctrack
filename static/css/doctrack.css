@@ -48,6 +48,12 @@
      labelled list, and the column charts a table view. */
   --chart-one: #0a6e9a;
   --chart-two: #b58c24;
+  /* Third categorical slot, added for the cumulative created / transferred /
+     completed chart. Moss green: it clears the same lightness band and 3:1
+     contrast on white as the other two, and sits far enough from both in hue
+     to stay separable under protanopia and deuteranopia — where teal and gold
+     already separate on lightness, and this sits between them on neither. */
+  --chart-three: #2f7d4f;
   --chart-track: #e8edf3;
   --chart-grid: #eef1f6;
   --sidebar-width: 236px;
@@ -713,6 +719,7 @@ a:hover { text-decoration: underline; }
 .chart-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
 .chart-swatch--one { background:var(--chart-one); }
 .chart-swatch--two { background:var(--chart-two); }
+.chart-swatch--three { background:var(--chart-three); }
 
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
@@ -730,6 +737,7 @@ a:hover { text-decoration: underline; }
 .report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
 .bar-one { background:var(--chart-one); }
 .bar-two { background:var(--chart-two); }
+.bar-three { background:var(--chart-three); }
 .bar-alert { background:var(--udm-red); }
 
 /* -------------------------------------------------------- column charts */
@@ -746,6 +754,7 @@ a:hover { text-decoration: underline; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
 .column--one { background:var(--chart-one); }
 .column--two { background:var(--chart-two); }
+.column--three { background:var(--chart-three); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
 .chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
 .chart-table { margin-top:12px; }
@@ -804,8 +813,16 @@ a:hover { text-decoration: underline; }
   .report-print-header { margin-bottom:8mm; padding-bottom:3mm; border-bottom:1px solid #8793a3; }
   .report-print-header strong,.report-print-header span { display:block; }
   .report-print-footer { margin-top:8mm; padding-top:3mm; border-top:1px solid #8793a3; }
-  .report-panel { display:block !important; page-break-after:always; }
-  .report-panel:last-of-type { page-break-after:auto; }
+  /* Print what is on screen, which means the active panel only.
+     This used to be `.report-panel { display:block !important }`, which forced
+     *both* panels into every print job: asking for the tracking report handed
+     you the repository report stapled behind it, and there was no way to print
+     either one alone. The !important also beat the `.report-panel { display:none }`
+     rule that does the tab switching, so the screen and the paper disagreed
+     about what the reader had selected. Now only the active panel prints, and
+     it is the last one on the page, so it needs no page break after it. */
+  .report-panel { display:none; }
+  .report-panel.active { display:block; page-break-after:auto; }
   .report-section-head { margin-top:0; }
   .stat-card,.card-udm { break-inside:avoid; box-shadow:none; }
   /* Bars and columns are background paint; without this they print blank. */
@@ -1381,4 +1398,49 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .table-stacked td { display: block; width: auto !important; padding: 0 !important; border: 0 !important; }
   .table-stacked th { color: var(--udm-muted); font-size: 12px; font-weight: 400; }
   .table-stacked td { font-size: 14px; }
+}
+
+/* ================================================================
+   Dashboard: combined breakdown, write-up, and printing
+   ================================================================ */
+.dashboard-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.dashboard-head-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* One bar, one segment per slice. Segment widths are the same percentages the
+   list prints beside each label, so the picture and the numbers cannot drift. */
+.breakdown-bar { display:flex; height:16px; margin-bottom:16px; border-radius:8px; overflow:hidden; background:var(--chart-track); }
+.breakdown-seg { display:block; height:100%; }
+.breakdown-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
+
+/* Colour is never the only carrier: every slice is named in the list, and the
+   status palette is reserved, so these reuse it rather than inventing a second
+   vocabulary for the same states. */
+.breakdown-seg--incoming { background:var(--udm-green); }
+.breakdown-seg--pending_receipt { background:var(--udm-gold); }
+.breakdown-seg--in_process { background:var(--udm-teal); }
+.breakdown-seg--overdue { background:var(--udm-red); }
+.breakdown-seg--pending_upload { background:var(--chart-one); }
+.breakdown-seg--historical { background:var(--udm-muted); }
+.breakdown-seg--completed { background:var(--chart-three); }
+
+.breakdown-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:2px 18px; }
+.breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy); font-size:13px; text-decoration:none; }
+.breakdown-item:hover,.breakdown-item:focus { background:var(--udm-canvas); }
+.breakdown-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.breakdown-percent { min-width:44px; color:var(--udm-muted); text-align:right; font-size:12px; }
+
+.dashboard-writeup { margin-top:18px; padding-top:14px; border-top:1px solid var(--udm-line); }
+.dashboard-writeup h3 { margin:0 0 6px; font-size:14px; color:var(--udm-navy); }
+.dashboard-writeup p { margin:0 0 6px; color:var(--udm-slate-text); font-size:13px; line-height:1.55; }
+.dashboard-writeup p:last-child { margin-bottom:0; }
+
+.dashboard-print-header { display:none; }
+@media print {
+  @page { size:A4 portrait; margin:12mm; }
+  .dashboard-print-header { display:flex; justify-content:space-between; gap:18px; margin-bottom:8mm; padding-bottom:3mm; border-bottom:1px solid #8793a3; color:var(--udm-slate-text); font-size:9pt; }
+  .dashboard-print-header strong,.dashboard-print-header span { display:block; }
+  /* Segment fills and swatches are background paint; without this they print blank. */
+  .breakdown-seg,.breakdown-swatch,.breakdown-bar { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .breakdown-item { break-inside:avoid; }
+  .dashboard-writeup { break-inside:avoid; }
 }

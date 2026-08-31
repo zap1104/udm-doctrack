@@ -479,3 +479,44 @@ check is a silent hole, a missed queryset is a 404.
 **Lesson:** "who may open this page" and "what may they act on once inside" are
 two questions. A role mixin only answers the first, and a role that gains a
 boundary turns every unscoped queryset behind it into a privilege escalation.
+
+---
+
+## 26. Printing a report always emitted both panels
+
+**File:** `static/css/doctrack.css`
+
+The reports page has two panels — tracking and repository — and shows one at a
+time behind a pair of tabs, driven by `.report-panel { display:none }` and
+`.report-panel.active { display:block }`. The print block then said:
+
+```css
+.report-panel { display:block !important; page-break-after:always; }
+```
+
+So every print job contained **both** reports regardless of which tab was open.
+Asking for the tracking report handed you the repository report stapled behind
+it, and neither could be printed on its own — on a page whose whole purpose is
+producing something to hand to somebody.
+
+The `!important` is what made it more than a stray rule: it beat the
+`display:none` that does the tab switching, so the screen and the paper
+disagreed about what the reader had selected. A printed copy could not be
+trusted to be the thing that was on screen when the button was pressed.
+
+**Fix:** print the active panel and nothing else, which is simply what the
+screen already does.
+
+```css
+.report-panel { display:none; }
+.report-panel.active { display:block; page-break-after:auto; }
+```
+
+The page break goes too — with one panel printing, it is the last element on
+the page and has nothing to break away from.
+
+**Lesson:** a print stylesheet is not a second, unrelated design; it is the same
+page on paper. A rule that makes print show something the screen is hiding is
+almost always describing a disagreement rather than a layout choice — and
+`!important` inside `@media print` is worth a second look every time, because
+the rule it is beating is usually the one carrying the user's own selection.

@@ -70,6 +70,24 @@ def env_list(name: str, default: str | list[str] | tuple[str, ...] = "") -> list
     return [item.strip() for item in str(env(name, default) or "").split(",") if item.strip()]
 
 
+def _time_setting(name: str, default: str):
+    """A "HH:MM" environment value as a `datetime.time`.
+
+    Falls back to the default rather than raising on a malformed value: a typo
+    in an office's opening time should not stop the site booting, and the
+    turnaround figures degrade to the documented window instead.
+    """
+    from datetime import time as _time
+
+    raw = str(env(name, default) or default).strip()
+    try:
+        hour, _, minute = raw.partition(":")
+        return _time(int(hour), int(minute or 0))
+    except (TypeError, ValueError):
+        hour, _, minute = default.partition(":")
+        return _time(int(hour), int(minute or 0))
+
+
 def has_package(name: str) -> bool:
     try:
         return importlib.util.find_spec(name) is not None
@@ -542,6 +560,29 @@ SITE_BASE_URL = env("SITE_BASE_URL", "").rstrip("/")
 TRACKING_NUMBER_PREFIX = env("TRACKING_NUMBER_PREFIX", "UDM-OVPA")
 TRACKING_NUMBER_SEQUENCE_WIDTH = env_int("TRACKING_NUMBER_SEQUENCE_WIDTH", 4)
 DEFAULT_ACTION_DUE_DAYS = env_int("DEFAULT_ACTION_DUE_DAYS", 3)
+
+# ---------------------------------------------------------------------------
+# Office hours, for turnaround figures
+#
+# Turnaround measured on the calendar reports a document routed Friday 4PM and
+# received Monday 9AM as "2 days 17 hrs", which reads as the receiving office
+# being slow and is really a weekend. apps.core.business_time counts only the
+# time inside this window; the calendar figure is kept beside it, never replaced,
+# because it is what a requester actually waited.
+#
+# The window is 8AM-5PM but a day only counts OFFICE_HOURS_PER_DAY of it —
+# nobody is at the desk for the lunch break and the ends of the day, and offices
+# here take lunch at different times, so the day is capped rather than modelled.
+#
+# There is no holiday calendar. An interval spanning one is over-counted by a
+# working day, which is why these figures are always labelled as office hours
+# rather than presented as exact.
+# ---------------------------------------------------------------------------
+OFFICE_DAY_START = _time_setting("OFFICE_DAY_START", "08:00")
+OFFICE_DAY_END = _time_setting("OFFICE_DAY_END", "17:00")
+OFFICE_HOURS_PER_DAY = float(env("OFFICE_HOURS_PER_DAY", "7"))
+#: Days 0..N-1 of the week are working days: 5 means Monday to Friday.
+OFFICE_WEEK_DAYS = env_int("OFFICE_WEEK_DAYS", 5)
 
 # Search tuning — every number here is documented in docs/SEARCH_DESIGN.md
 SEARCH_MIN_RELEVANCE_DEFAULT = env_int("SEARCH_MIN_RELEVANCE_DEFAULT", 75)

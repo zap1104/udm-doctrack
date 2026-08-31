@@ -17,10 +17,15 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import TemplateView, View
 
 from apps.accounts.models import Office
-from apps.documents.models import Document, SearchQueryLog, SearchResultClick
+from apps.documents.models import Document, SearchQueryLog, SearchResultClick, Source
 from apps.tracking import services as tracking_services
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
 
+from .business_time import (
+    OFFICE_HOURS_CAVEAT,
+    average_business_seconds,
+    humanise_business_seconds,
+)
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
@@ -104,6 +109,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             # second call would only repeat the same query.
             _annotate_destinations(attention + recent)
 
+        breakdown = self._combined_breakdown(user)
         context.update(
             {
                 "inbox_count": inbox.count(),
@@ -119,9 +125,146 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
                 "forwarded_today": forwarded_today,
                 "completed_today": completed_today,
                 "greeting": _greeting(),
+                "breakdown": breakdown,
+                "breakdown_summary": self._breakdown_summary(breakdown),
+                "printed_at": timezone.localtime(),
             }
         )
         return context
+
+    def _combined_breakdown(self, user):
+        """One percentage across both modules, sliced six ways.
+
+        The dashboard showed raw counts from each module side by side, which
+        left the reader to work out what share of everything each pile was —
+        and the two piles were never added up, so "how much is there altogether"
+        had no answer on the page.
+
+        The combined figure belongs here. The split historical/completed view
+        belongs in Reports and is deliberately *not* offered here behind a
+        picker: one screen that changes what it means depending on a control was
+        explicitly refused, and rightly — a printed copy of it cannot say which
+        mode produced it.
+
+        No arrows, no percent-change indicators anywhere. A month-on-month arrow
+        on a records backlog reads as a verdict on the office, which is not
+        something this page is entitled to hand out.
+        """
+        records = TrackingRecord.objects.visible_to(user)
+        documents = Document.objects.visible_to(user)
+        now = timezone.now()
+
+        pending_receipt = records.filter(status=Status.PENDING_RECEIPT).distinct().count()
+        in_process = records.filter(status=Status.IN_PROCESS).distinct().count()
+        overdue_total = (
+            records.filter(due_at__lt=now).exclude(status__in=COMPLETED_STATUSES).distinct().count()
+        )
+        # Incoming excludes the slices shown beside it, so the six add to the
+        # whole instead of double-counting the same record under two headings.
+        incoming = (
+            records.filter(status=Status.RECEIVED)
+            .exclude(due_at__lt=now)
+            .distinct()
+            .count()
+        )
+        awaiting_upload = records.filter(status=Status.COMPLETED_PENDING_UPLOAD).distinct().count()
+        repository_total = documents.distinct().count()
+        historical = documents.filter(source=Source.UPLOAD).distinct().count()
+        completed = repository_total - historical
+
+        tracking_url = reverse("tracking:list")
+        slices = [
+            # Every slice links through to the list behind it: a percentage
+            # nobody can open is a number the reader has to take on trust.
+            {"key": "incoming", "label": "Incoming", "total": incoming,
+             "url": f"{tracking_url}?scope=incoming", "group": "tracking"},
+            {"key": "pending_receipt", "label": "Pending receipt", "total": pending_receipt,
+             "url": f"{tracking_url}?scope=pending-receipt", "group": "tracking"},
+            {"key": "in_process", "label": "In process", "total": in_process,
+             "url": f"{tracking_url}?status=IN_PROCESS", "group": "tracking"},
+            # Overdue goes to Reports, not to the filtered tracking list: the
+            # question behind clicking it is "why are these late and whose are
+            # they", which is a report, not a list of rows.
+            {"key": "overdue", "label": "Overdue", "total": overdue_total,
+             "url": f"{reverse('core:reports')}?status=OVERDUE", "group": "tracking"},
+            {"key": "pending_upload", "label": "Completed - pending upload",
+             "total": awaiting_upload,
+             "url": f"{tracking_url}?scope=pending-upload", "group": "tracking"},
+            {"key": "historical", "label": "Repository - historical", "total": historical,
+             "url": f"{reverse('documents:repository')}?source={Source.UPLOAD}",
+             "group": "repository"},
+            {"key": "completed", "label": "Repository - completed", "total": completed,
+             "url": f"{reverse('documents:repository')}?source={Source.DTS}",
+             "group": "repository"},
+        ]
+
+        total = sum(row["total"] for row in slices)
+        ceiling = max([row["total"] for row in slices], default=0)
+        for row in slices:
+            row["percent"] = _percent(row["total"], total)
+            row["bar_percent"] = _bar(row["total"], ceiling)
+
+        tracking_total = sum(row["total"] for row in slices if row["group"] == "tracking")
+        return {
+            "slices": slices,
+            "total": total,
+            "tracking_total": tracking_total,
+            "repository_total": total - tracking_total,
+            "tracking_percent": _percent(tracking_total, total),
+            "repository_percent": _percent(total - tracking_total, total),
+        }
+
+    def _breakdown_summary(self, breakdown) -> list[str]:
+        """The numbers, said in sentences.
+
+        Written out because the dashboard is printed and handed to people who
+        were not the ones filtering it — a printed ring of coloured segments
+        with no words is a picture of a number, not a finding. Assembled from
+        the same figures the panel renders, so the prose cannot drift from the
+        chart above it.
+
+        Deliberately descriptive and never comparative: it says what is there,
+        not whether that is better or worse than last month. This page has no
+        basis for a verdict on an office and should not imply one.
+        """
+        total = breakdown["total"]
+        if not total:
+            return ["There are no documents in tracking or in the repository yet."]
+
+        by_key = {row["key"]: row for row in breakdown["slices"]}
+        sentences = [
+            f"There are {total} document{'s' if total != 1 else ''} altogether: "
+            f"{breakdown['tracking_total']} still moving through tracking "
+            f"({breakdown['tracking_percent']}%) and {breakdown['repository_total']} "
+            f"filed in the repository ({breakdown['repository_percent']}%)."
+        ]
+
+        awaiting = by_key["pending_receipt"]["total"]
+        if awaiting:
+            sentences.append(
+                f"{awaiting} document{'s are' if awaiting != 1 else ' is'} waiting for a "
+                f"receiving office to confirm receipt "
+                f"({by_key['pending_receipt']['percent']}% of everything)."
+            )
+
+        overdue_total = by_key["overdue"]["total"]
+        if overdue_total:
+            sentences.append(
+                f"{overdue_total} {'are' if overdue_total != 1 else 'is'} past the deadline set "
+                f"for {'them' if overdue_total != 1 else 'it'}. Reports breaks these down by "
+                f"office."
+            )
+        else:
+            sentences.append("Nothing is past its deadline.")
+
+        pending_upload = by_key["pending_upload"]["total"]
+        if pending_upload:
+            sentences.append(
+                f"{pending_upload} {'have' if pending_upload != 1 else 'has'} been completed and "
+                f"{'are' if pending_upload != 1 else 'is'} waiting for an administrator to "
+                f"approve {'them' if pending_upload != 1 else 'it'} into the repository."
+            )
+        return sentences
 
 
 #: Office codes listed in the dashboard's "To" column before it collapses to
@@ -291,9 +434,38 @@ def _month_series(queryset, field: str, since):
     }
 
 
+def _office_from_name(raw: str):
+    """Resolve an office typed by name or code.
+
+    Offered alongside the dropdown because a dropdown of every office in the
+    university is a scrolling exercise once this reaches past OVPA, and because
+    somebody who knows the office already knows its name.
+
+    Exact code first, then exact name, then a unique prefix. A prefix that
+    matches two offices resolves to neither: quietly picking the first would
+    hand somebody another office's report while showing them the name they
+    typed. Generating a report notifies nobody by design — this is an
+    anti-tampering control, an office must not learn it is being reviewed — so
+    an ambiguous match is a mistake nobody else is in a position to catch.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    exact = Office.objects.filter(Q(code__iexact=raw) | Q(name__iexact=raw)).first()
+    if exact:
+        return exact
+    matches = list(Office.objects.filter(name__istartswith=raw)[:2])
+    return matches[0] if len(matches) == 1 else None
+
+
 def report_filters_from_request(request):
     params = request.GET
     office = Office.objects.filter(pk=params["office"]).first() if params.get("office", "").isdigit() else None
+    # The dropdown wins when both are set, so a stale name in the box cannot
+    # silently override the office somebody just picked from the list.
+    office_name = params.get("office_name", "").strip()
+    if office is None and office_name:
+        office = _office_from_name(office_name)
     year = _filter_year(params.get("year", ""))
     status = params.get("status", "")
     if status not in dict(Status.choices) and status != "OVERDUE":
@@ -302,7 +474,14 @@ def report_filters_from_request(request):
         DocumentType.objects.filter(pk=params["document_type"]).first()
         if params.get("document_type", "").isdigit() else None
     )
-    return {"office": office, "year": year, "status": status, "document_type": document_type}
+    return {
+        "office": office,
+        "office_name": office_name,
+        "office_name_unmatched": bool(office_name) and office is None,
+        "year": year,
+        "status": status,
+        "document_type": document_type,
+    }
 
 
 def apply_report_filters(records, filters):
@@ -378,7 +557,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "by_status": self._by_status(records, total_records),
                 "office_flow": self._office_flow(records),
                 "monthly": self._monthly(records),
+                "office_volume": self._office_volume(records),
                 "turnaround": self._turnaround(records),
+                "turnaround_by_office": self._turnaround_by_office(records),
                 "overdue_offices": self._overdue_offices(records),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
@@ -457,57 +638,200 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _monthly(self, records):
-        """Created vs completed, month by month, on one shared scale."""
-        months, since = _month_window()
-        created = _month_series(records, "created_at", since)
-        finished = _month_series(
-            records.filter(status__in=COMPLETED_STATUSES), "completed_at", since
-        )
+        """Created, transferred-or-endorsed and completed — cumulative.
 
-        ceiling = max(
-            [created.get(month, 0) for month in months] + [finished.get(month, 0) for month in months] + [0]
-        )
+        Three series, and each one runs as a running total from the start of
+        records rather than resetting every month. The monthly-reset version
+        answered "how busy was March", which is a question about staffing; the
+        cumulative version answers "is the backlog growing", which is the
+        question the pairing exists for — Created is the tracking side, Completed
+        is the repository side, and the gap between the two curves is the work
+        still in the building. On a monthly reset that gap is invisible.
+
+        Transferred-or-endorsed counts routing steps rather than records, since
+        one document endorsed onward four times is four transfers of work.
+
+        The running totals start from *all* history, not from the window, so the
+        first bar is the true position in that month and not a fresh zero.
+        """
+        months, since = _month_window()
+        completed_records = records.filter(status__in=COMPLETED_STATUSES)
+        steps = RoutingStep.objects.filter(record__in=records)
+
+        created = _month_series(records, "created_at", since)
+        finished = _month_series(completed_records, "completed_at", since)
+        transferred = _month_series(steps, "sent_at", since)
+
+        # Everything before the window, so the curves begin where they really are.
+        opening = {
+            "created": records.filter(created_at__lt=since).count(),
+            "transferred": steps.filter(sent_at__lt=since).count(),
+            "completed": completed_records.filter(completed_at__lt=since).count(),
+        }
+
         rows = []
+        running = dict(opening)
         for month in months:
-            opened, closed = created.get(month, 0), finished.get(month, 0)
+            running["created"] += created.get(month, 0)
+            running["transferred"] += transferred.get(month, 0)
+            running["completed"] += finished.get(month, 0)
             rows.append(
                 {
                     "month": month,
-                    "created": opened,
-                    "completed": closed,
-                    "created_percent": _bar(opened, ceiling),
-                    "completed_percent": _bar(closed, ceiling),
+                    "created": running["created"],
+                    "transferred": running["transferred"],
+                    "completed": running["completed"],
+                    # This month's own additions, kept for the tooltip: a
+                    # cumulative curve alone cannot say what changed in March.
+                    "created_delta": created.get(month, 0),
+                    "transferred_delta": transferred.get(month, 0),
+                    "completed_delta": finished.get(month, 0),
                 }
             )
-        return {"rows": rows, "ceiling": ceiling, "total": sum(row["created"] for row in rows)}
+
+        ceiling = max([row["transferred"] for row in rows] + [row["created"] for row in rows] + [0])
+        for row in rows:
+            row["created_percent"] = _bar(row["created"], ceiling)
+            row["transferred_percent"] = _bar(row["transferred"], ceiling)
+            row["completed_percent"] = _bar(row["completed"], ceiling)
+
+        return {
+            "rows": rows,
+            "ceiling": ceiling,
+            "total": rows[-1]["created"] if rows else 0,
+            "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
+        }
+
+    def _office_volume(self, records):
+        """Which office handled the most documents, per month and cumulatively.
+
+        "Handled" means received: an office that confirms receipt has taken the
+        document on, which is the work being acknowledged here. Counting what an
+        office *sent* would credit a busy pass-through desk over the office that
+        actually did something with it.
+
+        Both series are shown together because they answer different questions —
+        this month's volume says who is under load now, the running total says
+        who has carried the year — and management asked for this to acknowledge
+        offices, which is a question about the year.
+        """
+        months, since = _month_window()
+        steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
+
+        rows = (
+            steps.filter(received_at__gte=since)
+            .annotate(month=TruncMonth("received_at"))
+            .values("month", "to_office__code", "to_office__name")
+            .annotate(total=Count("id"))
+        )
+        per_office: dict[str, dict] = {}
+        for row in rows:
+            if not row["month"] or not row["to_office__code"]:
+                continue
+            month = timezone.localtime(row["month"]).date().replace(day=1)
+            entry = per_office.setdefault(
+                row["to_office__code"],
+                {
+                    "code": row["to_office__code"],
+                    "name": row["to_office__name"] or row["to_office__code"],
+                    "by_month": {},
+                },
+            )
+            entry["by_month"][month] = entry["by_month"].get(month, 0) + row["total"]
+
+        # Everything before the window, so "cumulative" means since records began.
+        opening = {
+            row["to_office__code"]: row["total"]
+            for row in steps.filter(received_at__lt=since)
+            .values("to_office__code")
+            .annotate(total=Count("id"))
+            if row["to_office__code"]
+        }
+
+        current_month = months[-1] if months else None
+        leaderboard = []
+        for code, entry in per_office.items():
+            cumulative = opening.get(code, 0) + sum(entry["by_month"].values())
+            leaderboard.append(
+                {
+                    "code": code,
+                    "name": entry["name"],
+                    "this_month": entry["by_month"].get(current_month, 0),
+                    "cumulative": cumulative,
+                    "series": [entry["by_month"].get(month, 0) for month in months],
+                }
+            )
+        # Offices that handled nothing in the window but carry history still
+        # belong on a cumulative leaderboard.
+        for code, total in opening.items():
+            if code not in per_office:
+                leaderboard.append(
+                    {"code": code, "name": code, "this_month": 0,
+                     "cumulative": total, "series": [0] * len(months)}
+                )
+
+        leaderboard.sort(key=lambda row: (row["cumulative"], row["this_month"]), reverse=True)
+        leaderboard = leaderboard[:10]
+
+        cumulative_ceiling = max([row["cumulative"] for row in leaderboard], default=0)
+        month_ceiling = max([row["this_month"] for row in leaderboard], default=0)
+        for row in leaderboard:
+            row["cumulative_percent"] = _bar(row["cumulative"], cumulative_ceiling)
+            row["this_month_percent"] = _bar(row["this_month"], month_ceiling)
+        return {
+            "rows": leaderboard,
+            "months": months,
+            "current_month": current_month,
+        }
 
     def _turnaround(self, records):
-        """Real averages from the timestamps the routing steps already carry."""
+        """Real averages from the timestamps the routing steps already carry.
+
+        Each duration is reported twice: in office hours, and on the calendar.
+        Neither replaces the other. Office hours answer "how much working time
+        did the office have to act", which is the fair way to judge an office;
+        calendar time is what the requester actually waited, which is the fair
+        way to answer them. Showing only the first would flatter every office
+        that let something sit over a weekend; showing only the second — which
+        is what this did — charges them for the weekend itself.
+        """
         steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
         receipt = steps.aggregate(
             value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
         )["value"]
+        receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
 
         # Turnaround measures how long the *work* took, so it ends at completion
         # rather than at approval — the wait for an administrator is somebody
         # else's queue and would otherwise be charged to the office that
         # finished on time.
         done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
-        processing = done.filter(first_received_at__isnull=False).aggregate(
+        processing_set = done.filter(first_received_at__isnull=False)
+        processing = processing_set.aggregate(
             value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
         )["value"]
+        processing_office = average_business_seconds(
+            processing_set.values_list("first_received_at", "completed_at")
+        )
         lifetime = done.aggregate(
             value=Avg(F("completed_at") - F("created_at"), output_field=DurationField())
         )["value"]
+        lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
 
         with_deadline = done.filter(due_at__isnull=False)
         deadline_total = with_deadline.count()
         on_time = with_deadline.filter(completed_at__lte=F("due_at")).count()
 
         return {
-            "receipt": _humanise_duration(receipt),
-            "processing": _humanise_duration(processing),
-            "lifetime": _humanise_duration(lifetime),
+            # Office hours: the headline figures.
+            "receipt": humanise_business_seconds(receipt_office),
+            "processing": humanise_business_seconds(processing_office),
+            "lifetime": humanise_business_seconds(lifetime_office),
+            # Calendar: kept beside them, never instead of them.
+            "receipt_calendar": _humanise_duration(receipt),
+            "processing_calendar": _humanise_duration(processing),
+            "lifetime_calendar": _humanise_duration(lifetime),
+            "office_hours_caveat": OFFICE_HOURS_CAVEAT,
             "receipt_samples": steps.count(),
             "on_time": on_time,
             "on_time_total": deadline_total,
@@ -516,6 +840,90 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 record__in=records, received_at__isnull=True
             ).count(),
         }
+
+    def _turnaround_by_office(self, records):
+        """The same four metrics, per office.
+
+        An overall average hides the thing management actually wants to know:
+        which office is slow. One office taking a fortnight is invisible inside
+        a mean that eleven prompt offices also contribute to.
+
+        Attributed by the office that *received* the step or holds the record,
+        because that is who had the document and could act on it — attributing
+        by originating office would charge the raiser for everybody else's wait.
+        """
+        steps = list(
+            RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
+            .select_related("to_office")
+            .values_list("to_office__code", "to_office__name", "sent_at", "received_at")
+        )
+        done = list(
+            records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
+            .select_related("current_office")
+            .values_list(
+                "current_office__code", "current_office__name",
+                "created_at", "first_received_at", "completed_at", "due_at",
+            )
+        )
+
+        offices: dict[str, dict] = {}
+
+        def bucket(code, name):
+            if not code:
+                return None
+            return offices.setdefault(
+                code,
+                {
+                    "code": code, "name": name or code,
+                    "receipt_pairs": [], "processing_pairs": [], "lifetime_pairs": [],
+                    "on_time": 0, "on_time_total": 0, "records": 0,
+                },
+            )
+
+        for code, name, sent_at, received_at in steps:
+            row = bucket(code, name)
+            if row is not None:
+                row["receipt_pairs"].append((sent_at, received_at))
+
+        for code, name, created_at, first_received_at, completed_at, due_at in done:
+            row = bucket(code, name)
+            if row is None:
+                continue
+            row["records"] += 1
+            row["lifetime_pairs"].append((created_at, completed_at))
+            if first_received_at:
+                row["processing_pairs"].append((first_received_at, completed_at))
+            if due_at:
+                row["on_time_total"] += 1
+                if completed_at <= due_at:
+                    row["on_time"] += 1
+
+        rows = []
+        for row in offices.values():
+            rows.append(
+                {
+                    "code": row["code"],
+                    "name": row["name"],
+                    "records": row["records"],
+                    "receipt": humanise_business_seconds(
+                        average_business_seconds(row["receipt_pairs"])
+                    ),
+                    "processing": humanise_business_seconds(
+                        average_business_seconds(row["processing_pairs"])
+                    ),
+                    "lifetime": humanise_business_seconds(
+                        average_business_seconds(row["lifetime_pairs"])
+                    ),
+                    "on_time": row["on_time"],
+                    "on_time_total": row["on_time_total"],
+                    "on_time_percent": _percent(row["on_time"], row["on_time_total"]),
+                    # Sorted on, not shown: the office with the longest wait to
+                    # be received is the one worth putting at the top.
+                    "_sort": average_business_seconds(row["receipt_pairs"]) or 0,
+                }
+            )
+        rows.sort(key=lambda row: row["_sort"], reverse=True)
+        return rows
 
     def _overdue_offices(self, records):
         """Where overdue documents are sitting — a queue to chase, not a total."""

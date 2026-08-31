@@ -2,35 +2,118 @@
 {% load doctrack %}
 {% block title %}Dashboard · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head">
+<div class="page-head dashboard-page-head">
   <div>
     <div class="eyebrow">Dashboard</div>
     <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
     <p class="sub">{{ user.office_label }}</p>
   </div>
+  {% comment %}
+    Reports was reachable only from the sidebar, which on a narrow screen is
+    behind a menu button — so the page that explains these numbers had no route
+    from the page showing them.
+  {% endcomment %}
+  <div class="dashboard-head-actions no-print">
+    <a class="btn btn-udm-outline" href="{% url 'core:reports' %}">Open Reports</a>
+    {# The convention the reports page already uses — see doctrack.js. #}
+    <button class="btn btn-udm-outline" type="button" data-print-trigger>Print dashboard</button>
+  </div>
+</div>
+
+{# Printed copies carry their own heading: the sidebar and buttons do not print. #}
+<div class="report-print-header dashboard-print-header">
+  <strong>{{ SITE_LONG_NAME }} — Dashboard</strong>
+  <span>{{ user.office_label }}</span>
+  <span>Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ user.display_name }}</span>
 </div>
 
 <div class="row g-3 mb-4">
   <div class="col-12 col-md-4">
-    <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
+    <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming">
       <div class="label">Incoming</div>
       <div class="value">{{ inbox_count }}</div>
       <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
     </a>
   </div>
   <div class="col-6 col-md-4">
-    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
+    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
   <div class="col-6 col-md-4">
-    <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
+    {% comment %}
+      Overdue leads to Reports, not to the filtered tracking list. The question
+      behind clicking an overdue count is "why are these late and whose are
+      they", which is a report — a flat list of rows cannot answer it.
+    {% endcomment %}
+    <a class="stat-card red" href="{% url 'core:reports' %}?status=OVERDUE">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
-      <div class="hint">Past the action deadline</div>
+      <div class="hint">Past the action deadline · opens Reports</div>
     </a>
+  </div>
+</div>
+
+{% comment %}
+  One percentage across both modules. The dashboard showed raw counts from each
+  module side by side and never added them up, so "how much is there
+  altogether" had no answer on the page.
+
+  The combined view belongs here; the split historical/completed view belongs
+  in Reports. They are deliberately not one screen with a picker — a printed
+  copy of that screen cannot say which mode produced it.
+
+  No arrows and no percent-change indicators: a month-on-month arrow on a
+  records backlog reads as a verdict on an office, which this page has no basis
+  to hand out.
+{% endcomment %}
+<div class="card-udm mb-4">
+  <div class="card-udm-head">
+    <div>
+      <h2>All documents</h2>
+      <div class="card-udm-caption">
+        {{ breakdown.total }} document{{ breakdown.total|pluralize }} across tracking and the
+        repository. Every slice opens the list behind it.
+      </div>
+    </div>
+  </div>
+  <div class="card-udm-body">
+    {% if breakdown.total %}
+      <div class="breakdown-bar" role="img"
+           aria-label="Share of all documents by stage. The list below gives every figure.">
+        {% for slice in breakdown.slices %}
+          {% if slice.total %}
+            <span class="breakdown-seg breakdown-seg--{{ slice.key }}"
+                  style="width:{{ slice.percent }}%" title="{{ slice.label }}: {{ slice.total }} ({{ slice.percent }}%)"></span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="breakdown-list">
+        {% for slice in breakdown.slices %}
+          <a class="breakdown-item" href="{{ slice.url }}">
+            <i class="breakdown-swatch breakdown-seg--{{ slice.key }}" aria-hidden="true"></i>
+            <span class="breakdown-label">{{ slice.label }}</span>
+            <strong class="num">{{ slice.total }}</strong>
+            <span class="breakdown-percent num">{{ slice.percent }}%</span>
+          </a>
+        {% endfor %}
+      </div>
+
+      {% comment %}
+        The numbers, written out. A printed ring of coloured segments handed to
+        somebody who was not the one filtering it is a picture of a number, not
+        a finding. Generated from the same figures the panel renders, so the
+        prose cannot drift from the chart above it.
+      {% endcomment %}
+      <div class="dashboard-writeup">
+        <h3>What this shows</h3>
+        {% for sentence in breakdown_summary %}<p>{{ sentence }}</p>{% endfor %}
+      </div>
+    {% else %}
+      <div class="report-empty">Nothing has been tracked or filed yet.</div>
+    {% endif %}
   </div>
 </div>
 
