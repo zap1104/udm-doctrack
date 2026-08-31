@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load doctrack %}
-{% block title %}Routing Slip {{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block title %}Routing Slip {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block extra_head %}
   <meta name="robots" content="noindex, nofollow">
   <style>
@@ -344,7 +344,7 @@
         </div>
         <div class="routing-slip-header-tracking">
           <span>Tracking Number</span>
-          <strong class="mono">{{ record.tracking_number }}</strong>
+          <strong class="mono">{{ record.display_tracking_number }}</strong>
         </div>
         <div class="routing-slip-header-status">{% include "partials/_status_pill.html" with status=record.display_status %}</div>
       </div>
@@ -401,7 +401,7 @@
           {% for step in steps %}
             <tr>
               <td class="routing-slip-tracking-date-cell">
-                <strong class="routing-slip-row-tracking mono">{{ record.tracking_number }}</strong>
+                <strong class="routing-slip-row-tracking mono">{{ record.display_tracking_number }}</strong>
                 <span><strong>Sent:</strong> {{ step.sent_at|date:"d M Y" }}</span>
                 <span class="routing-slip-time">{{ step.sent_at|date:"g:i A" }}</span>
                 {% if step.received_at %}
@@ -463,7 +463,7 @@
       </div>
     </div>
     <div class="routing-slip-page-number">
-      <div class="mono">{{ record.tracking_number }}</div>
+      <div class="mono">{{ record.display_tracking_number }}</div>
       <div>Official printed copy</div>
     </div>
   </footer>

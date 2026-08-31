@@ -110,6 +110,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         # the template iterates, not on a throwaway copy of the queryset.
         page_records = list(page.object_list)
         services.annotate_can_confirm(page_records, request.user)
+        services.annotate_receiving_offices(page_records)
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the

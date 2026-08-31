@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -75,6 +76,31 @@ def ensure_received(record) -> None:
 # ---------------------------------------------------------------------------
 # Tracking numbers
 # ---------------------------------------------------------------------------
+#: Prefix of the placeholder a draft carries until it is sent.
+#:
+#: The column is unique and non-null, and the file storage path is built from
+#: it, so a draft cannot simply have no value — but it must not have a *real*
+#: one either. See `provisional_tracking_number`.
+DRAFT_NUMBER_PREFIX = "DRAFT"
+
+
+def provisional_tracking_number() -> str:
+    """A placeholder for a draft that has not been sent.
+
+    Drafts used to take a real number the moment they were created, which spent
+    it: a clerk who started five slips and abandoned four left four gaps in the
+    office's sequence. In a records series a gap is not neutral — it reads as
+    four documents that existed and cannot be found, which is exactly the
+    suspicion this system is meant to remove.
+
+    The number is now issued by `route_record` when the draft is actually sent,
+    so the series has no holes and the number's date is the date it entered
+    circulation. Until then the record carries one of these, which is never
+    displayed (see `TrackingRecord.display_tracking_number`).
+    """
+    return f"{DRAFT_NUMBER_PREFIX}-{uuid4().hex[:12].upper()}"
+
+
 @transaction.atomic
 def generate_tracking_number(office, when=None) -> str:
     """UDM-OVPA-<OFFICE>-<YEAR>-<MONTH>-<SEQ>, unique even with simultaneous users."""
@@ -185,7 +211,8 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         raise ValidationError("Your account has no office, so it cannot originate a document.")
 
     record = TrackingRecord.objects.create(
-        tracking_number=generate_tracking_number(office),
+        # Not a real number yet — `route_record` issues that on send.
+        tracking_number=provisional_tracking_number(),
         subject=subject.strip(),
         document_type=document_type,
         classification=_one_of(
@@ -333,7 +360,13 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     record.current_batch = batch
     record.due_at = due_at
     record.last_movement_at = timezone.now()
+    saved_fields = ["current_batch", "due_at", "last_movement_at", "status", "updated_at"]
     if record.status == Status.DRAFT:
+        # The number is issued here, on the first send, rather than when the
+        # draft was created — so an abandoned draft leaves no gap in the
+        # office's series and the number's month is the month it went out.
+        record.tracking_number = generate_tracking_number(record.originating_office)
+        saved_fields.append("tracking_number")
         # recalculate_status() deliberately does nothing for DRAFT/COMPLETED
         # records (see its docstring) so that calling it elsewhere can never
         # accidentally pull a draft out of editing. That guard would also
@@ -342,7 +375,7 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
         # here first. The value is a placeholder; recalculate_status()
         # immediately below computes the real one from the routing steps.
         record.status = Status.PENDING_RECEIPT
-    record.save(update_fields=["current_batch", "due_at", "last_movement_at", "status", "updated_at"])
+    record.save(update_fields=saved_fields)
     # recalculate_status() is the single source of truth for status,
     # current_office and current_holder — computing them again here
     # previously duplicated that logic and had drifted out of sync with it.
@@ -873,6 +906,43 @@ def awaiting_receipt(records, user):
         routing_steps__received_at__isnull=True,
         routing_steps__batch=F("current_batch"),
     ).exclude(status__in=COMPLETED_STATUSES)
+
+
+#: Office badges shown in a "Receiving office" cell before it collapses to "+N".
+RECEIVING_SHOWN = 3
+
+
+def annotate_receiving_offices(records) -> None:
+    """Attach the current batch's destination offices to each record.
+
+    One grouped query rather than `record.receiving_offices` per row, which on a
+    twenty-row page is twenty queries for something one `IN` clause answers.
+
+    `.only()` names every field the badge renders — code, name and colour — as
+    well as the two used to group. Leaving one out would defer it and fetch it a
+    row at a time, which is the per-row query this exists to avoid, reappearing
+    somewhere harder to spot.
+    """
+    if not records:
+        return
+    steps = (
+        RoutingStep.objects.filter(record__in=records)
+        .select_related("to_office")
+        .only("record_id", "batch", "to_office__code", "to_office__name", "to_office__colour")
+    )
+    by_record: dict[int, list] = {}
+    for step in steps:
+        by_record.setdefault(step.record_id, []).append(step)
+
+    for record in records:
+        seen, offices = set(), []
+        for step in by_record.get(record.pk, []):
+            if step.batch != record.current_batch or step.to_office_id in seen:
+                continue
+            seen.add(step.to_office_id)
+            offices.append(step.to_office)
+        record.receiving_offices_shown = offices[:RECEIVING_SHOWN]
+        record.receiving_more = max(0, len(offices) - RECEIVING_SHOWN)
 
 
 def annotate_can_confirm(records, user) -> None:

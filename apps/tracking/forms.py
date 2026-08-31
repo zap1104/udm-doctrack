@@ -353,7 +353,7 @@ class CompleteForm(BootstrapFormMixin, forms.Form):
     archive_now = forms.BooleanField(
         required=False,
         initial=True,
-        label="Move the record to Document Management right away",
+        label="Approve it into the Document Repository right away",
     )
 
 

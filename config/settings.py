@@ -584,6 +584,13 @@ OFFICE_HOURS_PER_DAY = float(env("OFFICE_HOURS_PER_DAY", "7"))
 #: Days 0..N-1 of the week are working days: 5 means Monday to Friday.
 OFFICE_WEEK_DAYS = env_int("OFFICE_WEEK_DAYS", 5)
 
+#: Columns in the repository's folder grid. Four fits the office names at the
+#: width the grid gets on a laptop without truncating them, and divides evenly
+#: into the twelve-odd offices under OVPA. The team has not settled on a final
+#: number, so it is a setting rather than a class in a template: changing it is
+#: one line here, and the grid reflows on its own.
+REPOSITORY_FOLDER_COLUMNS = env_int("REPOSITORY_FOLDER_COLUMNS", 4)
+
 # Search tuning — every number here is documented in docs/SEARCH_DESIGN.md
 SEARCH_MIN_RELEVANCE_DEFAULT = env_int("SEARCH_MIN_RELEVANCE_DEFAULT", 75)
 SEARCH_RANK_SATURATION_K = float(env("SEARCH_RANK_SATURATION_K", "0.06"))

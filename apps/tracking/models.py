@@ -305,8 +305,40 @@ class TrackingRecord(TimeStampedModel):
         return self.get_status_display()
 
     @property
+    def has_tracking_number(self) -> bool:
+        """False while the record is a draft carrying a placeholder.
+
+        Tested on the status rather than by matching the placeholder's shape, so
+        a change to how placeholders are spelled cannot leak one onto a screen.
+        """
+        return self.status != Status.DRAFT
+
+    @property
+    def display_tracking_number(self) -> str:
+        """What to print wherever a tracking number appears.
+
+        A draft has no number to show — it is issued on send, so that an
+        abandoned draft leaves no gap in the office's series. Showing the
+        placeholder would be worse than showing nothing: it looks like a
+        reference somebody could quote, and it would be quoted.
+        """
+        return self.tracking_number if self.has_tracking_number else "Not yet assigned"
+
+    @property
     def is_editable(self) -> bool:
         return self.status == Status.DRAFT
+
+    @property
+    def receiving_offices(self):
+        """Where the document is going in its current batch.
+
+        Distinct from `current_office`, which is where it *is*. Three offices
+        matter to a reader — who raised it, who holds it, and who owes the next
+        act — and showing only the first two leaves the most useful of the three
+        off the page: "which office are we waiting on" is the question the
+        record is usually opened to answer.
+        """
+        return [step.to_office for step in self.current_step_queryset.select_related("to_office")]
 
     @property
     def current_step_queryset(self):

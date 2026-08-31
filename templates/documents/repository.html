@@ -1,37 +1,56 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Document Management · {{ SITE_NAME }}{% endblock %}
+{% block title %}Document Repository · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Document Management</div>
+    <div class="eyebrow">Document Repository</div>
     <h1>Office Document Repository</h1>
     <p class="sub">Completed records, archived documents, and historical office uploads. Active work remains in Tracking.</p>
   </div>
   <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
 </div>
 
+{% comment %}
+  Folders across the full width rather than squeezed into a quarter-width rail.
+  A repository is a filing room: the first thing a reader wants is the drawers,
+  and in a narrow column the office names truncated to the point where two
+  offices read the same. Equal columns because no office's drawer is more
+  important than another's — the count inside each is the only ranking.
+
+  The column count is settings-driven (REPOSITORY_FOLDER_COLUMNS, default 4)
+  because the team has not settled on a number; it is one line to change.
+{% endcomment %}
+<div class="card-udm mb-4">
+  <div class="card-udm-head">
+    <div>
+      <h2>Office Folders</h2>
+      <div class="card-udm-caption">
+        Views over metadata (office · type · year). One file, many folders — nothing is
+        duplicated on disk.
+      </div>
+    </div>
+  </div>
+  <div class="card-udm-body">
+    <div class="folder-grid" style="--folder-columns:{{ folder_columns }};">
+      <a class="folder-tile {% if not selected_office %}active{% endif %}" href="{% url 'documents:repository' %}">
+        <span class="folder-tile-name">All documents</span>
+        <span class="folder-tile-count num">{{ all_count }}</span>
+      </a>
+      {% for folder in smart_folders %}
+        <a class="folder-tile {% if selected_office.code == folder.office__code %}active{% endif %}"
+           href="?office={{ folder.office__code }}" title="{{ folder.office__name }}">
+          <span class="folder-tile-name">{{ folder.office__name }}</span>
+          <span class="folder-tile-count num">{{ folder.total }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-3">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Office Folders</h2></div>
-      <div class="card-udm-body">
-        <a class="smart-folder {% if not selected_office %}active{% endif %}" href="{% url 'documents:repository' %}">
-          <span>All documents</span><span class="count">{{ all_count }}</span>
-        </a>
-        {% for folder in smart_folders %}
-          <a class="smart-folder {% if selected_office.code == folder.office__code %}active{% endif %}"
-             href="?office={{ folder.office__code }}">
-            <span>{{ folder.office__name|truncatechars:22 }}</span><span class="count">{{ folder.total }}</span>
-          </a>
-        {% endfor %}
-        <p class="form-text mt-3 mb-0">
-          Folders are views over metadata (office · type · year). One file, many folders — nothing is duplicated on disk.
-        </p>
-      </div>
-    </div>
-
-    <div class="card-udm mt-4">
       <div class="card-udm-head"><h2>Popular Tags</h2></div>
       <div class="card-udm-body">
         {% for tag in popular_tags %}

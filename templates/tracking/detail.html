@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}{{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block title %}{{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 
 <div class="page-head">
@@ -8,7 +8,7 @@
     <div class="eyebrow">Tracking Record</div>
     <h1>{{ record.subject }}</h1>
     <p class="sub">
-      <span class="mono">{{ record.tracking_number }}</span>
+      <span class="mono">{{ record.display_tracking_number }}</span>
       {% include "partials/_status_pill.html" with status=record.display_status %}
       {% if record.priority == "URGENT" %}<span class="pill pill-overdue">Urgent</span>{% endif %}
     </p>
@@ -27,9 +27,25 @@
       <div class="card-udm-head"><h2>Document information</h2></div>
       <div class="card-udm-body">
         <table class="table table-sm table-stacked mb-0">
+          {% comment %}
+            Three offices matter, and the page used to name two. "Current" is
+            where the document is; "Receiving" is who owes the next act, which
+            is what a reader opening this page usually wants — and on a batch
+            sent to several offices it is the only row that says who they are.
+          {% endcomment %}
           <tr><th class="text-muted fw-normal">Originating office</th><td>{% include "partials/_office_badge.html" with office=record.originating_office %}</td></tr>
           <tr><th class="text-muted fw-normal">Current office</th><td>{% include "partials/_office_badge.html" with office=record.current_office %}</td></tr>
-          <tr><th class="text-muted fw-normal">Held by</th><td>{{ record.current_holder.display_name|default:"Pending Receipt" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Receiving office</th>
+              <td class="office-cell">
+                {% for office in record.receiving_offices %}
+                  {% include "partials/_office_badge.html" with office=office %}
+                {% empty %}
+                  <span class="text-muted">{% if record.status == "DRAFT" %}Not sent yet{% else %}—{% endif %}</span>
+                {% endfor %}
+              </td></tr>
+          {# "Pending Receipt" here read as a person's name. It is not one. #}
+          <tr><th class="text-muted fw-normal">Held by</th>
+              <td>{{ record.current_holder.display_name|default:"Nobody yet — awaiting receipt" }}</td></tr>
           <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
           <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
           <tr><th class="text-muted fw-normal">Requested action</th>
@@ -134,7 +150,7 @@
         <div class="card-udm-body">
           <p class="text-muted" style="font-size:14px;">
             This records that <strong>{{ user.office.name }}</strong> has taken custody of
-            <span class="mono">{{ record.tracking_number }}</span>. The server writes the exact date and time —
+            <span class="mono">{{ record.display_tracking_number }}</span>. The server writes the exact date and time —
             not a value you type.
           </p>
           <form method="post" action="{% url 'tracking:confirm_receipt' record.pk %}">
@@ -195,7 +211,7 @@
                   This checkbox was missing, so CompleteRecordView's archiving
                   branch could never run: the field defaults to on, but an
                   unrendered checkbox simply is not posted, which reads as off.
-                  Completing a record left it out of Document Management until
+                  Completing a record left it out of the Document Repository until
                   somebody noticed the separate Archive button underneath.
                 {% endcomment %}
                 {% include "partials/_field.html" with field=complete_form.archive_now %}

@@ -148,7 +148,7 @@
             {% for record in attention_records %}
               <tr>
                 {% if show_office_columns %}
-                  <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+                  <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
                   <td>
                     {{ record.subject|truncatechars:46 }}
                     <div class="text-muted" style="font-size:12.5px;">
@@ -159,7 +159,7 @@
                   <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
                 {% else %}
                   <td>
-                    <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
+                    <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                     <div style="font-size:14px;">{{ record.subject }}</div>
                     <div class="text-muted" style="font-size:12.5px;">
                       From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
@@ -211,7 +211,7 @@
           <tbody>
           {% for record in recent_records %}
             <tr>
-              <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+              <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
               <td>{{ record.subject|truncatechars:52 }}</td>
               {% if show_office_columns %}
                 <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
@@ -245,7 +245,7 @@
 
     <div class="card-udm mt-4">
       <div class="card-udm-head">
-        <h2>Newest in Document Management</h2>
+        <h2>Newest in the Document Repository</h2>
         <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
           <span>Search</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>

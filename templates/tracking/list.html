@@ -1,12 +1,16 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Tracking · {{ SITE_NAME }}{% endblock %}
+{% block title %}Document Tracking · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">Tracking</div>
-    <h1>Active Document Tracking</h1>
-    <p class="sub">Current documents only. Completed records remain available in Document Management.</p>
+    <div class="eyebrow">Document Tracking</div>
+    {% comment %}
+      "Active" is gone: the page shows completed-pending-upload records too, so
+      the word was describing a filter the page no longer applies.
+    {% endcomment %}
+    <h1>Document Tracking</h1>
+    <p class="sub">Documents still moving, plus completed work awaiting approval into the Document Repository.</p>
   </div>
   <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
 </div>
@@ -74,7 +78,7 @@
         <tbody>
           {% for record in pending_upload %}
             <tr>
-              <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+              <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
               <td>{{ record.subject|truncatechars:52 }}</td>
               <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
               <td style="white-space:nowrap;">{{ record.completed_at|date:"d M Y" }}</td>
@@ -122,21 +126,25 @@
     <table class="table-udm">
       <thead>
         <tr>
-          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th>Tracking number</th><th>Subject</th><th>Current office</th><th>Updated</th><th>Status</th><th></th>
+          {# Current and receiving both: where it is, and who owes the next act. #}
+          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th>Tracking number</th><th>Subject</th><th>Current office</th><th>Receiving office</th><th>Updated</th><th>Status</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for record in records %}
           <tr>
-            {% if can_bulk_receive %}<td>{% if record.can_confirm_now %}<input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}" aria-label="Select {{ record.tracking_number }} for receipt">{% endif %}</td>{% endif %}
-            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
+            {% if can_bulk_receive %}<td>{% if record.can_confirm_now %}<input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}" aria-label="Select {{ record.display_tracking_number }} for receipt">{% endif %}</td>{% endif %}
+            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
             <td>
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
                 {{ record.document_type.name|default:"No type" }} · from {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>
             </td>
-            <td>{% include "partials/_office_badge.html" with office=record.current_office %}</td>
+            <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
+            <td class="office-cell">
+              {% include "partials/_office_badges.html" with offices=record.receiving_offices_shown more=record.receiving_more %}
+            </td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
           <td>
               {% comment %}
@@ -157,7 +165,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="{% if can_bulk_receive %}7{% else %}6{% endif %}">
+          <tr><td colspan="{% if can_bulk_receive %}8{% else %}7{% endif %}">
             <div class="empty-state">
               <h3>No active records match this view</h3>
               <p>Clear the filters or choose another queue above to see more records.</p>

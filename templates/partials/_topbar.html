@@ -16,6 +16,16 @@
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
+    {% comment %}
+      Dark mode, inside the app only. The icon and the label both name what
+      pressing it switches *to*, rather than what is currently on — a toggle
+      labelled with its own state is the classic ambiguity here.
+    {% endcomment %}
+    <button class="theme-toggle no-print" type="button" data-theme-toggle
+            aria-label="Switch to dark theme" title="Switch to dark theme">
+      <span class="theme-icon-light" aria-hidden="true">&#9789;</span>
+      <span class="theme-icon-dark" aria-hidden="true">&#9788;</span>
+    </button>
     {% include "partials/_notification_badge.html" %}
     <div class="dropdown">
       <button type="button" class="topbar-account-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu">

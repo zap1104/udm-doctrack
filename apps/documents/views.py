@@ -160,6 +160,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 # every page load.
                 "total": page.paginator.count,
                 "all_count": visible.count(),
+                # Settings-driven so the team can settle the number later
+                # without touching a template. See REPOSITORY_FOLDER_COLUMNS.
+                "folder_columns": settings.REPOSITORY_FOLDER_COLUMNS,
                 "retention_due": retention_due,
                 "retention_due_count": retention_due_count,
                 "retention_due_more": max(0, retention_due_count - len(retention_due)),

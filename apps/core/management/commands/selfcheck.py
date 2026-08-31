@@ -161,14 +161,25 @@ class Command(BaseCommand):
             ),
         )
 
-        def check_number():
-            parts = record.tracking_number.split("-")
-            if len(parts) != 6 or not parts[-1].isdigit():
-                raise RuntimeError(f"Malformed tracking number: {record.tracking_number}")
-            return record.tracking_number
+        def check_draft_has_no_number():
+            """A draft must not be carrying a real number yet.
 
-        number = self.step("Tracking number has the documented format", check_number)
-        self.stdout.write(f"        {number}")
+            It is issued on send, so that a draft somebody abandons leaves no
+            gap in the office's series. Checked before routing rather than
+            assumed, because the failure mode is silent: a placeholder that
+            reached a screen would look exactly like a reference to quote.
+            """
+            if record.has_tracking_number:
+                raise RuntimeError(
+                    f"A draft was issued a real tracking number: {record.tracking_number}"
+                )
+            if record.display_tracking_number != "Not yet assigned":
+                raise RuntimeError(
+                    f"A draft's placeholder is being displayed: {record.display_tracking_number}"
+                )
+            return "not yet assigned, as expected"
+
+        self.step("A draft carries no tracking number", check_draft_has_no_number)
 
         # --- 3. Route --------------------------------------------------------
         self.step(
@@ -177,6 +188,17 @@ class Command(BaseCommand):
                 record, [receiver_office], user=sender, instructions="For action.", due_days=3
             ),
         )
+
+        def check_number():
+            # After routing: the number is issued on send.
+            record.refresh_from_db()
+            parts = record.tracking_number.split("-")
+            if len(parts) != 6 or not parts[-1].isdigit():
+                raise RuntimeError(f"Malformed tracking number: {record.tracking_number}")
+            return record.tracking_number
+
+        number = self.step("Tracking number has the documented format", check_number)
+        self.stdout.write(f"        {number}")
 
         def check_pending_receipt():
             record.refresh_from_db()

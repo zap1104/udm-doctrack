@@ -16,6 +16,10 @@
   --udm-red: #b4342b;
   --udm-red-soft: #fbe7e5;
   --udm-canvas: #f5f7fa;
+  /* The raised surface: cards, tables, the topbar. Was #fff literal in 30-odd
+     places, which is what made a dark theme impossible to add without editing
+     every component. One token means the theme block below re-points them all. */
+  --udm-surface: #ffffff;
   --udm-line: #dfe5ec;
   --udm-line-strong: #b9c9da;
   --udm-line-soft: #cfd8e6;
@@ -151,7 +155,7 @@ a:hover { text-decoration: underline; }
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
 
 .app-topbar {
-  background: #fff;
+  background:var(--udm-surface);
   border-bottom: 1px solid var(--udm-line);
   padding: 12px 26px;
   display: flex;
@@ -188,7 +192,7 @@ a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------------ cards */
 .card-udm {
-  background: #fff;
+  background:var(--udm-surface);
   border: 1px solid var(--udm-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
@@ -202,7 +206,7 @@ a:hover { text-decoration: underline; }
 .card-udm .card-udm-body { padding: 18px 20px; }
 
 .stat-card {
-  background: #fff;
+  background:var(--udm-surface);
   border: 1px solid var(--udm-line);
   border-left: 4px solid var(--udm-teal);
   border-radius: var(--radius);
@@ -233,11 +237,15 @@ a:hover { text-decoration: underline; }
 .pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-forwarded { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-returned  { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
-.pill-draft     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
+/* Draft is the one status that is not in the workflow yet: nobody has been
+   sent it, nobody owes anything on it, and it is visible only to the office
+   writing it. So it is drawn as an outline rather than a fill — the difference
+   between "a stage this document is at" and "a document that has not started".
+   It also stops Draft reading as another solid chip alongside Pending receipt,
+   which is the one it was being confused with. */
+.pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 
 /* ----------------------------------------------------------------- tables */
@@ -270,7 +278,7 @@ a:hover { text-decoration: underline; }
 .timeline li::before {
   content: ""; position: absolute; left: -25px; top: 4px;
   width: 14px; height: 14px; border-radius: 50%;
-  background: #fff; border: 3px solid var(--udm-teal);
+  background:var(--udm-surface); border: 3px solid var(--udm-teal);
 }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
 .timeline li.is-done::before { border-color: var(--udm-green); }
@@ -317,7 +325,7 @@ a:hover { text-decoration: underline; }
 
 .file-chip {
   display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background: #fff;
+  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background:var(--udm-surface);
 }
 .file-chip .ext {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
@@ -333,7 +341,7 @@ a:hover { text-decoration: underline; }
 .smart-folder .count { color: var(--udm-muted); font-size: 12.5px; }
 
 .doc-tile {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: var(--radius);
   padding: 16px; height: 100%; display: flex; flex-direction: column; gap: 8px;
   box-shadow: var(--shadow-card);
 }
@@ -355,7 +363,7 @@ a:hover { text-decoration: underline; }
 .step-indicator .step.active { color: var(--udm-navy); font-weight: 600; }
 
 .text-preview {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: 8px;
+  background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: 8px;
   padding: 16px; max-height: 430px; overflow: auto;
   font-size: 13.5px; white-space: pre-wrap; color: #384456;
 }
@@ -367,8 +375,8 @@ a:hover { text-decoration: underline; }
 .btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
 .btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
 .btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
-.btn-udm-outline { background: #fff; border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { background: #fff; border-color: var(--udm-navy); color: var(--udm-navy); }
+.btn-udm-outline { background:var(--udm-surface); border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
+.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-navy); color: var(--udm-navy); }
 .btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
 .btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
 .btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
@@ -397,7 +405,7 @@ a:hover { text-decoration: underline; }
 .deadline-option {
   display: inline-flex; align-items: center; gap: 9px; flex: 1 1 220px;
   border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 13px;
-  background: #fff; font-size: 14px; cursor: pointer;
+  background:var(--udm-surface); font-size: 14px; cursor: pointer;
 }
 .deadline-option:hover { border-color: var(--udm-teal); }
 .deadline-option input { margin: 0; flex: 0 0 auto; }
@@ -454,7 +462,7 @@ a:hover { text-decoration: underline; }
   background-size: 56px 56px;
   mask-image: radial-gradient(circle at 78% 22%, #000 0%, transparent 62%);
 }
-.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background: #fff; }
+.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background:var(--udm-surface); }
 .login-form .inner { width: 100%; max-width: 372px; }
 
 .lockout-timer {
@@ -482,7 +490,7 @@ a:hover { text-decoration: underline; }
 
 @media print {
   .app-sidebar, .app-topbar, .no-print { display: none !important; }
-  body { background: #fff; }
+  body { background:var(--udm-surface); }
   .app-content { padding: 0; }
   .card-udm { box-shadow: none; border: 1px solid #cfd6e0; }
 }
@@ -500,7 +508,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-brand-icon { display:block !important; width:36px !important; height:36px !important; min-width:36px !important; max-width:36px !important; min-height:36px !important; max-height:36px !important; flex:0 0 36px !important; border-radius:9px; object-fit:contain; }
 .app-topbar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:13px; white-space:nowrap; }
 .app-topbar .topbar-search { flex:1 1 auto; min-width:180px; max-width:460px; }
-.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
+.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:var(--udm-surface); outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
 .app-topbar .topbar-account-button { display:inline-flex; align-items:center; gap:9px; width:auto; min-width:0; max-width:280px; padding:4px 6px; border:0 !important; border-radius:8px; background:transparent !important; color:var(--udm-ink); text-align:left; box-shadow:none !important; }
 .app-topbar .topbar-account-button:hover,.app-topbar .topbar-account-button:focus { background:var(--udm-canvas) !important; color:var(--udm-ink); }
 .app-topbar .topbar-account-copy { flex-direction:column; align-items:flex-start; width:auto; min-width:0; max-width:190px; }
@@ -522,7 +530,7 @@ a:hover { text-decoration: underline; }
 	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); }
+	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); }
 	.notification-row.is-actionable { border-left-color:var(--udm-red); }
 	.notification-row.is-received { border-left-color:var(--udm-teal); }
 	.notification-row.is-completed { border-left-color:var(--udm-navy); }
@@ -550,16 +558,11 @@ a:hover { text-decoration: underline; }
 .sidebar-office { padding:0 12px; color:#cdd9e8; font-size:13px; }
 .sidebar-office-name { color:#fff; font-weight:600; }
 .sidebar-office-role { margin-top:2px; color:rgba(205,217,232,.72); font-size:12.5px; }
-.tracking-subnav { margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-.tracking-subnav-link { display:block; margin:1px 0; padding:6px 10px; border-radius:7px; color:rgba(205,217,232,.76); font-size:12.5px; line-height:1.25; text-decoration:none; }
-.tracking-subnav-link:hover,.tracking-subnav-link:focus { background:rgba(255,255,255,.08); color:#fff; text-decoration:none; }
-.tracking-subnav-link--alert { color:#ffd2cd; }
 /* Which queue you are looking at. Both navs previously gave no indication at
    all, so every queue looked identical once the page had loaded. */
-.tracking-subnav-link.is-active { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
-.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:#fff; color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
+.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:var(--udm-surface); color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
 .tracking-queue-link:hover,.tracking-queue-link:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
 .tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
 .tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:#fff; }
@@ -568,7 +571,7 @@ a:hover { text-decoration: underline; }
 .tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
 .tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
 @media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
-@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } .tracking-subnav { display:flex; flex:0 0 auto; gap:4px; margin:0; padding:0; border-left:0; } .tracking-subnav-link { flex:0 0 auto; padding:8px 10px; white-space:nowrap; } }
+@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } }
 @media (max-width:767.98px) { .app-topbar { min-height:58px; gap:10px; padding:9px 14px; } .app-topbar .topbar-search { max-width:none; } .page-head { flex-direction:column; align-items:stretch; } .page-head > .btn,.page-head > a.btn { align-self:flex-start; } }
 @media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
 @media print { .tracking-queue-nav { display:none !important; } }
@@ -577,14 +580,14 @@ a:hover { text-decoration: underline; }
    PHASE 3: routing slip and print presentation
    ================================================================ */
 .routing-slip-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); color:var(--udm-ink); }
+.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); color:var(--udm-ink); }
 .routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:2px solid var(--udm-navy); }
 .routing-slip-heading { min-width:0; }
 .routing-slip-school { color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
 .routing-slip-heading h1 { margin:3px 0 2px; font-size:25px; }
 .routing-slip-office { color:var(--udm-muted); font-size:13px; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
-.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
+.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:var(--udm-surface); text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
    nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
@@ -596,7 +599,7 @@ a:hover { text-decoration: underline; }
 }
 /* Holds the generated QR svg. No border or padding: the code carries its own
    quiet zone (QR_BORDER), and framing it again would eat scannable area. */
-.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:#fff; }
+.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:var(--udm-surface); }
 .routing-slip-qr-pattern svg { display:block; width:100%; height:100%; }
 .routing-slip-control { min-width:160px; padding:8px 10px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-control span { display:block; color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -628,7 +631,7 @@ a:hover { text-decoration: underline; }
 .routing-slip-signature-line { display:block; height:24px; margin-top:7px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-receipt-note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--udm-line); }
 .routing-slip-empty { padding:24px !important; color:var(--udm-muted); text-align:center; }
-.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:#fff; font-size:11px; }
+.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); font-size:11px; }
 .routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-navy); }
 .routing-slip-action-pending { margin:7px 0 0; color:var(--udm-muted); font-size:10px; }
 .routing-slip-attachments { margin-top:20px; padding-top:2px; }
@@ -650,7 +653,7 @@ a:hover { text-decoration: underline; }
 }
 @page { size:A4 portrait; margin:12mm 10mm 14mm; }
 @media print {
-  html,body { background:#fff !important; }
+  html,body { background:var(--udm-surface) !important; }
   .app-content { padding:0 !important; }
   .routing-slip { max-width:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; }
   .routing-slip-header { break-inside:avoid; }
@@ -676,7 +679,7 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 
 .app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip),
-.app-sidebar a:not(.nav-item):not(.brand):not(.tracking-subnav-link) {
+.app-sidebar a:not(.nav-item):not(.brand) {
   font-weight: 700;
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
@@ -698,7 +701,7 @@ a:hover { text-decoration: underline; }
 .report-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .card-udm-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .report-print-header,.report-print-footer { display:none; }
-.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:#fff; box-shadow:var(--shadow-card); }
+.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy); }
 .reports-tab.active { background:var(--udm-navy); color:#fff; }
@@ -837,9 +840,9 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 html { scroll-behavior:smooth; }
 body.sidebar-open { overflow:hidden; }
-.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:#fff; color:var(--udm-navy); font-weight:700; }
+.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:var(--udm-surface); color:var(--udm-navy); font-weight:700; }
 .skip-link:focus { top:14px; }
-.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:#fff; color:var(--udm-muted); font-size:12.5px; }
+.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:var(--udm-surface); color:var(--udm-muted); font-size:12.5px; }
 .sidebar-toggle,.sidebar-close,.sidebar-backdrop { display:none; }
 .sidebar-mobile-head { display:block; }
 .app-content:focus { outline:none; }
@@ -868,7 +871,7 @@ body.sidebar-open { overflow:hidden; }
 .login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
 .login-account-note { margin:16px 0 0; color:var(--udm-muted); font-size:12.5px; }
 .lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
-.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); text-align:center; }
+.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); text-align:center; }
 .error-code { color:var(--udm-gold); font-family:"Aptos Display","Segoe UI",sans-serif; font-size:54px; font-weight:800; line-height:1; }
 .error-page h1 { margin:10px 0 6px; font-size:26px; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
@@ -897,12 +900,10 @@ body.sidebar-open { overflow:hidden; }
   .sidebar-close { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:25px; line-height:1; }
   .sidebar-backdrop { position:fixed; inset:0; z-index:1040; display:block; border:0; background:rgba(6,20,36,.5); opacity:0; pointer-events:none; transition:opacity 180ms ease; }
   body.sidebar-open .sidebar-backdrop { opacity:1; pointer-events:auto; }
-  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:#fff; }
+  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
   .sidebar-toggle span { display:block; width:17px; height:2px; border-radius:2px; background:var(--udm-navy); }
   .app-sidebar nav { display:block; }
   .app-sidebar .brand { padding:2px 5px 20px; }
-  .tracking-subnav { display:block; margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-  .tracking-subnav-link { display:block; padding:7px 10px; }
   .nav-section { display:block; }
   .app-topbar { position:sticky; top:0; }
   .app-footer { padding:16px; }
@@ -1027,7 +1028,7 @@ body.sidebar-open { overflow:hidden; }
   padding: 6px 11px;
   border: 1px solid var(--udm-line-strong);
   border-radius: 8px;
-  background: #ffffff;
+  background:var(--udm-surface);
   color: var(--udm-navy);
   font-size: 12.5px;
   font-weight: 700;
@@ -1099,7 +1100,7 @@ body.sidebar-open { overflow:hidden; }
 .multiselect {
   border: 1px solid var(--udm-line);
   border-radius: 8px;
-  background: #ffffff;
+  background:var(--udm-surface);
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(11, 49, 90, 0.05);
   transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -1126,7 +1127,7 @@ body.sidebar-open { overflow:hidden; }
 }
 
 .multiselect-search::placeholder { color: var(--udm-muted); }
-.multiselect-search:focus { outline: none; background: #ffffff; }
+.multiselect-search:focus { outline: none; background:var(--udm-surface); }
 
 .multiselect-list {
   max-height: 232px;
@@ -1243,7 +1244,7 @@ body.sidebar-open { overflow:hidden; }
      to its text on a narrow phone, and the two buttons then wrap awkwardly. */
   width: min(420px, calc(100vw - 32px));
   max-width: 420px; padding: 26px 28px; border: 1px solid var(--udm-line);
-  border-radius: 12px; background: #fff; color: var(--udm-ink);
+  border-radius: 12px; background:var(--udm-surface); color: var(--udm-ink);
   box-shadow: 0 18px 44px rgba(11, 49, 90, 0.22);
 }
 @media (max-width: 400px) {
@@ -1340,7 +1341,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .fold { margin: 0 0 14px; }
 .fold > summary {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
-  border: 1px solid var(--udm-line); border-radius: 999px; background: #fff;
+  border: 1px solid var(--udm-line); border-radius: 999px; background:var(--udm-surface);
   color: var(--udm-navy); cursor: pointer; font-size: 12.5px; font-weight: 600;
   list-style: none;
 }
@@ -1444,3 +1445,220 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .breakdown-item { break-inside:avoid; }
   .dashboard-writeup { break-inside:avoid; }
 }
+
+/* ---------------------------------------------------- repository folders */
+/* Equal columns across the full width. The count comes from
+   REPOSITORY_FOLDER_COLUMNS via a custom property on the element, so changing
+   it is a settings change rather than a template edit. auto-fill with a minimum
+   keeps it from producing unreadably narrow drawers on a small screen: the
+   configured count is a ceiling, not a promise. */
+.folder-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(max(160px,calc(100%/var(--folder-columns,4) - 12px)),1fr));
+  gap:12px;
+}
+.folder-tile {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  min-height:58px; padding:13px 15px;
+  border:1px solid var(--udm-line); border-radius:10px;
+  background:var(--udm-surface); color:var(--udm-navy); font-size:13.5px; text-decoration:none;
+}
+.folder-tile:hover,.folder-tile:focus { border-color:var(--udm-teal); text-decoration:none; }
+.folder-tile.active { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); font-weight:600; }
+/* Two lines before it clips, so an office name is legible rather than cut to a
+   prefix that reads the same as its neighbour's. */
+.folder-tile-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.folder-tile-count { flex:0 0 auto; color:var(--udm-muted); font-size:12.5px; }
+.folder-tile.active .folder-tile-count { color:inherit; }
+
+/* ================================================================
+   Dark theme
+   ================================================================
+   Applied inside the app only. The sign-in and lockout pages replace the body
+   block wholesale and carry their own full-bleed navy artwork; they are also
+   the one screen somebody sees before the system knows who they are, so there
+   is no stored preference to read. `.login-wrap` pins its tokens back below.
+
+   Implemented by re-pointing the existing tokens rather than as a second
+   stylesheet. Every rule above already draws from them, so a component added
+   later is themed without anybody remembering to theme it — which is how a
+   parallel dark stylesheet always eventually fails. Introducing --udm-surface
+   is what made this possible: the raised surface was #fff literal in thirty-one
+   places, so there was nothing to re-point.
+
+   One selector, [data-theme="dark"], and no prefers-color-scheme block:
+   doctrack.js resolves the operating-system preference and writes the
+   attribute. The alternative is duplicating a forty-line palette into a media
+   query, and two copies drift. The cost is that dark mode needs JavaScript,
+   which is the right trade — it is a preference, not content, and the light
+   theme is fully usable without it.
+
+   Values are re-tuned, never reused. The light palette was validated for 3:1
+   contrast against white, and the same hexes fail against a dark ground: the
+   soft tints go near-black, and the gold and green inks disappear into them. A
+   status pill nobody can read is worse than no colour at all. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces: canvas is the page, surface is the card raised off it. */
+  --udm-canvas: #0f1720;
+  --udm-surface: #17212c;
+
+  /* Navy is structural here (sidebar, buttons) rather than decorative, so it
+     darkens with the page instead of glowing against it. */
+  --udm-navy: #16222f;
+  --udm-navy-700: #1d2e3f;
+  --udm-navy-600: #24384c;
+
+  /* Brand hues lightened to clear contrast on the dark ground. */
+  --udm-gold: #e0b757;
+  --udm-teal: #4aa9bd;
+  --udm-green: #56b287;
+  --udm-red: #e2695f;
+
+  /* Tints become low-lightness washes of the same hue, not pale panels. */
+  --udm-gold-soft: #3a2f14;
+  --udm-teal-soft: #12333a;
+  --udm-green-soft: #14332a;
+  --udm-red-soft: #3a1e1b;
+  --udm-slate-soft: #212c39;
+
+  /* Ink on those washes, re-tuned to stay legible against them. */
+  --udm-gold-ink: #f0d391;
+  --udm-gold-ink-dark: #f6e2b4;
+  --udm-gold-ink-hover: #fbeed0;
+  --udm-gold-border: #8a6a12;
+  --udm-gold-tint: #241d0d;
+  --udm-gold-tint-strong: #4a3c19;
+  --udm-teal-ink: #8fd4e2;
+  --udm-teal-ink-dark: #b0e2ec;
+  --udm-green-ink: #92dcb6;
+  --udm-red-ink: #f3ada6;
+  --udm-slate-ink: #a8b6c8;
+
+  /* Text and rules. */
+  --udm-ink: #e6edf5;
+  --udm-label-ink: #cbd6e4;
+  --udm-slate-text: #b9c6d6;
+  --udm-muted: #91a1b5;
+  --udm-line: #27333f;
+  --udm-line-strong: #3a4a5c;
+  --udm-line-soft: #2f3d4c;
+
+  /* Charts: same three categorical slots, lifted to clear the dark ground
+     while keeping the hue separation that makes them distinguishable under
+     protanopia and deuteranopia. */
+  --chart-one: #4aa9d4;
+  --chart-two: #d8ae4e;
+  --chart-three: #5cb37e;
+  --chart-track: #212d3a;
+  --chart-grid: #202b36;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.5);
+}
+
+/* Bootstrap paints its own form controls and tables from its variables, which
+   are not ours. Re-pointed here rather than restyled, so the controls keep
+   Bootstrap's behaviour and only change colour. */
+:root[data-theme="dark"] body {
+  --bs-body-bg: var(--udm-canvas);
+  --bs-body-color: var(--udm-ink);
+  --bs-border-color: var(--udm-line);
+  --bs-secondary-color: var(--udm-muted);
+  --bs-emphasis-color: var(--udm-ink);
+  background: var(--udm-canvas);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .form-control,
+:root[data-theme="dark"] .form-select,
+:root[data-theme="dark"] textarea {
+  background: var(--udm-canvas);
+  border-color: var(--udm-line);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .form-control::placeholder { color: var(--udm-muted); }
+:root[data-theme="dark"] .form-control:focus,
+:root[data-theme="dark"] .form-select:focus {
+  background: var(--udm-canvas);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .dropdown-menu {
+  background: var(--udm-surface);
+  border-color: var(--udm-line);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .dropdown-item { color: var(--udm-ink); }
+:root[data-theme="dark"] .dropdown-item:hover,
+:root[data-theme="dark"] .dropdown-item:focus { background: var(--udm-canvas); color: var(--udm-ink); }
+:root[data-theme="dark"] .table-udm th { color: var(--udm-muted); }
+:root[data-theme="dark"] .table-udm tbody tr:hover { background: var(--udm-canvas); }
+/* .help-note is a warm off-white rather than the plain surface, so it does not
+   follow --udm-surface and needs a value of its own. */
+:root[data-theme="dark"] .help-note { background: #241f12; color: var(--udm-ink); }
+
+/* The sign-in and lockout screens stay light in both themes: they are their own
+   full-bleed composition on fixed navy, and they are shown before there is a
+   person to have a preference. Pinning the tokens back is enough — every rule
+   inside reads them. */
+:root[data-theme="dark"] .login-wrap {
+  --udm-canvas: #f5f7fa;
+  --udm-surface: #ffffff;
+  --udm-ink: #16202c;
+  --udm-muted: #63718a;
+  --udm-label-ink: #33415a;
+  --udm-slate-text: #41506a;
+  --udm-line: #dfe5ec;
+  --udm-line-strong: #b9c9da;
+  --udm-navy: #0b315a;
+  --udm-gold: #c49a2e;
+  --udm-teal: #16697a;
+  color-scheme: light;
+}
+
+/* Paper is white whatever the screen is. Printing a dark theme wastes toner and
+   comes out unreadable on the panels that rely on tinted fills, so print always
+   uses the light palette — the tokens are simply reset for the print context. */
+@media print {
+  :root[data-theme="dark"] {
+    --udm-canvas: #ffffff;
+    --udm-surface: #ffffff;
+    --udm-ink: #16202c;
+    --udm-label-ink: #33415a;
+    --udm-slate-text: #41506a;
+    --udm-muted: #63718a;
+    --udm-line: #dfe5ec;
+    --udm-line-strong: #b9c9da;
+    --udm-line-soft: #cfd8e6;
+    --udm-gold-soft: #f6edd8;
+    --udm-teal-soft: #e3f0f2;
+    --udm-green-soft: #e4f2ea;
+    --udm-red-soft: #fbe7e5;
+    --udm-slate-soft: #eceff4;
+    --udm-gold-ink: #8a6a12;
+    --udm-teal-ink: #10505d;
+    --udm-green-ink: #1f5a42;
+    --udm-red-ink: #8f2a22;
+    --udm-slate-ink: #55637a;
+    --chart-one: #0a6e9a;
+    --chart-two: #b58c24;
+    --chart-three: #2f7d4f;
+    --chart-track: #e8edf3;
+    --chart-grid: #eef1f6;
+  }
+}
+
+/* ------------------------------------------------------------ the control */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex: 0 0 38px; padding: 0;
+  border: 1px solid var(--udm-line); border-radius: 8px;
+  background: var(--udm-surface); color: var(--udm-navy);
+  font-size: 15px; line-height: 1;
+}
+.theme-toggle:hover, .theme-toggle:focus { border-color: var(--udm-teal); color: var(--udm-teal); }
+:root[data-theme="dark"] .theme-toggle { color: var(--udm-gold); }
+/* One button, two glyphs: the icon shows what pressing it will switch *to*,
+   which is what the label announces too. */
+.theme-toggle .theme-icon-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .theme-icon-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .theme-icon-dark { display: inline; }
