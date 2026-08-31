@@ -1,0 +1,58 @@
+{% load doctrack %}
+{% comment %}
+  Tracking's filters, as pills — the same control language as the queue nav on
+  the Tracking workspace and the filter rows beneath it. Each pill is a link
+  whose href already carries the selection clicking it would produce, so there
+  is no Apply button here either.
+
+  No relevance slider and no threshold note: nothing scores a tracking record.
+  A record either matches the words or it does not.
+{% endcomment %}
+<div class="tracking-filters">
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-status-label">Status</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="search-status-label">
+        {% for value, label in form.status.field.choices %}
+          <a class="pill-toggle{% if selected_status == value %} is-active{% endif %}{% if value == 'OVERDUE' %} pill-toggle--alert{% endif %}"
+             href="{% filter_url 'status' value %}"
+             {% if selected_status == value %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-scope-label">Queue</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="search-scope-label">
+        {% for value, label in form.scope.field.choices %}
+          <a class="pill-toggle{% if selected_scope == value %} is-active{% endif %}"
+             href="{% filter_url 'scope' value %}"
+             {% if selected_scope == value %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-office-label">Originating office</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="search-office-label">
+        {% for office in filter_offices %}
+          {% with selected=office.pk|stringformat:"s" %}
+            <a class="pill-toggle{% if selected in selected_office_ids %} is-active{% endif %}"
+               href="{% filter_url 'offices' office.pk multi=True %}"
+               title="{{ office.name }}"
+               {% if selected in selected_office_ids %}aria-current="true"{% endif %}>
+              {{ office.code }}
+              <span class="visually-hidden">
+                {% if selected in selected_office_ids %}selected — activate to remove{% else %}activate to add{% endif %}
+              </span>
+            </a>
+          {% endwith %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>

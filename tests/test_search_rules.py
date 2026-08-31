@@ -11,7 +11,7 @@ import pytest
 from django.conf import settings
 
 from apps.documents.models import AccessLevel, Document, Source
-from apps.search.forms import ADVANCED, QUICK, SearchForm
+from apps.search.forms import REPOSITORY, TRACKING
 
 SEARCH = "/search/"
 
@@ -22,7 +22,7 @@ SEARCH = "/search/"
 #: body matches out of a busy list. Every test below is about *coverage* and
 #: *scoping*, so they ask what search found rather than what the threshold then
 #: chose to show; the threshold has its own tests.
-ALL = "mode=advanced&min_relevance=0&show_all=on"
+ALL = "min_relevance=0&show_all=on"
 
 
 def found_pks(response):
@@ -62,64 +62,71 @@ def hr_document(db, users, offices, memo_type):
     )
 
 
-# --- 5.1 quick vs advanced --------------------------------------------------
+# --- 5.1 repository vs tracking --------------------------------------------
+#
+# This replaced an earlier Quick/Advanced toggle on the same parameter. That
+# split was about how many filters to show; this one is about which corpus is
+# being searched, which is what "repository search is the detailed one;
+# tracking search stays minimal" was actually drawing a line between.
 @pytest.mark.django_db
-def test_the_page_says_which_search_this_is(client, users):
+def test_the_page_says_which_corpus_this_is(client, users):
     client.force_login(users["med"])
     body = client.get(SEARCH).content.decode()
 
-    assert "Quick search" in body
-    assert "Advanced search" in body
+    assert "Document Repository" in body
+    assert "Document Tracking" in body
 
 
 @pytest.mark.django_db
-def test_quick_is_the_default_and_hides_the_filters(client, users):
+def test_repository_is_the_default(client, users):
+    """Every bookmark that predates the toggle has to keep working."""
     client.force_login(users["med"])
     response = client.get(f"{SEARCH}?q=inventory")
 
-    assert response.context["mode"] == QUICK
-    assert response.context["is_advanced"] is False
-    assert "Minimum relevance" not in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_advanced_shows_them(client, users):
-    client.force_login(users["med"])
-    response = client.get(f"{SEARCH}?mode=advanced&q=inventory")
-
-    assert response.context["is_advanced"] is True
+    assert response.context["mode"] == REPOSITORY
+    assert response.context["is_tracking"] is False
     assert "Minimum relevance" in response.content.decode()
 
 
 @pytest.mark.django_db
-def test_a_link_carrying_a_filter_opens_in_advanced(client, users, offices):
-    """A saved URL predating the modes would otherwise apply its own filter in
-    quick mode, where the reader cannot see it."""
+def test_an_unrecognised_mode_falls_back_to_repository(client, users):
+    """A stale link is not a reason to show an error page."""
     client.force_login(users["med"])
-    response = client.get(f"{SEARCH}?office={offices['MED'].pk}")
+    response = client.get(f"{SEARCH}?mode=bogus&q=inventory")
 
-    assert response.context["mode"] == ADVANCED
-
-
-@pytest.mark.django_db
-def test_quick_mode_ignores_a_filter_left_in_the_url(client, users, offices):
-    """Explicitly quick means the query and nothing else — an invisible filter
-    is the confusion the split exists to remove."""
-    form = SearchForm(
-        {"mode": QUICK, "q": "inventory", "office": str(offices["HR"].pk)}, years=[2026]
-    )
-    assert form.is_valid(), form.errors
-    assert form.cleaned_data["office"] is None
-    assert form.mode_in_use == QUICK
+    assert response.context["mode"] == REPOSITORY
 
 
 @pytest.mark.django_db
-def test_the_repository_link_opens_the_detailed_search(client, users):
-    """Repository search is the detailed one; tracking's stays minimal."""
+def test_tracking_mode_drops_every_relevance_control(client, users):
+    """Nothing scores a tracking record, so none of this chrome applies."""
+    client.force_login(users["med"])
+    response = client.get(f"{SEARCH}?mode={TRACKING}")
+    body = response.content.decode()
+
+    assert response.context["is_tracking"] is True
+    assert "Minimum relevance" not in body
+    assert "Sorted by relevance" not in body
+    assert "display filter" not in body
+    assert "data-search-enhance" not in body, "autocomplete indexes documents only"
+
+
+@pytest.mark.django_db
+def test_switching_mode_carries_no_filters_across(client, users, offices):
+    """min_relevance means nothing to a record with no extracted text, so the
+    pill starts that mode's search fresh rather than translating."""
+    client.force_login(users["med"])
+    body = client.get(f"{SEARCH}?q=inventory&min_relevance=10").content.decode()
+
+    assert f"?mode={TRACKING}\"" in body, "the tracking pill carries mode and nothing else"
+
+
+@pytest.mark.django_db
+def test_the_repository_link_opens_the_repository_search(client, users):
     client.force_login(users["med"])
     body = client.get("/documents/").content.decode()
 
-    assert "mode=advanced" in body
+    assert f"mode={REPOSITORY}" in body
 
 
 # --- 5.2 more than metadata -------------------------------------------------

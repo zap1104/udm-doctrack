@@ -34,7 +34,6 @@ from .forms import (
     TrackingFilterForm,
 )
 from .models import (
-    COMPLETED_STATUSES,
     QUIET_EVENTS,
     Attachment,
     RoutingStep,
@@ -42,7 +41,6 @@ from .models import (
     TrackingRecord,
 )
 
-PAGE_SIZE = 20
 #: Rows of the pending-upload queue shown before it collapses to a link.
 PENDING_UPLOAD_SHOWN = 5
 
@@ -82,14 +80,10 @@ class RecordListView(AppLoginRequiredMixin, View):
         offices = data.get("offices")
         owner = data.get("owner")
 
-        if status == "OVERDUE":
-            records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
-        elif status:
-            records = records.filter(status=status)
-        if offices:
-            # Originating office only — see TrackingFilterForm.offices for why
-            # this no longer also matches current_office.
-            records = records.filter(originating_office__in=offices)
+        # Shared with the unified search page's tracking mode, so "how a
+        # tracking record gets filtered" has one implementation. This page
+        # passes no `query` — it has queue pills instead of a search box.
+        records = services.filter_records(records, status=status, offices=offices)
         records = services.apply_scope(records, scope, request.user)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while
@@ -107,7 +101,7 @@ class RecordListView(AppLoginRequiredMixin, View):
             )
 
         records = records.distinct().order_by("-last_movement_at")
-        page = Paginator(records, PAGE_SIZE).get_page(request.GET.get("page"))
+        page = Paginator(records, services.PAGE_SIZE).get_page(request.GET.get("page"))
         # Materialised once so the annotation below lands on the very objects
         # the template iterates, not on a throwaway copy of the queryset.
         page_records = list(page.object_list)

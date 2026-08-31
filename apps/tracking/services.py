@@ -13,7 +13,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F, Max
+from django.db.models import F, Max, Q
 from django.utils import timezone
 
 from apps.core.models import AuditLog, Notification
@@ -821,6 +821,48 @@ SCOPE_MINE = "mine"
 #: queue. In process belongs to Incoming, per the queue definitions, so it is
 #: not a separate top-level queue of its own.
 _HELD_STATUSES = (Status.RECEIVED, Status.IN_PROCESS)
+
+
+#: Records per page wherever tracking records are listed. Lives here rather
+#: than on one of the two views that page them, so the Tracking workspace and
+#: the unified search page cannot drift to different page sizes.
+PAGE_SIZE = 20
+
+
+def filter_records(records, *, query=None, status=None, offices=None):
+    """Free-text, status and originating-office filtering for tracking records.
+
+    Kept here rather than inline in a view because two pages need it: the
+    Tracking workspace, and the tracking half of the unified search page. The
+    second one is why the text branch exists at all — the workspace has no
+    search box, having traded it for the queue pills, so `query` is only ever
+    passed by search.
+
+    Scope narrowing is deliberately *not* here. It depends on the user, this
+    does not, and the queues compose with these filters rather than replacing
+    them — callers apply `apply_scope()` afterwards.
+
+    A draft matches on its placeholder tracking number, which is never
+    displayed. That is not a leak: `visible_to` already limits a draft to the
+    person writing it, so the only person who can match one that way is its
+    author searching their own unsent work.
+    """
+    if query:
+        records = records.filter(
+            Q(tracking_number__icontains=query)
+            | Q(subject__icontains=query)
+            | Q(originating_office__name__icontains=query)
+            | Q(originating_office__code__icontains=query)
+            | Q(current_office__name__icontains=query)
+        )
+    if status == "OVERDUE":
+        # Overdue is derived, never stored — see TrackingRecord.display_status.
+        records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+    elif status:
+        records = records.filter(status=status)
+    if offices:
+        records = records.filter(originating_office__in=offices)
+    return records
 
 
 def apply_scope(records, scope, user):

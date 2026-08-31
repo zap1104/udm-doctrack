@@ -1,0 +1,70 @@
+{% load doctrack %}
+{% comment %}
+  Relevance-scored repository results. Relevance is a repository-only idea —
+  it is computed from extracted text and a tsvector, neither of which a live
+  tracking record has — so none of this is shared with tracking mode.
+{% endcomment %}
+<div class="search-results-head d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
+    {% if response.total_matches > response.results|length %}
+      of {{ response.total_matches }} matched
+    {% endif %}
+    <span class="text-muted">· {{ response.duration_ms }} ms</span>
+  </div>
+  <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
+</div>
+
+{% if response.hidden_count %}
+  <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
+    {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
+    <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
+    Tick “Include results below the threshold” to see them.
+  </div>
+{% endif %}
+
+<div class="card-udm">
+  <div class="card-udm-body p-0">
+    {% for result in results %}
+      <article class="result-item">
+        <div class="flex-grow-1" style="min-width:0;">
+          <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
+          <div class="meta">
+            {% include "partials/_office_badge.html" with office=result.document.office %}
+            {{ result.document.document_type.name|default:"Unclassified" }} ·
+            {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
+            {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
+          </div>
+          {% if result.snippet_html %}
+            <p class="mt-2 mb-1" style="font-size:14px;color:var(--udm-slate-text);">{{ result.snippet_html|safe }}</p>
+          {% endif %}
+          <div>
+            {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
+          </div>
+          {% if result.matched_in %}
+            <div class="text-muted mt-1" style="font-size:12.5px;">
+              Matched in: {% for where in result.matched_in %}{{ where }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            </div>
+          {% endif %}
+        </div>
+        <div class="relevance">
+          <span class="score">{{ result.relevance }}%</span>
+          {% relevance_bar result.relevance %}
+          <span class="text-muted" style="font-size:11px;">relevance</span>
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state">
+        <h3>No records matched “{{ response.query }}”</h3>
+        <p>Try fewer words, drop a filter, or lower the minimum relevance.
+           Office codes (MED, HR, REC) and tags work well on their own.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<p class="text-muted mt-3" style="font-size:12.5px;">
+  {{ response.explanation }}
+  {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
+</p>
+

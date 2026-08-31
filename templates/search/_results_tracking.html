@@ -1,0 +1,61 @@
+{% comment %}
+  Tracking results: the same row shape the workspace list uses — number,
+  subject, current office, updated, status pill — minus the bulk-receipt
+  checkbox column and the receiving-office column, which belong to a page where
+  you act on records rather than look for them.
+
+  Deliberately not factored into a partial shared with tracking/list.html. That
+  table's row is threaded through the bulk-receipt form: a checkbox cell that
+  appears only when the page decides any row is confirmable, and a colspan on
+  the empty state that counts with it. Pulling the row out would mean passing
+  that state into the include on every render, which is more coupling than the
+  duplication costs — and it would put a working page at risk to tidy a page
+  that has no such form.
+{% endcomment %}
+<div class="card-udm">
+  <div class="card-udm-body p-0 table-responsive">
+    <table class="table-udm">
+      <thead>
+        <tr>
+          <th>Tracking number</th><th>Subject</th><th>Current office</th>
+          <th>Updated</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in results %}
+          <tr>
+            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+            <td>
+              {{ record.subject|truncatechars:60 }}
+              <div class="text-muted" style="font-size:12.5px;">
+                {{ record.document_type.name|default:"No type" }} ·
+                from {% include "partials/_office_badge.html" with office=record.originating_office %}
+              </div>
+            </td>
+            <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
+            <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
+            <td>{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+            <td class="text-end">
+              <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="empty-state">
+              {% if query %}
+                <h3>No active records matched “{{ query }}”</h3>
+                <p>Try the tracking number, a word from the subject, or an office code.
+                   Completed records are in the Document Repository — switch mode above.</p>
+              {% else %}
+                <h3>No active records match these filters</h3>
+                <p>Clear a filter, or switch to the Document Repository for completed work.</p>
+              {% endif %}
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}

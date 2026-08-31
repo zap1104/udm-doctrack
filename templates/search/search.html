@@ -5,178 +5,115 @@
 <div class="page-head">
   <div>
     <div class="eyebrow">Search</div>
-    <h1>Search documents</h1>
-    <p class="sub">Metadata first, then the words inside the file. You do not need the tracking number.</p>
+    <h1>{% if is_tracking %}Search document tracking{% else %}Search the repository{% endif %}</h1>
+    <p class="sub">
+      {% if is_tracking %}
+        Active records still moving between offices. You do not need the tracking number.
+      {% else %}
+        Metadata first, then the words inside the file. You do not need the tracking number.
+      {% endif %}
+    </p>
   </div>
 </div>
 
 {% comment %}
-  Two modes, named on the page. Which search you were using used to be implicit
-  in which box you happened to open — the topbar field, the repository filters
-  and this page were three different searches with three different capabilities
-  and nothing on screen said so, so a reader who wanted to narrow by office had
-  no way to know whether the box in front of them could.
+  Two corpora, named on the page. The repository holds filed documents with
+  extracted text and a relevance score; tracking holds live records with a
+  status and a custody chain. Nothing scores a tracking record and nothing
+  gives a document a queue, so the filters and the result rows differ per mode
+  rather than being forced into one shape that fits neither.
 
-  Quick is the query alone. Advanced is the repository's detailed search: the
-  same query plus every filter. Tracking's own list search stays minimal and is
-  not one of these — it searches records, not the repository.
+  Each pill is a bare link to its own mode and carries nothing else. Switching
+  starts that mode's search fresh, because the filters do not translate — a
+  minimum-relevance threshold means nothing to a record with no extracted text,
+  and carrying it across would either be ignored silently or narrow the wrong
+  thing.
+
+  Same pill classes as the queue nav and the tracking filters: one pill
+  language for the app, not a third style for this page.
 {% endcomment %}
-<div class="reports-tabs no-print" role="tablist" aria-label="Search modes">
-  <a class="reports-tab {% if not is_advanced %}active{% endif %}" role="tab"
-     aria-selected="{% if not is_advanced %}true{% else %}false{% endif %}"
-     href="{% url 'search:index' %}?mode={{ quick_mode }}{% if form.q.value %}&q={{ form.q.value|urlencode }}{% endif %}">
-    Quick search
-  </a>
-  <a class="reports-tab {% if is_advanced %}active{% endif %}" role="tab"
-     aria-selected="{% if is_advanced %}true{% else %}false{% endif %}"
-     href="{% url 'search:index' %}?mode={{ advanced_mode }}{% if form.q.value %}&q={{ form.q.value|urlencode }}{% endif %}">
-    Advanced search
-  </a>
-</div>
-<p class="sub mb-3">
-  {% if is_advanced %}
-    Every filter below narrows the same search. Relevance is a display filter — nothing is discarded.
-  {% else %}
-    Words only. Switch to advanced search to narrow by office, type, tag, origin or date.
-  {% endif %}
-</p>
+<nav class="pill-row mb-3" aria-label="Search modes">
+  <div class="pill-row-list">
+    <a class="pill-toggle{% if not is_tracking %} is-active{% endif %}"
+       href="{% url 'search:index' %}?mode={{ repository_mode }}"
+       {% if not is_tracking %}aria-current="true"{% endif %}>Document Repository</a>
+    <a class="pill-toggle{% if is_tracking %} is-active{% endif %}"
+       href="{% url 'search:index' %}?mode={{ tracking_mode }}"
+       {% if is_tracking %}aria-current="true"{% endif %}>Document Tracking</a>
+  </div>
+</nav>
 
 <form method="get">
   {% include "partials/_form_errors.html" %}
-  {# Carried so the mode survives a submit rather than being inferred again. #}
+  {# Carried so the mode survives a submit of the search box. #}
   <input type="hidden" name="mode" value="{{ mode }}">
   <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
     <div class="row g-2">
+      {# Each form's own q carries the placeholder that describes its corpus. #}
       <div class="col-md-10">{{ form.q }}</div>
       <div class="col-md-2 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
     </div>
-    <datalist id="search-suggestions"></datalist>
+    {% if not is_tracking %}
+      {# Autocomplete indexes document terms only, so it is repository-only. #}
+      <datalist id="search-suggestions"></datalist>
+    {% endif %}
   </div></div>
 
-  <div class="row g-4">
-    {% if is_advanced %}
-    <div class="col-lg-3">
-      <div class="card-udm search-filters-card">
-        <div class="card-udm-head"><h2>Filters</h2></div>
-        <div class="card-udm-body">
-          {% include "partials/_field.html" with field=form.year %}
-          {% include "partials/_field.html" with field=form.office %}
-          {% include "partials/_field.html" with field=form.document_type %}
-          {% include "partials/_field.html" with field=form.tag %}
-          {% include "partials/_field.html" with field=form.source %}
-          <div class="row g-2 search-date-range">
-            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_from %}</div>
-            <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_to %}</div>
-          </div>
+  {% if is_tracking %}
+    {% include "search/_filters_tracking.html" %}
 
-          <label class="form-label" for="{{ form.min_relevance.id_for_label }}">
-            Minimum relevance: <span id="relevance-value" data-relevance-value>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
-          </label>
-          {{ form.min_relevance }}
-          <div class="form-check mt-2">
-            {{ form.show_all }}
-            <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
-          </div>
-
-          <button class="btn btn-udm-outline w-100 mt-3" type="submit">Apply filters</button>
-          <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}">Clear</a>
-        </div>
+    {% if has_searched %}
+      <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
+        <div><strong>{{ total }}</strong> active record{{ total|pluralize }} matched</div>
+        <span class="text-muted" style="font-size:13px;">Newest movement first</span>
       </div>
-
-      <div class="help-note mt-3">
-        <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% is a <strong>display filter</strong>, not a universal truth. The percentage means
-        “how well this record matches your words”, not “how accurate the system is”.
-      </div>
-    </div>
+      {% include "search/_results_tracking.html" %}
+    {% else %}
+      <div class="card-udm"><div class="card-udm-body empty-state">
+        <h3>Search active tracking records</h3>
+        <p>Try a tracking number, a word from the subject, or an office code.<br>
+           Example: <code>UDM-OVPA-MED</code> or <code>purchase request</code>.</p>
+      </div></div>
     {% endif %}
+  {% else %}
+    <div class="row g-4">
+      <div class="col-lg-3">
+        {% include "search/_filters_repository.html" %}
+      </div>
 
-    <div class="{% if is_advanced %}col-lg-9{% else %}col-12{% endif %}">
-      {% if has_searched %}
-        <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
-          <div>
-            <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
-            {% if response.total_matches > response.results|length %}
-              of {{ response.total_matches }} matched
-            {% endif %}
-            <span class="text-muted">· {{ response.duration_ms }} ms</span>
-          </div>
-          <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
-        </div>
-
-        {% if response.hidden_count %}
-          <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
-            {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
-            <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
-            Tick “Include results below the threshold” to see them.
-          </div>
+      <div class="col-lg-9">
+        {% if has_searched %}
+          {% include "search/_results_repository.html" %}
+        {% else %}
+          <div class="card-udm"><div class="card-udm-body empty-state">
+            <h3>Search the whole archive</h3>
+            <p>Try an office code, a subject word, a tag, a year, or a phrase in quotes.<br>
+               Example: <code>preventive maintenance MED</code> or <code>"work order"</code>.</p>
+          </div></div>
         {% endif %}
-
-        <div class="card-udm">
-          <div class="card-udm-body p-0">
-            {% for result in results %}
-              <article class="result-item">
-                <div class="flex-grow-1" style="min-width:0;">
-                  <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
-                  <div class="meta">
-                    {% include "partials/_office_badge.html" with office=result.document.office %}
-                    {{ result.document.document_type.name|default:"Unclassified" }} ·
-                    {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
-                    {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
-                  </div>
-                  {% if result.snippet_html %}
-                    <p class="mt-2 mb-1" style="font-size:14px;color:var(--udm-slate-text);">{{ result.snippet_html|safe }}</p>
-                  {% endif %}
-                  <div>
-                    {% for tag in result.document.tags.all|slice:":4" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
-                  </div>
-                  {% if result.matched_in %}
-                    <div class="text-muted mt-1" style="font-size:12.5px;">
-                      Matched in: {% for where in result.matched_in %}{{ where }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                    </div>
-                  {% endif %}
-                </div>
-                <div class="relevance">
-                  <span class="score">{{ result.relevance }}%</span>
-                  {% relevance_bar result.relevance %}
-                  <span class="text-muted" style="font-size:11px;">relevance</span>
-                </div>
-              </article>
-            {% empty %}
-              <div class="empty-state">
-                <h3>No records matched “{{ response.query }}”</h3>
-                <p>Try fewer words, drop a filter, or lower the minimum relevance.
-                   Office codes (MED, HR, REC) and tags work well on their own.</p>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-
-        <p class="text-muted mt-3" style="font-size:12.5px;">
-          {{ response.explanation }}
-          {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
-        </p>
-      {% else %}
-        <div class="card-udm"><div class="card-udm-body empty-state">
-          <h3>Search the whole archive</h3>
-          <p>Try an office code, a subject word, a tag, a year, or a phrase in quotes.<br>
-             Example: <code>preventive maintenance MED</code> or <code>"work order"</code>.</p>
-        </div></div>
-      {% endif %}
+      </div>
     </div>
-  </div>
+  {% endif %}
 </form>
 
-{% comment %}
-  The slider readout and the autocomplete used to be an inline <script> here.
-  CSP_SCRIPT_SRC allows no inline code, so switching ENABLE_CSP on would have
-  killed both of them silently — the same trap the reports tabs and the lockout
-  countdown were already moved out of. The behaviour now lives in doctrack.js
-  and reads what it needs from this marker, so Django keeps ownership of the
-  auto-generated field ids and the URL.
-{% endcomment %}
-<span hidden
-      data-search-enhance
-      data-search-autocomplete-url="{% url 'search:autocomplete' %}"
-      data-search-query-id="{{ form.q.id_for_label }}"
-      data-search-relevance-id="{{ form.min_relevance.id_for_label }}"></span>
+{% if not is_tracking %}
+  {% comment %}
+    The slider readout and the autocomplete used to be an inline <script> here.
+    CSP_SCRIPT_SRC allows no inline code, so switching ENABLE_CSP on would have
+    killed both of them silently — the same trap the reports tabs and the
+    lockout countdown were already moved out of. The behaviour now lives in
+    doctrack.js and reads what it needs from this marker, so Django keeps
+    ownership of the auto-generated field ids and the URL.
+
+    Repository-only: there is no relevance slider in tracking mode, and the
+    autocomplete endpoint indexes document terms, so firing it against a
+    tracking search would suggest words from a corpus the reader is not looking
+    at.
+  {% endcomment %}
+  <span hidden
+        data-search-enhance
+        data-search-autocomplete-url="{% url 'search:autocomplete' %}"
+        data-search-query-id="{{ form.q.id_for_label }}"
+        data-search-relevance-id="{{ form.min_relevance.id_for_label }}"></span>
+{% endif %}
 {% endblock %}
