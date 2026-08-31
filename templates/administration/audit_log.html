@@ -3,7 +3,8 @@
 {% block content %}
 <div class="page-head"><div>
   <div class="eyebrow">Administration</div><h1>Audit log</h1>
-  <p class="sub">Append-only. Sign-ins, routing, receipts, downloads, prints and master-data changes all land here.</p>
+  <p class="sub">Append-only. Sign-ins, routing, receipts, downloads, prints and master-data
+  changes all land here, and every document open and print is listed underneath.</p>
 </div></div>
 {% include "administration/_tabs.html" with tab='audit' %}
 
@@ -38,4 +39,70 @@
     </tbody>
   </table>
 </div></div>
+
+{% comment %}
+  Who read and who printed. A separate panel because it comes from the record
+  timeline rather than from AuditLog, and because it is the panel that makes
+  logging reads worth doing: a view-only account leaves no other trace, so
+  without somewhere to inspect these rows the trail answers nobody.
+{% endcomment %}
+<div class="card-udm mt-4">
+  <div class="card-udm-head">
+    <div>
+      <h2>Record access</h2>
+      <div class="card-udm-caption">
+        Who opened and who printed a document, every role included. Repeated opens
+        by the same person collapse into one entry per {{ view_dedup_minutes }} minutes,
+        so these are reading sessions rather than page loads. Prints are never
+        collapsed — each one is a separate copy leaving the system.
+      </div>
+    </div>
+  </div>
+  <div class="card-udm-body">
+    <form method="get" class="row g-2">
+      {# Carried through so filtering one panel does not reset the other. #}
+      {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+      {% if selected_action %}<input type="hidden" name="action" value="{{ selected_action }}">{% endif %}
+      <div class="col-md-5">
+        <input class="form-control" name="record" value="{{ record_query }}"
+               placeholder="Tracking number or subject…" aria-label="Filter by document">
+      </div>
+      <div class="col-md-5">
+        <input class="form-control" name="who" value="{{ who_query }}"
+               placeholder="Who opened or printed it…" aria-label="Filter by person">
+      </div>
+      <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+    </form>
+  </div>
+  <div class="card-udm-body p-0 table-responsive">
+    <table class="table-udm">
+      <thead><tr><th>When</th><th>Who</th><th>Office</th><th>What</th><th>Document</th></tr></thead>
+      <tbody>
+        {% for entry in access_entries %}
+          <tr>
+            <td style="white-space:nowrap;">{{ entry.created_at|date:"d M Y, g:i A" }}</td>
+            <td>{{ entry.actor.display_name|default:"—" }}</td>
+            <td class="office-cell">
+              {% if entry.actor_office %}
+                {% include "partials/_office_badge.html" with office=entry.actor_office %}
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td><span class="pill pill-muted">{{ entry.get_event_display }}</span></td>
+            <td class="mono">
+              <a href="{{ entry.record.get_absolute_url }}">{{ entry.record.tracking_number }}</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="p-4 text-muted">
+            {% if access_is_filtered %}
+              No opens or prints match that search.
+            {% else %}
+              No document has been opened or printed yet.
+            {% endif %}
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

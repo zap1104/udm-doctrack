@@ -53,8 +53,15 @@ class SystemAdminRequiredMixin(RoleRequiredMixin):
 
 
 class RecordsStaffRequiredMixin(RoleRequiredMixin):
-    allowed_roles = ("ADMIN", "SYSTEM_ADMIN")
-    permission_message = "Only records personnel and administrators can do this."
+    """Records work on the office's documents — everyone but a viewer.
+
+    Was ("ADMIN", "SECRETARY"). SECRETARY's accounts became USER in accounts
+    migration 0005, so USER is listed here to keep those accounts working; see
+    `User.is_records_staff`, which this mirrors.
+    """
+
+    allowed_roles = ("USER", "ADMIN", "SYSTEM_ADMIN")
+    permission_message = "View-only accounts cannot do this."
 
 
 class WriteAccessRequiredMixin(AppLoginRequiredMixin):

@@ -379,21 +379,45 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
     # Only now does the record become COMPLETED: the status and the Document
     # are written in the same transaction, so "completed" and "in the
     # repository" can never disagree.
+    #
+    # Approving your own completion is allowed — a one- or two-person office has
+    # nobody else, and a control that cannot be satisfied deadlocks the queue
+    # rather than protecting anything. But it is not the same act as an
+    # independent check, so it is not written down as though it were: both
+    # trails name it, and `approved_by` makes it answerable in a query.
+    self_approved = bool(record.completed_by_id) and record.completed_by_id == user.pk
     record.status = Status.COMPLETED
+    record.approved_by = user
+    record.approved_at = timezone.now()
     record.is_archived = True
-    record.archived_at = timezone.now()
-    record.save(update_fields=["status", "is_archived", "archived_at", "updated_at"])
+    record.archived_at = record.approved_at
+    record.save(
+        update_fields=[
+            "status", "approved_by", "approved_at", "is_archived", "archived_at", "updated_at",
+        ]
+    )
     add_activity(
         record,
         RecordActivity.Event.ARCHIVED,
-        f"Approved into the Document Repository by {user.display_name}",
+        (
+            f"Self-approved into the Document Repository by {user.display_name} "
+            "(same person marked it completed)"
+            if self_approved
+            else f"Approved into the Document Repository by {user.display_name}"
+        ),
         actor=user,
     )
     log_action(
         AuditLog.Action.ARCHIVE,
-        f"Approved {record.tracking_number} into the repository",
+        (
+            f"Self-approved {record.tracking_number} into the repository "
+            "(completed and approved by the same person)"
+            if self_approved
+            else f"Approved {record.tracking_number} into the repository"
+        ),
         actor=user,
         target=document,
+        extra={"self_approved": self_approved, "completed_by": record.completed_by_id},
     )
     return document
 

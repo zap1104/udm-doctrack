@@ -251,6 +251,16 @@ class TrackingRecord(TimeStampedModel):
     )
     completion_note = models.TextField(blank=True)
 
+    #: Who approved this record into the repository, and when. Stored rather
+    #: than inferred from the timeline, because this is the pair that answers
+    #: "did anybody other than the finisher look at this before it became
+    #: permanent?" — and a report cannot ask that of a text message.
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="approved_records",
+    )
+
     is_archived = models.BooleanField(default=False, db_index=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 
@@ -374,13 +384,21 @@ class TrackingRecord(TimeStampedModel):
         the append-only history under their name.
 
         Approval is an administrator's act, not the finishing office's: the
-        point of the COMPLETED_PENDING_UPLOAD stage is that somebody other than
-        the person who declared the work done checks it before it becomes a
-        permanent repository record. A system administrator may approve
-        anywhere; an office administrator only for their own office's documents.
+        point of the COMPLETED_PENDING_UPLOAD stage is that somebody looks at
+        the work before it becomes a permanent repository record. A system
+        administrator may approve anywhere; an office administrator only for
+        their own office's documents.
 
         Was `can_user_archive`, which let any handling office file its own work
         and so had nobody reviewing anything.
+
+        Self-approval is deliberately *not* blocked. In a one- or two-person
+        office the administrator is often the person who finished the work, and
+        refusing them would deadlock the queue with nobody to escalate to — a
+        control that cannot be satisfied gets worked around or turns the queue
+        into a graveyard. It is recorded instead: `approved_by` is stored on the
+        record and the audit entry names a self-approval as such, so the cases
+        where nobody independent looked are visible rather than prevented.
         """
         if not user.is_authenticated or user.is_viewer:
             return False

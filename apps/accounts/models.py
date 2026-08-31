@@ -186,10 +186,26 @@ class User(AbstractUser):
         ADMIN accounts to SYSTEM_ADMIN rather than leaving them holding a name
         that has quietly shrunk underneath them.
 
-        SECRETARY is gone, folded into ADMIN. A records secretary is the office's
-        records person with elevated rights inside their own office, which is
-        exactly what ADMIN now means; keeping it as a fifth role would have left
-        two names for one set of powers.
+        SECRETARY is gone, and its accounts become USER. The name suggested more
+        than the role held: every user-administration screen was gated on ADMIN
+        alone, so a secretary could not administer anybody. What a secretary
+        could do — act on the office's documents, share them, edit the office's
+        repository entries — is what USER does now. See migration 0005.
+
+        What each role may do:
+
+        - USER    own office: create and update routing slips, upload, update
+                  status, print, forward, and initiate a document's move to the
+                  repository (which an administrator then approves).
+        - VIEWER  own office: read active documents and the repository, open a
+                  history by tracking number, print the routing slip. Print is
+                  the only button. No status changes, uploads, edits, forwards,
+                  or timeline entries.
+        - ADMIN   own office: everything USER may do, plus adding users, setting
+                  access control, editing staff accounts, resetting passwords,
+                  and suspending, reactivating or deleting accounts — and
+                  approving completed documents into the repository.
+        - SYSTEM_ADMIN  all of the above, across every office.
         """
 
         SYSTEM_ADMIN = "SYSTEM_ADMIN", "System administrator (all offices)"
@@ -258,11 +274,21 @@ class User(AbstractUser):
 
     @property
     def is_records_staff(self) -> bool:
-        """Kept as the name the rest of the code already uses for "holds records
-        duties beyond an ordinary user". Since SECRETARY folded into ADMIN this
-        is the same population as `is_office_admin`.
+        """May do records work on their own office's documents.
+
+        Everyone except a viewer. This is the old {ADMIN, SECRETARY} set with
+        USER added, which is not a widening so much as a renaming: the powers
+        this gates — acting on the office's drafts, sharing a record, editing
+        the office's repository entries, seeing the office columns — are the
+        ones the brief's USER row lists, and they are what a SECRETARY account
+        actually had. Migrated secretaries therefore keep every one of them.
+
+        Deliberately *not* office-scoped on its own. It answers "may this person
+        do records work at all", never "over whose documents" — every call site
+        still compares offices, and the ones that matter do so on the line
+        immediately after asking this.
         """
-        return self.is_office_admin
+        return not self.is_viewer
 
     def can_administer(self, other) -> bool:
         """May this user create or edit `other`'s account?

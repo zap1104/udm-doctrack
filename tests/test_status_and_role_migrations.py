@@ -143,7 +143,15 @@ def test_existing_admins_keep_their_global_reach(apps_registry, offices):
 
 
 @pytest.mark.django_db
-def test_secretaries_become_office_administrators(apps_registry, offices):
+def test_secretaries_become_ordinary_users_not_administrators(apps_registry, offices):
+    """A migration must never be the thing that widens a permission.
+
+    SECRETARY sounds like an administrator and was not one: every
+    user-administration screen was gated on ADMIN alone, so mapping it to the
+    new ADMIN would have handed every secretary the ability to create accounts,
+    reset passwords and suspend colleagues — granted silently, by a data
+    migration nobody would think to audit.
+    """
     from apps.accounts.models import User
 
     User.objects.create_user(
@@ -153,28 +161,132 @@ def test_secretaries_become_office_administrators(apps_registry, offices):
     role_migration.forwards(apps_registry, None)
 
     mapped = User.objects.get(username="legacy-secretary")
-    assert mapped.role == User.Role.ADMIN
-    assert mapped.is_office_admin is True
+    assert mapped.role == User.Role.USER
+    assert mapped.is_office_admin is False
     assert mapped.is_system_admin is False
 
 
 @pytest.mark.django_db
-def test_a_secretary_is_not_swept_up_into_system_admin(apps_registry, offices):
-    """Order matters: run SECRETARY -> ADMIN first and the new office
-    administrators are caught by the ADMIN -> SYSTEM_ADMIN rule behind them."""
+def test_a_secretary_keeps_every_power_it_actually_had(apps_registry, offices, users, memo_type):
+    """Nothing is lost by the demotion, because the powers came from
+    `is_records_staff`, which USER now satisfies. All four call sites:
+    acting on the office's drafts, sharing a record, editing the office's
+    repository entries, and seeing the office columns on reports."""
+    from apps.accounts.models import User
+    from apps.documents.models import AccessLevel, Document
+    from apps.tracking.services import create_draft_record
+
+    secretary = User.objects.create_user(
+        username="legacy-secretary", password="x", office=offices["MED"], role="SECRETARY"
+    )
+    role_migration.forwards(apps_registry, None)
+    secretary.refresh_from_db()
+
+    assert secretary.is_records_staff is True
+
+    # 1. may act on a colleague's draft raised by their own office
+    draft = create_draft_record(
+        user=users["med"], subject="Somebody else's draft", instructions="For action.",
+        document_type=memo_type,
+    )
+    assert draft.can_user_act(secretary) is True
+
+    # 2. may edit their own office's repository entries
+    document = Document.objects.create(
+        title="MED filing", office=offices["MED"], year=2026,
+        uploaded_by=users["med"], access_level=AccessLevel.OFFICE,
+    )
+    assert document.can_user_edit(secretary) is True
+
+
+@pytest.mark.django_db
+def test_a_migrated_secretary_can_still_forward_and_share(
+    apps_registry, offices, users, memo_type, client
+):
+    from apps.accounts.models import User
+    from apps.tracking.models import RoutingStep, Status
+    from apps.tracking.services import confirm_receipt, create_draft_record, route_record
+
+    secretary = User.objects.create_user(
+        username="legacy-secretary", password="TestPass123!", office=offices["SUP"],
+        role="SECRETARY",
+    )
+    role_migration.forwards(apps_registry, None)
+    secretary.refresh_from_db()
+
+    record = create_draft_record(
+        user=users["med"], subject="Needs forwarding", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=secretary)
+    record.refresh_from_db()
+
+    # 3. may forward it onward
+    route_record(record, [offices["HR"]], user=secretary, action=RoutingStep.Action.FORWARD)
+    record.refresh_from_db()
+    assert record.status == Status.PENDING_RECEIPT
+
+    # 4. and may share it — the endpoint gated on is_records_staff
+    client.force_login(secretary)
+    response = client.post(
+        f"/tracking/{record.pk}/share/", {"office": offices["HR"].pk, "reason": "fyi"}
+    )
+    assert response.status_code == 302
+    assert record.grants.filter(office=offices["HR"]).exists()
+
+
+@pytest.mark.django_db
+def test_a_migrated_secretary_still_sees_the_office_columns(apps_registry, offices, client):
+    """The fourth call site: the dashboard shows the destination columns to
+    records staff and hides them from everyone else."""
     from apps.accounts.models import User
 
     User.objects.create_user(
-        username="s1", password="x", office=offices["REC"], role="SECRETARY"
+        username="legacy-secretary", password="TestPass123!", office=offices["REC"],
+        role="SECRETARY",
     )
+    role_migration.forwards(apps_registry, None)
+    secretary = User.objects.get(username="legacy-secretary")
+
+    client.force_login(secretary)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.context["show_office_columns"] is True
+
+
+@pytest.mark.django_db
+def test_a_secretary_gains_no_administration_access(apps_registry, offices, client):
+    """The whole reason for mapping to USER rather than ADMIN."""
+    from apps.accounts.models import User
+
     User.objects.create_user(
-        username="a1", password="x", office=offices["REC"], role="ADMIN"
+        username="legacy-secretary", password="TestPass123!", office=offices["REC"],
+        role="SECRETARY",
     )
+    role_migration.forwards(apps_registry, None)
+
+    client.force_login(User.objects.get(username="legacy-secretary"))
+    assert client.get("/accounts/users/").status_code == 403
+    assert client.get("/administration/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_nobody_is_left_on_a_retired_role(apps_registry, offices):
+    from apps.accounts.models import User
+
+    for index, role in enumerate(("ADMIN", "SECRETARY", "USER")):
+        User.objects.create_user(
+            username=f"legacy-{index}", password="x", office=offices["REC"], role=role
+        )
 
     role_migration.forwards(apps_registry, None)
 
-    assert User.objects.get(username="s1").role == User.Role.ADMIN
-    assert User.objects.get(username="a1").role == User.Role.SYSTEM_ADMIN
+    assert not User.objects.filter(role__in=("SECRETARY",)).exists()
+    assert set(User.objects.values_list("role", flat=True)) <= {
+        "SYSTEM_ADMIN", "ADMIN", "USER", "VIEWER",
+    }
 
 
 @pytest.mark.django_db

@@ -113,18 +113,21 @@ def log_view(record, *, user) -> RecordActivity | None:
     is the *only* act — without this, the people whose access is limited to
     looking are the people the history says nothing about.
 
-    Collapsed to one entry per person per window, because the alternative is a
-    row per page load: a clerk refreshing while they work would bury the
-    movement history under their own footprints, and the timeline is rendered on
-    the page being opened, so each read would lengthen the thing being read.
+    Collapsed to one entry per person per VIEW_LOG_DEDUP_MINUTES, because the
+    alternative is a row per page load: a clerk refreshing while they work would
+    bury the movement history under their own footprints, and the timeline is
+    rendered on the page being opened, so each read would lengthen the thing
+    being read.
+
+    So these rows count *reading sessions*, not page loads, and they undercount
+    on purpose. Do not present a count of them as a number of views.
     """
     if not getattr(user, "is_authenticated", False):
         return None
-    window = getattr(settings, "VIEW_LOG_WINDOW_MINUTES", 30)
     already = record.activities.filter(
         event=RecordActivity.Event.VIEWED,
         actor=user,
-        created_at__gte=timezone.now() - timedelta(minutes=window),
+        created_at__gte=timezone.now() - timedelta(minutes=settings.VIEW_LOG_DEDUP_MINUTES),
     ).exists()
     if already:
         return None
@@ -136,8 +139,11 @@ def log_view(record, *, user) -> RecordActivity | None:
 def log_print(record, *, user) -> RecordActivity:
     """Record that a paper copy of the routing slip was produced.
 
-    Never collapsed the way `log_view` is: each print puts another copy of a
-    confidential document outside the system, so each one is its own entry.
+    Never deduplicated, unlike `log_view`. Each print is a deliberate act that
+    puts another copy of a confidential document outside the system, and
+    repeated printing of the same record is precisely the pattern the trail
+    exists to make visible — collapsing it would erase the signal on the
+    grounds that there was too much of it.
     """
     return add_activity(
         record,

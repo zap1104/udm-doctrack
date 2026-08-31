@@ -325,6 +325,17 @@ SESSION_SAVE_EVERY_REQUEST = True
 #: minutes is enough to read it and save a half-typed remark.
 SESSION_WARNING_SECONDS = env_int("SESSION_WARNING_SECONDS", 120)
 
+#: How long one person's VIEWED entry stands for their reading of one record.
+#: A second open inside this window adds no row.
+#:
+#: The consequence is worth stating plainly, because the number looks like a
+#: statistic and is not one: a count of VIEWED rows is a count of *reading
+#: sessions*, not of page loads, and it undercounts by design. Anything that
+#: needs true page-view volume must not be built on it.
+#:
+#: PRINT is deliberately never deduplicated — see tracking.services.log_print.
+VIEW_LOG_DEDUP_MINUTES = env_int("VIEW_LOG_DEDUP_MINUTES", 30)
+
 SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
     "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_HTTPONLY = True

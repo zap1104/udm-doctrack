@@ -6,13 +6,21 @@ holding a name whose reach shrank underneath them — silently demoting the only
 accounts that can administer the system is not a migration anyone would notice
 until they could no longer fix it.
 
-SECRETARY is folded into ADMIN. A records secretary is the office's records
-person with elevated rights inside their own office, which is precisely what the
-new ADMIN is; carrying both would have left two names for one set of powers.
-This is the only mapping in this migration that grants anybody more than they
-had — a secretary gains the office-scoped user-administration screens — and it
-is deliberate: those screens are how an office head manages their own staff, and
-the secretary is who does that work.
+SECRETARY becomes USER, not ADMIN. It is tempting to read "records personnel"
+as "office administrator", but the code is the authority on what the role could
+actually do, and it could not administer anybody: `AdminRequiredMixin` was
+`("ADMIN",)`, so every user-administration screen was closed to a secretary. A
+secretary's powers came entirely from `RecordsStaffRequiredMixin` and
+`is_records_staff` — acting on the office's documents, sharing them, editing the
+office's repository entries — which is exactly what the new USER role covers.
+
+Mapping them to ADMIN would therefore have handed every secretary the ability to
+create accounts, reset passwords and suspend colleagues, granted silently by a
+migration nobody would think to audit. A data migration must never be the thing
+that widens a permission.
+
+Office heads are promoted to ADMIN by hand afterwards, by somebody who knows
+which of them is the head. That cannot be inferred from a role column.
 
 VIEWER is new and nobody is migrated into it.
 """
@@ -22,8 +30,8 @@ from django.db import migrations, models
 ROLE_MAP = {
     # was global admin  -> keep global reach under its new name
     "ADMIN": "SYSTEM_ADMIN",
-    # was records staff -> office-scoped administrator
-    "SECRETARY": "ADMIN",
+    # was records staff -> ordinary office user, which is what it could do
+    "SECRETARY": "USER",
 }
 
 NEW_CHOICES = [
@@ -42,22 +50,29 @@ OLD_CHOICES = [
 
 def forwards(apps, schema_editor):
     User = apps.get_model("accounts", "User")
-    # ADMIN -> SYSTEM_ADMIN must run before SECRETARY -> ADMIN, or the
-    # secretaries promoted into ADMIN would be swept up by the first rule and
-    # end up as system administrators.
-    User.objects.filter(role="ADMIN").update(role="SYSTEM_ADMIN")
-    User.objects.filter(role="SECRETARY").update(role="ADMIN")
+    for old, new in ROLE_MAP.items():
+        User.objects.filter(role=old).update(role=new)
+    # Nobody is left holding a role the field no longer offers. Worth asserting
+    # rather than assuming: a stray value survives every screen silently, showing
+    # as a raw code where a label belongs and matching no filter.
+    assert not User.objects.exclude(
+        role__in=["SYSTEM_ADMIN", "ADMIN", "USER", "VIEWER"]
+    ).exists(), "a user was left on a role that no longer exists"
 
 
 def backwards(apps, schema_editor):
-    """SYSTEM_ADMIN goes back to ADMIN; office administrators become
-    secretaries again. VIEWER has no pre-existing equivalent, so those accounts
-    are put back as ordinary users — the nearest role that can still sign in.
+    """Undo what can be undone.
+
+    SYSTEM_ADMIN goes back to ADMIN. The secretaries cannot be picked back out
+    of USER — after the forward pass they are indistinguishable from every other
+    ordinary user, which is the point of the mapping — so reversing returns a
+    working database in which nobody is a secretary. VIEWER has no pre-existing
+    equivalent either, so those accounts become ordinary users: the nearest role
+    that can still sign in.
     """
     User = apps.get_model("accounts", "User")
-    User.objects.filter(role="ADMIN").update(role="SECRETARY")
-    User.objects.filter(role="SYSTEM_ADMIN").update(role="ADMIN")
     User.objects.filter(role="VIEWER").update(role="USER")
+    User.objects.filter(role="SYSTEM_ADMIN").update(role="ADMIN")
 
 
 class Migration(migrations.Migration):

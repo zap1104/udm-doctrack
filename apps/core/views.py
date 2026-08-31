@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from datetime import datetime, time, timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -18,7 +19,7 @@ from django.views.generic import TemplateView, View
 from apps.accounts.models import Office
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
-from apps.tracking.models import RoutingStep, Status, TrackingRecord
+from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
 
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
@@ -84,7 +85,11 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             )
         completed_today = (
             TrackingRecord.objects.visible_to(user)
-            .filter(status=Status.COMPLETED, completed_at__date=today)
+            # Both halves of completion: the work was finished today whether or
+            # not an administrator has approved it into the repository yet.
+            # Counting only COMPLETED would report zero for an office that
+            # finished ten documents this morning and is waiting on approval.
+            .filter(status__in=COMPLETED_STATUSES, completed_at__date=today)
             .distinct()
             .count()
         )
@@ -307,7 +312,7 @@ def apply_report_filters(records, filters):
     if year:
         records = records.filter(created_at__year=year)
     if filters["status"] == "OVERDUE":
-        records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+        records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
     elif filters["status"]:
         records = records.filter(status=filters["status"])
     if filters["document_type"]:
@@ -345,14 +350,16 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
 
         total_records = records.count()
         total_documents = documents.count()
-        overdue = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED).count()
+        overdue = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES).count()
         awaiting = (
             records.filter(routing_steps__received_at__isnull=True)
-            .exclude(status=Status.COMPLETED)
+            .exclude(status__in=COMPLETED_STATUSES)
             .distinct()
             .count()
         )
-        completed = records.filter(status=Status.COMPLETED).count()
+        # Work finished, approved or not — approval can lag by weeks and a
+        # report that waits on it understates the office every time.
+        completed = records.filter(status__in=COMPLETED_STATUSES).count()
 
         context.update(
             {
@@ -453,7 +460,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         """Created vs completed, month by month, on one shared scale."""
         months, since = _month_window()
         created = _month_series(records, "created_at", since)
-        finished = _month_series(records.filter(status=Status.COMPLETED), "completed_at", since)
+        finished = _month_series(
+            records.filter(status__in=COMPLETED_STATUSES), "completed_at", since
+        )
 
         ceiling = max(
             [created.get(month, 0) for month in months] + [finished.get(month, 0) for month in months] + [0]
@@ -479,7 +488,11 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
         )["value"]
 
-        done = records.filter(status=Status.COMPLETED, completed_at__isnull=False)
+        # Turnaround measures how long the *work* took, so it ends at completion
+        # rather than at approval — the wait for an administrator is somebody
+        # else's queue and would otherwise be charged to the office that
+        # finished on time.
+        done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
         processing = done.filter(first_received_at__isnull=False).aggregate(
             value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
         )["value"]
@@ -508,7 +521,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         """Where overdue documents are sitting — a queue to chase, not a total."""
         rows = list(
             records.filter(due_at__lt=timezone.now())
-            .exclude(status=Status.COMPLETED)
+            .exclude(status__in=COMPLETED_STATUSES)
             .exclude(current_office__isnull=True)
             .values("current_office__code", "current_office__name")
             .annotate(total=Count("id", distinct=True))
@@ -987,25 +1000,108 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         )
 
 
+#: Rows shown per panel on the audit screen.
+AUDIT_ROWS = 300
+
+
 class AuditLogView(AdminRequiredMixin, TemplateView):
+    """The append-only trails, side by side.
+
+    Two of them, because they answer different questions and live in different
+    tables. `AuditLog` records what was done to the system; the record-access
+    panel reads the VIEWED and PRINTED entries on `RecordActivity`, which record
+    who *looked at* and who *printed* a document.
+
+    The second panel is the point of logging reads at all. A view-only account
+    leaves no other trace, so without somewhere to inspect these rows the
+    requirement they were built for is not met — a log nobody can read is a log
+    that does not exist.
+    """
+
     template_name = "administration/audit_log.html"
+
+    def record_access_entries(self):
+        """VIEWED and PRINTED, narrowed to what this administrator may see.
+
+        Office-scoped for the same reason the account screens are: an office
+        administrator inspecting who read which document must not thereby be
+        handed the reading history of every other office's documents. The scope
+        follows the *record*, via the same visibility rule the rest of the
+        system uses, rather than the actor — otherwise an office would lose
+        sight of an outsider who read one of its own documents, which is the
+        case the trail matters most for.
+        """
+        from apps.tracking.models import QUIET_EVENTS, RecordActivity, TrackingRecord
+
+        access_events = set(QUIET_EVENTS) | {RecordActivity.Event.PRINTED}
+        entries = (
+            RecordActivity.objects.filter(event__in=access_events)
+            .select_related("actor", "actor_office", "record")
+            .order_by("-created_at", "-id")
+        )
+        if not self.request.user.is_system_admin:
+            visible = TrackingRecord.objects.visible_to(self.request.user)
+            entries = entries.filter(record__in=visible)
+
+        record_query = self.request.GET.get("record", "").strip()
+        who_query = self.request.GET.get("who", "").strip()
+        if record_query:
+            entries = entries.filter(
+                Q(record__tracking_number__icontains=record_query)
+                | Q(record__subject__icontains=record_query)
+            )
+        if who_query:
+            entries = entries.filter(
+                Q(actor__username__icontains=who_query)
+                | Q(actor__first_name__icontains=who_query)
+                | Q(actor__last_name__icontains=who_query)
+            )
+        return entries, record_query, who_query
+
+    def system_log_entries(self):
+        """`AuditLog`, narrowed to what this administrator may see.
+
+        Scoped by the actor's office for anyone but a system administrator.
+        This screen used to be reachable only by the global ADMIN role, so the
+        unscoped queryset was correct; opening it to office administrators is
+        what makes it a leak, and it is the same leak the account screens had —
+        a role that gained a boundary, behind a queryset that never had one.
+
+        Rows with no actor are system actions belonging to no office, so they
+        stay with the system administrators.
+        """
+        entries = AuditLog.objects.select_related("actor")
+        if not self.request.user.is_system_admin:
+            if not self.request.user.office_id:
+                return entries.none()
+            entries = entries.filter(actor__office_id=self.request.user.office_id)
+        return entries
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        entries = AuditLog.objects.select_related("actor")
+        entries = self.system_log_entries()
         action = self.request.GET.get("action", "")
         query = self.request.GET.get("q", "").strip()
         if action:
             entries = entries.filter(action=action)
         if query:
             entries = entries.filter(Q(summary__icontains=query) | Q(actor_label__icontains=query))
+
+        access_entries, record_query, who_query = self.record_access_entries()
         context.update(
             {
-                "entries": entries[:300],
+                "entries": entries[:AUDIT_ROWS],
                 "actions": AuditLog.Action.choices,
                 "selected_action": action,
                 "query": query,
-                "master_data": MASTER_DATA,
+                "access_entries": access_entries[:AUDIT_ROWS],
+                "record_query": record_query,
+                "who_query": who_query,
+                "view_dedup_minutes": settings.VIEW_LOG_DEDUP_MINUTES,
+                # Only the panel the administrator asked about, so a search for
+                # one record does not leave the other panel looking unfiltered.
+                "access_is_filtered": bool(record_query or who_query),
+                "master_data": master_data_for(self.request.user),
             }
         )
         return context
