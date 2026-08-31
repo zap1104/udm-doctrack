@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
+from apps.accounts.models import Office
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.utils import log_action, qr_svg
@@ -139,6 +140,13 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "records": page_records,
                 "pending_upload": pending_upload,
                 "pending_upload_more": pending_upload_more,
+                # The pills need to know which of them are on. Resolved here as
+                # a set of strings rather than in the template, because the
+                # template would have to compare a model pk against the raw
+                # query values and those are strings.
+                "filter_offices": Office.active.all(),
+                "selected_office_ids": {str(office.pk) for office in (offices or [])},
+                "selected_owner": owner or "",
                 "can_bulk_receive": any(record.can_confirm_now for record in page_records),
                 # The paginator has already counted this queryset; calling
                 # .count() again would run the same DISTINCT-over-joins query

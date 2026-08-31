@@ -36,6 +36,50 @@ def pagination_url(context, page_number) -> str:
     params["page"] = page_number
     return f"?{params.urlencode()}"
 
+
+@register.simple_tag(takes_context=True)
+def filter_url(context, param, value, multi=False) -> str:
+    """A link that turns one filter value on or off, keeping the rest.
+
+    This is what lets a *multi*-select filter be a row of links rather than a
+    form: each pill's href already contains the selection that clicking it
+    would produce, so there is nothing to submit and no Apply button — which is
+    the whole point of the pill design. Selecting three offices is three links,
+    each one carrying the previous two along.
+
+    `multi=True` toggles the value in and out of a repeated parameter.
+    Otherwise the parameter is replaced, and clicking the value that is already
+    active clears it — so a single-select pill row needs no separate "all"
+    entry unless the caller wants one for discoverability.
+
+    `page` is always dropped: page four of the old filter is not page four of
+    the new one, and keeping it lands the reader on an empty table.
+    """
+    request = context.get("request")
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    params.pop("page", None)
+
+    value = "" if value is None else str(value)
+    current = params.getlist(param)
+
+    if multi:
+        chosen = [item for item in current if item != value] if value in current else [*current, value]
+    elif value == "" or current == [value]:
+        chosen = []
+    else:
+        chosen = [value]
+
+    if chosen:
+        params.setlist(param, chosen)
+    else:
+        params.pop(param, None)
+
+    query = params.urlencode()
+    # A bare "?" is a valid same-page link but reads as broken in the status
+    # bar, so an empty query returns the path instead.
+    return f"?{query}" if query else (request.path if request is not None else "?")
+
+
 STATUS_PILL = {
     "DRAFT": "pill-draft",
     "PENDING_RECEIPT": "pill-pending",

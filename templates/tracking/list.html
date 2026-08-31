@@ -17,7 +17,7 @@
 {% with scope=request.GET.scope status=request.GET.status %}
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">
-    <a class="tracking-queue-link{% if not scope and not status %} is-active{% endif %}"
+    <a class="pill-toggle{% if not scope and not status %} is-active{% endif %}"
        href="{% url 'tracking:list' %}">All Active</a>
     {% comment %}
       Each queue is now one `scope`, computed in tracking.services.apply_scope.
@@ -26,141 +26,66 @@
       record's status regardless of which office held it, so a document another
       office had received showed up in your Received queue.
     {% endcomment %}
-    <a class="tracking-queue-link{% if scope == 'incoming' %} is-active{% endif %}"
+    <a class="pill-toggle{% if scope == 'incoming' %} is-active{% endif %}"
        href="{% url 'tracking:list' %}?scope=incoming">Incoming</a>
-    <a class="tracking-queue-link{% if scope == 'outgoing' %} is-active{% endif %}"
+    <a class="pill-toggle{% if scope == 'outgoing' %} is-active{% endif %}"
        href="{% url 'tracking:list' %}?scope=outgoing">Outgoing</a>
-    <a class="tracking-queue-link{% if scope == 'pending-receipt' %} is-active{% endif %}"
+    <a class="pill-toggle{% if scope == 'pending-receipt' %} is-active{% endif %}"
        href="{% url 'tracking:list' %}?scope=pending-receipt">Pending Receipt</a>
-    <a class="tracking-queue-link{% if scope == 'received' %} is-active{% endif %}"
+    <a class="pill-toggle{% if scope == 'received' %} is-active{% endif %}"
        href="{% url 'tracking:list' %}?scope=received">Received</a>
-    <a class="tracking-queue-link tracking-queue-link--alert{% if scope == 'overdue' %} is-active{% endif %}"
+    <a class="pill-toggle pill-toggle--alert{% if scope == 'overdue' %} is-active{% endif %}"
        href="{% url 'tracking:list' %}?scope=overdue">Overdue</a>
   </div>
 </nav>
 {% endwith %}
 {% comment %}
-  The queue is chosen by the pills above; this panel narrows within it.
+  The filters are pills too, because they are the same control as the queue nav
+  above: click a thing, narrow the list. The bordered card with checkboxes, a
+  radio group and an Apply button was a second UI language on one page for a job
+  the first language already did.
 
-  The hidden status/scope inputs are what make that true. A GET form submits
-  only the fields inside it, so without them, applying an office filter while
-  on the Overdue pill would post neither `scope` nor `status` and silently drop
-  you back to All Active — the filter would look like it had reset the page.
-
-  No inline onchange handler: a plain submit button does the job, and the CSP
-  already has one inline-handler violation elsewhere without this adding a
-  second.
+  Every pill is a link whose href already contains the selection clicking it
+  would produce — see the `filter_url` tag. That is what removes the Apply
+  button even for the multi-select office row: there is no form state to submit,
+  so there is nothing to apply. It also means each pill carries the active queue
+  along, which is what the hidden inputs used to be for.
 {% endcomment %}
-<div class="card-udm mb-3">
-  <div class="card-udm-body">
-    <form method="get" class="tracking-filter-form">
-      {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
-      {% if request.GET.scope %}<input type="hidden" name="scope" value="{{ request.GET.scope }}">{% endif %}
-
-      <div class="tracking-filter-cols">
-        <fieldset class="tracking-filter-group">
-          <legend class="tracking-filter-label">Originating office</legend>
-          <div class="tracking-filter-checks">
-            {% for checkbox in form.offices %}
-              <label class="form-check tracking-filter-check">
-                {{ checkbox.tag }}
-                <span class="form-check-label">{{ checkbox.choice_label }}</span>
-              </label>
-            {% endfor %}
-          </div>
-        </fieldset>
-
-        <fieldset class="tracking-filter-group">
-          <legend class="tracking-filter-label">Show</legend>
-          <div class="tracking-filter-checks">
-            {% for radio in form.owner %}
-              <label class="form-check tracking-filter-check">
-                {{ radio.tag }}
-                <span class="form-check-label">{{ radio.choice_label }}</span>
-              </label>
-            {% endfor %}
-          </div>
-        </fieldset>
+<div class="tracking-filters">
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-office-label">Originating office</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-office-label">
+        {% for office in filter_offices %}
+          {% with selected=office.pk|stringformat:"s" %}
+            <a class="pill-toggle{% if selected in selected_office_ids %} is-active{% endif %}"
+               href="{% filter_url 'offices' office.pk multi=True %}"
+               title="{{ office.name }}"
+               {% if selected in selected_office_ids %}aria-current="true"{% endif %}>
+              {{ office.code }}
+              <span class="visually-hidden">
+                {% if selected in selected_office_ids %}selected — activate to remove{% else %}activate to add{% endif %}
+              </span>
+            </a>
+          {% endwith %}
+        {% endfor %}
       </div>
+    </div>
+  </div>
 
-      <div class="tracking-filter-actions">
-        <button class="btn btn-udm-outline btn-sm" type="submit">Apply filters</button>
-        {% if form.offices.value or form.owner.value %}
-          {# Back to the same queue with the panel cleared, not back to All Active. #}
-          <a class="btn btn-link btn-sm"
-             href="{% url 'tracking:list' %}{% if request.GET.scope %}?scope={{ request.GET.scope }}{% elif request.GET.status %}?status={{ request.GET.status }}{% endif %}">
-            Clear filters
-          </a>
-        {% endif %}
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-owner-label">Show</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-owner-label">
+        {% for value, label in form.owner.field.choices %}
+          <a class="pill-toggle{% if selected_owner == value %} is-active{% endif %}"
+             href="{% filter_url 'owner' value %}"
+             {% if selected_owner == value %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
       </div>
-    </form>
+    </div>
   </div>
 </div>
-
-{% if pending_upload %}
-  {% comment %}
-    Completed work waiting for an administrator to approve it into the
-    repository. It lives here rather than on the repository page because these
-    records have not reached the repository — approving one is the act that puts
-    it there. Above the list because it is a to-do, not part of the list.
-  {% endcomment %}
-  <div class="card-udm mb-3 no-print">
-    <div class="card-udm-head">
-      <div>
-        <h2>Completed - pending upload</h2>
-        <div class="card-udm-caption">
-          The work is finished. Review each one and approve it into the Document
-          Repository — or send it back to tracking if it was finished too early.
-        </div>
-      </div>
-    </div>
-    <div class="card-udm-body p-0 table-responsive">
-      <table class="table-udm">
-        <thead>
-          <tr>
-            <th>Tracking number</th><th>Subject</th><th>Office</th><th>Completed</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for record in pending_upload %}
-            <tr>
-              <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-              <td>{{ record.subject|truncatechars:52 }}</td>
-              <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-              <td style="white-space:nowrap;">{{ record.completed_at|date:"d M Y" }}</td>
-              <td class="text-end">
-                {% comment %}
-                  Two approval paths, both here: Review opens the record first,
-                  Approve files it in one click. `next=queue` brings a one-click
-                  approval back to this queue rather than dropping the
-                  administrator into the document they just filed.
-                {% endcomment %}
-                <div class="d-inline-flex align-items-center justify-content-end gap-2 flex-wrap">
-                  <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Review</a>
-                  {% if record.can_approve %}
-                    <form method="post" action="{% url 'tracking:archive' record.pk %}" class="d-flex m-0">
-                      {% csrf_token %}
-                      <input type="hidden" name="next" value="queue">
-                      <button class="btn btn-udm btn-sm" type="submit">Approve</button>
-                    </form>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if pending_upload_more %}
-      <div class="card-udm-body pt-0">
-        <p class="text-muted mb-0" style="font-size:13px;">
-          and {{ pending_upload_more }} more waiting for approval —
-          <a href="{% url 'tracking:list' %}?scope=pending-upload">see them all</a>.
-        </p>
-      </div>
-    {% endif %}
-  </div>
-{% endif %}
 
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">

@@ -560,35 +560,45 @@ a:hover { text-decoration: underline; }
 .sidebar-office-role { margin-top:2px; color:rgba(205,217,232,.72); font-size:12.5px; }
 /* Which queue you are looking at. Both navs previously gave no indication at
    all, so every queue looked identical once the page had loaded. */
+/* ------------------------------------------------------------ pill toggles
+   One pill design for the whole page. The queue nav and the filter rows below
+   it are the same control doing the same job — narrow the list by clicking a
+   thing — so they are the same class rather than two rulesets that drift.
+   `.tracking-queue-*` was that ruleset; it is now just the row that holds them. */
+.pill-toggle {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:36px; padding:7px 14px;
+  border:1px solid var(--udm-line); border-radius:999px;
+  background:var(--udm-surface); color:var(--udm-navy);
+  font-size:13px; font-weight:600; line-height:1;
+  white-space:nowrap; text-decoration:none;
+}
+.pill-toggle:hover,.pill-toggle:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
+.pill-toggle.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+.pill-toggle--alert { color:var(--udm-red-ink); }
+.pill-toggle--alert:hover,.pill-toggle--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
+.pill-toggle--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
+
+/* A row of pills: scrolls sideways rather than stacking into a tall column,
+   which is what a wrapped checkbox list did on a phone. */
+.pill-row { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+.pill-row-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
+
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
-.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:var(--udm-surface); color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
-.tracking-queue-link:hover,.tracking-queue-link:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
-.tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
-.tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:#fff; }
-.tracking-queue-link--alert { border-color:#efc6c2; color:var(--udm-red); }
-.tracking-queue-link--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
-.tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
-.tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
-@media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
-@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } }
-@media (max-width:767.98px) { .app-topbar { min-height:58px; gap:10px; padding:9px 14px; } .app-topbar .topbar-search { max-width:none; } .page-head { flex-direction:column; align-items:stretch; } .page-head > .btn,.page-head > a.btn { align-self:flex-start; } }
-@media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
-@media print { .tracking-queue-nav { display:none !important; } }
 
-/* ------------------------------------------------- tracking filter panel */
-/* Sits under the queue pills and narrows within whichever one is active. */
-.tracking-filter-cols { display:flex; flex-wrap:wrap; gap:20px; }
-.tracking-filter-group { border:0; padding:0; margin:0; min-width:220px; }
-.tracking-filter-label { font-size:12.5px; font-weight:700; color:var(--udm-navy); padding:0 0 6px; }
-.tracking-filter-checks { display:flex; flex-wrap:wrap; gap:4px 16px; }
-/* The label wraps the input, so the whole thing is the hit target rather than
-   the 13px box alone. */
-.tracking-filter-check { display:flex; align-items:center; gap:6px; margin:0; padding:0; font-size:13.5px; }
-.tracking-filter-check .form-check-input { margin:0; float:none; }
-.tracking-filter-check .form-check-label { cursor:pointer; }
-.tracking-filter-actions { display:flex; align-items:center; gap:6px; margin-top:14px; }
-@media print { .tracking-filter-form { display:none !important; } }
+/* ------------------------------------------------- tracking filter rows */
+/* No card, no border, no Apply button — the filters read as the same surface
+   as the queue pills above them, because they are the same control. */
+.tracking-filters { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.tracking-filter-row { display:flex; align-items:center; gap:10px; min-width:0; }
+.tracking-filter-label { flex:0 0 auto; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--udm-muted); }
+@media (max-width:767.98px) {
+  /* The label sits above its pills once the row runs out of width, rather than
+     squeezing the scrolling strip into what is left beside it. */
+  .tracking-filter-row { flex-direction:column; align-items:stretch; gap:5px; }
+}
+@media print { .tracking-queue-nav,.tracking-filters { display:none !important; } }
 
 /* ================================================================
    PHASE 3: routing slip and print presentation

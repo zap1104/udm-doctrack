@@ -341,22 +341,87 @@ def test_the_page_has_no_search_box_and_no_in_process_pill(client, users):
 
 
 @pytest.mark.django_db
-def test_the_filter_panel_carries_the_active_pill_through_a_submit(client, users):
-    """Without the hidden inputs a GET submit would post neither scope nor
-    status, dropping the reader back to All Active."""
+def test_every_filter_pill_carries_the_active_queue(client, users, offices):
+    """Each pill's href already contains the selection clicking it produces, so
+    there is nothing to submit — and the queue has to ride along in it, or
+    filtering would drop the reader back to All Active."""
     client.force_login(users["admin"])
     body = client.get("/tracking/?scope=overdue").content.decode()
 
-    assert '<input type="hidden" name="scope" value="overdue">' in body
+    assert "scope=overdue&amp;offices=" in body, "office pills keep the queue"
+    assert "scope=overdue&amp;owner=" in body, "owner pills keep the queue"
 
 
 @pytest.mark.django_db
-def test_the_panel_renders_both_groups(client, users):
+def test_the_filters_are_links_not_a_form(client, users):
+    """The card, the checkboxes, the radios and the Apply button are all gone:
+    one pill language for the page, not two."""
+    client.force_login(users["admin"])
+    content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
+
+    assert "Apply filters" not in content
+    assert 'name="offices"' not in content, "a link, not a checkbox"
+    assert 'name="owner"' not in content, "a link, not a radio"
+    assert "form-check-input" not in content
+
+
+@pytest.mark.django_db
+def test_the_panel_renders_both_groups(client, users, offices):
     client.force_login(users["admin"])
     body = client.get("/tracking/").content.decode()
 
     assert "Originating office" in body
     assert "Office files" in body
     assert "Files created by me only" in body
-    assert 'name="offices"' in body
-    assert 'name="owner"' in body
+    for office in offices.values():
+        assert f">{office.code}" in body or f"{office.code}\n" in body, office.code
+
+
+@pytest.mark.django_db
+def test_the_queue_and_filter_pills_share_one_class(client, users):
+    """The acceptance criterion: one pill design on the page, not two."""
+    client.force_login(users["admin"])
+    content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
+
+    assert "tracking-queue-link" not in content, "folded into the shared class"
+    # Six queue pills plus the office and owner rows all use the same class.
+    assert content.count("pill-toggle") > 10
+
+
+@pytest.mark.django_db
+def test_an_office_pill_toggles_itself_off_again(client, users, offices):
+    """Multi-select without a form: the pill for an office already selected
+    links to the selection *without* it. Only its own pill does — the others
+    must keep it, which is what makes selecting a second office additive."""
+    import re
+
+    client.force_login(users["admin"])
+    med, sup = offices["MED"], offices["SUP"]
+    body = client.get(f"/tracking/?offices={med.pk}").content.decode()
+
+    anchors = dict(
+        re.findall(r'href="([^"]*)"\s*\n\s*title="([^"]*)"', body)
+    )
+    by_office = {name: href for href, name in anchors.items()}
+
+    assert f"offices={med.pk}" not in by_office[med.name], "its own pill clears it"
+    assert f"offices={med.pk}" in by_office[sup.name], "another pill keeps it"
+
+
+@pytest.mark.django_db
+def test_a_second_office_pill_keeps_the_first(client, users, offices):
+    client.force_login(users["admin"])
+    med, sup = offices["MED"].pk, offices["SUP"].pk
+    body = client.get(f"/tracking/?offices={med}").content.decode()
+
+    assert f"offices={med}&amp;offices={sup}" in body
+
+
+@pytest.mark.django_db
+def test_changing_a_filter_returns_to_the_first_page(client, users, offices):
+    """Page four of the old filter is not page four of the new one."""
+    client.force_login(users["admin"])
+    body = client.get(f"/tracking/?page=3&offices={offices['MED'].pk}").content.decode()
+    filters = body.split("Originating office", 1)[1].split("active record", 1)[0]
+
+    assert "page=3" not in filters
