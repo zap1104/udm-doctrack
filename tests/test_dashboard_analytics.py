@@ -731,6 +731,69 @@ def test_no_javascript_charting_library_was_added():
         assert library not in base, library
 
 
+def _div_depth(html):
+    """Running <div> depth per line, and the depth left over at the end."""
+    import re
+
+    depth, trace = 0, []
+    for number, line in enumerate(html.splitlines(), 1):
+        trace.append((number, depth, line))
+        depth += len(re.findall(r"<div\b", line)) - len(re.findall(r"</div>", line))
+    return depth, trace
+
+
+def test_the_dashboard_template_closes_every_div_it_opens():
+    """Guards the re-flow, which moved whole panels between columns.
+
+    scripts/check_templates.py validates Django tag nesting and passes happily
+    on markup whose <div>s do not balance, so a lifted block that carried its
+    old row-closing tag with it sailed through every gate: the suite was green,
+    ruff was clean, and the page still returned 200 — with every panel after the
+    stray tag rendered outside the container, stacked in a column a few
+    characters wide.
+    """
+    import pathlib
+
+    html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
+    leftover, _ = _div_depth(html)
+
+    assert leftover == 0, f"{leftover:+d} unbalanced <div> in dashboard.html"
+
+
+def test_every_dashboard_row_and_column_sits_at_the_depth_it_should():
+    """Balanced totals are not enough on their own: an extra <div> and a missing
+    one cancel out in the sum while leaving the page mis-nested. Bootstrap's
+    grid only works when a .row is at container level and every .col- is
+    directly inside one, so those two depths are checked outright."""
+    import pathlib
+    import re
+
+    html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
+    _, trace = _div_depth(html)
+
+    for number, depth, line in trace:
+        if re.search(r'<div class="row\b', line):
+            assert depth == 0, f"line {number}: .row nested at depth {depth}"
+        elif re.search(r'<div class="col-', line):
+            assert depth == 1, f"line {number}: .col- at depth {depth}, not inside a .row"
+
+
+@pytest.mark.django_db
+def test_the_panels_all_render_inside_the_page_container(client, users, filed_record):
+    """The rendered page, not just the template — every panel heading has to
+    come before the content block closes."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    for heading in ("Records by status", "Office Flow Today",
+                    "Newest in the Document Repository"):
+        assert f"<h2>{heading}</h2>" in body, heading
+
+    # The last panel must still precede the memo dialog, which is the final
+    # thing in the content block.
+    assert body.index("Newest in the Document Repository") < body.index('id="dashboard-memo"')
+
+
 @pytest.mark.django_db
 def test_the_dashboard_still_prints(client, users, finished_record):
     client.force_login(users["admin"])
