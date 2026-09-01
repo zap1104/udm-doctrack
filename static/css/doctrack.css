@@ -1470,6 +1470,105 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .dashboard-writeup { break-inside:avoid; }
 }
 
+/* ================================================================
+   Dashboard analytics panels
+   Two chart types the reports toolkit did not already have — the ring and
+   the trend line — plus the overdue banner and the memo sheet. Everything
+   else on the dashboard reuses .report-bar / .column-chart / .status-row /
+   .report-metric as they stand.
+
+   Every colour here is a --udm-* or --chart-* token. No panel introduces a
+   palette of its own.
+   ================================================================ */
+
+/* --------------------------------------------------------- scope picker */
+.dashboard-scope { display:flex; align-items:center; gap:8px; }
+.dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
+.dashboard-scope .form-select { min-width:210px; border-color:var(--udm-line); color:var(--udm-navy); font-size:13px; font-weight:600; }
+.dashboard-scope .form-select:focus { border-color:var(--udm-teal); box-shadow:0 0 0 .18rem rgba(22,105,122,.18); }
+
+/* -------------------------------------------------------- overdue banner */
+/* The left rule is the same device .stat-card.red uses, at the width a full
+   card needs. Red is reserved for this on the dashboard: it is the one panel
+   describing something that has gone wrong. */
+.dashboard-alert { border-left:5px solid var(--udm-red); }
+.dashboard-alert .card-udm-head h2 { color:var(--udm-red-ink); }
+.alert-figures { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 30px; padding-bottom:14px; margin-bottom:4px; border-bottom:1px solid var(--chart-grid); }
+.alert-figure-value { color:var(--udm-navy); font-size:23px; font-weight:800; line-height:1.1; letter-spacing:-.02em; }
+.alert-figure-label { margin-top:2px; color:var(--udm-muted); font-size:12px; }
+/* The lead figure is the count itself — the one number somebody acts on. */
+.alert-figure--lead .alert-figure-value { color:var(--udm-red); font-size:38px; }
+.alert-figure--lead .alert-figure-label { color:var(--udm-red-ink); font-weight:700; }
+.overdue-office-list { margin-top:4px; }
+.overdue-oldest { color:var(--udm-muted); font-size:12px; text-align:right; white-space:nowrap; }
+/* Four columns rather than the three .report-series-item--wide gives, because
+   these rows carry the age of the oldest item as well as the count. */
+.overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) 44px 116px; }
+
+/* ------------------------------------------------------------------ ring */
+.donut-layout { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+/* One conic-gradient, stops computed server-side so the ring always closes at
+   100%. The hole is a disc rather than a mask so it prints: a mask would leave
+   a filled circle on paper. */
+.donut { position:relative; flex:0 0 190px; width:190px; height:190px; border-radius:50%; }
+.donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
+.donut-hole-value { color:var(--udm-navy); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
+
+/* ------------------------------------------------------------ trend line */
+.trend-layout { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.trend-chart { flex:1 1 420px; min-width:0; }
+/* Fixed viewBox, fluid box. Height comes from the viewBox's own 640:170 ratio
+   rather than a fixed pixel height, so the plot scales uniformly and the data
+   points stay circular — stretching it to fill a set height would flatten them
+   into ovals. vector-effect="non-scaling-stroke" then holds the line weight
+   steady across the range of widths this column takes. */
+.trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/170; }
+.trend-grid { stroke:var(--chart-grid); stroke-width:1; }
+.trend-axis { stroke:var(--udm-line); stroke-width:1; }
+/* The month labels sit outside the SVG so they are real text at a real size —
+   inside a stretched viewBox they would be distorted with the plot. The left
+   inset matches the plot's 34-unit gutter. */
+.trend-axis-labels { display:flex; margin-left:5.3%; }
+.trend-axis-labels span { flex:1 1 0; min-width:0; color:var(--udm-muted); font-size:11px; text-align:center; }
+.trend-summary { flex:1 1 250px; min-width:0; padding:14px 16px; border:1px solid var(--udm-line); border-radius:10px; }
+.trend-summary-head { margin-bottom:8px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
+.trend-summary .meter-head { margin-top:14px; }
+
+/* ------------------------------------------------------------- uploads */
+.uploads-leader { display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:10px 13px; margin-bottom:12px; border:1px solid var(--udm-gold-tint-strong); border-radius:10px; background:var(--udm-gold-tint); color:var(--udm-gold-ink-dark); font-size:13px; }
+.uploads-leader-tag { padding:2px 9px; border-radius:999px; background:var(--udm-gold); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+
+/* ---------------------------------------------------------------- memo */
+.memo-sheet { padding:22px 24px; border:1px solid var(--udm-line); border-radius:8px; }
+.memo-meta { display:flex; flex-wrap:wrap; gap:8px 26px; padding-bottom:13px; margin-bottom:15px; border-bottom:1px solid var(--chart-grid); color:var(--udm-muted); font-size:12.5px; }
+.memo-meta strong { color:var(--udm-navy); }
+.memo-sheet p { margin:0 0 11px; color:var(--udm-ink); font-size:14px; line-height:1.65; }
+.memo-sheet p:last-child { margin-bottom:0; }
+.memo-footnote { flex:1 1 auto; color:var(--udm-muted); font-size:11.5px; text-align:left; }
+
+@media (max-width:991.98px) {
+  .donut { flex-basis:150px; width:150px; height:150px; }
+  .donut-hole { inset:36px; }
+  .donut-hole-value { font-size:21px; }
+  .alert-figure--lead .alert-figure-value { font-size:31px; }
+  .overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px 92px; }
+  .dashboard-scope .form-select { min-width:150px; }
+}
+
+@media print {
+  /* Same hide-the-chrome pattern the reports page uses. The modal is a control
+     surface, not content: printing from inside it prints the dashboard, which
+     is what somebody pressing Print in a dialog about the dashboard means. */
+  .dashboard-scope,.modal,.modal-backdrop { display:none !important; }
+  .dashboard-alert,.donut-layout,.trend-layout,.memo-sheet { break-inside:avoid; }
+  /* Ring, bars and dots are background paint; without this they print blank. */
+  .donut,.donut-hole,.uploads-leader-tag,.alert-figure--lead {
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+}
+
 /* ---------------------------------------------------- repository folders */
 /* Equal columns across the full width. The count comes from
    REPOSITORY_FOLDER_COLUMNS via a custom property on the element, so changing

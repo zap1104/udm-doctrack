@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, DurationField, Exists, F, OuterRef, Q
+from django.db.models import Avg, Count, Exists, OuterRef, Q
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -21,12 +21,12 @@ from apps.documents.models import Document, SearchQueryLog, SearchResultClick, S
 from apps.tracking import services as tracking_services
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
 
-from .business_time import (
-    OFFICE_HOURS_CAVEAT,
-    average_business_seconds,
-    humanise_business_seconds,
-)
-from .colors import STATUS_COLOURS
+from . import analytics
+from .analytics import bar as _bar
+from .analytics import month_series as _month_series
+from .analytics import month_window as _month_window
+from .analytics import percent as _percent
+from .business_time import average_business_seconds, humanise_business_seconds
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
@@ -59,12 +59,30 @@ def decorate_notification(notification):
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
+#: Colour per breakdown slice, as the CSS custom properties themselves rather
+#: than hex values. The stacked bar already paints these from
+#: `.breakdown-seg--<key>` in doctrack.css; the ring and its swatches read the
+#: same variables, so a palette change lands in one file and every mark on the
+#: page moves together. Hard-coding hex here would be a second palette that
+#: silently stops matching the first.
+BREAKDOWN_COLOURS = {
+    "incoming": "var(--udm-green)",
+    "pending_receipt": "var(--udm-gold)",
+    "in_process": "var(--udm-teal)",
+    "overdue": "var(--udm-red)",
+    "pending_upload": "var(--chart-one)",
+    "historical": "var(--udm-muted)",
+    "completed": "var(--chart-three)",
+}
+
+
 class DashboardView(AppLoginRequiredMixin, TemplateView):
     template_name = "core/dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        scope = self._scope()
 
         inbox = tracking_services.inbox_for(user)
         custody = tracking_services.in_custody_for(user)
@@ -113,7 +131,8 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             # second call would only repeat the same query.
             _annotate_destinations(attention + recent)
 
-        breakdown = self._combined_breakdown(user)
+        breakdown = self._combined_breakdown(user, scope["office"])
+        context.update(self._analytics(user, scope, breakdown))
         context.update(
             {
                 "inbox_count": inbox.count(),
@@ -136,7 +155,233 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         )
         return context
 
-    def _combined_breakdown(self, user):
+    # -- scope ------------------------------------------------------------
+    def _scope(self):
+        """Which office the analytics panels describe.
+
+        Administrators watch traffic between offices, so they may narrow the
+        page to one of them. Everybody else gets their own office and no
+        control, exactly as before.
+
+        Gated on `is_office_admin` — the property behind AdminRequiredMixin's
+        ("ADMIN", "SYSTEM_ADMIN") — not on `is_records_staff`, which is everyone
+        except a viewer and would hand the picker to the ordinary office users
+        it is not for.
+
+        The chosen office is applied *on top of* `visible_to(user)`, never
+        instead of it, so `?office=` can only ever narrow what somebody is
+        already entitled to see. An office administrator, whose rights stop at
+        their own office, therefore gains nothing by naming a different one.
+        """
+        user = self.request.user
+        if not user.is_office_admin:
+            return {"office": None, "offices": [], "can_pick": False, "label": "Your office"}
+
+        raw = self.request.GET.get("office", "")
+        office = Office.objects.filter(pk=raw).first() if raw.isdigit() else None
+        return {
+            "office": office,
+            "offices": Office.active.all().order_by("name"),
+            "can_pick": True,
+            "label": office.name if office else "All offices",
+        }
+
+    def _scoped(self, user, office):
+        """The two base querysets the analytics panels and the memo read from."""
+        records = TrackingRecord.objects.visible_to(user)
+        documents = Document.objects.visible_to(user)
+        if office:
+            # The same pairing Reports filters on, so "MED" means the same thing
+            # on both pages: raised by that office, or sitting there now.
+            records = records.filter(Q(originating_office=office) | Q(current_office=office))
+            documents = documents.filter(office=office)
+        return records.distinct(), documents.distinct()
+
+    # -- analytics panels --------------------------------------------------
+    def _analytics(self, user, scope, breakdown):
+        """The six chart panels, all from apps/core/analytics.py.
+
+        Every figure comes from the same scoped querysets the tables above use,
+        so nothing on the page can disagree with anything else on it.
+        """
+        records, documents = self._scoped(user, scope["office"])
+
+        overdue_rows = analytics.overdue_offices(records)
+        overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
+        uploads = analytics.uploads_by_office(documents, records)
+        trend = analytics.turnaround_by_month(records)
+
+        return {
+            "scope": scope,
+            "overdue_offices": overdue_rows,
+            "overdue_summary": overdue,
+            "status_donut": self._donut(breakdown),
+            "monthly": analytics.monthly_volume(records),
+            "turnaround_trend": trend,
+            "turnaround_trend_points": self._trend_points(trend),
+            "turnaround": analytics.turnaround(records),
+            "uploads_by_office": uploads,
+            "live_by_status": analytics.live_records_by_status(records),
+            "memo": self._memo(scope, breakdown, overdue, trend, uploads),
+        }
+
+    def _donut(self, breakdown):
+        """Ring segments for the combined breakdown.
+
+        The ring is drawn with one `conic-gradient`, which needs its stops as
+        cumulative percentages — computed here rather than in the template,
+        because a running total is arithmetic and templates in this codebase do
+        not do arithmetic.
+
+        Rounding is absorbed by the final segment so the ring always closes at
+        100%: seven independently rounded values leave either a hairline gap or
+        an overlap, and a ring with a slit in it reads as a rendering fault.
+        """
+        slices = [row for row in breakdown["slices"] if row["total"]]
+        if not slices:
+            return {"stops": "", "slices": [], "total": 0}
+
+        stops, running = [], 0
+        for index, row in enumerate(slices):
+            share = row["percent"] if index < len(slices) - 1 else 100 - running
+            start, running = running, running + share
+            stops.append("{} {}% {}%".format(row["colour"], start, running))
+        return {"stops": ", ".join(stops), "slices": slices, "total": breakdown["total"]}
+
+    #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
+    #: polyline can be built from plain numbers here and scaled by CSS in the
+    #: browser rather than recomputed per viewport.
+    TREND_WIDTH, TREND_HEIGHT = 640, 170
+    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 34, 12, 24
+
+    def _trend_points(self, trend):
+        """The three turnaround series as SVG polylines.
+
+        Months with no completions are skipped rather than plotted at zero: a
+        month in which nothing was finished did not take zero days to finish
+        things, and a line dropping to the axis would say exactly that.
+        """
+        rows = trend["rows"]
+        if not rows or not trend["has_data"]:
+            return []
+
+        plot_w = self.TREND_WIDTH - self.TREND_PAD_LEFT
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        step = plot_w / len(rows)
+        ceiling = trend["ceiling"] or 1
+
+        def place(index, value):
+            x = self.TREND_PAD_LEFT + (index + 0.5) * step
+            y = self.TREND_PAD_TOP + (1 - value / ceiling) * plot_h
+            return round(x, 1), round(y, 1)
+
+        series = [
+            ("receipt", "To mark-as-received", "var(--chart-two)"),
+            ("processing", "Processing", "var(--chart-one)"),
+            ("lifetime", "Total lifetime", "var(--chart-three)"),
+        ]
+        built = []
+        for key, label, colour in series:
+            points = [
+                place(index, row[key])
+                for index, row in enumerate(rows)
+                if row[key] is not None
+            ]
+            if not points:
+                continue
+            built.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "colour": colour,
+                    "polyline": " ".join(f"{x},{y}" for x, y in points),
+                    "dots": [{"x": x, "y": y} for x, y in points],
+                }
+            )
+        return built
+
+    def _memo(self, scope, breakdown, overdue, trend, uploads):
+        """The dashboard's own numbers, said in sentences.
+
+        Assembled here rather than in the template for the same reason
+        `_breakdown_summary` is: a memo is prose about figures, and prose built
+        beside the figures cannot drift from them.
+
+        Descriptive, never comparative. It reports what is on the page; it does
+        not say whether that is better or worse than last month, because this
+        page has no basis for a verdict on an office and a printed memo carrying
+        one would outlive the context that produced it.
+        """
+        total = breakdown["total"]
+        # "All offices" takes a plural verb; a named office and "Your office"
+        # take a singular one. The generic labels are lowercased mid-sentence —
+        # an office's real name keeps its capitals, "All offices" should not.
+        several = scope["can_pick"] and not scope["office"]
+        holder = scope["label"] if scope["office"] else scope["label"].lower()
+        lines = [
+            "As at {:%d %B %Y}, {} {} {} document{} across tracking and the "
+            "repository: {} still moving ({}%) and {} filed ({}%).".format(
+                timezone.localtime(),
+                holder,
+                "hold" if several else "holds",
+                total,
+                "" if total == 1 else "s",
+                breakdown["tracking_total"],
+                breakdown["tracking_percent"],
+                breakdown["repository_total"],
+                breakdown["repository_percent"],
+            )
+        ]
+
+        late = overdue["total"]
+        if late:
+            sentence = (
+                "{} document{} {} past the deadline set for {} ({}% of everything "
+                "on record)".format(
+                    late,
+                    "" if late == 1 else "s",
+                    "is" if late == 1 else "are",
+                    "it" if late == 1 else "them",
+                    overdue["percent_of_all"],
+                )
+            )
+            if overdue["oldest_days"]:
+                sentence += ", the oldest by {} day{}".format(
+                    overdue["oldest_days"], "" if overdue["oldest_days"] == 1 else "s"
+                )
+            lines.append(sentence + ".")
+        else:
+            lines.append("Nothing is past its deadline.")
+
+        latest = trend["latest"]
+        if latest and latest["lifetime"] is not None:
+            lines.append(
+                "Documents completed in {:%B} took an average of {} from being raised "
+                "to being finished, counted in office hours.".format(
+                    latest["month"], latest["lifetime_label"]
+                )
+            )
+        if latest and latest["has_on_time"]:
+            lines.append(
+                "{} of {} document{} with a deadline {} completed on time ({}%).".format(
+                    latest["on_time"],
+                    latest["closed"],
+                    "" if latest["closed"] == 1 else "s",
+                    "was" if latest["closed"] == 1 else "were",
+                    latest["on_time_percent"],
+                )
+            )
+
+        leader = uploads["leader"]
+        if leader:
+            lines.append(
+                "{} added the most to the repository this month ({} of {}, {}%).".format(
+                    leader["name"], leader["total"], uploads["total"], leader["percent"]
+                )
+            )
+        return lines
+
+    def _combined_breakdown(self, user, office=None):
         """One percentage across both modules, sliced six ways.
 
         The dashboard showed raw counts from each module side by side, which
@@ -154,27 +399,15 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         on a records backlog reads as a verdict on the office, which is not
         something this page is entitled to hand out.
         """
-        records = TrackingRecord.objects.visible_to(user)
-        documents = Document.objects.visible_to(user)
-        now = timezone.now()
-
-        pending_receipt = records.filter(status=Status.PENDING_RECEIPT).distinct().count()
-        in_process = records.filter(status=Status.IN_PROCESS).distinct().count()
-        overdue_total = (
-            records.filter(due_at__lt=now).exclude(status__in=COMPLETED_STATUSES).distinct().count()
-        )
-        # Incoming excludes the slices shown beside it, so the six add to the
-        # whole instead of double-counting the same record under two headings.
-        incoming = (
-            records.filter(status=Status.RECEIVED)
-            .exclude(due_at__lt=now)
-            .distinct()
-            .count()
-        )
-        awaiting_upload = records.filter(status=Status.COMPLETED_PENDING_UPLOAD).distinct().count()
-        repository_total = documents.distinct().count()
-        historical = documents.filter(source=Source.UPLOAD).distinct().count()
-        completed = repository_total - historical
+        records, documents = self._scoped(user, office)
+        totals = analytics.combined_totals(records, documents)
+        incoming = totals["incoming"]
+        pending_receipt = totals["pending_receipt"]
+        in_process = totals["in_process"]
+        overdue_total = totals["overdue"]
+        awaiting_upload = totals["pending_upload"]
+        historical = totals["historical"]
+        completed = totals["completed"]
 
         tracking_url = reverse("tracking:list")
         slices = [
@@ -207,6 +440,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
         for row in slices:
             row["percent"] = _percent(row["total"], total)
             row["bar_percent"] = _bar(row["total"], ceiling)
+            row["colour"] = BREAKDOWN_COLOURS[row["key"]]
 
         tracking_total = sum(row["total"] for row in slices if row["group"] == "tracking")
         return {
@@ -353,10 +587,6 @@ def _greeting() -> str:
 # ---------------------------------------------------------------------------
 # Reports
 # ---------------------------------------------------------------------------
-#: Months of history the charts cover. A year is the reporting unit offices
-#: actually use, and it keeps every column chart to twelve readable bars.
-REPORT_MONTHS = 12
-
 #: Widest year a filter may name. Django's `__year` lookup builds real
 #: `datetime` objects for the range bounds, so a year outside what `datetime`
 #: can represent raises rather than matching nothing: `?year=10000` raised
@@ -373,69 +603,6 @@ def _filter_year(raw: str) -> int | None:
         return None
     value = int(raw)
     return value if MIN_FILTER_YEAR <= value <= MAX_FILTER_YEAR else None
-
-
-def _percent(part: int, whole: int) -> int:
-    return int(round(100 * part / whole)) if whole else 0
-
-
-def _bar(part: int, whole: int) -> int:
-    """Bar width as a percentage. Zero stays zero — a minimum-width stub would
-    paint a value that is not there — but a real value never rounds away."""
-    if not part or not whole:
-        return 0
-    return max(1, int(round(100 * part / whole)))
-
-
-def _humanise_duration(delta) -> str:
-    """A timedelta as office language: '2 days 4 hrs', '3 hrs', '18 mins'."""
-    if delta is None:
-        return "—"
-    total = int(delta.total_seconds())
-    if total < 60:
-        return "under a minute"
-    days, remainder = divmod(total, 86400)
-    hours, remainder = divmod(remainder, 3600)
-    minutes = remainder // 60
-    if days:
-        return f"{days} day{'s' if days != 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
-    if hours:
-        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min{'s' if minutes != 1 else ''}"
-    return f"{minutes} min{'s' if minutes != 1 else ''}"
-
-
-def _month_window():
-    """The last `REPORT_MONTHS` calendar months, plus the datetime they start at.
-
-    Built by walking months rather than subtracting days so February and the
-    31-day months land on the right buckets.
-    """
-    months: list = []
-    cursor = timezone.localdate().replace(day=1)
-    for _ in range(REPORT_MONTHS):
-        months.append(cursor)
-        cursor = (cursor - timedelta(days=1)).replace(day=1)
-    months.reverse()
-    since = timezone.make_aware(
-        datetime.combine(months[0], time.min), timezone.get_current_timezone()
-    )
-    return months, since
-
-
-def _month_series(queryset, field: str, since):
-    """{month: count} for one date field, so two series can share an axis."""
-    rows = (
-        queryset.filter(**{f"{field}__gte": since})
-        .annotate(month=TruncMonth(field))
-        .values("month")
-        .annotate(total=Count("id", distinct=True))
-        .order_by("month")
-    )
-    return {
-        timezone.localtime(row["month"]).date().replace(day=1): row["total"]
-        for row in rows
-        if row["month"]
-    }
 
 
 def _office_from_name(raw: str):
@@ -584,18 +751,11 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return [value.year for value in years]
 
     # -- tracking panels ---------------------------------------------------
+    # The aggregations below live in apps/core/analytics.py because the
+    # dashboard shows the same figures. Kept as thin methods rather than
+    # inlined at the call site so a subclass can still override one panel.
     def _by_status(self, records, total):
-        """One row per status: share of the whole, plus a bar against the
-        largest status so the shortest bar is still visible."""
-        rows = list(records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total"))
-        labels = dict(Status.choices)
-        ceiling = max([row["total"] for row in rows], default=0)
-        for row in rows:
-            row["label"] = labels.get(row["status"], row["status"])
-            row["percent"] = _percent(row["total"], total)
-            row["bar_percent"] = _bar(row["total"], ceiling)
-            row["colour"] = STATUS_COLOURS.get(row["status"], STATUS_COLOURS["DRAFT"])
-        return rows
+        return analytics.by_status(records, total)
 
     def _office_flow(self, records):
         """Transferred vs received per office — both series from routing steps.
@@ -642,69 +802,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _monthly(self, records):
-        """Created, transferred-or-endorsed and completed — cumulative.
-
-        Three series, and each one runs as a running total from the start of
-        records rather than resetting every month. The monthly-reset version
-        answered "how busy was March", which is a question about staffing; the
-        cumulative version answers "is the backlog growing", which is the
-        question the pairing exists for — Created is the tracking side, Completed
-        is the repository side, and the gap between the two curves is the work
-        still in the building. On a monthly reset that gap is invisible.
-
-        Transferred-or-endorsed counts routing steps rather than records, since
-        one document endorsed onward four times is four transfers of work.
-
-        The running totals start from *all* history, not from the window, so the
-        first bar is the true position in that month and not a fresh zero.
-        """
-        months, since = _month_window()
-        completed_records = records.filter(status__in=COMPLETED_STATUSES)
-        steps = RoutingStep.objects.filter(record__in=records)
-
-        created = _month_series(records, "created_at", since)
-        finished = _month_series(completed_records, "completed_at", since)
-        transferred = _month_series(steps, "sent_at", since)
-
-        # Everything before the window, so the curves begin where they really are.
-        opening = {
-            "created": records.filter(created_at__lt=since).count(),
-            "transferred": steps.filter(sent_at__lt=since).count(),
-            "completed": completed_records.filter(completed_at__lt=since).count(),
-        }
-
-        rows = []
-        running = dict(opening)
-        for month in months:
-            running["created"] += created.get(month, 0)
-            running["transferred"] += transferred.get(month, 0)
-            running["completed"] += finished.get(month, 0)
-            rows.append(
-                {
-                    "month": month,
-                    "created": running["created"],
-                    "transferred": running["transferred"],
-                    "completed": running["completed"],
-                    # This month's own additions, kept for the tooltip: a
-                    # cumulative curve alone cannot say what changed in March.
-                    "created_delta": created.get(month, 0),
-                    "transferred_delta": transferred.get(month, 0),
-                    "completed_delta": finished.get(month, 0),
-                }
-            )
-
-        ceiling = max([row["transferred"] for row in rows] + [row["created"] for row in rows] + [0])
-        for row in rows:
-            row["created_percent"] = _bar(row["created"], ceiling)
-            row["transferred_percent"] = _bar(row["transferred"], ceiling)
-            row["completed_percent"] = _bar(row["completed"], ceiling)
-
-        return {
-            "rows": rows,
-            "ceiling": ceiling,
-            "total": rows[-1]["created"] if rows else 0,
-            "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
-        }
+        return analytics.monthly_volume(records)
 
     def _office_volume(self, records):
         """Which office handled the most documents, per month and cumulatively.
@@ -789,61 +887,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         }
 
     def _turnaround(self, records):
-        """Real averages from the timestamps the routing steps already carry.
-
-        Each duration is reported twice: in office hours, and on the calendar.
-        Neither replaces the other. Office hours answer "how much working time
-        did the office have to act", which is the fair way to judge an office;
-        calendar time is what the requester actually waited, which is the fair
-        way to answer them. Showing only the first would flatter every office
-        that let something sit over a weekend; showing only the second — which
-        is what this did — charges them for the weekend itself.
-        """
-        steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-        receipt = steps.aggregate(
-            value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
-        )["value"]
-        receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
-
-        # Turnaround measures how long the *work* took, so it ends at completion
-        # rather than at approval — the wait for an administrator is somebody
-        # else's queue and would otherwise be charged to the office that
-        # finished on time.
-        done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
-        processing_set = done.filter(first_received_at__isnull=False)
-        processing = processing_set.aggregate(
-            value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
-        )["value"]
-        processing_office = average_business_seconds(
-            processing_set.values_list("first_received_at", "completed_at")
-        )
-        lifetime = done.aggregate(
-            value=Avg(F("completed_at") - F("created_at"), output_field=DurationField())
-        )["value"]
-        lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
-
-        with_deadline = done.filter(due_at__isnull=False)
-        deadline_total = with_deadline.count()
-        on_time = with_deadline.filter(completed_at__lte=F("due_at")).count()
-
-        return {
-            # Office hours: the headline figures.
-            "receipt": humanise_business_seconds(receipt_office),
-            "processing": humanise_business_seconds(processing_office),
-            "lifetime": humanise_business_seconds(lifetime_office),
-            # Calendar: kept beside them, never instead of them.
-            "receipt_calendar": _humanise_duration(receipt),
-            "processing_calendar": _humanise_duration(processing),
-            "lifetime_calendar": _humanise_duration(lifetime),
-            "office_hours_caveat": OFFICE_HOURS_CAVEAT,
-            "receipt_samples": steps.count(),
-            "on_time": on_time,
-            "on_time_total": deadline_total,
-            "on_time_percent": _percent(on_time, deadline_total),
-            "unreceived": RoutingStep.objects.filter(
-                record__in=records, received_at__isnull=True
-            ).count(),
-        }
+        return analytics.turnaround(records)
 
     def _turnaround_by_office(self, records):
         """The same four metrics, per office.
@@ -930,19 +974,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _overdue_offices(self, records):
-        """Where overdue documents are sitting — a queue to chase, not a total."""
-        rows = list(
-            records.filter(due_at__lt=timezone.now())
-            .exclude(status__in=COMPLETED_STATUSES)
-            .exclude(current_office__isnull=True)
-            .values("current_office__code", "current_office__name")
-            .annotate(total=Count("id", distinct=True))
-            .order_by("-total")[:8]
-        )
-        ceiling = max([row["total"] for row in rows], default=0)
-        for row in rows:
-            row["percent"] = _bar(row["total"], ceiling)
-        return rows
+        return analytics.overdue_offices(records)
 
     # -- document panels ---------------------------------------------------
     def _document_types(self, documents):
