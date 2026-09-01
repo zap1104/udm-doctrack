@@ -220,6 +220,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             "monthly": analytics.monthly_volume(records),
             "turnaround_trend": trend,
             "turnaround_trend_points": self._trend_points(trend),
+            "turnaround_trend_geometry": self._trend_geometry(),
             "turnaround": analytics.turnaround(records),
             "uploads_by_office": uploads,
             "live_by_status": analytics.live_records_by_status(records),
@@ -273,8 +274,47 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
     #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
     #: polyline can be built from plain numbers here and scaled by CSS in the
     #: browser rather than recomputed per viewport.
-    TREND_WIDTH, TREND_HEIGHT = 640, 170
-    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 34, 12, 24
+    #:
+    #: The box is deeper than it is wide by the standards of a sparkline
+    #: (640x240, not the original 640x170) because this panel now shares a row
+    #: rather than spanning the page: in a half-width column the old ratio
+    #: resolved to about 110px of height for twelve months of three series,
+    #: which is not enough to see one line cross another.
+    #:
+    #: No left gutter. It used to reserve 34 units for y-axis labels that were
+    #: never drawn — the scale is stated in words beneath the chart instead —
+    #: so the gutter was dead space pushing the plot narrower still.
+    TREND_WIDTH, TREND_HEIGHT = 640, 240
+    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 0, 10, 26
+
+    #: Horizontal rules behind the plot, as fractions of the ceiling. The last
+    #: is the baseline and is drawn heavier.
+    TREND_GRID_STEPS = (1.0, 0.75, 0.5, 0.25, 0.0)
+
+    def _trend_geometry(self):
+        """The plot box and its grid lines, in the units the viewBox declares.
+
+        Computed here rather than written into the template as literals. They
+        were literals, and the plot's own geometry lived in Python: the two
+        agreed only because they had been matched by hand, so changing the box
+        moved the lines off the data silently.
+        """
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        lines = []
+        for index, step in enumerate(self.TREND_GRID_STEPS):
+            lines.append(
+                {
+                    "y": round(self.TREND_PAD_TOP + (1 - step) * plot_h, 1),
+                    # The baseline is the axis, not another rule behind the data.
+                    "axis": index == len(self.TREND_GRID_STEPS) - 1,
+                }
+            )
+        return {
+            "width": self.TREND_WIDTH,
+            "height": self.TREND_HEIGHT,
+            "view_box": f"0 0 {self.TREND_WIDTH} {self.TREND_HEIGHT}",
+            "grid": lines,
+        }
 
     def _trend_points(self, trend):
         """The three turnaround series as SVG polylines.

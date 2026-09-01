@@ -331,7 +331,8 @@ def test_live_by_status_leaves_overdue_out(overdue_record, users):
 # --- context ---------------------------------------------------------------
 NEW_KEYS = [
     "overdue_offices", "overdue_summary", "tracking_donut", "repository_donut", "monthly",
-    "turnaround_trend", "turnaround_trend_points", "turnaround",
+    "turnaround_trend", "turnaround_trend_points", "turnaround_trend_geometry",
+    "turnaround",
     "uploads_by_office", "live_by_status", "memo", "scope",
 ]
 
@@ -507,6 +508,99 @@ def test_the_trend_line_is_built_server_side(client, users, finished_record):
         assert line["polyline"], line["key"]
         assert line["colour"].startswith("var(--"), line["key"]
         assert line["dots"]
+
+
+def _view():
+    from apps.core.views import DashboardView
+
+    return DashboardView()
+
+
+def test_the_grid_lines_are_placed_by_the_same_constants_as_the_data():
+    """They were literals in the template while the plot geometry lived in
+    Python, so the two agreed only because they had been matched by hand and
+    changing the box moved the rules off the data without saying so."""
+    view = _view()
+    geometry = view._trend_geometry()
+    plot_h = view.TREND_HEIGHT - view.TREND_PAD_TOP - view.TREND_PAD_BOTTOM
+
+    assert geometry["grid"][0]["y"] == view.TREND_PAD_TOP, "top rule is not the ceiling"
+    assert geometry["grid"][-1]["y"] == view.TREND_PAD_TOP + plot_h, "baseline is not zero"
+    assert geometry["view_box"] == f"0 0 {view.TREND_WIDTH} {view.TREND_HEIGHT}"
+
+
+def test_only_the_baseline_is_drawn_as_an_axis():
+    grid = _view()._trend_geometry()["grid"]
+
+    assert grid[-1]["axis"] is True
+    assert not any(line["axis"] for line in grid[:-1])
+
+
+def test_a_ceiling_value_lands_on_the_top_rule_and_a_zero_on_the_baseline():
+    """What makes the rules readable: a point level with a rule means that
+    value, and a rule the data never touches is decoration."""
+    view = _view()
+    geometry = view._trend_geometry()
+    trend = {
+        "rows": [{"receipt": 4.0, "processing": 0.0, "lifetime": None}] * 12,
+        "ceiling": 4,
+        "has_data": True,
+    }
+
+    series = {row["key"]: row for row in view._trend_points(trend)}
+
+    assert {dot["y"] for dot in series["receipt"]["dots"]} == {geometry["grid"][0]["y"]}
+    assert {dot["y"] for dot in series["processing"]["dots"]} == {geometry["grid"][-1]["y"]}
+
+
+def test_the_plot_uses_the_whole_width():
+    """It used to reserve a left gutter for y-axis labels that were never drawn,
+    which cost the plot 5% of a column that is now half as wide as it was."""
+    view = _view()
+    trend = {
+        "rows": [{"receipt": 1.0, "processing": None, "lifetime": None}] * 12,
+        "ceiling": 4,
+        "has_data": True,
+    }
+
+    xs = [dot["x"] for row in view._trend_points(trend) for dot in row["dots"]]
+
+    assert view.TREND_PAD_LEFT == 0
+    assert min(xs) < view.TREND_WIDTH * 0.06
+    assert max(xs) > view.TREND_WIDTH * 0.94
+
+
+def test_the_plot_is_deep_enough_to_read_at_half_width():
+    """This panel shares a row now. At the ratio it started with, a column of
+    about 415px resolved to roughly 110px of height for twelve months of three
+    series, which is not enough to see one line cross another."""
+    view = _view()
+
+    assert 415 * view.TREND_HEIGHT / view.TREND_WIDTH > 140
+
+
+def test_the_stylesheet_declares_the_same_ratio_the_view_plots_at():
+    """The box is declared in two places — the viewBox from the view, the
+    aspect-ratio in CSS — and a mismatch letterboxes the plot inside its own
+    card without erroring anywhere."""
+    import pathlib
+
+    view = _view()
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+    assert f"aspect-ratio:{view.TREND_WIDTH}/{view.TREND_HEIGHT}" in css
+
+
+@pytest.mark.django_db
+def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finished_record):
+    """In the head it shared one line with the title and the office-hours
+    caveat, which at this column width left three keys fighting a sentence for
+    the same few centimetres."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "trend-legend" in body
+    assert body.index("trend-legend") > body.index("Turnaround by month")
 
 
 @pytest.mark.django_db

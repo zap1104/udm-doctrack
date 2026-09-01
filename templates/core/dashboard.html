@@ -360,16 +360,22 @@
             {{ turnaround_trend.office_hours_caveat }}
           </div>
         </div>
-        <div class="chart-legend">
-          {% for series in turnaround_trend_points %}
-            <span class="chart-key">
-              <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
-            </span>
-          {% endfor %}
-        </div>
       </div>
       <div class="card-udm-body">
         {% if turnaround_trend.has_data %}
+          {% comment %}
+            The legend sits in the body rather than beside the heading. In the
+            head it shared one line with the title and the office-hours caveat,
+            which at this column width left three keys fighting a sentence for
+            the same few centimetres.
+          {% endcomment %}
+          <div class="chart-legend trend-legend">
+            {% for series in turnaround_trend_points %}
+              <span class="chart-key">
+                <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
+              </span>
+            {% endfor %}
+          </div>
           <div class="trend-layout">
             <div class="trend-chart">
               {% comment %}
@@ -378,14 +384,20 @@
                 The default uniform scaling keeps the dots round, and the CSS sizes
                 the box by the viewBox's own ratio so nothing is letterboxed.
               {% endcomment %}
-              <svg class="trend-svg" viewBox="0 0 640 170" role="img"
+              <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
                    aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
+                {% comment %}
+                  Rules and baseline from the same constants that place the
+                  data. They were literals here while the plot geometry lived in
+                  Python, so the two agreed only by hand and changing the box
+                  moved the lines off the data without saying so.
+                {% endcomment %}
                 <g aria-hidden="true">
-                  <line x1="34" x2="640" y1="12" y2="12" class="trend-grid"></line>
-                  <line x1="34" x2="640" y1="46" y2="46" class="trend-grid"></line>
-                  <line x1="34" x2="640" y1="80" y2="80" class="trend-grid"></line>
-                  <line x1="34" x2="640" y1="114" y2="114" class="trend-grid"></line>
-                  <line x1="34" x2="640" y1="146" y2="146" class="trend-axis"></line>
+                  {% for line in turnaround_trend_geometry.grid %}
+                    <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
+                          y1="{{ line.y }}" y2="{{ line.y }}"
+                          class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
+                  {% endfor %}
                 </g>
                 {% for series in turnaround_trend_points %}
                   <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
@@ -412,17 +424,19 @@
               <div class="trend-summary-head">
                 {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
               </div>
-              <div class="report-metric">
-                <span>To mark-as-received</span>
-                <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
-              </div>
-              <div class="report-metric">
-                <span>Processing</span>
-                <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
-              </div>
-              <div class="report-metric">
-                <span>Total lifetime</span>
-                <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+              <div class="trend-summary-figures">
+                <div class="report-metric">
+                  <span>To mark-as-received</span>
+                  <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
+                </div>
+                <div class="report-metric">
+                  <span>Processing</span>
+                  <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
+                </div>
+                <div class="report-metric">
+                  <span>Total lifetime</span>
+                  <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+                </div>
               </div>
               {% comment %}
                 Only shown when something actually had a deadline that month. A 0%
