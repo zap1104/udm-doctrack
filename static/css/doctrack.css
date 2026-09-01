@@ -1458,6 +1458,10 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-writeup h3 { margin:0 0 6px; font-size:14px; color:var(--udm-navy); }
 .dashboard-writeup p { margin:0 0 6px; color:var(--udm-slate-text); font-size:13px; line-height:1.55; }
 .dashboard-writeup p:last-child { margin-bottom:0; }
+/* The write-up used to close the "All documents" card, where the rule above it
+   separated it from the chart. It is now a card of its own beneath the two
+   rings, so the border and the offset would draw a line under nothing. */
+.dashboard-writeup--standalone { margin-top:0; padding-top:0; border-top:0; }
 
 .dashboard-print-header { display:none; }
 @media print {

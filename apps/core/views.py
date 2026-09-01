@@ -215,7 +215,8 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             "scope": scope,
             "overdue_offices": overdue_rows,
             "overdue_summary": overdue,
-            "status_donut": self._donut(breakdown),
+            "tracking_donut": self._domain_donut(breakdown, "tracking"),
+            "repository_donut": self._domain_donut(breakdown, "repository"),
             "monthly": analytics.monthly_volume(records),
             "turnaround_trend": trend,
             "turnaround_trend_points": self._trend_points(trend),
@@ -225,28 +226,49 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             "memo": self._memo(scope, breakdown, overdue, trend, uploads),
         }
 
-    def _donut(self, breakdown):
-        """Ring segments for the combined breakdown.
+    def _domain_donut(self, breakdown, group):
+        """Ring segments for one domain's slice of the combined breakdown.
+
+        One ring per domain rather than a single combined one. The combined
+        version could show the split between tracking and the repository but
+        not the shape of either: five tracking stages competing with two
+        repository ones in a single ring left the tracking slices too thin to
+        read, which is the half somebody acts on.
 
         The ring is drawn with one `conic-gradient`, which needs its stops as
         cumulative percentages — computed here rather than in the template,
         because a running total is arithmetic and templates in this codebase do
         not do arithmetic.
 
-        Rounding is absorbed by the final segment so the ring always closes at
-        100%: seven independently rounded values leave either a hairline gap or
-        an overlap, and a ring with a slit in it reads as a rendering fault.
+        Percentages are recomputed against this domain's own subtotal. Reusing
+        the grand-total percentages already on the slices would leave each ring
+        summing to its share of everything rather than to 100%, so a Repository
+        ring covering a third of all documents would be drawn as a third of a
+        circle with two thirds of it blank.
+
+        Rounding is absorbed by the final segment so the ring always closes:
+        independently rounded values leave either a hairline gap or an overlap,
+        and a ring with a slit in it reads as a rendering fault.
         """
-        slices = [row for row in breakdown["slices"] if row["total"]]
-        if not slices:
+        domain = [
+            row for row in breakdown["slices"]
+            if row["group"] == group and row["total"]
+        ]
+        if not domain:
             return {"stops": "", "slices": [], "total": 0}
 
+        subtotal = sum(row["total"] for row in domain)
+        # Copied, not mutated: `_breakdown_summary` and `_memo` read the
+        # grand-total percentages off these same dicts, and rewriting them here
+        # would silently change what the prose beneath the rings says.
+        domain = [{**row, "percent": _percent(row["total"], subtotal)} for row in domain]
+
         stops, running = [], 0
-        for index, row in enumerate(slices):
-            share = row["percent"] if index < len(slices) - 1 else 100 - running
+        for index, row in enumerate(domain):
+            share = row["percent"] if index < len(domain) - 1 else 100 - running
             start, running = running, running + share
             stops.append("{} {}% {}%".format(row["colour"], start, running))
-        return {"stops": ", ".join(stops), "slices": slices, "total": breakdown["total"]}
+        return {"stops": ", ".join(stops), "slices": domain, "total": subtotal}
 
     #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
     #: polyline can be built from plain numbers here and scaled by CSS in the

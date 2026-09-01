@@ -1,0 +1,27 @@
+{% comment %}
+  One ring plus its legend. Shared by the Tracking and Repository cards so the
+  two cannot drift apart — they differ only in which context variable feeds
+  them, which is the `donut` argument.
+
+  The ring itself is presentation: one conic-gradient with server-computed
+  stops, hidden from assistive technology because the legend beneath carries
+  every figure it encodes.
+{% endcomment %}
+<div class="donut-layout">
+  <div class="donut" style="background:conic-gradient({{ donut.stops }})" aria-hidden="true">
+    <div class="donut-hole">
+      <div class="donut-hole-value num">{{ donut.total }}</div>
+      <div class="donut-hole-label">documents</div>
+    </div>
+  </div>
+  <div class="donut-legend">
+    {% for slice in donut.slices %}
+      <a class="breakdown-item" href="{{ slice.url }}">
+        <i class="breakdown-swatch" style="background:{{ slice.colour }}" aria-hidden="true"></i>
+        <span class="breakdown-label">{{ slice.label }}</span>
+        <strong class="num">{{ slice.total }}</strong>
+        <span class="breakdown-percent num">{{ slice.percent }}%</span>
+      </a>
+    {% endfor %}
+  </div>
+</div>

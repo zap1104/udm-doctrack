@@ -57,6 +57,29 @@ def overdue_record(users, offices, memo_type):
 
 
 @pytest.fixture
+def filed_record(users, offices, memo_type, finished_record):
+    """A completed record that has also been filed.
+
+    `finished_record` stops at completion, which leaves the document awaiting an
+    administrator's approval — tracking has it, the repository does not. The
+    Repository ring needs something actually on its side of the line.
+    """
+    from django.utils import timezone as django_timezone
+
+    from apps.documents.models import Document, Source
+
+    Document.objects.create(
+        title="A filed document",
+        office=offices["SUP"],
+        document_type=memo_type,
+        year=django_timezone.localdate().year,
+        source=Source.UPLOAD,
+        uploaded_by=users["sup"],
+    )
+    return finished_record
+
+
+@pytest.fixture
 def finished_record(users, offices, memo_type):
     """MED raises it, SUP receives and completes it."""
     record = create_draft_record(
@@ -307,7 +330,7 @@ def test_live_by_status_leaves_overdue_out(overdue_record, users):
 # ============================================================== Group B
 # --- context ---------------------------------------------------------------
 NEW_KEYS = [
-    "overdue_offices", "overdue_summary", "status_donut", "monthly",
+    "overdue_offices", "overdue_summary", "tracking_donut", "repository_donut", "monthly",
     "turnaround_trend", "turnaround_trend_points", "turnaround",
     "uploads_by_office", "live_by_status", "memo", "scope",
 ]
@@ -360,35 +383,116 @@ def test_the_panels_respect_visibility(client, users, finished_record):
     assert everything["live_by_status"] is not None
 
 
-# --- the ring --------------------------------------------------------------
-@pytest.mark.django_db
-def test_the_ring_always_closes_at_one_hundred_percent(client, users, finished_record):
-    """Seven independently rounded values leave a hairline gap or an overlap,
-    and a ring with a slit in it reads as a rendering fault."""
-    client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context["status_donut"]
+# --- the rings -------------------------------------------------------------
+# One ring per domain. The combined ring could show the split between tracking
+# and the repository but not the shape of either, and tracking is the half
+# somebody acts on.
+DONUTS = ["tracking_donut", "repository_donut"]
 
-    assert donut["stops"], "something was drawn"
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("key", DONUTS)
+def test_each_ring_closes_at_one_hundred_percent(client, users, filed_record, key):
+    """Independently rounded values leave a hairline gap or an overlap, and a
+    ring with a slit in it reads as a rendering fault."""
+    client.force_login(users["admin"])
+    donut = client.get(DASHBOARD).context[key]
+
+    assert donut["stops"], f"{key} drew nothing"
     assert donut["stops"].rstrip().endswith("100%")
 
 
 @pytest.mark.django_db
-def test_the_ring_is_painted_from_the_brand_tokens(client, users, finished_record):
+@pytest.mark.parametrize("key", DONUTS)
+def test_each_ring_is_measured_against_its_own_domain(client, users, filed_record, key):
+    """The whole point of splitting them. Reusing the grand-total percentages
+    would leave each ring summing to its share of everything rather than to
+    100%, so a Repository ring covering a third of all documents would be drawn
+    as a third of a circle with two thirds of it blank."""
+    client.force_login(users["admin"])
+    donut = client.get(DASHBOARD).context[key]
+
+    assert sum(row["percent"] for row in donut["slices"]) == 100
+    assert donut["total"] == sum(row["total"] for row in donut["slices"])
+
+
+@pytest.mark.django_db
+def test_the_two_rings_together_are_the_whole(client, users, filed_record):
+    """Two rings replace one; between them they still account for everything."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    assert (
+        context["tracking_donut"]["total"] + context["repository_donut"]["total"]
+        == context["breakdown"]["total"]
+    )
+
+
+@pytest.mark.django_db
+def test_splitting_the_ring_did_not_rewrite_the_shared_slices(client, users, filed_record):
+    """The per-domain pass copies rather than mutates: the write-up and the memo
+    read the grand-total percentages off these same dicts, and rewriting them
+    would silently change what the prose beneath the rings says."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    assert sum(row["percent"] for row in context["breakdown"]["slices"]) == 100
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("key", DONUTS)
+def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key):
     """Not the mockup's forest-green and gold."""
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context["status_donut"]
+    donut = client.get(DASHBOARD).context[key]
 
     for slice_ in donut["slices"]:
         assert slice_["colour"].startswith("var(--"), slice_["key"]
 
 
 @pytest.mark.django_db
-def test_an_empty_system_draws_no_ring(client, users):
+@pytest.mark.parametrize("key", DONUTS)
+def test_an_empty_domain_draws_no_ring(client, users, key):
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context["status_donut"]
+    donut = client.get(DASHBOARD).context[key]
 
     assert donut["stops"] == ""
     assert donut["total"] == 0
+
+
+@pytest.mark.django_db
+def test_a_domain_with_nothing_in_it_says_so_rather_than_drawing_an_empty_circle(
+    client, users
+):
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "Nothing is in tracking." in body
+    assert "Nothing has been filed yet." in body
+
+
+@pytest.mark.django_db
+def test_the_combined_stacked_bar_was_replaced_not_kept_alongside(
+    client, users, filed_record
+):
+    """Two rings replace the one bar; a third combined view would say the same
+    thing a third time."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "breakdown-bar" not in body
+    assert "<h2>All documents</h2>" not in body
+
+
+@pytest.mark.django_db
+def test_the_write_up_survived_the_panel_it_lived_in(client, users, filed_record):
+    """It exists so a printed copy says something in words rather than only in
+    colour, which is a reason the panel's removal does not touch."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "What this shows" in body
+    assert "dashboard-writeup" in body
 
 
 # --- the trend line --------------------------------------------------------
