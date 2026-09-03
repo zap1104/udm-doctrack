@@ -12,6 +12,7 @@ passing unchanged — the extraction was a refactor, not a behaviour change.
 
 from __future__ import annotations
 
+import pathlib
 from datetime import timedelta
 
 import pytest
@@ -879,13 +880,290 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    for heading in ("Records by status", "Office Flow Today",
+    for heading in ("Action Centre", "Records by status", "Office Flow Today",
                     "Newest in the Document Repository"):
         assert f"<h2>{heading}</h2>" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
     assert body.index("Newest in the Document Repository") < body.index('id="dashboard-memo"')
+
+
+# ============================================================== Action Centre
+@pytest.fixture
+def awaiting_receipt(users, offices, memo_type):
+    """Three documents routed to SUP and waiting for it to confirm receipt."""
+    records = []
+    for index in range(3):
+        record = create_draft_record(
+            user=users["med"], subject=f"For receipt {index}", instructions="x",
+            document_type=memo_type,
+        )
+        route_record(record, [offices["SUP"]], user=users["med"])
+        records.append(record)
+    return records
+
+
+@pytest.mark.django_db
+def test_the_two_desk_panels_became_one(client, users, awaiting_receipt):
+    """"Pending Receipt" and "Recent Tracking Activity" sat in different rows
+    answering versions of the same question, so the reader had to look in two
+    places to know whether the desk was clear."""
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "<h2>Action Centre</h2>" in body
+    assert "<h2>Pending Receipt</h2>" not in body
+    assert "<h2>Recent Tracking Activity</h2>" not in body
+
+
+@pytest.mark.django_db
+def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaiting_receipt):
+    """A list of what already happened above a list of what has not is a filing
+    cabinet, not a desk."""
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "Needs action" in body
+    assert "Recently moved" in body
+    assert body.index("Needs action") < body.index("Recently moved")
+
+
+@pytest.mark.django_db
+def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_receipt):
+    """The panel is the h2; the blocks inside it are h3. Nesting level is what
+    tells a screen reader the two tables belong to one panel."""
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert '<h3 class="desk-block-title">Needs action</h3>' in body
+    assert '<h3 class="desk-block-title">Recently moved</h3>' in body
+
+
+@pytest.mark.django_db
+def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awaiting_receipt):
+    """Merging the panels is a template change. Renaming the context would make
+    it a view change nobody asked for."""
+    client.force_login(users["sup"])
+    context = client.get(DASHBOARD).context
+
+    assert "attention_records" in context
+    assert "recent_records" in context
+
+
+@pytest.mark.django_db
+def test_the_desk_keeps_both_empty_states(client, users):
+    """A fresh account has nothing in either block, and an empty panel that says
+    nothing looks broken rather than clear."""
+    client.force_login(users["hr"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "No incoming documents are waiting" in body
+    assert "No active records yet." in body
+
+
+@pytest.mark.django_db
+def test_the_desk_comes_before_the_memo_dialog(client, users, awaiting_receipt):
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert body.index("Action Centre") < body.index('id="dashboard-memo"')
+
+
+# ------------------------------------------------------------ quick actions
+@pytest.mark.django_db
+def test_a_document_can_be_started_from_the_dashboard(client, users):
+    """Neither view was reachable from here or from the sidebar: somebody
+    landing on the dashboard had to go out to a list page to find the button."""
+    from django.urls import reverse
+
+    client.force_login(users["med"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert reverse("tracking:create") in body
+    assert reverse("documents:upload") in body
+
+
+@pytest.mark.django_db
+def test_the_new_record_button_uses_the_same_words_as_the_tracking_list(client, users):
+    """One act, one label. Two names for the same button is two buttons as far
+    as somebody learning the system is concerned."""
+    client.force_login(users["med"])
+    body = client.get(DASHBOARD).content.decode()
+    listing = pathlib.Path("templates/tracking/list.html").read_text(encoding="utf-8")
+
+    assert "+ New Tracking Slip" in body
+    assert "+ New Tracking Slip" in listing
+
+
+@pytest.mark.django_db
+def test_a_viewer_is_not_offered_buttons_that_would_turn_them_away(client, users):
+    """Both target views refuse a viewer, so offering the button promises a page
+    that answers with a redirect and a warning."""
+    from django.urls import reverse
+
+    client.force_login(users["viewer"])
+    response = client.get(DASHBOARD)
+    body = response.content.decode()
+
+    assert response.context["can_start_work"] is False
+    assert reverse("tracking:create") not in body
+    assert reverse("documents:upload") not in body
+
+
+@pytest.mark.django_db
+def test_hiding_the_button_is_not_the_permission(client, users):
+    """The endpoint stays reachable to anyone who knows the URL, so the view has
+    to refuse on its own — the hidden button is a courtesy, not a control."""
+    client.force_login(users["viewer"])
+
+    assert client.get("/tracking/new/").status_code in (302, 403)
+
+
+@pytest.mark.django_db
+def test_an_account_with_no_office_is_not_offered_them_either(client, users, offices):
+    """`OfficeAssignedMixin` sends these accounts back to the dashboard with a
+    warning, which is a poor answer to a button on the dashboard."""
+    from django.contrib.auth import get_user_model
+
+    orphan = get_user_model().objects.create_user(
+        username="unassigned", password="TestPass123!", office=None, role="USER",
+    )
+    client.force_login(orphan)
+
+    assert client.get(DASHBOARD).context["can_start_work"] is False
+
+
+# ---------------------------------------------------------- bulk receipt
+@pytest.mark.django_db
+def test_the_desk_offers_bulk_receipt_when_something_can_be_received(
+    client, users, awaiting_receipt
+):
+    client.force_login(users["sup"])
+    response = client.get(DASHBOARD)
+    body = response.content.decode()
+
+    assert response.context["can_bulk_receive"] is True
+    assert 'name="record_ids"' in body
+    assert 'name="confirm_custody"' in body
+
+
+@pytest.mark.django_db
+def test_the_custody_attestation_is_asked_for_in_the_same_words_as_the_list(
+    client, users, awaiting_receipt
+):
+    """It is a custody assertion landing in an append-only audit trail. The
+    dashboard does not get to ask for it more casually than the tracking list
+    does, and it is not defaulted or dropped to save a click."""
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+    listing = pathlib.Path("templates/tracking/list.html").read_text(encoding="utf-8")
+
+    wording = "I confirm the selected physical or digital documents are present in my office's custody."
+    assert wording in body
+    assert wording in listing
+
+
+@pytest.mark.django_db
+def test_the_custody_box_is_required_not_pre_ticked(client, users, awaiting_receipt):
+    import re
+
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    box = re.search(r'<input[^>]*name="confirm_custody"[^>]*>', body).group(0)
+    assert "required" in box
+    assert "checked" not in box
+
+
+@pytest.mark.django_db
+def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaiting_receipt):
+    """Recently moved is read-only. A form spanning both would put rows nobody
+    can act on inside the thing that submits."""
+    import re
+
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
+    assert form, "no bulk receipt form rendered"
+    assert "Needs action" in form.group(0)
+    assert "Recently moved" not in form.group(0)
+    assert "csrfmiddlewaretoken" in form.group(0)
+
+
+@pytest.mark.django_db
+def test_no_bulk_footer_when_nothing_on_the_page_can_be_received(client, users, awaiting_receipt):
+    """MED raised these and cannot receive them. Showing the attestation to
+    somebody with nothing to attest to is an invitation to tick it anyway."""
+    client.force_login(users["med"])
+    response = client.get(DASHBOARD)
+
+    assert response.context["can_bulk_receive"] is False
+    assert 'name="confirm_custody"' not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_dashboard_adds_no_write_path_of_its_own(client, users, awaiting_receipt):
+    """It posts to the tracking app's existing view, which is the one place
+    receipt is recorded."""
+    from django.urls import reverse
+
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert reverse("tracking:bulk_confirm_receipt") in body
+
+
+@pytest.mark.django_db
+def test_bulk_receipt_from_the_dashboard_actually_records_it(client, users, awaiting_receipt):
+    """The markup is only worth having if the post it builds is accepted."""
+    from apps.tracking.models import Status
+
+    client.force_login(users["sup"])
+    response = client.post(
+        "/tracking/bulk-receipt/",
+        {
+            "record_ids": [r.pk for r in awaiting_receipt[:2]],
+            "confirm_custody": "on",
+            "note": "",
+        },
+    )
+
+    assert response.status_code == 302
+    for record in awaiting_receipt[:2]:
+        record.refresh_from_db()
+        assert record.status == Status.RECEIVED
+    awaiting_receipt[2].refresh_from_db()
+    assert awaiting_receipt[2].status == Status.PENDING_RECEIPT, "unticked row untouched"
+
+
+@pytest.mark.django_db
+def test_the_post_is_refused_without_the_attestation(client, users, awaiting_receipt):
+    """The whole reason the dashboard cannot offer a one-click receive."""
+    from apps.tracking.models import Status
+
+    client.force_login(users["sup"])
+    client.post(
+        "/tracking/bulk-receipt/",
+        {"record_ids": [r.pk for r in awaiting_receipt], "note": ""},
+    )
+
+    for record in awaiting_receipt:
+        record.refresh_from_db()
+        assert record.status == Status.PENDING_RECEIPT
+
+
+@pytest.mark.django_db
+def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt):
+    """django-csp is enforced. The one `onchange` on the page is the scope
+    picker, which predates this panel and is left alone deliberately."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "onclick=" not in body
+    assert "onsubmit=" not in body
+    assert body.count("onchange=") <= 1
 
 
 @pytest.mark.django_db
