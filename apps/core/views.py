@@ -281,17 +281,18 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
     #: polyline can be built from plain numbers here and scaled by CSS in the
     #: browser rather than recomputed per viewport.
     #:
-    #: The box is deeper than it is wide by the standards of a sparkline
-    #: (640x240, not the original 640x170) because this panel now shares a row
-    #: rather than spanning the page: in a half-width column the old ratio
-    #: resolved to about 110px of height for twelve months of three series,
-    #: which is not enough to see one line cross another.
+    #: 640x170. It was briefly 640x240, to compensate for the panel being moved
+    #: into a half-width column where the flatter ratio resolved to about 110px
+    #: of height — not enough to see one of three series cross another. The panel
+    #: spans the page again, so the plot is roughly 630px wide beside its summary
+    #: and 170 gives it about 168px of height. The compensation went with the
+    #: width that caused it.
     #:
-    #: No left gutter. It used to reserve 34 units for y-axis labels that were
-    #: never drawn — the scale is stated in words beneath the chart instead —
-    #: so the gutter was dead space pushing the plot narrower still.
-    TREND_WIDTH, TREND_HEIGHT = 640, 240
-    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 0, 10, 26
+    #: No left gutter, and that part stays: it used to reserve 34 units for
+    #: y-axis labels that were never drawn — the scale is stated in words beneath
+    #: the chart — so the gutter was dead space at any width.
+    TREND_WIDTH, TREND_HEIGHT = 640, 170
+    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 0, 12, 24
 
     #: Horizontal rules behind the plot, as fractions of the ceiling. The last
     #: is the baseline and is drawn heavier.

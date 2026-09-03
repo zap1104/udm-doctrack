@@ -1539,12 +1539,14 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
 
 /* ------------------------------------------------------------ trend line */
-/* The chart and its summary stack rather than sitting side by side: this panel
-   shares a row now, and two columns inside one half-width column gives neither
-   enough room. Kept as flex with a wrap so a future full-width placement puts
-   them back beside each other without needing a second rule. */
+/* Chart and summary side by side. They stacked while this panel sat in a
+   half-width column, where two columns inside one gave neither enough room; the
+   panel spans the page again. The wrap is kept so a narrow viewport still
+   stacks them rather than crushing both. */
 .trend-layout { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
-.trend-chart { flex:1 1 100%; min-width:0; }
+/* Grows faster than the summary so the extra width goes to the plot, which is
+   the part that gets harder to read as the series crowd together. */
+.trend-chart { flex:3 1 420px; min-width:0; }
 .trend-legend { margin-bottom:12px; }
 /* Fixed viewBox, fluid box. Height comes from the viewBox's own ratio rather
    than a fixed pixel height, so the plot scales uniformly and the data points
@@ -1552,10 +1554,10 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    ovals. vector-effect="non-scaling-stroke" then holds the line weight steady
    across the range of widths this column takes.
 
-   640:240, not the 640:170 this started at: at half width the old ratio came
-   out around 110px tall, which is not enough depth to see one series cross
-   another. Keep this in step with TREND_WIDTH/TREND_HEIGHT in views.py. */
-.trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/240; }
+   Keep this in step with TREND_WIDTH/TREND_HEIGHT in views.py — a mismatch
+   letterboxes the plot inside its own card without erroring anywhere, which is
+   why a test asserts the two agree. */
+.trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/170; }
 .trend-grid { stroke:var(--chart-grid); stroke-width:1; }
 .trend-axis { stroke:var(--udm-line); stroke-width:1; }
 /* The month labels sit outside the SVG so they are real text at a real size —
@@ -1564,11 +1566,11 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    labels that were never drawn. */
 .trend-axis-labels { display:flex; }
 .trend-axis-labels span { flex:1 1 0; min-width:0; color:var(--udm-muted); font-size:11px; text-align:center; }
-/* Two columns of figures under the chart rather than one tall stack, which ran
-   the card far past the panel beside it. */
-.trend-summary { flex:1 1 100%; min-width:0; padding:12px 14px; border:1px solid var(--udm-line); border-radius:10px; }
+.trend-summary { flex:1 1 250px; min-width:0; padding:12px 14px; border:1px solid var(--udm-line); border-radius:10px; }
 .trend-summary-head { margin-bottom:6px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
-.trend-summary-figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0 18px; }
+/* auto-fit, so the figures sit in one column beside the chart and spread into
+   two when the layout wraps and the summary has the full width to itself. */
+.trend-summary-figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0 18px; }
 /* The border between rows belongs to a single column of figures; across a grid
    it draws a rule through the middle of the group. */
 .trend-summary-figures .report-metric { border-bottom:0; padding:6px 0; }

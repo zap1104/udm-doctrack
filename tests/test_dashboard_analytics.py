@@ -571,13 +571,23 @@ def test_the_plot_uses_the_whole_width():
     assert max(xs) > view.TREND_WIDTH * 0.94
 
 
-def test_the_plot_is_deep_enough_to_read_at_half_width():
-    """This panel shares a row now. At the ratio it started with, a column of
-    about 415px resolved to roughly 110px of height for twelve months of three
-    series, which is not enough to see one line cross another."""
+def test_the_plot_is_deep_enough_to_read_at_the_width_it_gets():
+    """The panel spans the page, and the chart takes roughly 630px of it beside
+    the summary. Twelve months of three series need enough depth there to show
+    one line crossing another — the half-width version resolved to about 110px
+    and could not."""
     view = _view()
 
-    assert 415 * view.TREND_HEIGHT / view.TREND_WIDTH > 140
+    assert 630 * view.TREND_HEIGHT / view.TREND_WIDTH > 140
+
+
+def test_the_half_width_compensation_went_with_the_width_that_caused_it():
+    """640x240 was a response to the panel being squeezed into a column. It is
+    full width again, so the flatter box is correct and the taller one would
+    just be wasted vertical space."""
+    view = _view()
+
+    assert (view.TREND_WIDTH, view.TREND_HEIGHT) == (640, 170)
 
 
 def test_the_stylesheet_declares_the_same_ratio_the_view_plots_at():
@@ -1164,6 +1174,82 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
     assert "onclick=" not in body
     assert "onsubmit=" not in body
     assert body.count("onchange=") <= 1
+
+
+# ------------------------------------------------------- the column rule
+#: Top to bottom. A pair is (left, right); a lone string is a full-width row.
+#: Left is tracking, right is the repository, wherever a row is split.
+EXPECTED_ROWS = [
+    "Needs attention now",
+    ("Tracking", "Repository"),
+    "What this shows",
+    ("Action Centre", "Newest in the Document Repository"),
+    ("Monthly volume", "Added to the repository"),
+    "Turnaround by month",
+    ("Records by status", "Office Flow Today"),
+]
+
+
+@pytest.mark.django_db
+def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_record):
+    """The donut row teaches "left is what is moving, right is what is filed".
+    The page used to drop that immediately, so a reader who had just learned it
+    was wrong by the next row."""
+    import re
+
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    headings = [
+        re.sub(r"<[^>]+>|\s+", " ", m.group(1) or m.group(2)).strip()
+        for m in re.finditer(r"<h2>(.*?)</h2>|<h3>(What this shows)</h3>", body, re.S)
+    ]
+    expected = []
+    for row in EXPECTED_ROWS:
+        expected.extend(row if isinstance(row, tuple) else [row])
+
+    # "Added to the repository &mdash; September" carries the month, as the
+    # HTML entity rather than the character.
+    normalised = [re.split(r"&mdash;| — ", h)[0].strip() for h in headings]
+    assert normalised == expected
+
+
+@pytest.mark.django_db
+def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, filed_record):
+    """Newest in the Document Repository used to be stacked inside the same
+    column as Office Flow Today, which is why the repository side of the page
+    simply stopped after the donut."""
+    import re
+
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    columns = re.findall(r'<div class="col-xl-6">(.*?)(?=<div class="col-xl-6">|</div>\s*</div>\s*$)', body, re.S)
+    assert any("Newest in the Document Repository" in c and "Office Flow Today" not in c
+               for c in columns), "the two are still sharing one column"
+
+
+def test_the_turnaround_panel_is_full_width():
+    """Three series over twelve months does not fit in half a row — that is what
+    commit 4b082e8 was about. It has the whole row now, so the box it plots in
+    went back to the ratio it had before that squeeze.
+
+    Asserted as <div> depth: a panel in a column sits two levels deeper than one
+    that spans the page, which is the difference between the two shapes.
+    """
+    import pathlib
+
+    html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
+    _, trace = _div_depth(html)
+    depth_of = {
+        heading: depth
+        for _, depth, line in trace
+        for heading in ("Turnaround by month", "Needs attention now", "Monthly volume")
+        if f"<h2>{heading}</h2>" in line
+    }
+
+    assert depth_of["Turnaround by month"] == depth_of["Needs attention now"], "full width"
+    assert depth_of["Turnaround by month"] < depth_of["Monthly volume"], "not in a column"
 
 
 @pytest.mark.django_db
