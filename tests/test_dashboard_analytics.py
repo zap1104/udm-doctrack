@@ -487,14 +487,19 @@ def test_the_combined_stacked_bar_was_replaced_not_kept_alongside(
 
 
 @pytest.mark.django_db
-def test_the_write_up_survived_the_panel_it_lived_in(client, users, filed_record):
-    """It exists so a printed copy says something in words rather than only in
-    colour, which is a reason the panel's removal does not touch."""
+def test_the_write_up_panel_was_removed_but_its_figures_are_still_computed(
+    client, users, filed_record
+):
+    """Removed from the page by explicit approval. The context key stays because
+    the brief said to leave it — but nothing renders it now, so the prose that
+    made a printed copy legible to somebody who did not filter it is gone. There
+    is a FIXME on `_breakdown_summary` saying so."""
     client.force_login(users["admin"])
-    body = client.get(DASHBOARD).content.decode()
+    response = client.get(DASHBOARD)
 
-    assert "What this shows" in body
-    assert "dashboard-writeup" in body
+    assert "What this shows" not in response.content.decode()
+    assert "dashboard-writeup" not in response.content.decode()
+    assert response.context["breakdown_summary"], "still computed, just unrendered"
 
 
 # --- the trend line --------------------------------------------------------
@@ -890,13 +895,13 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    for heading in ("Action Centre", "Records by status", "Office Flow Today",
-                    "Newest in the Document Repository"):
+    for heading in ("Action Centre", "Newest in the Document Repository",
+                    "Monthly volume", "Turnaround by month"):
         assert f"<h2>{heading}</h2>" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("Newest in the Document Repository") < body.index('id="dashboard-memo"')
+    assert body.index("Turnaround by month") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Action Centre
@@ -1180,13 +1185,10 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: Top to bottom. A pair is (left, right); a lone string is a full-width row.
 #: Left is tracking, right is the repository, wherever a row is split.
 EXPECTED_ROWS = [
-    "Needs attention now",
     ("Tracking", "Repository"),
-    "What this shows",
     ("Action Centre", "Newest in the Document Repository"),
     ("Monthly volume", "Added to the repository"),
     "Turnaround by month",
-    ("Records by status", "Office Flow Today"),
 ]
 
 
@@ -1202,7 +1204,7 @@ def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_r
 
     headings = [
         re.sub(r"<[^>]+>|\s+", " ", m.group(1) or m.group(2)).strip()
-        for m in re.finditer(r"<h2>(.*?)</h2>|<h3>(What this shows)</h3>", body, re.S)
+        for m in re.finditer(r"<h2>(.*?)</h2>", body, re.S)
     ]
     expected = []
     for row in EXPECTED_ROWS:
@@ -1229,27 +1231,70 @@ def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, fil
                for c in columns), "the two are still sharing one column"
 
 
-def test_the_turnaround_panel_is_full_width():
-    """Three series over twelve months does not fit in half a row — that is what
-    commit 4b082e8 was about. It has the whole row now, so the box it plots in
-    went back to the ratio it had before that squeeze.
+def test_the_turnaround_panel_is_full_width_and_comes_last():
+    """It is the one chart spanning both domains, so it closes the page under
+    the four half-width rows rather than sitting in one of them. Three series
+    over twelve months does not fit in half a row either — that is what commit
+    4b082e8 was about.
 
-    Asserted as <div> depth: a panel in a column sits two levels deeper than one
-    that spans the page, which is the difference between the two shapes.
+    Asserted as <div> depth: a panel in a col-xl-6 sits at the same depth as one
+    in a col-12, so the class is checked directly.
     """
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    _, trace = _div_depth(html)
-    depth_of = {
-        heading: depth
-        for _, depth, line in trace
-        for heading in ("Turnaround by month", "Needs attention now", "Monthly volume")
-        if f"<h2>{heading}</h2>" in line
-    }
+    head = html.index("<h2>Turnaround by month</h2>")
+    column = html.rindex('<div class="col-', 0, head)
 
-    assert depth_of["Turnaround by month"] == depth_of["Needs attention now"], "full width"
-    assert depth_of["Turnaround by month"] < depth_of["Monthly volume"], "not in a column"
+    assert html[column:].startswith('<div class="col-12">'), "not full width"
+    assert "<h2>" not in html[head + 1:html.index("{% comment %}\n  Generate memo.")], "not last"
+
+
+@pytest.mark.django_db
+def test_the_page_carries_its_two_column_labels(client, users, filed_record):
+    """Said once, above the first split row: every row below reads tracking on
+    the left and the repository on the right."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert '<div class="eyebrow">tracking</div>' in body
+    assert '<div class="eyebrow">repository</div>' in body
+
+
+@pytest.mark.django_db
+def test_held_by_your_office_kept_a_home_when_its_panel_went(client, users, filed_record):
+    """custody_count was a line inside Office Flow Today, which the wireframe
+    drops. Of the four figures that panel carried it is the one that says how
+    much work is sitting with you, so it took a stat card rather than going with
+    the others."""
+    client.force_login(users["sup"])
+    response = client.get(DASHBOARD)
+    body = response.content.decode()
+
+    assert "Held by your office" in body
+    assert str(response.context["custody_count"]) in body
+
+
+@pytest.mark.django_db
+def test_the_removed_panels_are_gone_from_the_page(client, users, filed_record):
+    """Four panels were removed by explicit approval, one yes each."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    for heading in ("Needs attention now", "Records by status", "Office Flow Today"):
+        assert f"<h2>{heading}</h2>" not in body, heading
+
+
+@pytest.mark.django_db
+def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, overdue_record):
+    """Markup only. Reports reads several of the same helpers, and the memo
+    still reads the overdue figures."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    for key in ("overdue_offices", "overdue_summary", "live_by_status",
+                "custody_count", "received_today", "breakdown_summary"):
+        assert key in context, key
 
 
 @pytest.mark.django_db

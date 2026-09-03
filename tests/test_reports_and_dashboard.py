@@ -290,7 +290,11 @@ def test_the_dashboard_writes_up_what_the_numbers_show(client, finished_record, 
 
     summary = response.context["breakdown_summary"]
     assert summary and all(isinstance(line, str) for line in summary)
-    assert "What this shows" in response.content.decode()
+    # The panel that rendered this was removed from the dashboard by explicit
+    # approval; the figures are still computed and the memo still speaks in
+    # sentences, so what this test guards — that the numbers can be said in
+    # words — moved to the memo rather than disappearing.
+    assert "Generate memo" in response.content.decode()
 
 
 @pytest.mark.django_db
