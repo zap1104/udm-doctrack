@@ -8,6 +8,13 @@
     <h1>Office Document Repository</h1>
     <p class="sub">Completed records, archived documents, and historical office uploads. Active work remains in Tracking.</p>
   </div>
+  {% comment %}
+    FIXME: same as templates/tracking/list.html — shown to viewers, whom
+    UploadView refuses. Gate on the same test the dashboard uses.
+
+    FIXME: this says "Upload Document" while the dashboard button for the same
+    view says "Upload to Repository". Pick one and use it in both.
+  {% endcomment %}
   <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
 </div>
 

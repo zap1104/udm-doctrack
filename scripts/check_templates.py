@@ -14,6 +14,13 @@ Runs without Django installed, so it is usable in CI before anything is set up.
 It is a linter, not a substitute for opening the pages in a browser.
 """
 
+# FIXME: this validates Django tag nesting only. It passed happily on a template
+# whose <div>s did not balance, and the page shipped with half the dashboard
+# rendered outside its container (fixed in 48151ab). tests/test_dashboard_analytics.py
+# now checks <div> depth for dashboard.html alone; that check belongs here, over
+# every template, so no other page can ship the same fault.
+
+
 from __future__ import annotations
 
 import re
