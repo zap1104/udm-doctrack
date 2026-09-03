@@ -79,21 +79,21 @@
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-12 col-md-4">
+  <div class="col-6 col-md-3">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming">
       <div class="label">Incoming</div>
       <div class="value">{{ inbox_count }}</div>
       <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
     </a>
   </div>
-  <div class="col-6 col-md-4">
+  <div class="col-6 col-md-3">
     <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
-  <div class="col-6 col-md-4">
+  <div class="col-6 col-md-3">
     {% comment %}
       Overdue leads to Reports, not to the filtered tracking list. The question
       behind clicking an overdue count is "why are these late and whose are
@@ -105,104 +105,31 @@
       <div class="hint">Past the action deadline · opens Reports</div>
     </a>
   </div>
+  {% comment %}
+    Held by your office. It was a line inside Office Flow Today, which the
+    wireframe drops; of the four figures that panel carried this is the one
+    that says how much work is sitting with you right now, so it takes a card
+    rather than going with the others.
+  {% endcomment %}
+  <div class="col-6 col-md-3">
+    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=custody">
+      <div class="label">Held by your office</div>
+      <div class="value">{{ custody_count }}</div>
+      <div class="hint">Received and not yet forwarded or completed</div>
+    </a>
+  </div>
 </div>
 
 {% comment %}
-  Every row below follows one rule: tracking on the left, the repository on the
-  right, or the panel takes the full width. The donut row sets that expectation
-  and the page used to drop it immediately, so a reader who had just learned
-  "left is what is moving, right is what is filed" was wrong by the next row.
-
-  Needs attention now leads, full width, because it is the only panel here that
-  states something somebody has to go and do today.
+  Two labels for the whole page, not for one row. Every row below reads
+  tracking on the left and the repository on the right, and saying so once here
+  is what makes the other rows legible without repeating a heading on each.
 {% endcomment %}
+<div class="row g-4 mb-1" aria-hidden="true">
+  <div class="col-xl-6"><div class="eyebrow">tracking</div></div>
+  <div class="col-xl-6"><div class="eyebrow">repository</div></div>
+</div>
 
-{% comment %}
-  Needs attention now. Overdue leads the page because it is the only thing on it
-  that somebody has to act on today — everything below is a position, this is a
-  queue. Counts alone could not distinguish twelve documents one day late from
-  three a month late, so every row carries the age of its oldest item.
-{% endcomment %}
-  <div class="card-udm dashboard-alert">
-    <div class="card-udm-head">
-      <div>
-        <h2>Needs attention now</h2>
-        <div class="card-udm-caption">
-          Documents past the deadline set for them, and where they are sitting.
-        </div>
-      </div>
-      <a class="btn btn-dashboard-action btn-sm" href="{% url 'core:reports' %}?status=OVERDUE">
-        <span>Open in Reports</span>
-        <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
-      </a>
-    </div>
-    <div class="card-udm-body">
-      {% if overdue_summary.total %}
-        <div class="alert-figures">
-          <div class="alert-figure alert-figure--lead">
-            <div class="alert-figure-value num">{{ overdue_summary.total }}</div>
-            <div class="alert-figure-label">
-              overdue document{{ overdue_summary.total|pluralize }}
-            </div>
-          </div>
-          <div class="alert-figure">
-            <div class="alert-figure-value num">{{ overdue_summary.oldest_days }}</div>
-            <div class="alert-figure-label">days past deadline, oldest</div>
-          </div>
-          <div class="alert-figure">
-            <div class="alert-figure-value num">{{ overdue_summary.percent_of_all }}%</div>
-            <div class="alert-figure-label">of everything on record</div>
-          </div>
-          <div class="alert-figure">
-            <div class="alert-figure-value num">{{ overdue_summary.office_count }}</div>
-            {% comment %}
-              "offices affected" rather than "offices holding them": the pronoun
-              would be keyed on the office count while referring to the documents,
-              so one office holding five late documents read "office holding it".
-            {% endcomment %}
-            <div class="alert-figure-label">
-              office{{ overdue_summary.office_count|pluralize }} affected
-            </div>
-          </div>
-        </div>
-        <div class="overdue-office-list">
-          {% for row in overdue_offices %}
-            <div class="report-series-item report-series-item--wide">
-              <span title="{{ row.name }}">{{ row.name }}</span>
-              <div class="report-bar"><i class="bar-alert" style="width:{{ row.bar_percent }}%"></i></div>
-              <strong class="num">{{ row.total }}</strong>
-              <span class="overdue-oldest num">oldest {{ row.oldest_days }} day{{ row.oldest_days|pluralize }}</span>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="report-empty">Nothing is past its deadline.</div>
-      {% endif %}
-    </div>
-  </div>
-
-{% comment %}
-  ============================================================
-  Analytics panels. Every figure comes from apps/core/analytics.py, the same
-  module the Reports page reads, so the two pages cannot disagree about the
-  same metric. Nothing here is a placeholder waiting for a dataset.
-  ============================================================
-{% endcomment %}
-
-{% comment %}
-  One ring per domain rather than one combined ring. The combined version could
-  show the split between tracking and the repository but not the shape of
-  either: five tracking stages competing with two repository ones in a single
-  ring left the tracking slices too thin to read, and tracking is the half
-  somebody acts on. Each ring is drawn against its own domain's subtotal, so
-  both close at 100%.
-
-  The stacked "All documents" bar that used to sit here is gone — it said the
-  same thing these two rings say, in a form that could not be read per domain.
-  Its write-up did not go with it: it sits beneath the pair now, because a
-  printed ring of colour handed to somebody who was not the one filtering it is
-  a picture of a number, not a finding.
-{% endcomment %}
 <div class="row g-4 mb-3">
   <div class="col-xl-6">
     <div class="card-udm h-100">
@@ -246,38 +173,21 @@
   </div>
 </div>
 
-{% comment %}
-  A shared caption for the pair above: the two rings together are the whole,
-  and this is the whole said in words. Generated from the same figures, so the
-  prose cannot drift from the charts.
-{% endcomment %}
-{% if breakdown.total %}
-  <div class="card-udm mb-4">
-    <div class="card-udm-body">
-      <div class="dashboard-writeup dashboard-writeup--standalone">
-        <h3>What this shows</h3>
-        {% for sentence in breakdown_summary %}<p>{{ sentence }}</p>{% endfor %}
-      </div>
-    </div>
-  </div>
-{% endif %}
-
 <div class="row g-4 mb-4">
-  {# Tracking: what is on your desk. Repository: what has been filed. #}
   <div class="col-xl-6">
     {% comment %}
-      Action Centre. Two questions that were two panels: what needs doing, and what
-      moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
-      sitting in different rows and answering versions of the same question, so the
-      reader had to look in two places to know whether the desk was clear.
+          Action Centre. Two questions that were two panels: what needs doing, and what
+          moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
+          sitting in different rows and answering versions of the same question, so the
+          reader had to look in two places to know whether the desk was clear.
 
-      Full width because the merged tables carry up to five columns each under the
-      records-staff view, and because "what do I do next" is the one thing on this
-      page somebody acts on rather than reads.
+          Full width because the merged tables carry up to five columns each under the
+          records-staff view, and because "what do I do next" is the one thing on this
+          page somebody acts on rather than reads.
 
-      Needs action comes first, always. A list of what already happened above a list
-      of what has not is a filing cabinet, not a desk.
-    {% endcomment %}
+          Needs action comes first, always. A list of what already happened above a list
+          of what has not is a filing cabinet, not a desk.
+        {% endcomment %}
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
@@ -449,8 +359,8 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <h2>Newest in the Document Repository</h2>
-            <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
-              <span>Search</span>
+            <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}">
+      <span>Open repository</span>
               <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
             </a>
           </div>
@@ -466,18 +376,18 @@
               <p class="text-muted mb-0">No completed or archived records are available yet.</p>
             {% endfor %}
           </div>
-        </div>
+            </div>
   </div>
 </div>
 
 <div class="row g-4 mb-4">
   <div class="col-xl-6">
     {% comment %}
-        Monthly volume. The same cumulative three-series chart Reports draws, from
-        the same function — running totals rather than monthly resets, because the
-        gap between Created and Completed is the work still in the building and a
-        monthly reset hides it completely.
-      {% endcomment %}
+            Monthly volume. The same cumulative three-series chart Reports draws, from
+            the same function — running totals rather than monthly resets, because the
+            gap between Created and Completed is the work still in the building and a
+            monthly reset hides it completely.
+          {% endcomment %}
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
@@ -542,11 +452,11 @@
   </div>
   <div class="col-xl-6">
     {% comment %}
-        Uploads by office. One combined figure per office — a document uploaded
-        directly and a tracked record completed and filed are both an office adding
-        to the repository, and splitting them would make an office doing one of each
-        look half as productive as one doing two of the same.
-      {% endcomment %}
+            Uploads by office. One combined figure per office — a document uploaded
+            directly and a tracked record completed and filed are both an office adding
+            to the repository, and splitting them would make an office doing one of each
+            look half as productive as one doing two of the same.
+          {% endcomment %}
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
@@ -593,196 +503,152 @@
   </div>
 </div>
 
-{% comment %}
-      Turnaround by month. Counted in office hours, the same basis the Reports
-      figures use — a document routed Friday 4PM and received Monday 9AM waited
-      about an hour of anybody's attention, and charging the office for the weekend
-      would be the wrong reading. Months with nothing completed are left unplotted
-      rather than drawn at zero: nothing finished is not the same as finished
-      instantly.
-    {% endcomment %}
-  <div class="card-udm">
-    <div class="card-udm-head">
-      <div>
-        <h2>Turnaround by month</h2>
-          <div class="card-udm-caption">
-            Average working days per stage, counted in <strong>office hours</strong>.
-            {{ turnaround_trend.office_hours_caveat }}
-          </div>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% if turnaround_trend.has_data %}
-          {% comment %}
-            The legend sits in the body rather than beside the heading. In the
-            head it shared one line with the title and the office-hours caveat,
-            which at this column width left three keys fighting a sentence for
-            the same few centimetres.
-          {% endcomment %}
-          <div class="chart-legend trend-legend">
-            {% for series in turnaround_trend_points %}
-              <span class="chart-key">
-                <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
-              </span>
-            {% endfor %}
-          </div>
-          <div class="trend-layout">
-            <div class="trend-chart">
-              {% comment %}
-                No preserveAspectRatio="none": it stretches the plot to the column
-                width, which turns every data point from a circle into an oval.
-                The default uniform scaling keeps the dots round, and the CSS sizes
-                the box by the viewBox's own ratio so nothing is letterboxed.
-              {% endcomment %}
-              <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
-                   aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
-                {% comment %}
-                  Rules and baseline from the same constants that place the
-                  data. They were literals here while the plot geometry lived in
-                  Python, so the two agreed only by hand and changing the box
-                  moved the lines off the data without saying so.
-                {% endcomment %}
-                <g aria-hidden="true">
-                  {% for line in turnaround_trend_geometry.grid %}
-                    <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
-                          y1="{{ line.y }}" y2="{{ line.y }}"
-                          class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
-                  {% endfor %}
-                </g>
-                {% for series in turnaround_trend_points %}
-                  <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
-                            stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"></polyline>
-                  {% for dot in series.dots %}
-                    <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" fill="#fff"
-                            stroke="{{ series.colour }}" stroke-width="2"
-                            vector-effect="non-scaling-stroke"></circle>
-                  {% endfor %}
-                {% endfor %}
-              </svg>
-              <div class="trend-axis-labels" aria-hidden="true">
-                {% for row in turnaround_trend.rows %}
-                  <span>{{ row.month|date:"M" }}</span>
-                {% endfor %}
-              </div>
-              <div class="chart-scale">
-                Top of the chart = {{ turnaround_trend.ceiling }} working day{{ turnaround_trend.ceiling|pluralize }}
-                &middot; one day is eight office hours
-              </div>
-            </div>
-            <div class="trend-summary">
-              <div class="trend-summary-head">
-                {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
-              </div>
-              <div class="trend-summary-figures">
-                <div class="report-metric">
-                  <span>To mark-as-received</span>
-                  <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
-                </div>
-                <div class="report-metric">
-                  <span>Processing</span>
-                  <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
-                </div>
-                <div class="report-metric">
-                  <span>Total lifetime</span>
-                  <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
-                </div>
-              </div>
-              {% comment %}
-                Only shown when something actually had a deadline that month. A 0%
-                printed for a month in which nothing was due would read as
-                "everything was late", which is the opposite of the truth.
-              {% endcomment %}
-              {% if turnaround_trend.latest.has_on_time %}
-                <div class="meter-head">
-                  <span>Completed on time</span>
-                  <strong class="num">{{ turnaround_trend.latest.on_time_percent }}%</strong>
-                </div>
-                <div class="meter-track">
-                  <i class="meter-fill" style="width:{{ turnaround_trend.latest.on_time_percent }}%"></i>
-                </div>
-                <div class="meter-foot">
-                  {{ turnaround_trend.latest.on_time }} of {{ turnaround_trend.latest.closed }}
-                  document{{ turnaround_trend.latest.closed|pluralize }} with a deadline
-                </div>
-              {% endif %}
-            </div>
-          </div>
-          <details class="chart-table">
-            <summary>View as table</summary>
-            <div class="table-responsive"><table class="table-udm">
-              <thead><tr>
-                <th>Month</th><th class="text-end">To received</th><th class="text-end">Processing</th>
-                <th class="text-end">Lifetime</th><th class="text-end">On time</th>
-              </tr></thead>
-              <tbody>
-                {% for row in turnaround_trend.rows %}
-                  <tr>
-                    <td>{{ row.month|date:"F Y" }}</td>
-                    <td class="text-end num">{{ row.receipt|default_if_none:"—" }}</td>
-                    <td class="text-end num">{{ row.processing|default_if_none:"—" }}</td>
-                    <td class="text-end num">{{ row.lifetime|default_if_none:"—" }}</td>
-                    <td class="text-end num">
-                      {% if row.has_on_time %}{{ row.on_time_percent }}%{% else %}&mdash;{% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table></div>
-          </details>
-        {% else %}
-          <div class="report-empty">
-            Nothing has been received or completed yet, so there is no turnaround to measure.
-          </div>
-        {% endif %}
-      </div>
-    </div>
-
 <div class="row g-4 mb-4">
-  <div class="col-xl-6">
+  <div class="col-12">
     {% comment %}
-        Records by status. The same markup as the Reports status panel, from the
-        same `by_status` function. Overdue is deliberately absent: it is a deadline
-        condition on top of these statuses rather than one of them, it already has
-        the banner at the top of this page, and counting it twice here would move
-        records out of the status they are actually in.
-      {% endcomment %}
-    <div class="card-udm h-100">
+          Turnaround by month. Counted in office hours, the same basis the Reports
+          figures use — a document routed Friday 4PM and received Monday 9AM waited
+          about an hour of anybody's attention, and charging the office for the weekend
+          would be the wrong reading. Months with nothing completed are left unplotted
+          rather than drawn at zero: nothing finished is not the same as finished
+          instantly.
+        {% endcomment %}
+    <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>Records by status</h2>
-          <div class="card-udm-caption">
-            Where the records still in play stand right now. Overdue is a deadline
-            condition on top of these, counted separately above.
-          </div>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% for row in live_by_status %}
-          <div class="status-row">
-            <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
-            <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
-            <strong class="num">{{ row.total }}</strong>
-            <span class="status-share num">{{ row.percent }}%</span>
-          </div>
-        {% empty %}
-          <div class="report-empty">No records are in play.</div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head"><h2>Office Flow Today</h2></div>
-          <div class="card-udm-body">
-            <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
-            <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
-            <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
-            <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
-              <span>Held by your office</span><strong>{{ custody_count }}</strong>
+          <h2>Turnaround by month</h2>
+            <div class="card-udm-caption">
+              Average working days per stage, counted in <strong>office hours</strong>.
+              {{ turnaround_trend.office_hours_caveat }}
             </div>
           </div>
         </div>
+        <div class="card-udm-body">
+          {% if turnaround_trend.has_data %}
+            {% comment %}
+              The legend sits in the body rather than beside the heading. In the
+              head it shared one line with the title and the office-hours caveat,
+              which at this column width left three keys fighting a sentence for
+              the same few centimetres.
+            {% endcomment %}
+            <div class="chart-legend trend-legend">
+              {% for series in turnaround_trend_points %}
+                <span class="chart-key">
+                  <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
+                </span>
+              {% endfor %}
+            </div>
+            <div class="trend-layout">
+              <div class="trend-chart">
+                {% comment %}
+                  No preserveAspectRatio="none": it stretches the plot to the column
+                  width, which turns every data point from a circle into an oval.
+                  The default uniform scaling keeps the dots round, and the CSS sizes
+                  the box by the viewBox's own ratio so nothing is letterboxed.
+                {% endcomment %}
+                <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
+                     aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
+                  {% comment %}
+                    Rules and baseline from the same constants that place the
+                    data. They were literals here while the plot geometry lived in
+                    Python, so the two agreed only by hand and changing the box
+                    moved the lines off the data without saying so.
+                  {% endcomment %}
+                  <g aria-hidden="true">
+                    {% for line in turnaround_trend_geometry.grid %}
+                      <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
+                            y1="{{ line.y }}" y2="{{ line.y }}"
+                            class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
+                    {% endfor %}
+                  </g>
+                  {% for series in turnaround_trend_points %}
+                    <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
+                              stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+                              vector-effect="non-scaling-stroke"></polyline>
+                    {% for dot in series.dots %}
+                      <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" fill="#fff"
+                              stroke="{{ series.colour }}" stroke-width="2"
+                              vector-effect="non-scaling-stroke"></circle>
+                    {% endfor %}
+                  {% endfor %}
+                </svg>
+                <div class="trend-axis-labels" aria-hidden="true">
+                  {% for row in turnaround_trend.rows %}
+                    <span>{{ row.month|date:"M" }}</span>
+                  {% endfor %}
+                </div>
+                <div class="chart-scale">
+                  Top of the chart = {{ turnaround_trend.ceiling }} working day{{ turnaround_trend.ceiling|pluralize }}
+                  &middot; one day is eight office hours
+                </div>
+              </div>
+              <div class="trend-summary">
+                <div class="trend-summary-head">
+                  {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
+                </div>
+                <div class="trend-summary-figures">
+                  <div class="report-metric">
+                    <span>Receipt</span>
+                    <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
+                  </div>
+                  <div class="report-metric">
+                    <span>In process</span>
+                    <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
+                  </div>
+                  <div class="report-metric">
+                    <span>Total lifetime</span>
+                    <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+                  </div>
+                </div>
+                {% comment %}
+                  Only shown when something actually had a deadline that month. A 0%
+                  printed for a month in which nothing was due would read as
+                  "everything was late", which is the opposite of the truth.
+                {% endcomment %}
+                {% if turnaround_trend.latest.has_on_time %}
+                  <div class="meter-head">
+                    <span>Completed on time</span>
+                    <strong class="num">{{ turnaround_trend.latest.on_time_percent }}%</strong>
+                  </div>
+                  <div class="meter-track">
+                    <i class="meter-fill" style="width:{{ turnaround_trend.latest.on_time_percent }}%"></i>
+                  </div>
+                  <div class="meter-foot">
+                    {{ turnaround_trend.latest.on_time }} of {{ turnaround_trend.latest.closed }}
+                    document{{ turnaround_trend.latest.closed|pluralize }} with a deadline
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+            <details class="chart-table">
+              <summary>View as table</summary>
+              <div class="table-responsive"><table class="table-udm">
+                <thead><tr>
+                  <th>Month</th><th class="text-end">To received</th><th class="text-end">Processing</th>
+                  <th class="text-end">Lifetime</th><th class="text-end">On time</th>
+                </tr></thead>
+                <tbody>
+                  {% for row in turnaround_trend.rows %}
+                    <tr>
+                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td class="text-end num">{{ row.receipt|default_if_none:"—" }}</td>
+                      <td class="text-end num">{{ row.processing|default_if_none:"—" }}</td>
+                      <td class="text-end num">{{ row.lifetime|default_if_none:"—" }}</td>
+                      <td class="text-end num">
+                        {% if row.has_on_time %}{{ row.on_time_percent }}%{% else %}&mdash;{% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table></div>
+            </details>
+          {% else %}
+            <div class="report-empty">
+              Nothing has been received or completed yet, so there is no turnaround to measure.
+            </div>
+          {% endif %}
+        </div>
+      </div>
   </div>
 </div>
 

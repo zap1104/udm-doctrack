@@ -344,9 +344,13 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             y = self.TREND_PAD_TOP + (1 - value / ceiling) * plot_h
             return round(x, 1), round(y, 1)
 
+        # "Receipt" is time-to-confirm-receipt, and "In process" is the span
+        # from that confirmation to completion. The second is a stage, not the
+        # IN_PROCESS status: a document is in somebody's hands for the whole of
+        # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
         series = [
-            ("receipt", "To mark-as-received", "var(--chart-two)"),
-            ("processing", "Processing", "var(--chart-one)"),
+            ("receipt", "Receipt", "var(--chart-two)"),
+            ("processing", "In process", "var(--chart-one)"),
             ("lifetime", "Total lifetime", "var(--chart-three)"),
         ]
         built = []
@@ -523,6 +527,17 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
 
     def _breakdown_summary(self, breakdown) -> list[str]:
         """The numbers, said in sentences.
+
+        FIXME: nothing renders this any more. The "What this shows" panel that
+        carried it was removed from the dashboard when the page was rebuilt to
+        the wireframe, and the brief said to leave the context key, so it is
+        computed on every request and thrown away. The memo says something
+        similar but is not the same text and only appears when somebody opens
+        the dialog. Either render it again — the print header is the obvious
+        place, since the reason it exists is that this page gets printed and
+        handed to people who did not filter it — or delete the method, the
+        context key, and the `breakdown_summary` assertions in
+        tests/test_dashboard_analytics.py and tests/test_reports_and_dashboard.py.
 
         Written out because the dashboard is printed and handed to people who
         were not the ones filtering it — a printed ring of coloured segments
