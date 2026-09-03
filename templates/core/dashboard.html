@@ -108,6 +108,80 @@
 </div>
 
 {% comment %}
+  Every row below follows one rule: tracking on the left, the repository on the
+  right, or the panel takes the full width. The donut row sets that expectation
+  and the page used to drop it immediately, so a reader who had just learned
+  "left is what is moving, right is what is filed" was wrong by the next row.
+
+  Needs attention now leads, full width, because it is the only panel here that
+  states something somebody has to go and do today.
+{% endcomment %}
+
+{% comment %}
+      Needs attention now. Overdue leads the page because it is the only thing on
+      it that somebody has to act on today — everything below is a position, this
+      is a queue. Counts alone could not distinguish twelve documents one day late
+      from three a month late, so every row carries the age of its oldest item.
+    {% endcomment %}
+    <div class="card-udm dashboard-alert h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Needs attention now</h2>
+          <div class="card-udm-caption">
+            Documents past the deadline set for them, and where they are sitting.
+          </div>
+        </div>
+        <a class="btn btn-dashboard-action btn-sm" href="{% url 'core:reports' %}?status=OVERDUE">
+          <span>Open in Reports</span>
+          <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+      <div class="card-udm-body">
+        {% if overdue_summary.total %}
+          <div class="alert-figures">
+            <div class="alert-figure alert-figure--lead">
+              <div class="alert-figure-value num">{{ overdue_summary.total }}</div>
+              <div class="alert-figure-label">
+                overdue document{{ overdue_summary.total|pluralize }}
+              </div>
+            </div>
+            <div class="alert-figure">
+              <div class="alert-figure-value num">{{ overdue_summary.oldest_days }}</div>
+              <div class="alert-figure-label">days past deadline, oldest</div>
+            </div>
+            <div class="alert-figure">
+              <div class="alert-figure-value num">{{ overdue_summary.percent_of_all }}%</div>
+              <div class="alert-figure-label">of everything on record</div>
+            </div>
+            <div class="alert-figure">
+              <div class="alert-figure-value num">{{ overdue_summary.office_count }}</div>
+              {% comment %}
+                "offices affected" rather than "offices holding them": the pronoun
+                would be keyed on the office count while referring to the documents,
+                so one office holding five late documents read "office holding it".
+              {% endcomment %}
+              <div class="alert-figure-label">
+                office{{ overdue_summary.office_count|pluralize }} affected
+              </div>
+            </div>
+          </div>
+          <div class="overdue-office-list">
+            {% for row in overdue_offices %}
+              <div class="report-series-item report-series-item--wide">
+                <span title="{{ row.name }}">{{ row.name }}</span>
+                <div class="report-bar"><i class="bar-alert" style="width:{{ row.bar_percent }}%"></i></div>
+                <strong class="num">{{ row.total }}</strong>
+                <span class="overdue-oldest num">oldest {{ row.oldest_days }} day{{ row.oldest_days|pluralize }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="report-empty">Nothing is past its deadline.</div>
+        {% endif %}
+      </div>
+    </div>
+
+{% comment %}
   ============================================================
   Analytics panels. Every figure comes from apps/core/analytics.py, the same
   module the Reports page reads, so the two pages cannot disagree about the
@@ -189,77 +263,337 @@
 {% endif %}
 
 <div class="row g-4 mb-4">
+  {# Tracking: what is on your desk. Repository: what has been filed. #}
   <div class="col-xl-6">
     {% comment %}
-      Needs attention now. Overdue leads the page because it is the only thing on
-      it that somebody has to act on today — everything below is a position, this
-      is a queue. Counts alone could not distinguish twelve documents one day late
-      from three a month late, so every row carries the age of its oldest item.
+      Action Centre. Two questions that were two panels: what needs doing, and what
+      moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
+      sitting in different rows and answering versions of the same question, so the
+      reader had to look in two places to know whether the desk was clear.
+
+      Full width because the merged tables carry up to five columns each under the
+      records-staff view, and because "what do I do next" is the one thing on this
+      page somebody acts on rather than reads.
+
+      Needs action comes first, always. A list of what already happened above a list
+      of what has not is a filing cabinet, not a desk.
     {% endcomment %}
-    <div class="card-udm dashboard-alert h-100">
+    <div class="card-udm mb-4">
       <div class="card-udm-head">
         <div>
-          <h2>Needs attention now</h2>
-          <div class="card-udm-caption">
-            Documents past the deadline set for them, and where they are sitting.
-          </div>
+          <h2>Action Centre</h2>
+          {% if show_office_columns %}
+            <div class="card-udm-caption">
+              Showing which office sent each document and which has still to confirm it.
+            </div>
+          {% endif %}
         </div>
-        <a class="btn btn-dashboard-action btn-sm" href="{% url 'core:reports' %}?status=OVERDUE">
-          <span>Open in Reports</span>
+        <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=incoming">
+          <span>Open Tracking</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
         </a>
       </div>
-      <div class="card-udm-body">
-        {% if overdue_summary.total %}
-          <div class="alert-figures">
-            <div class="alert-figure alert-figure--lead">
-              <div class="alert-figure-value num">{{ overdue_summary.total }}</div>
-              <div class="alert-figure-label">
-                overdue document{{ overdue_summary.total|pluralize }}
-              </div>
+
+      {% comment %}
+        The form wraps the Needs-action block only. Recently moved is read-only, and
+        a form spanning both would put rows nobody can act on inside the thing that
+        submits.
+
+        Bulk receipt keeps its custody attestation here rather than trading it for a
+        one-click button: `BulkConfirmReceiptForm.confirm_custody` is required, and
+        it is required because somebody is asserting the documents are physically in
+        their office. That assertion lands in an append-only audit trail, so the
+        dashboard asks for it in the same words the tracking list does.
+      {% endcomment %}
+      {% comment %}
+        FIXME: submitting this lands the user on /tracking/?scope=inbox, not back
+        here. BulkConfirmReceiptView redirects there on success *and* on failure
+        (apps/tracking/views.py), which is right for the tracking list that owns it
+        and wrong for a panel on the dashboard — a validation error is reported on
+        a page the user did not submit from. Give the view a `next` parameter, or
+        have it redirect to the referrer when it is a known internal page.
+      {% endcomment %}
+      {% if can_bulk_receive %}
+        <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
+      {% endif %}
+
+      <div class="desk-block">
+        <h3 class="desk-block-title">Needs action</h3>
+        <div class="card-udm-body p-0">
+          {% if attention_records %}
+            <div class="table-responsive"><table class="table-udm">
+              {% if show_office_columns %}
+                <thead>
+                  <tr>
+                    {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
+                    <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                  </tr>
+                </thead>
+              {% endif %}
+              <tbody>
+              {% for record in attention_records %}
+                <tr>
+                  {% if can_bulk_receive %}
+                    <td>
+                      {% if record.can_confirm_now %}
+                        <input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}"
+                               aria-label="Select {{ record.display_tracking_number }} for receipt">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                  {% if show_office_columns %}
+                    <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+                    <td>
+                      {{ record.subject|truncatechars:46 }}
+                      <div class="text-muted" style="font-size:12.5px;">
+                        updated {{ record.last_movement_at|timesince }} ago
+                      </div>
+                    </td>
+                    <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                    <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
+                  {% else %}
+                    <td>
+                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
+                      <div style="font-size:14px;">{{ record.subject }}</div>
+                      <div class="text-muted" style="font-size:12.5px;">
+                        From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                      </div>
+                    </td>
+                  {% endif %}
+                  <td class="text-end">
+                    {% if record.can_confirm_now %}
+                      <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                        <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                        <span>Confirm Receipt</span>
+                      </a>
+                    {% else %}
+                      {% include "partials/_status_pill.html" with status=record.display_status %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table></div>
+          {% else %}
+            {% comment %}
+              FIXME: this links to `?scope=inbox` while the panel head above links
+              to `?scope=incoming`. Both resolve to the same queue — `inbox` is a
+              legacy alias kept for bookmarks, see SCOPE_INBOX in
+              apps/tracking/services.py — but one panel offering the same queue
+              under two names is a trap for the next reader. Settle on `incoming`
+              here and audit the other callers of the legacy aliases.
+            {% endcomment %}
+            <div class="empty-state">
+              <h3>No incoming documents are waiting</h3>
+              <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
             </div>
-            <div class="alert-figure">
-              <div class="alert-figure-value num">{{ overdue_summary.oldest_days }}</div>
-              <div class="alert-figure-label">days past deadline, oldest</div>
+          {% endif %}
+        </div>
+
+        {% comment %}
+          Same three controls as the tracking list, in the same order and the same
+          words: an optional shared note, the custody attestation, then the submit.
+          Receipt is one act with one wording wherever it is offered.
+        {% endcomment %}
+        {% if can_bulk_receive %}
+          <div class="card-udm-body border-top">
+            <label class="form-label" for="desk-receipt-note">Receipt note for all selected records (optional)</label>
+            <textarea class="form-control" id="desk-receipt-note" name="note" maxlength="2000" rows="2"
+                      placeholder="Add the same custody note to each selected record"></textarea>
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" name="confirm_custody" id="desk-confirm-custody" required>
+              <label class="form-check-label" for="desk-confirm-custody">I confirm the selected physical or digital documents are present in my office's custody.</label>
             </div>
-            <div class="alert-figure">
-              <div class="alert-figure-value num">{{ overdue_summary.percent_of_all }}%</div>
-              <div class="alert-figure-label">of everything on record</div>
-            </div>
-            <div class="alert-figure">
-              <div class="alert-figure-value num">{{ overdue_summary.office_count }}</div>
-              {% comment %}
-                "offices affected" rather than "offices holding them": the pronoun
-                would be keyed on the office count while referring to the documents,
-                so one office holding five late documents read "office holding it".
-              {% endcomment %}
-              <div class="alert-figure-label">
-                office{{ overdue_summary.office_count|pluralize }} affected
-              </div>
-            </div>
+            <button class="btn btn-receipt mt-3" type="submit">Confirm Receipt for Selected</button>
           </div>
-          <div class="overdue-office-list">
-            {% for row in overdue_offices %}
-              <div class="report-series-item report-series-item--wide">
-                <span title="{{ row.name }}">{{ row.name }}</span>
-                <div class="report-bar"><i class="bar-alert" style="width:{{ row.bar_percent }}%"></i></div>
-                <strong class="num">{{ row.total }}</strong>
-                <span class="overdue-oldest num">oldest {{ row.oldest_days }} day{{ row.oldest_days|pluralize }}</span>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="report-empty">Nothing is past its deadline.</div>
         {% endif %}
+      </div>
+
+      {% if can_bulk_receive %}</form>{% endif %}
+
+      <div class="desk-block desk-block--secondary">
+        <h3 class="desk-block-title">Recently moved</h3>
+        <div class="card-udm-body p-0 table-responsive">
+          <table class="table-udm">
+            {% if show_office_columns %}
+              <thead>
+                <tr>
+                  <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
+                </tr>
+              </thead>
+            {% endif %}
+            <tbody>
+            {% for record in recent_records %}
+              <tr>
+                <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+                <td>{{ record.subject|truncatechars:52 }}</td>
+                {% if show_office_columns %}
+                  <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                  <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
+                {% endif %}
+                <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+              </tr>
+            {% empty %}
+              <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
+                No active records yet.
+              </td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
-  {% comment %}
-    Turnaround by month takes the half-width slot Pending Receipt vacated, so
-    the row it shares with the overdue banner still has two cards in it.
-  {% endcomment %}
+  <div class="col-xl-6">
+    <div class="card-udm mt-4">
+          <div class="card-udm-head">
+            <h2>Newest in the Document Repository</h2>
+            <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
+              <span>Search</span>
+              <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+          <div class="card-udm-body">
+            {% for document in recent_documents %}
+              <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
+                <div class="text-muted" style="font-size:12.5px;">
+                  {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+                </div>
+              </div>
+            {% empty %}
+              <p class="text-muted mb-0">No completed or archived records are available yet.</p>
+            {% endfor %}
+          </div>
+        </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
   <div class="col-xl-6">
     {% comment %}
+        Monthly volume. The same cumulative three-series chart Reports draws, from
+        the same function — running totals rather than monthly resets, because the
+        gap between Created and Completed is the work still in the building and a
+        monthly reset hides it completely.
+      {% endcomment %}
+        <div class="card-udm h-100">
+          <div class="card-udm-head">
+            <div>
+              <h2>Monthly volume</h2>
+              <div class="card-udm-caption">
+                Running totals since records began. The gap between created and
+                completed is what is still open.
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
+              <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
+              <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
+            </div>
+          </div>
+          <div class="card-udm-body">
+            {% if monthly.total %}
+              <div class="column-chart" role="img"
+                   aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
+                <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                <div class="column-chart-plot">
+                  {% for row in monthly.rows %}
+                    <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">
+                      <div class="column-pair">
+                        {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
+                        {% if row.transferred %}<span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>{% endif %}
+                        {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}
+                      </div>
+                      <div class="column-label">{{ row.month|date:"M" }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="chart-scale">
+                Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
+                {{ monthly.outstanding }} still open
+              </div>
+              <details class="chart-table">
+                <summary>View as table</summary>
+                <div class="table-responsive"><table class="table-udm">
+                  <thead><tr>
+                    <th>Month</th><th class="text-end">Created</th>
+                    <th class="text-end">Transferred</th><th class="text-end">Completed</th>
+                  </tr></thead>
+                  <tbody>
+                    {% for row in monthly.rows %}
+                      <tr>
+                        <td>{{ row.month|date:"F Y" }}</td>
+                        <td class="text-end num">{{ row.created }}</td>
+                        <td class="text-end num">{{ row.transferred }}</td>
+                        <td class="text-end num">{{ row.completed }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table></div>
+              </details>
+            {% else %}
+              <div class="report-empty">No tracking activity recorded yet.</div>
+            {% endif %}
+          </div>
+        </div>
+  </div>
+  <div class="col-xl-6">
+    {% comment %}
+        Uploads by office. One combined figure per office — a document uploaded
+        directly and a tracked record completed and filed are both an office adding
+        to the repository, and splitting them would make an office doing one of each
+        look half as productive as one doing two of the same.
+      {% endcomment %}
+      <div class="card-udm h-100">
+          <div class="card-udm-head">
+            <div>
+              <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
+              <div class="card-udm-caption">
+                Uploaded directly plus completed and filed, counted together.
+              </div>
+            </div>
+          </div>
+          <div class="card-udm-body">
+            {% if uploads_by_office.rows %}
+              {% comment %}
+                Named only when one office is genuinely ahead. On a tie the server
+                sends no leader, because calling a tie "the top office" hands out a
+                distinction the numbers did not award.
+              {% endcomment %}
+              {% if uploads_by_office.leader %}
+                <div class="uploads-leader">
+                  <span class="uploads-leader-tag">Most this month</span>
+                  <span>
+                    <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
+                    {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
+                    ({{ uploads_by_office.leader.percent }}%)
+                  </span>
+                </div>
+              {% endif %}
+              {% for row in uploads_by_office.rows %}
+                <div class="report-series-item report-series-item--wide"
+                     title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
+                  <span>{{ row.name }}</span>
+                  <div class="report-bar">
+                    <i class="{% if row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
+                       style="width:{{ row.bar_percent }}%"></i>
+                  </div>
+                  <strong class="num">{{ row.total }}</strong>
+                  <span class="status-share num">{{ row.percent }}%</span>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="report-empty">Nothing has been added to the repository this month.</div>
+            {% endif %}
+          </div>
+        </div>
+  </div>
+</div>
+
+{% comment %}
       Turnaround by month. Counted in office hours, the same basis the Reports
       figures use — a document routed Friday 4PM and received Monday 9AM waited
       about an hour of anybody's attention, and charging the office for the weekend
@@ -403,379 +737,52 @@
         {% endif %}
       </div>
     </div>
-  </div>
-</div>
 
-{% comment %}
-  Action Centre. Two questions that were two panels: what needs doing, and what
-  moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
-  sitting in different rows and answering versions of the same question, so the
-  reader had to look in two places to know whether the desk was clear.
-
-  Full width because the merged tables carry up to five columns each under the
-  records-staff view, and because "what do I do next" is the one thing on this
-  page somebody acts on rather than reads.
-
-  Needs action comes first, always. A list of what already happened above a list
-  of what has not is a filing cabinet, not a desk.
-{% endcomment %}
-<div class="card-udm mb-4">
-  <div class="card-udm-head">
-    <div>
-      <h2>Action Centre</h2>
-      {% if show_office_columns %}
-        <div class="card-udm-caption">
-          Showing which office sent each document and which has still to confirm it.
-        </div>
-      {% endif %}
-    </div>
-    <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=incoming">
-      <span>Open Tracking</span>
-      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
-    </a>
-  </div>
-
-  {% comment %}
-    The form wraps the Needs-action block only. Recently moved is read-only, and
-    a form spanning both would put rows nobody can act on inside the thing that
-    submits.
-
-    Bulk receipt keeps its custody attestation here rather than trading it for a
-    one-click button: `BulkConfirmReceiptForm.confirm_custody` is required, and
-    it is required because somebody is asserting the documents are physically in
-    their office. That assertion lands in an append-only audit trail, so the
-    dashboard asks for it in the same words the tracking list does.
-  {% endcomment %}
-  {% comment %}
-    FIXME: submitting this lands the user on /tracking/?scope=inbox, not back
-    here. BulkConfirmReceiptView redirects there on success *and* on failure
-    (apps/tracking/views.py), which is right for the tracking list that owns it
-    and wrong for a panel on the dashboard — a validation error is reported on
-    a page the user did not submit from. Give the view a `next` parameter, or
-    have it redirect to the referrer when it is a known internal page.
-  {% endcomment %}
-  {% if can_bulk_receive %}
-    <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
-  {% endif %}
-
-  <div class="desk-block">
-    <h3 class="desk-block-title">Needs action</h3>
-    <div class="card-udm-body p-0">
-      {% if attention_records %}
-        <div class="table-responsive"><table class="table-udm">
-          {% if show_office_columns %}
-            <thead>
-              <tr>
-                {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
-                <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
-              </tr>
-            </thead>
-          {% endif %}
-          <tbody>
-          {% for record in attention_records %}
-            <tr>
-              {% if can_bulk_receive %}
-                <td>
-                  {% if record.can_confirm_now %}
-                    <input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}"
-                           aria-label="Select {{ record.display_tracking_number }} for receipt">
-                  {% endif %}
-                </td>
-              {% endif %}
-              {% if show_office_columns %}
-                <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-                <td>
-                  {{ record.subject|truncatechars:46 }}
-                  <div class="text-muted" style="font-size:12.5px;">
-                    updated {{ record.last_movement_at|timesince }} ago
-                  </div>
-                </td>
-                <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
-              {% else %}
-                <td>
-                  <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
-                  <div style="font-size:14px;">{{ record.subject }}</div>
-                  <div class="text-muted" style="font-size:12.5px;">
-                    From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
-                  </div>
-                </td>
-              {% endif %}
-              <td class="text-end">
-                {% if record.can_confirm_now %}
-                  <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
-                    <span class="btn-receipt-icon" aria-hidden="true">✓</span>
-                    <span>Confirm Receipt</span>
-                  </a>
-                {% else %}
-                  {% include "partials/_status_pill.html" with status=record.display_status %}
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table></div>
-      {% else %}
-        {% comment %}
-          FIXME: this links to `?scope=inbox` while the panel head above links
-          to `?scope=incoming`. Both resolve to the same queue — `inbox` is a
-          legacy alias kept for bookmarks, see SCOPE_INBOX in
-          apps/tracking/services.py — but one panel offering the same queue
-          under two names is a trap for the next reader. Settle on `incoming`
-          here and audit the other callers of the legacy aliases.
-        {% endcomment %}
-        <div class="empty-state">
-          <h3>No incoming documents are waiting</h3>
-          <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-          <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
-        </div>
-      {% endif %}
-    </div>
-
+<div class="row g-4 mb-4">
+  <div class="col-xl-6">
     {% comment %}
-      Same three controls as the tracking list, in the same order and the same
-      words: an optional shared note, the custody attestation, then the submit.
-      Receipt is one act with one wording wherever it is offered.
-    {% endcomment %}
-    {% if can_bulk_receive %}
-      <div class="card-udm-body border-top">
-        <label class="form-label" for="desk-receipt-note">Receipt note for all selected records (optional)</label>
-        <textarea class="form-control" id="desk-receipt-note" name="note" maxlength="2000" rows="2"
-                  placeholder="Add the same custody note to each selected record"></textarea>
-        <div class="form-check mt-3">
-          <input class="form-check-input" type="checkbox" name="confirm_custody" id="desk-confirm-custody" required>
-          <label class="form-check-label" for="desk-confirm-custody">I confirm the selected physical or digital documents are present in my office's custody.</label>
-        </div>
-        <button class="btn btn-receipt mt-3" type="submit">Confirm Receipt for Selected</button>
-      </div>
-    {% endif %}
-  </div>
-
-  {% if can_bulk_receive %}</form>{% endif %}
-
-  <div class="desk-block desk-block--secondary">
-    <h3 class="desk-block-title">Recently moved</h3>
-    <div class="card-udm-body p-0 table-responsive">
-      <table class="table-udm">
-        {% if show_office_columns %}
-          <thead>
-            <tr>
-              <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
-            </tr>
-          </thead>
-        {% endif %}
-        <tbody>
-        {% for record in recent_records %}
-          <tr>
-            <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-            <td>{{ record.subject|truncatechars:52 }}</td>
-            {% if show_office_columns %}
-              <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-              <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
-            {% endif %}
-            <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
-          </tr>
-        {% empty %}
-          <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
-            No active records yet.
-          </td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mb-4">
-  <div class="col-xl-6">
-  {% comment %}
-    Monthly volume. The same cumulative three-series chart Reports draws, from
-    the same function — running totals rather than monthly resets, because the
-    gap between Created and Completed is the work still in the building and a
-    monthly reset hides it completely.
-  {% endcomment %}
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <div>
-          <h2>Monthly volume</h2>
-          <div class="card-udm-caption">
-            Running totals since records began. The gap between created and
-            completed is what is still open.
-          </div>
-        </div>
-        <div class="chart-legend">
-          <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% if monthly.total %}
-          <div class="column-chart" role="img"
-               aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
-            <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-            <div class="column-chart-plot">
-              {% for row in monthly.rows %}
-                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">
-                  <div class="column-pair">
-                    {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
-                    {% if row.transferred %}<span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>{% endif %}
-                    {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}
-                  </div>
-                  <div class="column-label">{{ row.month|date:"M" }}</div>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-          <div class="chart-scale">
-            Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
-            {{ monthly.outstanding }} still open
-          </div>
-          <details class="chart-table">
-            <summary>View as table</summary>
-            <div class="table-responsive"><table class="table-udm">
-              <thead><tr>
-                <th>Month</th><th class="text-end">Created</th>
-                <th class="text-end">Transferred</th><th class="text-end">Completed</th>
-              </tr></thead>
-              <tbody>
-                {% for row in monthly.rows %}
-                  <tr>
-                    <td>{{ row.month|date:"F Y" }}</td>
-                    <td class="text-end num">{{ row.created }}</td>
-                    <td class="text-end num">{{ row.transferred }}</td>
-                    <td class="text-end num">{{ row.completed }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table></div>
-          </details>
-        {% else %}
-          <div class="report-empty">No tracking activity recorded yet.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  {% comment %}
-    Uploads by office. One combined figure per office — a document uploaded
-    directly and a tracked record completed and filed are both an office adding
-    to the repository, and splitting them would make an office doing one of each
-    look half as productive as one doing two of the same.
-  {% endcomment %}
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <div>
-          <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
-          <div class="card-udm-caption">
-            Uploaded directly plus completed and filed, counted together.
-          </div>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% if uploads_by_office.rows %}
-          {% comment %}
-            Named only when one office is genuinely ahead. On a tie the server
-            sends no leader, because calling a tie "the top office" hands out a
-            distinction the numbers did not award.
-          {% endcomment %}
-          {% if uploads_by_office.leader %}
-            <div class="uploads-leader">
-              <span class="uploads-leader-tag">Most this month</span>
-              <span>
-                <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
-                {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
-                ({{ uploads_by_office.leader.percent }}%)
-              </span>
-            </div>
-          {% endif %}
-          {% for row in uploads_by_office.rows %}
-            <div class="report-series-item report-series-item--wide"
-                 title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
-              <span>{{ row.name }}</span>
-              <div class="report-bar">
-                <i class="{% if row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
-                   style="width:{{ row.bar_percent }}%"></i>
+        Records by status. The same markup as the Reports status panel, from the
+        same `by_status` function. Overdue is deliberately absent: it is a deadline
+        condition on top of these statuses rather than one of them, it already has
+        the banner at the top of this page, and counting it twice here would move
+        records out of the status they are actually in.
+      {% endcomment %}
+      <div class="card-udm h-100">
+          <div class="card-udm-head">
+            <div>
+              <h2>Records by status</h2>
+              <div class="card-udm-caption">
+                Where the records still in play stand right now. Overdue is a deadline
+                condition on top of these, counted separately above.
               </div>
-              <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.percent }}%</span>
             </div>
-          {% endfor %}
-        {% else %}
-          <div class="report-empty">Nothing has been added to the repository this month.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mb-4">
-  {% comment %}
-    Records by status. The same markup as the Reports status panel, from the
-    same `by_status` function. Overdue is deliberately absent: it is a deadline
-    condition on top of these statuses rather than one of them, it already has
-    the banner at the top of this page, and counting it twice here would move
-    records out of the status they are actually in.
-  {% endcomment %}
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <div>
-          <h2>Records by status</h2>
-          <div class="card-udm-caption">
-            Where the records still in play stand right now. Overdue is a deadline
-            condition on top of these, counted separately above.
+          </div>
+          <div class="card-udm-body">
+            {% for row in live_by_status %}
+              <div class="status-row">
+                <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
+                <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
+                <strong class="num">{{ row.total }}</strong>
+                <span class="status-share num">{{ row.percent }}%</span>
+              </div>
+            {% empty %}
+              <div class="report-empty">No records are in play.</div>
+            {% endfor %}
           </div>
         </div>
-      </div>
-      <div class="card-udm-body">
-        {% for row in live_by_status %}
-          <div class="status-row">
-            <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
-            <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
-            <strong class="num">{{ row.total }}</strong>
-            <span class="status-share num">{{ row.percent }}%</span>
-          </div>
-        {% empty %}
-          <div class="report-empty">No records are in play.</div>
-        {% endfor %}
-      </div>
-    </div>
   </div>
   <div class="col-xl-6">
     <div class="card-udm">
-      <div class="card-udm-head"><h2>Office Flow Today</h2></div>
-      <div class="card-udm-body">
-        <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
-          <span>Held by your office</span><strong>{{ custody_count }}</strong>
-        </div>
-      </div>
-    </div>
-
-    <div class="card-udm mt-4">
-      <div class="card-udm-head">
-        <h2>Newest in the Document Repository</h2>
-        <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
-          <span>Search</span>
-          <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
-        </a>
-      </div>
-      <div class="card-udm-body">
-        {% for document in recent_documents %}
-          <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
-            <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
-            <div class="text-muted" style="font-size:12.5px;">
-              {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+          <div class="card-udm-head"><h2>Office Flow Today</h2></div>
+          <div class="card-udm-body">
+            <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
+            <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
+            <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
+            <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
+              <span>Held by your office</span><strong>{{ custody_count }}</strong>
             </div>
           </div>
-        {% empty %}
-          <p class="text-muted mb-0">No completed or archived records are available yet.</p>
-        {% endfor %}
-      </div>
-    </div>
+        </div>
   </div>
 </div>
 
