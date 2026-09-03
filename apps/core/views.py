@@ -123,6 +123,10 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
 
         attention = attention[:5]
         tracking_services.annotate_can_confirm(attention, user)
+        # Same test the tracking list uses (apps/tracking/views.py): the bulk
+        # footer only appears when at least one row on this page could actually
+        # be received, so nobody is shown an attestation they cannot satisfy.
+        can_bulk_receive = any(record.can_confirm_now for record in attention)
 
         recent = list(tracking_services.active_for(user)[:8])
         show_office_columns = user.is_records_staff
@@ -148,6 +152,8 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
                 "forwarded_today": forwarded_today,
                 "completed_today": completed_today,
                 "greeting": _greeting(),
+                "can_bulk_receive": can_bulk_receive,
+                "can_start_work": _can_start_work(user),
                 "breakdown": breakdown,
                 "breakdown_summary": self._breakdown_summary(breakdown),
                 "printed_at": timezone.localtime(),
@@ -635,6 +641,26 @@ def _annotate_destinations(records) -> None:
         outstanding = awaiting or destinations
         record.pending_offices_shown = outstanding[:DESTINATIONS_SHOWN]
         record.pending_more = max(0, len(outstanding) - DESTINATIONS_SHOWN)
+
+
+def _can_start_work(user) -> bool:
+    """Whether to offer the New Tracking Slip / Upload buttons.
+
+    Mirrors the two gates the target views apply — `WriteAccessRequiredMixin`
+    turns a viewer away, and `OfficeAssignedMixin` turns away an account with no
+    office — so the dashboard does not offer a button that answers with a
+    redirect and a warning.
+
+    This hides a control; it does not grant one. Both views still refuse the
+    request on their own, which is the check that matters: a hidden button is
+    not a permission, and the endpoints stay reachable to anyone who knows the
+    URL. The tracking list and the repository show these buttons to everyone and
+    let the redirect explain, which is defensible but reads as a dead end on the
+    one page a viewer is most likely to start from.
+    """
+    if user.is_viewer:
+        return False
+    return user.office_id is not None or user.is_superuser
 
 
 def _greeting() -> str:

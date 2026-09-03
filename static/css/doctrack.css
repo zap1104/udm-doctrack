@@ -1485,6 +1485,24 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    palette of its own.
    ================================================================ */
 
+/* ------------------------------------------------------------ Action Centre */
+/* Two blocks in one card. The rule between them is what separates "what needs
+   doing" from "what already happened" now that they no longer have a card edge
+   each to do it. */
+.desk-block--secondary { border-top:1px solid var(--udm-line); }
+/* Sits at the same weight as the card heading it lives under rather than at
+   browser-default h3 size, which next to a 16px h2 would read as the larger of
+   the two. Uppercase and tracked so it reads as a divider, not a second title
+   competing with the h2 above it. */
+.desk-block-title {
+  margin:0; padding:14px 20px 0;
+  color:var(--udm-muted); font-size:11.5px; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase;
+}
+/* The tables carry their own top padding through .card-udm-body.p-0, so the
+   title would otherwise sit hard against the first row. */
+.desk-block-title + .card-udm-body { padding-top:10px; }
+
 /* --------------------------------------------------------- scope picker */
 .dashboard-scope { display:flex; align-items:center; gap:8px; }
 .dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
