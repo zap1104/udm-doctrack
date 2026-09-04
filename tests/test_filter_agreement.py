@@ -779,3 +779,73 @@ def test_the_in_process_queue_is_office_scoped_like_its_neighbours(
     assert theirs.pk in anywhere, "SUP can see it"
     assert theirs.pk not in held, "but SUP is not holding it"
     assert held < anywhere, "a status pill here would answer the wrong question"
+
+
+# --- pending upload, and the office picker ---------------------------------
+@pytest.mark.django_db
+def test_the_pending_upload_pill_agrees_with_its_dashboard_slice(client, users, deadlines):
+    """The last stage a record has on this page: finished, waiting for an
+    administrator to approve it into the repository."""
+    client.force_login(users["sup"])
+    body = client.get(TRACKING).content.decode()
+    slice_row = next(
+        row for row in client.get(DASHBOARD).context["breakdown"]["slices"]
+        if row["key"] == "pending_upload"
+    )
+
+    assert "?scope=pending-upload" in body, "the pill is in the queue row"
+    assert slice_row["total"] == len(page_records(client, f"{TRACKING}?scope=pending-upload"))
+
+
+@pytest.mark.django_db
+def test_only_an_administrator_is_offered_the_office_picker(client, users):
+    """The control is a convenience, not the permission: `?office=` was already
+    refused for everybody else by scope_office, which is what decides here too,
+    so the two cannot drift into disagreeing."""
+    client.force_login(users["med"])
+    assert 'id="tracking-as-office"' not in client.get(TRACKING).content.decode()
+
+    client.force_login(users["med_admin"])
+    assert 'id="tracking-as-office"' in client.get(TRACKING).content.decode()
+
+
+@pytest.mark.django_db
+def test_the_picker_shows_the_chosen_office_queues(client, users, offices, traffic):
+    """What the page has honoured all along, now with a way to set it."""
+    client.force_login(users["admin"])
+
+    own = page_records(client, f"{TRACKING}?scope=incoming")
+    theirs = page_records(client, f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}")
+
+    client.force_login(users["sup"])
+    assert theirs == page_records(client, f"{TRACKING}?scope=incoming")
+    assert theirs != own
+
+
+@pytest.mark.django_db
+def test_the_picker_carries_the_filters_already_applied(client, users, offices, traffic):
+    """A GET form submits only its own fields, so without the hidden inputs
+    picking an office would silently clear the queue and everything beside it —
+    the same way the queue pills used to drop the owner filter."""
+    client.force_login(users["admin"])
+    body = client.get(
+        f"{TRACKING}?scope=incoming&owner=mine&overdue=yes&offices={offices['SUP'].pk}"
+    ).content.decode()
+    form = re.search(r'<form class="dashboard-scope".*?</form>', body, re.S).group(0)
+
+    for name, value in (("scope", "incoming"), ("owner", "mine"),
+                        ("overdue", "yes"), ("offices", str(offices["SUP"].pk))):
+        assert f'name="{name}" value="{value}"' in form, name
+
+
+@pytest.mark.django_db
+def test_no_picker_submits_through_an_inline_handler(client, users):
+    """django-csp allows no inline script, so `onchange="this.form.submit()"`
+    either fails in production or forces 'unsafe-inline' into script-src for the
+    whole site. Both pickers declare `data-auto-submit` and doctrack.js listens."""
+    client.force_login(users["admin"])
+
+    for path in (TRACKING, DASHBOARD):
+        body = client.get(path).content.decode()
+        assert "onchange=" not in body, path
+        assert "data-auto-submit" in body, path

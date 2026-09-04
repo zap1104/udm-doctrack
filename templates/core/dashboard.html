@@ -22,19 +22,18 @@
       somebody is already entitled to see.
     {% endcomment %}
     {% comment %}
-      FIXME: the select below submits through an inline `onchange` handler.
-      django-csp is enforced in production (ENABLE_CSP), and an inline handler
-      needs either 'unsafe-inline' in script-src or a nonce, so this either
-      already fails there or is holding the policy open for everything else.
-      Move it to a delegated listener in static/js/doctrack.js keyed off a data
-      attribute, the way the print trigger works. Predates this panel; the same
-      pattern is in templates/core/notifications.html:27.
+      data-auto-submit rather than an inline onchange handler, which django-csp
+      blocks in production — it either failed there or held 'unsafe-inline' open
+      for the whole site. The listener is in static/js/doctrack.js beside the
+      print trigger, and the Tracking page's picker uses the same one.
+
+      FIXME: templates/core/notifications.html still has the inline version.
     {% endcomment %}
     {% if scope.can_pick %}
       <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office"
-                onchange="this.form.submit()">
+                data-auto-submit>
           <option value="">All offices</option>
           {% for office in scope.offices %}
             <option value="{{ office.pk }}" {% if scope.office.pk == office.pk %}selected{% endif %}>

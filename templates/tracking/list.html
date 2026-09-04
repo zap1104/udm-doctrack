@@ -61,6 +61,14 @@
     <a class="pill-toggle{% if scope == 'in-process' %} is-active{% endif %}"
        href="{% filter_url 'scope' 'in-process' %}">In Process</a>
     {% comment %}
+      The last stage a record has on this page: finished, and waiting for an
+      administrator to approve it into the repository. `scope`, like the rest of
+      the row; it resolves to the same records as the dashboard's
+      Completed - pending upload slice, which is where the count comes from.
+    {% endcomment %}
+    <a class="pill-toggle{% if scope == 'pending-upload' %} is-active{% endif %}"
+       href="{% filter_url 'scope' 'pending-upload' %}">Pending Upload</a>
+    {% comment %}
       Set apart, because it is not a peer of the queues beside it — it is a
       modifier that composes with them. Incoming + Overdue is one click from
       either pill now, and both light up together; while overdue was a `scope`
@@ -92,6 +100,52 @@
   along, which is what the hidden inputs used to be for.
 {% endcomment %}
 <div class="tracking-filters">
+  {% if can_pick_office %}
+    {% comment %}
+      "View this page as office X", the control for the `?office=` parameter the
+      page has honoured all along without offering a way to set it. Gated on
+      is_office_admin by services.scope_office, which is also what refuses the
+      parameter itself — the control is a convenience, not the permission.
+
+      Distinct from "Originating office" below, and the labels have to carry
+      that: this one changes whose queues the page answers for, that one filters
+      by who raised the document. Same word, two questions, which is exactly the
+      confusion apps/core/filters.py exists to keep apart.
+
+      The current filters ride along as hidden inputs. A GET form submits only
+      its own fields, so without them picking an office would silently clear the
+      queue and every filter beside it.
+    {% endcomment %}
+    <div class="tracking-filter-row">
+      <span class="tracking-filter-label" id="filter-as-office-label">Viewing as</span>
+      <form class="dashboard-scope" method="get" action="{% url 'tracking:list' %}">
+        {% if request.GET.scope %}<input type="hidden" name="scope" value="{{ request.GET.scope }}">{% endif %}
+        {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+        {% if request.GET.owner %}<input type="hidden" name="owner" value="{{ request.GET.owner }}">{% endif %}
+        {% if request.GET.overdue %}<input type="hidden" name="overdue" value="{{ request.GET.overdue }}">{% endif %}
+        {% for raised in resolved.raised_by_ids %}
+          <input type="hidden" name="offices" value="{{ raised }}">
+        {% endfor %}
+        {% comment %}
+          data-auto-submit, not an inline onchange handler: django-csp allows no
+          inline script, so the dashboard's picker either fails in production or
+          holds the policy open for everything else. doctrack.js listens.
+        {% endcomment %}
+        <select class="form-select form-select-sm" id="tracking-as-office" name="office"
+                aria-labelledby="filter-as-office-label" data-auto-submit>
+          <option value="">Your office</option>
+          {% for office in filter_offices %}
+            <option value="{{ office.pk }}"
+                    {% if resolved.as_office.pk == office.pk %}selected{% endif %}>
+              {{ office.code }} · {{ office.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
+      </form>
+    </div>
+  {% endif %}
+
   <div class="tracking-filter-row">
     <span class="tracking-filter-label" id="filter-office-label">Originating office</span>
     <div class="pill-row">

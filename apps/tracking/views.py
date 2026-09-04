@@ -173,6 +173,9 @@ class RecordListView(AppLoginRequiredMixin, View):
                 # else. Without it the reader concludes the filter is broken.
                 "impossible_reason": core_filters.impossible_reason(resolved),
                 "resolved": resolved,
+                # The picker is offered to whoever `scope_office` would honour
+                # the parameter for, so the control and the gate cannot drift.
+                "can_pick_office": request.user.is_office_admin,
                 # Labels live here rather than in the template so the three
                 # states are named once, beside the values the resolver accepts.
                 "deadline_choices": [

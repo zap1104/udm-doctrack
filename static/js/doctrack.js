@@ -329,6 +329,24 @@
   });
 
   /* ----------------------------------------------------------------------
+     Auto-submitting selects.
+
+     A filter that applies itself on change, without an inline onchange
+     handler: django-csp allows no inline script, so `onchange="this.form.submit()"`
+     either fails in production or forces 'unsafe-inline' into script-src for
+     the whole site. Declared as data, listened for here, like every other
+     behaviour on the page.
+
+     The markup keeps a <noscript> submit button, so the control still works
+     with scripting off.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
+    select.addEventListener("change", function () {
+      if (select.form) select.form.submit();
+    });
+  });
+
+  /* ----------------------------------------------------------------------
      Auto-print: a page that exists only to be printed opens the dialog on
      arrival, so reaching it is one click rather than two.
 
