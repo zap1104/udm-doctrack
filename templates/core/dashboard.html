@@ -55,10 +55,18 @@
       in place for whenever they come back or move; two tests still assert it.
     {% endcomment %}
     <a class="btn btn-udm-outline" href="{% url 'core:reports' %}">Open Reports</a>
+    {% comment %}
+      "Print dashboard" was here and is gone. The dashboard is a screen for
+      reading, not a document: printing it produced a chopped-up screenshot
+      whose panels meant nothing off the page. The memo is the thing worth
+      putting on paper, and it now has a page of its own to do it from.
+
+      Ctrl+P still opens the browser's own dialog — no button can prevent that
+      — and that printout is not recorded in the audit log, because the marker
+      that logs one belongs to a document and this page is not one.
+    {% endcomment %}
     <button class="btn btn-udm-outline" type="button"
             data-bs-toggle="modal" data-bs-target="#dashboard-memo">Generate memo</button>
-    {# The convention the reports page already uses — see doctrack.js. #}
-    <button class="btn btn-udm-outline" type="button" data-print-trigger>Print dashboard</button>
   </div>
 </div>
 

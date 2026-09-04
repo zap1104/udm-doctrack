@@ -495,6 +495,10 @@ a:hover { text-decoration: underline; }
 
 @media print {
   .app-sidebar, .app-topbar, .no-print { display: none !important; }
+  /* A dialog is a control surface, not content. Printing one lays it over the
+     page behind it and prints both; no page wants that, so the rule is shared
+     rather than repeated per page. */
+  .modal, .modal-backdrop { display: none !important; }
   body { background:var(--udm-surface); }
   .app-content { padding: 0; }
   .card-udm { box-shadow: none; border: 1px solid #cfd6e0; }
@@ -1617,17 +1621,16 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .dashboard-scope .form-select { min-width:150px; }
 }
 
-@media print {
-  /* Same hide-the-chrome pattern the reports page uses. The modal is a control
-     surface, not content: printing from inside it prints the dashboard, which
-     is what somebody pressing Print in a dialog about the dashboard means. */
-  .dashboard-scope,.modal,.modal-backdrop { display:none !important; }
-  .dashboard-alert,.donut-layout,.trend-layout,.memo-sheet { break-inside:avoid; }
-  /* Ring, bars and dots are background paint; without this they print blank. */
-  .donut,.donut-hole,.uploads-leader-tag,.alert-figure--lead {
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-}
+/* The dashboard's print rules lived here and are gone with the button that
+   needed them. They existed to make the *screen* printable — keeping the donut
+   and trend panels from splitting across a page break — and the dashboard is
+   no longer something the app offers to print. The memo is, and it prints from
+   templates/core/dashboard_memo_print.html with rules of its own.
+
+   The paragraph they also carried, `.modal,.modal-backdrop{display:none}`, has
+   moved up to the shared print block: hiding a dialog when printing is right
+   on every page, not just this one, and it is the rule that used to make Print
+   inside the memo print the dashboard behind it. */
 
 /* ---------------------------------------------------- repository folders */
 /* Equal columns across the full width. The count comes from

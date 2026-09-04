@@ -1341,12 +1341,34 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
 
 
 @pytest.mark.django_db
-def test_the_dashboard_still_prints(client, users, finished_record):
+def test_the_dashboard_no_longer_offers_to_print_itself(client, users, finished_record):
+    """The dashboard is a screen for reading, not a document.
+
+    Printing it produced a chopped-up screenshot whose panels meant nothing off
+    the page. The memo is the thing worth putting on paper and it prints from a
+    page of its own, so the only print-related control left here is the one
+    that opens the memo.
+    """
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "data-print-trigger" in body
-    assert "dashboard-print-header" in body
+    assert "Print dashboard" not in body
+    assert "Generate memo" in body
+
+
+@pytest.mark.django_db
+def test_ctrl_p_on_the_dashboard_is_not_recorded(client, users, finished_record):
+    """An accepted gap, asserted so it stays a decision rather than a surprise.
+
+    Nothing can stop the browser's own print dialog. What the app controls is
+    whether that printout is entered in the audit log, and it is not: the
+    marker that logs one belongs to a document, and this page is not one. The
+    memo's print page carries the marker instead.
+    """
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "data-print-log" not in body
 
 
 @pytest.mark.django_db
