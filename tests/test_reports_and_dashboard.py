@@ -284,38 +284,6 @@ def test_the_dashboard_offers_a_way_into_reports(client, users):
 
 
 @pytest.mark.django_db
-def test_the_dashboard_writes_up_what_the_numbers_show(client, finished_record, users):
-    client.force_login(users["admin"])
-    response = client.get(DASHBOARD)
-
-    summary = response.context["breakdown_summary"]
-    assert summary and all(isinstance(line, str) for line in summary)
-    # The panel that rendered this was removed from the dashboard by explicit
-    # approval; the figures are still computed and the memo still speaks in
-    # sentences, so what this test guards — that the numbers can be said in
-    # words — moved to the memo rather than disappearing.
-    assert "Generate memo" in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_the_write_up_agrees_with_the_figures_beside_it(client, finished_record, users):
-    client.force_login(users["admin"])
-    response = client.get(DASHBOARD)
-    breakdown = response.context["breakdown"]
-    summary = " ".join(response.context["breakdown_summary"])
-
-    assert str(breakdown["total"]) in summary
-
-
-@pytest.mark.django_db
-def test_an_empty_system_still_says_something(client, users):
-    client.force_login(users["admin"])
-    summary = client.get(DASHBOARD).context["breakdown_summary"]
-
-    assert summary == ["There are no documents in tracking or in the repository yet."]
-
-
-@pytest.mark.django_db
 def test_the_memo_is_what_the_dashboard_offers_to_print(client, users):
     """The dashboard prints nothing itself any more.
 

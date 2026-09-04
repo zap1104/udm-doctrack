@@ -152,9 +152,8 @@ class DashboardMemoMixin:
     def _memo(self, scope, breakdown, overdue, overdue_rows, trend, uploads):
         """The dashboard's own numbers, as labelled sections.
 
-        Assembled here rather than in the template for the same reason
-        `_breakdown_summary` is: a memo is a statement about figures, and one
-        built beside the figures cannot drift from them.
+        Assembled here rather than in the template: a memo is a statement
+        about figures, and one built beside the figures cannot drift from them.
 
         Descriptive, never comparative. It reports what is on the page; it does
         not say whether that is better or worse than last month, because this
@@ -170,6 +169,22 @@ class DashboardMemoMixin:
         """
         line = self._memo_line
         total = breakdown["total"]
+
+        if not total:
+            # The one thing _breakdown_summary said that the memo did not. Four
+            # rows of zeroes describe an empty system accurately and read as a
+            # broken page, and this section was the last place still printing a
+            # zero as a figure rather than saying it in words.
+            return [
+                {
+                    "heading": "Overview",
+                    "lines": [
+                        line("Scope", scope["label"]),
+                        line("", "There are no documents in tracking or in the "
+                                 "repository yet."),
+                    ],
+                }
+            ]
 
         overview = [
             line("Scope", scope["label"]),
@@ -419,7 +434,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "can_bulk_receive": can_bulk_receive,
                 "can_start_work": user.can_start_work,
                 "breakdown": breakdown,
-                "breakdown_summary": self._breakdown_summary(breakdown),
             }
         )
         return context
@@ -477,7 +491,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             return {"stops": "", "slices": [], "total": 0}
 
         subtotal = sum(row["total"] for row in domain)
-        # Copied, not mutated: `_breakdown_summary` and `_memo` read the
+        # Copied, not mutated: `_memo` and the donut panels read the
         # grand-total percentages off these same dicts, and rewriting them here
         # would silently change what the prose beneath the rings says.
         domain = [{**row, "percent": _percent(row["total"], subtotal)} for row in domain]
@@ -584,70 +598,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 }
             )
         return built
-
-    def _breakdown_summary(self, breakdown) -> list[str]:
-        """The numbers, said in sentences.
-
-        FIXME: nothing renders this any more. The "What this shows" panel that
-        carried it was removed from the dashboard when the page was rebuilt to
-        the wireframe, and the brief said to leave the context key, so it is
-        computed on every request and thrown away. The memo says something
-        similar but is not the same text and only appears when somebody opens
-        the dialog. Either render it again — the print header is the obvious
-        place, since the reason it exists is that this page gets printed and
-        handed to people who did not filter it — or delete the method, the
-        context key, and the `breakdown_summary` assertions in
-        tests/test_dashboard_analytics.py and tests/test_reports_and_dashboard.py.
-
-        Written out because the dashboard is printed and handed to people who
-        were not the ones filtering it — a printed ring of coloured segments
-        with no words is a picture of a number, not a finding. Assembled from
-        the same figures the panel renders, so the prose cannot drift from the
-        chart above it.
-
-        Deliberately descriptive and never comparative: it says what is there,
-        not whether that is better or worse than last month. This page has no
-        basis for a verdict on an office and should not imply one.
-        """
-        total = breakdown["total"]
-        if not total:
-            return ["There are no documents in tracking or in the repository yet."]
-
-        by_key = {row["key"]: row for row in breakdown["slices"]}
-        sentences = [
-            f"There are {total} document{'s' if total != 1 else ''} altogether: "
-            f"{breakdown['tracking_total']} still moving through tracking "
-            f"({breakdown['tracking_percent']}%) and {breakdown['repository_total']} "
-            f"filed in the repository ({breakdown['repository_percent']}%)."
-        ]
-
-        awaiting = by_key["pending_receipt"]["total"]
-        if awaiting:
-            sentences.append(
-                f"{awaiting} document{'s are' if awaiting != 1 else ' is'} waiting for a "
-                f"receiving office to confirm receipt "
-                f"({by_key['pending_receipt']['percent']}% of everything)."
-            )
-
-        overdue_total = by_key["overdue"]["total"]
-        if overdue_total:
-            sentences.append(
-                f"{overdue_total} {'are' if overdue_total != 1 else 'is'} past the deadline set "
-                f"for {'them' if overdue_total != 1 else 'it'}. Reports breaks these down by "
-                f"office."
-            )
-        else:
-            sentences.append("Nothing is past its deadline.")
-
-        pending_upload = by_key["pending_upload"]["total"]
-        if pending_upload:
-            sentences.append(
-                f"{pending_upload} {'have' if pending_upload != 1 else 'has'} been completed and "
-                f"{'are' if pending_upload != 1 else 'is'} waiting for an administrator to "
-                f"approve {'them' if pending_upload != 1 else 'it'} into the repository."
-            )
-        return sentences
-
 
 #: Office codes listed in the dashboard's "To" column before it collapses to
 #: "+N more". Four fits on one line at the width the column actually gets.

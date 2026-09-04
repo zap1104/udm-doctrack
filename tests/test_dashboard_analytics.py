@@ -356,7 +356,7 @@ def test_the_existing_panels_were_added_to_not_replaced(client, users, finished_
     context = client.get(DASHBOARD).context
 
     for key in ("inbox_count", "outgoing_count", "overdue_count",
-                "attention_records", "recent_records", "breakdown", "breakdown_summary"):
+                "attention_records", "recent_records", "breakdown"):
         assert key in context, key
 
 
@@ -487,19 +487,22 @@ def test_the_combined_stacked_bar_was_replaced_not_kept_alongside(
 
 
 @pytest.mark.django_db
-def test_the_write_up_panel_was_removed_but_its_figures_are_still_computed(
+def test_the_write_up_is_gone_from_the_page_and_from_the_context(
     client, users, filed_record
 ):
-    """Removed from the page by explicit approval. The context key stays because
-    the brief said to leave it — but nothing renders it now, so the prose that
-    made a printed copy legible to somebody who did not filter it is gone. There
-    is a FIXME on `_breakdown_summary` saying so."""
+    """The panel went when the page was rebuilt to the wireframe, and the
+    figures behind it followed once the dashboard stopped being printable.
+
+    It existed so a printed copy said something in words rather than only in
+    colour. Nothing prints the dashboard any more, and the memo — which does
+    print — says more than it did.
+    """
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
 
     assert "What this shows" not in response.content.decode()
     assert "dashboard-writeup" not in response.content.decode()
-    assert response.context["breakdown_summary"], "still computed, just unrendered"
+    assert "breakdown_summary" not in response.context
 
 
 # --- the trend line --------------------------------------------------------
@@ -669,6 +672,24 @@ def test_the_memo_agrees_with_the_figures_beside_it(client, users, overdue_recor
 
     assert str(response.context["breakdown"]["total"]) in memo
     assert str(response.context["overdue_summary"]["total"]) in memo
+
+
+@pytest.mark.django_db
+def test_an_empty_system_still_says_something(client, users):
+    """Inherited from `_breakdown_summary`, which is gone.
+
+    That method existed so a printed copy said something in words rather than
+    only in colour, and its one behaviour the memo did not already cover was
+    this: a system with nothing in it says so, instead of printing four rows of
+    zeroes. `_memo` states zero in words everywhere else — this section was the
+    last place still printing one as a figure.
+    """
+    client.force_login(users["admin"])
+    memo = client.get(DASHBOARD).context["memo"]
+
+    assert memo_headings(memo) == ["Overview"], "nothing else has anything to say"
+    assert {"label": "", "value": "There are no documents in tracking or in the repository yet."} in memo[0]["lines"]
+    assert "0 document" not in memo_text(memo)
 
 
 @pytest.mark.django_db
@@ -1431,7 +1452,7 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
     context = client.get(DASHBOARD).context
 
     for key in ("overdue_offices", "overdue_summary", "live_by_status",
-                "custody_count", "received_today", "breakdown_summary"):
+                "custody_count", "received_today"):
         assert key in context, key
 
 
