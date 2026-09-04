@@ -237,8 +237,12 @@ def test_the_dashboard_shows_one_percentage_across_both_modules(
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
     keys = {row["key"] for row in breakdown["slices"]}
-    assert {"incoming", "pending_receipt", "in_process", "overdue"} <= keys, "tracking slices"
+    # "incoming" was the label on a slice computing status=RECEIVED, and
+    # "overdue" was a condition sitting among stages it overlapped. The slices
+    # are the four live statuses now, which partition the tracking side.
+    assert {"pending_receipt", "received", "in_process", "pending_upload"} <= keys, "tracking slices"
     assert {"historical", "completed"} <= keys, "repository slices"
+    assert "overdue" not in keys, "a condition, not a stage — it has a stat card"
     assert breakdown["total"] == breakdown["tracking_total"] + breakdown["repository_total"]
 
 

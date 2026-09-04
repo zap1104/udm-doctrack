@@ -79,8 +79,14 @@
   <div class="col-6 col-md-3">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming">
       <div class="label">Incoming</div>
-      <div class="value">{{ inbox_count }}</div>
-      <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
+      <div class="value">{{ incoming_count }}</div>
+      {% comment %}
+        The hint used to read "pending your receipt", which described a narrower
+        queue than the card counts: Incoming spans pending receipt, received and
+        in process together. Saying otherwise sent the reader looking for a
+        number the card was not showing.
+      {% endcomment %}
+      <div class="hint">{{ incoming_new_today }} moved today · addressed to your office</div>
     </a>
   </div>
   <div class="col-6 col-md-3">
@@ -110,11 +116,16 @@
     wireframe drops; of the four figures that panel carried this is the one
     that says how much work is sitting with you right now, so it takes a card
     rather than going with the others.
+
+    It opens ?scope=received, not ?scope=custody. Custody is every record whose
+    current_office is this office — completed and filed ones included — so the
+    card counted 1 and its page listed 9. The hint below already described
+    ?scope=received, which is what this card has always meant.
   {% endcomment %}
   <div class="col-6 col-md-3">
-    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=custody">
+    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=received">
       <div class="label">Held by your office</div>
-      <div class="value">{{ custody_count }}</div>
+      <div class="value">{{ received_count }}</div>
       <div class="hint">Received and not yet forwarded or completed</div>
     </a>
   </div>
@@ -286,17 +297,16 @@
             </table></div>
           {% else %}
             {% comment %}
-              FIXME: this links to `?scope=inbox` while the panel head above links
-              to `?scope=incoming`. Both resolve to the same queue — `inbox` is a
-              legacy alias kept for bookmarks, see SCOPE_INBOX in
-              apps/tracking/services.py — but one panel offering the same queue
-              under two names is a trap for the next reader. Settle on `incoming`
-              here and audit the other callers of the legacy aliases.
+              This linked to `?scope=inbox` while the panel head linked to
+              `?scope=incoming`, under a comment claiming both resolved to the
+              same queue. They do not: `inbox` is unconfirmed steps only, and
+              on the demo data one office saw 9 against incoming's 5. Two links
+              in one panel, labelled the same, opening different queues.
             {% endcomment %}
             <div class="empty-state">
               <h3>No incoming documents are waiting</h3>
               <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=incoming">Open Incoming</a>
             </div>
           {% endif %}
         </div>

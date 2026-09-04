@@ -301,19 +301,36 @@ def test_uploads_covers_this_month_only(finished_record, users):
 # --- combined totals -------------------------------------------------------
 @pytest.mark.django_db
 def test_combined_totals_do_not_double_count(overdue_record, finished_record, users):
-    """Incoming excludes anything already counted as overdue, so the slices sum
-    to the whole instead of past it."""
+    """The name was always the intent and never the behaviour.
+
+    Overdue used to sit among the slices, and it is a deadline condition lying
+    across all three live stages rather than a stage of its own — on the demo
+    data the ring reported 109 slice entries over 44 records. The old assertion
+    could not catch it: it allowed the total to exceed the record count by
+    exactly the overdue figure, which is the double-count it was named for.
+
+    The slices are statuses now, and statuses are mutually exclusive by
+    construction, so the sum is exact rather than bounded.
+    """
+    from apps.tracking.models import ACTIVE_STATUSES, Status
+
     records = TrackingRecord.objects.visible_to(users["admin"])
     documents = Document.objects.visible_to(users["admin"])
 
     totals = analytics.combined_totals(records, documents)
     tracking = (
-        totals["incoming"] + totals["pending_receipt"] + totals["in_process"]
-        + totals["overdue"] + totals["pending_upload"]
+        totals["pending_receipt"] + totals["received"]
+        + totals["in_process"] + totals["pending_upload"]
+    )
+    live = (
+        records.filter(status__in=ACTIVE_STATUSES)
+        .exclude(status=Status.DRAFT)
+        .distinct()
+        .count()
     )
 
-    assert totals["overdue"] == 1
-    assert tracking <= records.distinct().count() + totals["overdue"]
+    assert totals["overdue"] == 1, "still computed, for the stat card"
+    assert tracking == live, "every live record counted exactly once"
     assert totals["historical"] + totals["completed"] == documents.distinct().count()
 
 
@@ -355,7 +372,7 @@ def test_the_existing_panels_were_added_to_not_replaced(client, users, finished_
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
 
-    for key in ("inbox_count", "outgoing_count", "overdue_count",
+    for key in ("incoming_count", "outgoing_count", "received_count", "overdue_count",
                 "attention_records", "recent_records", "breakdown"):
         assert key in context, key
 
@@ -1157,9 +1174,12 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    for scope in ("incoming", "outgoing", "overdue", "custody"):
+    # `received`, not `custody`: custody is every record whose current_office is
+    # this office, completed ones included, so the card read 1 over a page of 9.
+    for scope in ("incoming", "outgoing", "overdue", "received"):
         assert f"/tracking/?scope={scope}" in body, scope
     assert "/reports/?status=OVERDUE" not in body
+    assert "?scope=custody" not in body
 
 
 @pytest.mark.django_db
@@ -1550,7 +1570,7 @@ def test_held_by_your_office_kept_a_home_when_its_panel_went(client, users, file
     body = response.content.decode()
 
     assert "Held by your office" in body
-    assert str(response.context["custody_count"]) in body
+    assert str(response.context["received_count"]) in body
 
 
 @pytest.mark.django_db
@@ -1571,7 +1591,7 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
     context = client.get(DASHBOARD).context
 
     for key in ("overdue_offices", "overdue_summary", "live_by_status",
-                "custody_count", "received_today"):
+                "received_count", "received_today"):
         assert key in context, key
 
 

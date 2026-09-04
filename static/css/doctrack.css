@@ -244,12 +244,6 @@ a:hover { text-decoration: underline; }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
-/* Draft is the one status that is not in the workflow yet: nobody has been
-   sent it, nobody owes anything on it, and it is visible only to the office
-   writing it. So it is drawn as an outline rather than a fill — the difference
-   between "a stage this document is at" and "a document that has not started".
-   It also stops Draft reading as another solid chip alongside Pending receipt,
-   which is the one it was being confused with. */
 .pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 
@@ -1495,10 +1489,12 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* Colour is never the only carrier: every slice is named in the list, and the
    status palette is reserved, so these reuse it rather than inventing a second
    vocabulary for the same states. */
-.breakdown-seg--incoming { background:var(--udm-green); }
+/* Keyed to the slice names in views.BREAKDOWN_COLOURS. There is no --overdue
+   segment any more: overdue lies across the live stages instead of beside them,
+   so it is a stat card rather than a slice. */
 .breakdown-seg--pending_receipt { background:var(--udm-gold); }
+.breakdown-seg--received { background:var(--udm-green); }
 .breakdown-seg--in_process { background:var(--udm-teal); }
-.breakdown-seg--overdue { background:var(--udm-red); }
 .breakdown-seg--pending_upload { background:var(--chart-one); }
 .breakdown-seg--historical { background:var(--udm-muted); }
 .breakdown-seg--completed { background:var(--chart-three); }

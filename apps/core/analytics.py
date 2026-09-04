@@ -27,7 +27,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Office
 from apps.documents.models import Source
-from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status
+from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status
 
 from .business_time import (
     OFFICE_HOURS_CAVEAT,
@@ -502,33 +502,49 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
 
 
 def combined_totals(records, documents) -> dict:
-    """One whole, split seven ways across tracking and the repository.
+    """One whole, split across tracking and the repository.
 
-    The two modules were shown side by side and never added up, so "how much is
-    there altogether" had no answer on the page. The slices are mutually
-    exclusive by construction — Incoming excludes anything already counted as
-    overdue — so the percentages sum to 100 rather than past it.
+    The tracking slices are statuses, and statuses are mutually exclusive by
+    construction, so the ring is a partition without anything having to exclude
+    anything else. That was not true while Overdue sat among them: it is a
+    deadline condition lying across all three live stages — on the demo data 10
+    pending-receipt and 15 in-process records were also overdue — so the ring
+    reported 109 slice entries over 44 records while still drawing a closed
+    circle, because the percentages are normalised to their own sum. Overdue is
+    a stat card now, which is where a cross-cutting condition belongs.
+
+    Counted over ACTIVE_STATUSES, the set the Tracking page itself lists, so
+    each slice equals the rows behind `?status=`. Drafts are excluded: a draft
+    has not been sent, so it is not yet moving between offices, and it is
+    visible only to the office writing it.
+
+    Not office-scoped, and deliberately so — the slices link to `?status=`,
+    which is not office-scoped either. The per-office queues are the stat cards,
+    which count through `apply_scope` and link to `?scope=`. Making the ring
+    office-scoped as well looked right until an administrator opened it: the
+    queues resolve against the viewer's own office, so a system administrator
+    saw their own office's three records where the page showed the university's.
     """
-    now = timezone.now()
+    live = records.filter(status__in=ACTIVE_STATUSES)
 
-    pending_receipt = records.filter(status=Status.PENDING_RECEIPT).distinct().count()
-    in_process = records.filter(status=Status.IN_PROCESS).distinct().count()
-    overdue_total = (
-        records.filter(due_at__lt=now).exclude(status__in=COMPLETED_STATUSES).distinct().count()
-    )
-    incoming = (
-        records.filter(status=Status.RECEIVED).exclude(due_at__lt=now).distinct().count()
-    )
-    awaiting_upload = records.filter(status=Status.COMPLETED_PENDING_UPLOAD).distinct().count()
+    def by_status(status):
+        return live.filter(status=status).distinct().count()
+
     repository_total = documents.distinct().count()
     historical = documents.filter(source=Source.UPLOAD).distinct().count()
 
     return {
-        "incoming": incoming,
-        "pending_receipt": pending_receipt,
-        "in_process": in_process,
-        "overdue": overdue_total,
-        "pending_upload": awaiting_upload,
+        "pending_receipt": by_status(Status.PENDING_RECEIPT),
+        "received": by_status(Status.RECEIVED),
+        "in_process": by_status(Status.IN_PROCESS),
+        "pending_upload": by_status(Status.COMPLETED_PENDING_UPLOAD),
+        # Not a slice; the stat card and the memo both read it from here.
+        "overdue": (
+            records.filter(due_at__lt=timezone.now())
+            .exclude(status__in=COMPLETED_STATUSES)
+            .distinct()
+            .count()
+        ),
         "historical": historical,
         "completed": repository_total - historical,
     }

@@ -711,54 +711,26 @@ def grant_access(record, *, user, office=None, target_user=None, reason="") -> R
 # Queue helpers used by the dashboard
 # ---------------------------------------------------------------------------
 def inbox_for(user):
-    """Documents waiting for this user's office to confirm receipt."""
-    if not user.is_authenticated or not user.office_id:
-        return TrackingRecord.objects.none()
-    return (
-        TrackingRecord.objects.visible_to(user)
-        .filter(
-            routing_steps__to_office_id=user.office_id,
-            routing_steps__received_at__isnull=True,
-            routing_steps__batch=F("current_batch"),
-        )
-        .exclude(status__in=COMPLETED_STATUSES)
-        .with_related()
-        .distinct()
-    )
+    """Documents waiting for this user's office to confirm receipt.
 
+    NOT a dashboard queue, and narrower than every one of them. This is the set
+    somebody may actually press Confirm on, which is what bulk receipt needs and
+    what `selfcheck` asserts against; the Incoming card counts
+    `apply_scope(..., SCOPE_INCOMING, ...)`, which also holds what has already
+    been received and what is being worked on.
 
-def in_custody_for(user):
-    """Documents this office has received and still has to act on."""
-    if not user.is_authenticated or not user.office_id:
-        return TrackingRecord.objects.none()
-    return (
-        TrackingRecord.objects.visible_to(user)
-        .filter(
-            status__in=[Status.RECEIVED, Status.IN_PROCESS],
-            routing_steps__to_office_id=user.office_id,
-            routing_steps__received_at__isnull=False,
-            routing_steps__batch=F("current_batch"),
-        )
-        .filter(current_office_id=user.office_id)
-        .with_related()
-        .distinct()
-    )
-
-
-def outgoing_for(user):
-    """Documents this office sent that nobody has confirmed yet.
-
-    Named for the queue it fills ("Outgoing") rather than for the status the
-    records carry, which is what `in_transit_from` used to do — the status is
-    called Pending receipt now, and the phrase "in transit" is no longer
-    vocabulary this system uses anywhere a reader can see.
+    Two sibling helpers stood here — `in_custody_for` and `outgoing_for` — and
+    the dashboard counted its cards with them while linking to the scopes, so
+    every card disagreed with the page it opened. They are gone; `apply_scope`
+    is the one definition of those queues. This one survives because confirming
+    receipt is a different question from listing a queue.
     """
     if not user.is_authenticated or not user.office_id:
         return TrackingRecord.objects.none()
     return (
         TrackingRecord.objects.visible_to(user)
         .filter(
-            routing_steps__from_office_id=user.office_id,
+            routing_steps__to_office_id=user.office_id,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )
@@ -810,7 +782,22 @@ SCOPE_OVERDUE = "overdue"
 #: repository page because the records in it have not reached the repository —
 #: approving them is what puts them there.
 SCOPE_PENDING_UPLOAD = "pending-upload"
-#: Older names, still linked to from saved bookmarks and the dashboard tiles.
+#: Older names, kept only so saved bookmarks still resolve. Nothing in the app
+#: links to them any more.
+#:
+#: They are NOT synonyms for the queues that replaced them, and a comment here
+#: used to say they were:
+#:
+#:   inbox   is narrower than incoming — unconfirmed steps only, where incoming
+#:           spans pending receipt, received and in process
+#:   sent    is narrower than outgoing — drops a document the moment somebody
+#:           confirms it, where outgoing keeps what left the office
+#:   custody is *wider* than received — every record whose current_office is
+#:           this office, completed and filed ones included
+#:
+#: Measured on the demo data, one office: inbox 9 against incoming 5, sent 15
+#: against outgoing 7. Anything pointed at an alias by mistake shows a
+#: different queue from the one its label promises.
 SCOPE_INBOX = "inbox"
 SCOPE_AWAITING = "awaiting"
 SCOPE_CUSTODY = "custody"
@@ -913,9 +900,23 @@ def apply_scope(records, scope, user):
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_PENDING_RECEIPT:
+        # Both directions: what this office owes a receipt on, and what it sent
+        # that nobody has signed for yet. The second half was missing, so the
+        # one queue whose whole job is "who has not confirmed" could not answer
+        # it for the office doing the asking.
+        #
+        # One .filter() call, not two. Split across two calls each condition
+        # binds to a *different* routing step, so a record with any unconfirmed
+        # step and any step to or from this office would match — which is a
+        # wider queue than either half.
+        #
+        # The Confirm Receipt button stays correct on its own: annotate_can_confirm
+        # checks to_office_id independently, so the outgoing rows joining this
+        # queue show no button.
         return records.filter(
+            Q(routing_steps__to_office_id=user.office_id)
+            | Q(routing_steps__from_office_id=user.office_id),
             status=Status.PENDING_RECEIPT,
-            routing_steps__to_office_id=user.office_id,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )

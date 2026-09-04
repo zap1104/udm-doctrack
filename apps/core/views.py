@@ -65,11 +65,13 @@ def decorate_notification(notification):
 #: same variables, so a palette change lands in one file and every mark on the
 #: page moves together. Hard-coding hex here would be a second palette that
 #: silently stops matching the first.
+#: No "overdue" entry: overdue stopped being a slice when it turned out to lie
+#: across the three live stages rather than beside them. It keeps --udm-red on
+#: its stat card, which is the only place it is drawn now.
 BREAKDOWN_COLOURS = {
-    "incoming": "var(--udm-green)",
     "pending_receipt": "var(--udm-gold)",
+    "received": "var(--udm-green)",
     "in_process": "var(--udm-teal)",
-    "overdue": "var(--udm-red)",
     "pending_upload": "var(--chart-one)",
     "historical": "var(--udm-muted)",
     "completed": "var(--chart-three)",
@@ -148,6 +150,7 @@ class DashboardMemoMixin:
             records = records.filter(Q(originating_office=office) | Q(current_office=office))
             documents = documents.filter(office=office)
         return records.distinct(), documents.distinct()
+
     @staticmethod
     def _memo_line(label, value):
         """One row of the memo. An empty label makes it a standalone statement.
@@ -282,29 +285,29 @@ class DashboardMemoMixin:
         """
         records, documents = self._scoped(user, office)
         totals = analytics.combined_totals(records, documents)
-        incoming = totals["incoming"]
-        pending_receipt = totals["pending_receipt"]
-        in_process = totals["in_process"]
-        overdue_total = totals["overdue"]
-        awaiting_upload = totals["pending_upload"]
         historical = totals["historical"]
         completed = totals["completed"]
 
         tracking_url = reverse("tracking:list")
         slices = [
-            # Every slice links through to the list behind it: a percentage
-            # nobody can open is a number the reader has to take on trust.
-            {"key": "incoming", "label": "Incoming", "total": incoming,
-             "url": f"{tracking_url}?scope=incoming", "group": "tracking"},
-            {"key": "pending_receipt", "label": "Pending receipt", "total": pending_receipt,
-             "url": f"{tracking_url}?scope=pending-receipt", "group": "tracking"},
-            {"key": "in_process", "label": "In process", "total": in_process,
-             "url": f"{tracking_url}?status=IN_PROCESS", "group": "tracking"},
-            {"key": "overdue", "label": "Overdue", "total": overdue_total,
-             "url": f"{tracking_url}?scope=overdue", "group": "tracking"},
+            # Every slice links through to the list behind it, and the count is
+            # taken from that same query — see analytics.combined_totals. A
+            # percentage nobody can open is a number the reader has to take on
+            # trust; one that opens a page listing something else is worse.
+            #
+            # Overdue is not here. It lies across all three live stages, so as a
+            # slice it counted the same records twice; it has its own stat card.
+            {"key": "pending_receipt", "label": "Pending receipt",
+             "total": totals["pending_receipt"],
+             "url": f"{tracking_url}?status={Status.PENDING_RECEIPT}", "group": "tracking"},
+            {"key": "received", "label": "Received", "total": totals["received"],
+             "url": f"{tracking_url}?status={Status.RECEIVED}", "group": "tracking"},
+            {"key": "in_process", "label": "In process", "total": totals["in_process"],
+             "url": f"{tracking_url}?status={Status.IN_PROCESS}", "group": "tracking"},
             {"key": "pending_upload", "label": "Completed - pending upload",
-             "total": awaiting_upload,
-             "url": f"{tracking_url}?scope=pending-upload", "group": "tracking"},
+             "total": totals["pending_upload"],
+             "url": f"{tracking_url}?status={Status.COMPLETED_PENDING_UPLOAD}",
+             "group": "tracking"},
             {"key": "historical", "label": "Repository - historical", "total": historical,
              "url": f"{reverse('documents:repository')}?source={Source.UPLOAD}",
              "group": "repository"},
@@ -374,16 +377,29 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         memo_context = self.get_memo_context()
         scope = memo_context["scope"]
 
-        inbox = tracking_services.inbox_for(user)
-        custody = tracking_services.in_custody_for(user)
-        outgoing = tracking_services.outgoing_for(user)
+        # The cards count what their own page lists, so both start from the
+        # queryset the Tracking page starts from and go through `apply_scope`.
+        # They used to come from inbox_for / outgoing_for / in_custody_for,
+        # which are narrower than the scopes the cards link to: on the demo data
+        # an office saw "Held by your office 1" over a page listing 9.
+        desk = tracking_services.active_for(user)
+
+        def queue(scope):
+            return tracking_services.apply_scope(desk, scope, user).distinct()
+
+        incoming = queue(tracking_services.SCOPE_INCOMING)
+        received = queue(tracking_services.SCOPE_RECEIVED)
+        outgoing = queue(tracking_services.SCOPE_OUTGOING)
         overdue = tracking_services.overdue_for(user)
 
-        attention = list(inbox[:5])
+        # Needs action leads with what is waiting to be confirmed, which is the
+        # part of Incoming somebody has to do something about today.
+        pending = queue(tracking_services.SCOPE_PENDING_RECEIPT)
+        attention = list(pending[:5])
         if len(attention) < 5:
             attention += [record for record in overdue[: 5 - len(attention)] if record not in attention]
         if len(attention) < 5:
-            attention += [record for record in custody[: 5 - len(attention)] if record not in attention]
+            attention += [record for record in received[: 5 - len(attention)] if record not in attention]
 
         today = timezone.localdate()
         office_today = TrackingRecord.objects.none()
@@ -430,9 +446,12 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         context.update(self._analytics(user, scope, memo_context))
         context.update(
             {
-                "inbox_count": inbox.count(),
-                "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
-                "custody_count": custody.count(),
+                # Renamed from inbox_count / custody_count so the old names
+                # cannot be picked up again by accident — they counted a
+                # different queue from the one their card opened.
+                "incoming_count": incoming.count(),
+                "incoming_new_today": incoming.filter(last_movement_at__date=today).count(),
+                "received_count": received.count(),
                 "outgoing_count": outgoing.count(),
                 "overdue_count": overdue.count(),
                 "attention_records": attention,

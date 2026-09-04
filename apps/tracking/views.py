@@ -366,7 +366,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
         if not form.is_valid():
             message = next(iter(form.errors.values()))[0] if form.errors else "Choose documents to receive."
             messages.error(request, message)
-            return redirect(f"{reverse('tracking:list')}?scope=inbox")
+            return redirect(f"{reverse('tracking:list')}?scope=incoming")
         try:
             steps = services.bulk_confirm_receipts(
                 form.cleaned_data["record_ids"], user=request.user, note=form.cleaned_data.get("note", "")
@@ -378,7 +378,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
             request,
             f"Receipt recorded for {len(steps)} selected document{'s' if len(steps) != 1 else ''}.",
         )
-        return redirect(f"{reverse('tracking:list')}?scope=inbox")
+        return redirect(f"{reverse('tracking:list')}?scope=incoming")
 
 
 class ConfirmReceiptView(OfficeAssignedMixin, View):
