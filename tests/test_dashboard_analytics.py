@@ -831,6 +831,43 @@ def test_the_new_panels_use_only_brand_tokens():
         assert hexcode.lower() in {"#fff", "#ffffff"}, hexcode
 
 
+def test_the_turnaround_figures_cannot_overlap_when_the_panel_narrows():
+    """The summary beside the plot overlapped itself on a magnified screen.
+
+    Two causes, both about a minimum that would not give way. `white-space:
+    nowrap` on the figure inherits into the caption under it, so "4 days 9 hrs
+    on the calendar" became one unbreakable ~145px box in a 190px column that
+    also had to hold a label; and `minmax(190px, 1fr)` is a floor, so once the
+    panel itself was under 190px the column stopped shrinking and its contents
+    hung over the neighbouring figure.
+
+    Nothing caught it: the page returns 200, the divs balance, and no test here
+    resolves a width. This one reads the two declarations directly, which is
+    the shape of the bug rather than the rendering of it.
+
+    FIXME: still not a layout test — it asserts the CSS says the right thing,
+    not that nothing overlaps at a given viewport. Measuring that needs a
+    headless browser at several widths and zoom levels.
+    """
+    import pathlib
+    import re
+
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+    def rule(selector):
+        m = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+        assert m, f"{selector} is gone — this guard needs rewriting"
+        return re.sub(r"\s+", " ", m.group(1))
+
+    # The figure stays intact; the caption under it is a phrase and may wrap.
+    assert "white-space:nowrap" in rule(".report-metric strong").replace(" ", "")
+    assert "white-space:normal" in rule(".report-metric small").replace(" ", "")
+
+    # The track minimum has to yield to a container narrower than itself.
+    columns = rule(".trend-summary-figures")
+    assert "minmax(min(190px,100%)" in columns.replace(" ", ""), columns
+
+
 def test_no_javascript_charting_library_was_added():
     """Bootstrap 5 + HTMX + Django templates only."""
     import pathlib

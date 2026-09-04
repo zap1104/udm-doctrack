@@ -817,7 +817,12 @@ a:hover { text-decoration: underline; }
 .report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
 .report-metric strong { color:var(--udm-navy-text); font-size:14px; text-align:right; white-space:nowrap; }
-.report-metric small { display:block; font-size:11.5px; }
+/* The figure itself must not split — "2 days 5 hrs" broken across lines reads
+   as two numbers — but nowrap inherits, and the caption below it is a whole
+   phrase: "4 days 9 hrs on the calendar". That made the caption the widest
+   unbreakable thing in the column, so it pushed out of its grid cell and over
+   the next figure. Only the figure needs holding together. */
+.report-metric small { display:block; font-size:11.5px; white-space:normal; }
 
 .meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
 .meter-head strong { color:var(--udm-navy-text); font-size:17px; }
@@ -1574,11 +1579,21 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-summary { flex:1 1 250px; min-width:0; padding:12px 14px; border:1px solid var(--udm-line); border-radius:10px; }
 .trend-summary-head { margin-bottom:6px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
 /* auto-fit, so the figures sit in one column beside the chart and spread into
-   two when the layout wraps and the summary has the full width to itself. */
-.trend-summary-figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0 18px; }
+   two when the layout wraps and the summary has the full width to itself.
+   min(190px,100%) rather than a bare 190px, because a bare minimum is a floor
+   the track will not go below: once the panel is narrower than it — a magnified
+   screen being the usual way to get there — the column stayed 190px wide and
+   its contents hung over the figure beside them. Capping the minimum at the
+   container's own width lets the track shrink with it instead. */
+.trend-summary-figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr)); gap:0 18px; }
 /* The border between rows belongs to a single column of figures; across a grid
-   it draws a rule through the middle of the group. */
-.trend-summary-figures .report-metric { border-bottom:0; padding:6px 0; }
+   it draws a rule through the middle of the group. flex-wrap is the last
+   resort, past the point where label and figure fit on one line: the figure
+   drops below its label rather than the two printing over each other. */
+.trend-summary-figures .report-metric { border-bottom:0; padding:6px 0; min-width:0; flex-wrap:wrap; gap:0 12px; }
+/* A flex item will not shrink below its own content unless it is told it may. */
+.trend-summary-figures .report-metric > span,
+.trend-summary-figures .report-metric > strong { min-width:0; }
 .trend-summary .meter-head { margin-top:10px; padding-top:10px; border-top:1px solid var(--chart-grid); }
 
 /* ------------------------------------------------------------- uploads */
