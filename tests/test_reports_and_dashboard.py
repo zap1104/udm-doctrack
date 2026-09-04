@@ -267,12 +267,23 @@ def test_every_slice_links_through_to_its_list(client, finished_record, users):
 
 
 @pytest.mark.django_db
-def test_overdue_leads_to_reports_not_to_the_tracking_list(client, users):
+def test_every_tracking_slice_opens_the_tracking_list(client, users):
+    """Overdue was the exception and is no longer.
+
+    It pointed at Reports on the argument that "why are these late and whose
+    are they" is a report rather than a list of rows. That is true of the
+    question and not of the click: a slice counting documents is opened to see
+    the documents, and one slice in the ring leaving for a different page is a
+    surprise every time it happens. The per-office breakdown is still a click
+    away in Reports, which the dashboard links to in its own right.
+    """
     client.force_login(users["admin"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
-    overdue = next(row for row in breakdown["slices"] if row["key"] == "overdue")
-    assert overdue["url"].startswith("/reports/")
+    tracking = [row for row in breakdown["slices"] if row["group"] == "tracking"]
+    assert tracking, "the ring should have tracking slices"
+    for row in tracking:
+        assert row["url"].startswith("/tracking/"), row["key"]
 
 
 @pytest.mark.django_db

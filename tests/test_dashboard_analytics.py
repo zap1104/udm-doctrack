@@ -1149,6 +1149,32 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
 
 
 @pytest.mark.django_db
+def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record):
+    """Overdue used to open Reports on the argument that "why are these late"
+    is a report rather than a list. True of the question, not of the click: a
+    card counting documents is opened to see the documents, and one card
+    behaving unlike the three beside it is a surprise every time."""
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    for scope in ("incoming", "outgoing", "overdue", "custody"):
+        assert f"/tracking/?scope={scope}" in body, scope
+    assert "/reports/?status=OVERDUE" not in body
+
+
+@pytest.mark.django_db
+def test_the_overdue_card_and_the_list_it_opens_agree(client, users, overdue_record):
+    """The number on the card has to be the number of rows behind it. Pointing
+    a count at a list filtered even slightly differently is worse than pointing
+    it somewhere else entirely — the reader has no reason to doubt it."""
+    client.force_login(users["admin"])
+    counted = client.get(DASHBOARD).context["overdue_count"]
+    listed = client.get("/tracking/?scope=overdue").context["page_obj"].paginator.count
+
+    assert counted == listed
+
+
+@pytest.mark.django_db
 def test_the_two_desk_blocks_are_told_apart(client, users, awaiting_receipt):
     """They were reading as one list with a line through it.
 

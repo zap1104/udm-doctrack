@@ -300,11 +300,8 @@ class DashboardMemoMixin:
              "url": f"{tracking_url}?scope=pending-receipt", "group": "tracking"},
             {"key": "in_process", "label": "In process", "total": in_process,
              "url": f"{tracking_url}?status=IN_PROCESS", "group": "tracking"},
-            # Overdue goes to Reports, not to the filtered tracking list: the
-            # question behind clicking it is "why are these late and whose are
-            # they", which is a report, not a list of rows.
             {"key": "overdue", "label": "Overdue", "total": overdue_total,
-             "url": f"{reverse('core:reports')}?status=OVERDUE", "group": "tracking"},
+             "url": f"{tracking_url}?scope=overdue", "group": "tracking"},
             {"key": "pending_upload", "label": "Completed - pending upload",
              "total": awaiting_upload,
              "url": f"{tracking_url}?scope=pending-upload", "group": "tracking"},

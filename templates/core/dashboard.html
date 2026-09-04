@@ -92,14 +92,17 @@
   </div>
   <div class="col-6 col-md-3">
     {% comment %}
-      Overdue leads to Reports, not to the filtered tracking list. The question
-      behind clicking an overdue count is "why are these late and whose are
-      they", which is a report — a flat list of rows cannot answer it.
+      Overdue opens the tracking list, like the three cards beside it. It used
+      to open Reports on the argument that "why are these late and whose are
+      they" is a report rather than a list — true of the question, but not of
+      the click: a card counting documents is opened to see the documents, and
+      landing somewhere else makes this one card behave unlike its neighbours.
+      The per-office breakdown is still a click away in Reports.
     {% endcomment %}
-    <a class="stat-card red" href="{% url 'core:reports' %}?status=OVERDUE">
+    <a class="stat-card red" href="{% url 'tracking:list' %}?scope=overdue">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
-      <div class="hint">Past the action deadline · opens Reports</div>
+      <div class="hint">Past the action deadline</div>
     </a>
   </div>
   {% comment %}
