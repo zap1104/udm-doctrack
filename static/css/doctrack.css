@@ -5,6 +5,11 @@
 
 :root {
   --udm-navy: #0b315a;
+  /* Navy doing its *text* job, split from navy doing its background job. The
+     two want opposite things once the page goes dark: the background darkens
+     with it, the text has to lift off it. Identical to --udm-navy in this
+     theme, so nothing here changes; the dark block is where they diverge. */
+  --udm-navy-text: var(--udm-navy);
   --udm-navy-700: #0e3c6d;
   --udm-navy-600: #14477e;
   --udm-gold: #c49a2e;
@@ -82,7 +87,7 @@ body {
 
 h1, h2, h3, h4, h5, .display-face {
   font-family: "Aptos Display", "Aptos", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  color: var(--udm-navy);
+  color: var(--udm-navy-text);
   letter-spacing: -0.01em;
 }
 
@@ -109,7 +114,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 .wordmark .udm { color: var(--udm-gold); }
-.wordmark .doctrack { color: var(--udm-navy); }
+.wordmark .doctrack { color: var(--udm-navy-text); }
 .wordmark--light .doctrack { color: #ffffff; }
 
 /* ------------------------------------------------------------------ shell */
@@ -219,7 +224,7 @@ a:hover { text-decoration: underline; }
 .stat-card .label { color: var(--udm-muted); font-size: 13px; }
 .stat-card .value {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-size: 34px; font-weight: 700; color: var(--udm-navy); line-height: 1.1;
+  font-size: 34px; font-weight: 700; color: var(--udm-navy-text); line-height: 1.1;
 }
 .stat-card .hint { font-size: 12.5px; color: var(--udm-muted); }
 .stat-card.gold { border-left-color: var(--udm-gold); }
@@ -259,12 +264,12 @@ a:hover { text-decoration: underline; }
 .table-udm tbody tr:hover { background: #fafbfd; }
 .table-udm .mono {
   font-family: "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px; color: var(--udm-navy); font-weight: 600; white-space: nowrap;
+  font-size: 12.5px; color: var(--udm-navy-text); font-weight: 600; white-space: nowrap;
 }
 /* Office codes in the records-staff columns: short, scannable, and never the
    thing that forces a row to wrap. */
 .table-udm .office-cell {
-  font-size: 12.5px; font-weight: 600; color: var(--udm-navy);
+  font-size: 12.5px; font-weight: 600; color: var(--udm-navy-text);
   white-space: nowrap; letter-spacing: 0.02em;
 }
 
@@ -283,7 +288,7 @@ a:hover { text-decoration: underline; }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
 .timeline li.is-done::before { border-color: var(--udm-green); }
 .timeline li.is-muted::before { border-color: var(--udm-line); }
-.timeline .t-title { font-weight: 600; color: var(--udm-navy); }
+.timeline .t-title { font-weight: 600; color: var(--udm-navy-text); }
 .timeline .t-meta { color: var(--udm-muted); font-size: 13px; }
 .timeline .t-detail {
   margin-top: 6px; background: var(--udm-canvas); border: 1px solid var(--udm-line);
@@ -296,7 +301,7 @@ a:hover { text-decoration: underline; }
 }
 .relevance .score {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-weight: 700; font-size: 19px; color: var(--udm-navy);
+  font-weight: 700; font-size: 19px; color: var(--udm-navy-text);
 }
 .relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: #e7ecf3; overflow: hidden; }
 .relevance-bar span { display: block; height: 100%; background: var(--udm-teal); border-radius: 999px; }
@@ -351,7 +356,7 @@ a:hover { text-decoration: underline; }
 .doc-tile .meta { color: var(--udm-muted); font-size: 12.5px; }
 
 .empty-state { text-align: center; padding: 46px 20px; color: var(--udm-muted); }
-.empty-state h3 { color: var(--udm-navy); margin-bottom: 6px; }
+.empty-state h3 { color: var(--udm-navy-text); margin-bottom: 6px; }
 
 .step-indicator { display: flex; gap: 10px; align-items: center; color: var(--udm-muted); font-size: 13px; }
 .step-indicator .step { display: inline-flex; align-items: center; gap: 7px; }
@@ -360,7 +365,7 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
 }
 .step-indicator .step.active .num { background: var(--udm-navy); color: #fff; }
-.step-indicator .step.active { color: var(--udm-navy); font-weight: 600; }
+.step-indicator .step.active { color: var(--udm-navy-text); font-weight: 600; }
 
 .text-preview {
   background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: 8px;
@@ -375,8 +380,8 @@ a:hover { text-decoration: underline; }
 .btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
 .btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
 .btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
-.btn-udm-outline { background:var(--udm-surface); border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-navy); color: var(--udm-navy); }
+.btn-udm-outline { background:var(--udm-surface); border: 1px solid var(--udm-line); color: var(--udm-navy-text); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
+.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-navy); color: var(--udm-navy-text); }
 .btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
 .btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
 .btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
@@ -430,7 +435,7 @@ a:hover { text-decoration: underline; }
 .phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
 .phase2-checklist li { margin-bottom: 10px; }
 .phase2-checklist li:last-child { margin-bottom: 0; }
-.phase2-checklist strong { color: var(--udm-navy); }
+.phase2-checklist strong { color: var(--udm-navy-text); }
 .phase2-review-table th {
   width: 190px; color: var(--udm-muted); font-size: 13px; font-weight: 600; vertical-align: top;
 }
@@ -516,7 +521,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-account-name { color:var(--udm-ink); font-size:13.5px; font-weight:600; }
 .app-topbar .topbar-account-office { color:var(--udm-muted); font-size:11.5px; }
 .app-topbar .topbar-account-arrow { flex:0 0 auto; color:var(--udm-muted); font-size:12px; }
-	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy); text-decoration:none; }
+	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy-text); text-decoration:none; }
 	.topbar-notifications:hover { background:var(--udm-canvas); color:var(--udm-teal-ink); }
 	.topbar-notifications:focus-visible { outline:3px solid rgba(22,105,122,.35); outline-offset:2px; }
 	.notification-bell { width:21px; height:21px; }
@@ -524,7 +529,7 @@ a:hover { text-decoration: underline; }
 	.notification-page-head { align-items:flex-start; }
 	.notification-toolbar { border-radius:var(--radius); }
 	.notification-filters { display:flex; flex-wrap:wrap; gap:6px; }
-	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy); font-size:13px; font-weight:600; text-decoration:none; }
+	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy-text); font-size:13px; font-weight:600; text-decoration:none; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-filter:focus-visible { outline:3px solid rgba(22,105,122,.2); outline-offset:2px; }
 	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
@@ -536,7 +541,7 @@ a:hover { text-decoration: underline; }
 	.notification-row.is-completed { border-left-color:var(--udm-navy); }
 	.notification-row.is-shared { border-left-color:#96743a; }
 	.notification-row.is-read { background:var(--udm-canvas); box-shadow:none; }
-	.notification-kind-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--udm-navy-soft); color:var(--udm-navy); font-size:15px; font-weight:700; }
+	.notification-kind-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--udm-navy-soft); color:var(--udm-navy-text); font-size:15px; font-weight:700; }
 	.notification-row.is-actionable .notification-kind-icon { background:var(--udm-red-soft); color:var(--udm-red); }
 	.notification-row.is-received .notification-kind-icon { background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-row-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--udm-muted); font-size:11px; }
@@ -569,7 +574,7 @@ a:hover { text-decoration: underline; }
   display:inline-flex; align-items:center; justify-content:center;
   min-height:36px; padding:7px 14px;
   border:1px solid var(--udm-line); border-radius:999px;
-  background:var(--udm-surface); color:var(--udm-navy);
+  background:var(--udm-surface); color:var(--udm-navy-text);
   font-size:13px; font-weight:600; line-height:1;
   white-space:nowrap; text-decoration:none;
 }
@@ -712,7 +717,7 @@ a:hover { text-decoration: underline; }
 
 .app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):hover,
 .app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):focus {
-  color: var(--udm-navy);
+  color: var(--udm-navy-text);
   text-decoration-thickness: 2px;
 }
 
@@ -727,7 +732,7 @@ a:hover { text-decoration: underline; }
 .report-print-header,.report-print-footer { display:none; }
 .reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
-.reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy); }
+.reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }
 .reports-tab.active { background:var(--udm-navy); color:#fff; }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
@@ -751,13 +756,13 @@ a:hover { text-decoration: underline; }
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
-.report-office-label { margin-bottom:7px; color:var(--udm-navy); font-size:13px; font-weight:700; }
+.report-office-label { margin-bottom:7px; color:var(--udm-navy-text); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
 .report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.report-series-item strong { text-align:right; color:var(--udm-navy); }
+.report-series-item strong { text-align:right; color:var(--udm-navy-text); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
@@ -805,17 +810,17 @@ a:hover { text-decoration: underline; }
 }
 .status-row:last-child { border-bottom:0; }
 .status-row-label { min-width:0; overflow:hidden; }
-.status-row strong { text-align:right; color:var(--udm-navy); font-size:14px; }
+.status-row strong { text-align:right; color:var(--udm-navy-text); font-size:14px; }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
 /* -------------------------------------------------------------- metrics */
 .report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
-.report-metric strong { color:var(--udm-navy); font-size:14px; text-align:right; white-space:nowrap; }
+.report-metric strong { color:var(--udm-navy-text); font-size:14px; text-align:right; white-space:nowrap; }
 .report-metric small { display:block; font-size:11.5px; }
 
 .meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
-.meter-head strong { color:var(--udm-navy); font-size:17px; }
+.meter-head strong { color:var(--udm-navy-text); font-size:17px; }
 /* Unfilled track is a lighter step of the fill's own ramp, so state reads
    across the whole bar. */
 .meter-track { height:10px; border-radius:2px; background:var(--udm-green-soft); }
@@ -864,7 +869,7 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 html { scroll-behavior:smooth; }
 body.sidebar-open { overflow:hidden; }
-.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:var(--udm-surface); color:var(--udm-navy); font-weight:700; }
+.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:var(--udm-surface); color:var(--udm-navy-text); font-weight:700; }
 .skip-link:focus { top:14px; }
 .app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:var(--udm-surface); color:var(--udm-muted); font-size:12.5px; }
 .sidebar-toggle,.sidebar-close,.sidebar-backdrop { display:none; }
@@ -881,7 +886,7 @@ body.sidebar-open { overflow:hidden; }
 .message-stack { display:grid; gap:9px; margin-bottom:16px; }
 .app-alert { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; margin:0; border-radius:10px; }
 .app-alert-icon { width:9px; height:9px; margin-top:7px; border-radius:50%; background:currentColor; opacity:.75; }
-.app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy); font-weight:700; text-decoration:none; }
+.app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy-text); font-weight:700; text-decoration:none; }
 .app-pagination .page-item:not(.disabled) .page-link:hover { border-color:var(--udm-teal); background:var(--udm-teal-soft); }
 .account-facts th { width:130px; color:var(--udm-muted); font-weight:500; }
 .account-sticky-note { position:sticky; top:86px; }
@@ -1053,7 +1058,7 @@ body.sidebar-open { overflow:hidden; }
   border: 1px solid var(--udm-line-strong);
   border-radius: 8px;
   background:var(--udm-surface);
-  color: var(--udm-navy);
+  color: var(--udm-navy-text);
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1;
@@ -1277,11 +1282,11 @@ body.sidebar-open { overflow:hidden; }
   .session-dialog__actions { flex-direction: column; }
 }
 .session-dialog::backdrop { background: rgba(11, 32, 56, 0.55); }
-.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; color: var(--udm-navy); }
+.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; color: var(--udm-navy-text); }
 .session-dialog p { margin: 0; font-size: 14px; color: var(--udm-slate-text); }
 .session-dialog__clock {
   margin: 16px 0 20px; font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-navy); text-align: center;
+  font-variant-numeric: tabular-nums; color: var(--udm-navy-text); text-align: center;
 }
 .session-dialog__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .session-dialog__actions .btn { flex: 1 1 auto; }
@@ -1366,7 +1371,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .fold > summary {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
   border: 1px solid var(--udm-line); border-radius: 999px; background:var(--udm-surface);
-  color: var(--udm-navy); cursor: pointer; font-size: 12.5px; font-weight: 600;
+  color: var(--udm-navy-text); cursor: pointer; font-size: 12.5px; font-weight: 600;
   list-style: none;
 }
 .fold > summary::-webkit-details-marker { display: none; }
@@ -1449,13 +1454,13 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .breakdown-seg--completed { background:var(--chart-three); }
 
 .breakdown-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:2px 18px; }
-.breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy); font-size:13px; text-decoration:none; }
+.breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy-text); font-size:13px; text-decoration:none; }
 .breakdown-item:hover,.breakdown-item:focus { background:var(--udm-canvas); }
 .breakdown-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .breakdown-percent { min-width:44px; color:var(--udm-muted); text-align:right; font-size:12px; }
 
 .dashboard-writeup { margin-top:18px; padding-top:14px; border-top:1px solid var(--udm-line); }
-.dashboard-writeup h3 { margin:0 0 6px; font-size:14px; color:var(--udm-navy); }
+.dashboard-writeup h3 { margin:0 0 6px; font-size:14px; color:var(--udm-navy-text); }
 .dashboard-writeup p { margin:0 0 6px; color:var(--udm-slate-text); font-size:13px; line-height:1.55; }
 .dashboard-writeup p:last-child { margin-bottom:0; }
 /* The write-up used to close the "All documents" card, where the rule above it
@@ -1506,7 +1511,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* --------------------------------------------------------- scope picker */
 .dashboard-scope { display:flex; align-items:center; gap:8px; }
 .dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
-.dashboard-scope .form-select { min-width:210px; border-color:var(--udm-line); color:var(--udm-navy); font-size:13px; font-weight:600; }
+.dashboard-scope .form-select { min-width:210px; border-color:var(--udm-line); color:var(--udm-navy-text); font-size:13px; font-weight:600; }
 .dashboard-scope .form-select:focus { border-color:var(--udm-teal); box-shadow:0 0 0 .18rem rgba(22,105,122,.18); }
 
 /* -------------------------------------------------------- overdue banner */
@@ -1516,7 +1521,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-alert { border-left:5px solid var(--udm-red); }
 .dashboard-alert .card-udm-head h2 { color:var(--udm-red-ink); }
 .alert-figures { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 30px; padding-bottom:14px; margin-bottom:4px; border-bottom:1px solid var(--chart-grid); }
-.alert-figure-value { color:var(--udm-navy); font-size:23px; font-weight:800; line-height:1.1; letter-spacing:-.02em; }
+.alert-figure-value { color:var(--udm-navy-text); font-size:23px; font-weight:800; line-height:1.1; letter-spacing:-.02em; }
 .alert-figure-label { margin-top:2px; color:var(--udm-muted); font-size:12px; }
 /* The lead figure is the count itself — the one number somebody acts on. */
 .alert-figure--lead .alert-figure-value { color:var(--udm-red); font-size:38px; }
@@ -1534,7 +1539,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    a filled circle on paper. */
 .donut { position:relative; flex:0 0 190px; width:190px; height:190px; border-radius:50%; }
 .donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
-.donut-hole-value { color:var(--udm-navy); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+.donut-hole-value { color:var(--udm-navy-text); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
 .donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
 .donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
 
@@ -1583,7 +1588,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* ---------------------------------------------------------------- memo */
 .memo-sheet { padding:22px 24px; border:1px solid var(--udm-line); border-radius:8px; }
 .memo-meta { display:flex; flex-wrap:wrap; gap:8px 26px; padding-bottom:13px; margin-bottom:15px; border-bottom:1px solid var(--chart-grid); color:var(--udm-muted); font-size:12.5px; }
-.memo-meta strong { color:var(--udm-navy); }
+.memo-meta strong { color:var(--udm-navy-text); }
 .memo-sheet p { margin:0 0 11px; color:var(--udm-ink); font-size:14px; line-height:1.65; }
 .memo-sheet p:last-child { margin-bottom:0; }
 .memo-footnote { flex:1 1 auto; color:var(--udm-muted); font-size:11.5px; text-align:left; }
@@ -1624,7 +1629,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   min-height:58px; padding:13px 15px;
   border:1px solid var(--udm-line); border-radius:10px;
-  background:var(--udm-surface); color:var(--udm-navy); font-size:13.5px; text-decoration:none;
+  background:var(--udm-surface); color:var(--udm-navy-text); font-size:13.5px; text-decoration:none;
 }
 .folder-tile:hover,.folder-tile:focus { border-color:var(--udm-teal); text-decoration:none; }
 .folder-tile.active { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); font-weight:600; }
@@ -1670,6 +1675,9 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   /* Navy is structural here (sidebar, buttons) rather than decorative, so it
      darkens with the page instead of glowing against it. */
   --udm-navy: #16222f;
+  /* ...which leaves navy-as-text at 1.01:1 on the card surface — invisible —
+     so here it parts company with the background and becomes the body ink. */
+  --udm-navy-text: var(--udm-ink);
   --udm-navy-700: #1d2e3f;
   --udm-navy-600: #24384c;
 
@@ -1773,10 +1781,35 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --udm-line: #dfe5ec;
   --udm-line-strong: #b9c9da;
   --udm-navy: #0b315a;
+  --udm-navy-text: var(--udm-navy);
   --udm-gold: #c49a2e;
   --udm-teal: #16697a;
   color-scheme: light;
 }
+
+/* ---------------------------------------------- dark theme: contrast repairs
+   What --udm-navy-text cannot reach: a hard-coded colour, and white-on-brand
+   pairings that stopped working when the brand hues were lightened to clear the
+   dark ground. Every rule here is behind the dark selector, so light is untouched. */
+
+/* A slate that reads as body text on white and as background on the dark card. */
+:root[data-theme="dark"] .text-preview { color: var(--udm-slate-text); }
+
+/* White fell to 1.9:1 on gold, 2.6 on green, 2.7 on teal. The hues have to stay
+   light to clear the dark ground, so the label goes dark instead — 6.6:1 and up,
+   and each button still reads as its own colour. */
+:root[data-theme="dark"] .btn-udm-green,
+:root[data-theme="dark"] .btn-udm-green:hover,
+:root[data-theme="dark"] .btn-udm-teal,
+:root[data-theme="dark"] .btn-udm-teal:hover,
+:root[data-theme="dark"] .btn-receipt-icon,
+:root[data-theme="dark"] .uploads-leader-tag { color: var(--udm-canvas); }
+
+/* The step number sat on a hard-coded pale disc, which stayed pale when nothing
+   else did. The active disc is restored on the second line: it is navy with
+   white on it, already legible, and would otherwise lose to the first. */
+:root[data-theme="dark"] .step-indicator .num { background: var(--udm-slate-soft); }
+:root[data-theme="dark"] .step-indicator .step.active .num { background: var(--udm-navy); }
 
 /* Paper is white whatever the screen is. Printing a dark theme wastes toner and
    comes out unreadable on the panels that rely on tinted fills, so print always
@@ -1815,7 +1848,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   display: inline-flex; align-items: center; justify-content: center;
   width: 38px; height: 38px; flex: 0 0 38px; padding: 0;
   border: 1px solid var(--udm-line); border-radius: 8px;
-  background: var(--udm-surface); color: var(--udm-navy);
+  background: var(--udm-surface); color: var(--udm-navy-text);
   font-size: 15px; line-height: 1;
 }
 .theme-toggle:hover, .theme-toggle:focus { border-color: var(--udm-teal); color: var(--udm-teal); }
