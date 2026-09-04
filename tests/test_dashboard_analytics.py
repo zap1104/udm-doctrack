@@ -807,6 +807,46 @@ def test_the_memo_lists_every_office_that_added_to_the_repository(
 
 
 @pytest.mark.django_db
+def test_the_memo_names_the_office_rather_than_saying_your_office(
+    client, users, finished_record
+):
+    """A printed memo has left the building.
+
+    `_scope()` calls a non-picker's scope "Your office", which answers a reader
+    looking at their own screen and answers nobody on paper. The header meta
+    line already resolved this to the real office name; the memo body did not,
+    so one page carried two different answers to the same question.
+
+    Resolved once in `_scope` as `display` rather than by each template
+    deciding for itself — there were three copies of that ternary and this
+    would have been a fourth.
+    """
+    client.force_login(users["med"])
+    response = client.get("/memo/print/")
+    body = response.content.decode()
+    overview = response.context["memo"][0]["lines"]
+
+    assert response.context["scope"]["can_pick"] is False
+    assert {"label": "Scope", "value": users["med"].office_label} in overview
+    assert "Your office" not in body
+
+
+@pytest.mark.django_db
+def test_an_admin_scope_still_reads_as_the_picker_names_it(
+    client, users, offices, finished_record
+):
+    """The other half: for a user who has the picker, `display` is the picker's
+    own label, so the memo and the control agree."""
+    client.force_login(users["admin"])
+
+    everything = client.get("/memo/print/").context["memo"][0]["lines"]
+    assert {"label": "Scope", "value": "All offices"} in everything
+
+    narrowed = client.get(f"/memo/print/?office={offices['SUP'].pk}").context["memo"][0]["lines"]
+    assert {"label": "Scope", "value": offices["SUP"].name} in narrowed
+
+
+@pytest.mark.django_db
 def test_the_memo_never_compares_month_to_month(client, users, finished_record):
     """Descriptive, never comparative — a printed memo carrying a verdict on an
     office outlives the context that produced it."""

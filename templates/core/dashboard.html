@@ -50,9 +50,11 @@
       on request. Starting a document is now reached from the page that owns the
       act — the tracking list and the repository — and not from the dashboard.
 
-      FIXME: `can_start_work` is still computed in `DashboardView` and nothing
-      renders it any more. It is the gate those two buttons used, so it is left
-      in place for whenever they come back or move; two tests still assert it.
+      `can_start_work` is still computed here and rendered by nothing on this
+      page. It is not dead: it moved onto the user model in f822252 and now
+      gates the same two buttons on the tracking list and the repository, which
+      is where they are offered from. It stays in this context so the dashboard
+      can offer them again without re-deriving the rule.
     {% endcomment %}
     <a class="btn btn-udm-outline" href="{% url 'core:reports' %}">Open Reports</a>
     {% comment %}
@@ -73,7 +75,7 @@
 {# Printed copies carry their own heading: the sidebar and buttons do not print. #}
 <div class="report-print-header dashboard-print-header">
   <strong>{{ SITE_LONG_NAME }} — Dashboard</strong>
-  <span>{% if scope.can_pick %}{{ scope.label }}{% else %}{{ user.office_label }}{% endif %}</span>
+  <span>{{ scope.display }}</span>
   <span>Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ user.display_name }}</span>
 </div>
 
@@ -676,7 +678,7 @@
       <div class="modal-body">
         <div class="memo-sheet">
           <div class="memo-meta">
-            <span><strong>Scope</strong> · {% if scope.can_pick %}{{ scope.label }}{% else %}{{ user.office_label }}{% endif %}</span>
+            <span><strong>Scope</strong> · {{ scope.display }}</span>
             <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
             <span><strong>By</strong> · {{ user.display_name }}</span>
           </div>

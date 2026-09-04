@@ -113,15 +113,29 @@ class DashboardMemoMixin:
         """
         user = self.request.user
         if not user.is_office_admin:
-            return {"office": None, "offices": [], "can_pick": False, "label": "Your office"}
+            # `label` is what the picker would have been called; `display` is
+            # what to print. They differ only here, and only because "Your
+            # office" answers a reader looking at their own screen and answers
+            # nobody at all on a printed page that has left the building. Both
+            # keys exist so the choice is made once, here, rather than by each
+            # template deciding whether to fall back to the user's office.
+            return {
+                "office": None,
+                "offices": [],
+                "can_pick": False,
+                "label": "Your office",
+                "display": user.office_label,
+            }
 
         raw = self.request.GET.get("office", "")
         office = Office.objects.filter(pk=raw).first() if raw.isdigit() else None
+        label = office.name if office else "All offices"
         return {
             "office": office,
             "offices": Office.active.all().order_by("name"),
             "can_pick": True,
-            "label": office.name if office else "All offices",
+            "label": label,
+            "display": label,
         }
 
     def _scoped(self, user, office):
@@ -179,7 +193,7 @@ class DashboardMemoMixin:
                 {
                     "heading": "Overview",
                     "lines": [
-                        line("Scope", scope["label"]),
+                        line("Scope", scope["display"]),
                         line("", "There are no documents in tracking or in the "
                                  "repository yet."),
                     ],
@@ -187,7 +201,7 @@ class DashboardMemoMixin:
             ]
 
         overview = [
-            line("Scope", scope["label"]),
+            line("Scope", scope["display"]),
             line("Total", self._plural(total, "document")),
             line("Still moving", "{} ({}%)".format(
                 breakdown["tracking_total"], breakdown["tracking_percent"])),
@@ -318,6 +332,7 @@ class DashboardMemoMixin:
             "tracking_percent": _percent(tracking_total, total),
             "repository_percent": _percent(total - tracking_total, total),
         }
+
     def get_memo_context(self):
         """Everything the memo needs, computed once from one set of querysets.
 

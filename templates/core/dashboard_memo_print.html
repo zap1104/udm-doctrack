@@ -30,7 +30,7 @@
     evidence of anything once it leaves the screen.
   {% endcomment %}
   <div class="memo-print-meta">
-    <span><strong>Scope</strong> · {% if scope.can_pick %}{{ scope.label }}{% else %}{{ user.office_label }}{% endif %}</span>
+    <span><strong>Scope</strong> · {{ scope.display }}</span>
     <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
     <span><strong>By</strong> · {{ user.display_name }}</span>
   </div>
