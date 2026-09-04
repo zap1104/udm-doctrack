@@ -251,6 +251,13 @@ a:hover { text-decoration: underline; }
 
    Filled for what is here to act on, outline for what has left — the same
    contrast the draft pill below draws between "in the workflow" and "not yet". */
+/* A stage and a deadline condition are two answers, so a cell can hold two
+   pills. Wrapping rather than overflowing: the Status column is already narrow
+   and the routing slip is print CSS with no room to grow. */
+.pill-stack { display:flex; flex-wrap:wrap; gap:4px; }
+/* Separates the deadline modifier from the queue pills it composes with. A hair
+   rule rather than a gap: a gap alone reads as the row wrapping. */
+.queue-modifier-rule { align-self:stretch; width:1px; margin:2px 4px; background:var(--udm-line); }
 .pill-incoming  { background: var(--udm-slate-soft); color: var(--udm-navy-text); }
 .pill-outgoing  { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 /* Draft is the one status that is not in the workflow yet: nobody has been

@@ -81,15 +81,20 @@ def test_filter_records_narrows_by_status(med_to_sup, users):
 
 
 @pytest.mark.django_db
-def test_filter_records_treats_overdue_as_derived(med_to_sup, users):
-    """Overdue is not a stored status — it is a due date in the past."""
+def test_filter_records_treats_overdue_as_its_own_condition(med_to_sup, users):
+    """Overdue is not a stored status — it is a due date in the past.
+
+    It was `status="OVERDUE"`, which meant the stage and the deadline
+    could not both be asked for. `overdue=` is a parameter of its own now,
+    and composes with `status=`.
+    """
     base = TrackingRecord.objects.visible_to(users["admin"])
-    assert med_to_sup not in filter_records(base, status="OVERDUE")
+    assert med_to_sup not in filter_records(base, overdue="yes")
 
     med_to_sup.due_at = timezone.now() - timezone.timedelta(days=1)
     med_to_sup.save(update_fields=["due_at"])
 
-    assert med_to_sup in filter_records(base, status="OVERDUE")
+    assert med_to_sup in filter_records(base, overdue="yes")
 
 
 @pytest.mark.django_db

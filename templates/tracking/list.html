@@ -48,8 +48,15 @@
        href="{% filter_url 'scope' 'pending-receipt' %}">Pending Receipt</a>
     <a class="pill-toggle{% if scope == 'received' %} is-active{% endif %}"
        href="{% filter_url 'scope' 'received' %}">Received</a>
-    <a class="pill-toggle pill-toggle--alert{% if scope == 'overdue' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'overdue' %}">Overdue</a>
+    {% comment %}
+      Set apart, because it is not a peer of the queues beside it — it is a
+      modifier that composes with them. Incoming + Overdue is one click from
+      either pill now, and both light up together; while overdue was a `scope`
+      it replaced the queue instead of qualifying it.
+    {% endcomment %}
+    <span class="queue-modifier-rule" aria-hidden="true"></span>
+    <a class="pill-toggle pill-toggle--alert{% if request.GET.overdue == 'yes' %} is-active{% endif %}"
+       href="{% filter_url 'overdue' 'yes' %}">Overdue</a>
     {% comment %}
       Necessary once the pills preserve state: "click All Active" used to be the
       way out and no longer is, because it now keeps everything else set.
@@ -89,6 +96,24 @@
               </span>
             </a>
           {% endwith %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-deadline-label">Deadline</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-deadline-label">
+        {% comment %}
+          Three states, not two: "what is still on time" is a question the
+          offices ask when planning a week, and an absent parameter has to go on
+          meaning "do not filter". The two named ones partition the total.
+        {% endcomment %}
+        {% for value, label in deadline_choices %}
+          <a class="pill-toggle{% if request.GET.overdue|default:'' == value %} is-active{% endif %}"
+             href="{% filter_url 'overdue' value %}"
+             {% if request.GET.overdue|default:'' == value %}aria-current="true"{% endif %}>{{ label }}</a>
         {% endfor %}
       </div>
     </div>
@@ -141,10 +166,14 @@
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
           <td>
               {% comment %}
-                display_status already resolves to OVERDUE whenever is_overdue
-                is true, so a second pill guarded on both could never render.
+                Two pills, because they answer different questions: the stage
+                says what to do next, the tag says how urgent it is. They used
+                to be one, and the stage was the half that lost.
               {% endcomment %}
-              {% include "partials/_status_pill.html" with status=record.display_status %}
+              <div class="pill-stack">
+                {% include "partials/_status_pill.html" with status=record.status %}
+                {% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+              </div>
             </td>
             <td class="text-end">
               {% if record.can_confirm_now %}

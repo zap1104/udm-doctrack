@@ -123,7 +123,7 @@ def test_an_overdue_record_stops_being_overdue_once_completed(sent_record, users
     # Pending upload is still a completion: nobody is late finishing work that
     # is finished, only late filing it.
     assert sent_record.is_overdue is False
-    assert sent_record.display_status == Status.COMPLETED_PENDING_UPLOAD
+    assert sent_record.status == Status.COMPLETED_PENDING_UPLOAD
 
 
 # --- 1.3 In process is gated on receipt ------------------------------------

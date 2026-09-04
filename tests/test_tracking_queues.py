@@ -111,10 +111,13 @@ def test_overdue_is_derived_and_never_stored(in_flight, users):
     in_flight.save(update_fields=["due_at"])
 
     assert in_flight in scoped(users["sup"], SCOPE_OVERDUE)
-    # The stored status is untouched; only the display changes.
+    # The stored status is untouched, and now the shown one is too. It used to
+    # be replaced: `display_status` returned "OVERDUE", so a record that was
+    # both pending receipt and late showed only that it was late — and the
+    # stage is the half a clerk acts on.
     in_flight.refresh_from_db()
     assert in_flight.status == Status.PENDING_RECEIPT
-    assert in_flight.display_status == "OVERDUE"
+    assert in_flight.is_overdue is True
 
 
 @pytest.mark.django_db

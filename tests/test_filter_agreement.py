@@ -25,6 +25,7 @@ count-only assertion would have called that agreement.
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 import pytest
 
@@ -35,6 +36,7 @@ from apps.tracking.services import (
     active_for,
     annotate_direction,
     apply_scope,
+    complete_record,
     confirm_receipt,
     create_draft_record,
     mark_in_process,
@@ -576,3 +578,156 @@ def test_the_action_centre_is_the_queue_its_button_opens(client, users, traffic)
     href = re.search(r'href="(/tracking/\?scope=pending-receipt[^"]*)"', body).group(1)
 
     assert panel <= page_records(client, href)
+
+
+# --- overdue is a condition, not a stage -----------------------------------
+@pytest.fixture
+def deadlines(users, offices, memo_type):
+    """One of each live stage, on time and late, plus the two edge cases the
+    partition depends on: a record with no deadline, and one completed after
+    its deadline passed."""
+    from django.utils import timezone as tz
+
+    made = {}
+
+    def routed(key, late, receive=False, process=False, complete=False, due=True):
+        record = create_draft_record(
+            user=users["med"], subject=f"{key}", instructions="x", document_type=memo_type,
+        )
+        route_record(record, [offices["SUP"]], user=users["med"])
+        if receive:
+            confirm_receipt(record, user=users["sup"])
+        if process:
+            mark_in_process(record, user=users["sup"])
+        if complete:
+            record.refresh_from_db()
+            complete_record(record, user=users["sup"])
+        when = (tz.now() - timedelta(days=9)) if late else (tz.now() + timedelta(days=9))
+        TrackingRecord.objects.filter(pk=record.pk).update(due_at=when if due else None)
+        record.refresh_from_db()
+        made[key] = record
+        return record
+
+    routed("pending_ontime", late=False)
+    routed("pending_late", late=True)
+    routed("received_ontime", late=False, receive=True)
+    routed("received_late", late=True, receive=True)
+    routed("process_ontime", late=False, receive=True, process=True)
+    routed("process_late", late=True, receive=True, process=True)
+    routed("no_deadline", late=False, due=False)
+    routed("completed_after_deadline", late=True, receive=True, complete=True)
+    return made
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("key", "label"),
+    [("pending_late", "Pending receipt"), ("received_late", "Received"),
+     ("process_late", "In process")],
+)
+def test_a_late_record_shows_its_stage_and_its_lateness(client, users, deadlines, key, label):
+    """The pill replaced the stage: `display_status` returned "OVERDUE", so a
+    reader who opened the Pending receipt slice counted two records and one
+    Pending receipt pill. Overdue says the deadline went by; it does not say
+    whether anybody has signed for the document, which is the part to act on."""
+    client.force_login(users["sup"])
+    record = deadlines[key]
+    body = client.get(f"{TRACKING}?q=&status={record.status}").content.decode()
+
+    assert label in body
+    assert "Overdue" in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "status",
+    [Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS],
+)
+def test_the_stage_and_the_deadline_compose(client, users, deadlines, status):
+    """Both at once, which `status=OVERDUE` made impossible: it held the one
+    parameter, so asking for overdue pending-receipts cost the queue pill."""
+    client.force_login(users["sup"])
+
+    staged = page_records(client, f"{TRACKING}?status={status}")
+    late = page_records(client, f"{TRACKING}?status={status}&overdue=yes")
+    on_time = page_records(client, f"{TRACKING}?status={status}&overdue=no")
+
+    assert late and on_time, "the fixture has one of each"
+    assert late | on_time == staged
+    assert not (late & on_time)
+
+
+@pytest.mark.django_db
+def test_the_two_deadline_buckets_partition_the_whole(client, users, deadlines):
+    """The regression test for the trap in the negative branch.
+
+    `.exclude(due_at__lt=now)` reads as the opposite of overdue and is not: it
+    throws out every record whose deadline passed *before* the work finished, so
+    those appear under neither filter. Measured on 280 records it returned 13
+    where the explicit form returns 248 — 235 rows falling out of a page that
+    offers only these two choices. The fixture carries both edge cases.
+    """
+    client.force_login(users["sup"])
+
+    everything = page_records(client, TRACKING)
+    late = page_records(client, f"{TRACKING}?overdue=yes")
+    on_time = page_records(client, f"{TRACKING}?overdue=no")
+
+    assert deadlines["no_deadline"].pk in on_time, "no deadline is not late"
+    assert deadlines["completed_after_deadline"].pk in on_time, "finished is not late"
+    assert late | on_time == everything
+    assert not (late & on_time)
+
+
+@pytest.mark.django_db
+def test_the_legacy_spellings_still_resolve(client, users, deadlines):
+    """Every saved bookmark, the dashboard's Overdue card and the queue pill
+    emit one of these. They translate in the resolver, so nothing downstream
+    keeps a second code path — keeping one is what made overdue a status."""
+    client.force_login(users["sup"])
+
+    canonical = page_records(client, f"{TRACKING}?overdue=yes")
+
+    assert page_records(client, f"{TRACKING}?status=OVERDUE") == canonical
+    assert page_records(client, f"{TRACKING}?scope=overdue") == canonical
+
+
+@pytest.mark.django_db
+def test_a_legacy_spelling_composes_with_a_queue(client, users, deadlines):
+    """`?scope=overdue` used to *be* the queue, so it could not narrow one."""
+    client.force_login(users["sup"])
+
+    incoming = page_records(client, f"{TRACKING}?scope=incoming")
+    late = page_records(client, f"{TRACKING}?scope=incoming&overdue=yes")
+
+    assert late <= incoming
+    assert late == incoming & page_records(client, f"{TRACKING}?overdue=yes")
+
+
+@pytest.mark.django_db
+def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines):
+    """The CSV wrote "Overdue" into the Status column, so an exported sheet had
+    no record of what stage the late documents were at — and a spreadsheet
+    attached to a memo is read by somebody who cannot re-run the query."""
+    client.force_login(users["admin"])
+    rows = client.get("/reports/export/").content.decode().splitlines()
+
+    header = next(r for r in rows if r.startswith("Tracking number"))
+    columns = header.split(",")
+    assert "Status" in columns and "Overdue" in columns
+
+    late = deadlines["pending_late"]
+    line = next(r for r in rows if late.tracking_number in r)
+    assert "Pending receipt" in line, "the stage survives the export"
+    assert "Yes" in line.split(",")[columns.index("Overdue")]
+
+
+@pytest.mark.django_db
+def test_finished_work_is_never_late(client, users, deadlines):
+    """Empty by construction: `is_overdue` and both query branches exclude the
+    completed statuses, so asking for both can only ever return nothing."""
+    client.force_login(users["sup"])
+    response = client.get(f"{TRACKING}?overdue=yes&status={Status.COMPLETED_PENDING_UPLOAD}")
+
+    assert response.context["page_obj"].paginator.count == 0
+    assert "is not late" in response.content.decode()

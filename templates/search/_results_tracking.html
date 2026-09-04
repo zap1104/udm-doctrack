@@ -35,7 +35,7 @@
             </td>
             <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
-            <td>{% include "partials/_status_pill.html" with status=record.display_status %}</td>
+            <td>{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
             <td class="text-end">
               <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
             </td>

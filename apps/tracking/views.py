@@ -76,15 +76,22 @@ class RecordListView(AppLoginRequiredMixin, View):
         # the wrong answer presented as the right one.
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
-        status = data.get("status")
-        scope = data.get("scope")
+        # Status, scope and overdue come from the resolver, not the form: it is
+        # what translates the two legacy spellings — `?status=OVERDUE` and
+        # `?scope=overdue` — into the overdue condition, so nothing downstream
+        # has to know they exist. Offices and owner the form still validates.
+        resolved = core_filters.resolve(request)
+        status = resolved.status
+        scope = resolved.scope
         offices = data.get("offices")
         owner = data.get("owner")
 
         # Shared with the unified search page's tracking mode, so "how a
         # tracking record gets filtered" has one implementation. This page
         # passes no `query` — it has queue pills instead of a search box.
-        records = services.filter_records(records, status=status, offices=offices)
+        records = services.filter_records(
+            records, status=status, offices=offices, overdue=resolved.overdue
+        )
         # "View this page as office X", the same thing the dashboard's picker
         # means, and gated the same way — services.scope_office decides, so the
         # two pages cannot answer "whose queue is this" differently.
@@ -93,7 +100,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         # viewer's. For one that does not — Overdue, Pending upload — there is
         # no such office to replace, so the picker narrows by the same
         # originating-or-current pairing the dashboard scopes its panels with.
-        as_office = services.scope_office(request.user, request.GET.get("office"))
+        as_office = resolved.as_office
         if as_office and scope not in services.OFFICE_SCOPED:
             records = records.filter(
                 Q(originating_office=as_office) | Q(current_office=as_office)
@@ -107,16 +114,19 @@ class RecordListView(AppLoginRequiredMixin, View):
         if owner:
             records = services.apply_scope(records, owner, request.user)
 
-        if form.errors:
+        # Minus anything the resolver understood. The forms validate against the
+        # current vocabulary, so a bookmark reading `?status=OVERDUE` was
+        # honoured and warned about in the same breath.
+        unrecognised = sorted(set(form.errors) - set(resolved.translated))
+        if unrecognised:
             messages.warning(
                 request,
                 "Ignored a filter that was not recognised: "
-                + ", ".join(sorted(form.errors)) + ". Showing the rest.",
+                + ", ".join(unrecognised) + ". Showing the rest.",
             )
         # A filter that fails open is worse than one that errors: the reader
         # believes the page is narrowed to one office and it is the whole
         # university. `resolve` records what it refused rather than dropping it.
-        resolved = core_filters.resolve(request)
         if resolved.invalid:
             messages.warning(
                 request,
@@ -163,6 +173,11 @@ class RecordListView(AppLoginRequiredMixin, View):
                 # else. Without it the reader concludes the filter is broken.
                 "impossible_reason": core_filters.impossible_reason(resolved),
                 "resolved": resolved,
+                # Labels live here rather than in the template so the three
+                # states are named once, beside the values the resolver accepts.
+                "deadline_choices": [
+                    ("", "Any deadline"), ("yes", "Overdue only"), ("no", "On time only"),
+                ],
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses
                 # them on its own; this only stops offering a dead end.

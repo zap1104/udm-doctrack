@@ -346,7 +346,7 @@
           <span>Tracking Number</span>
           <strong class="mono">{{ record.display_tracking_number }}</strong>
         </div>
-        <div class="routing-slip-header-status">{% include "partials/_status_pill.html" with status=record.display_status %}</div>
+        <div class="routing-slip-header-status">{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</div>
       </div>
     </div>
   </header>

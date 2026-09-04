@@ -789,6 +789,9 @@ def report_filters_from_request(request):
         office = _office_from_name(office_name)
     year = _filter_year(params.get("year", ""))
     status = params.get("status", "")
+    # "OVERDUE" is not a status and is accepted here as the vocabulary Reports'
+    # own filter row speaks — see apps.core.filters for the translation the
+    # listing pages do with the same string.
     if status not in dict(Status.choices) and status != "OVERDUE":
         status = ""
     document_type = (
@@ -812,7 +815,11 @@ def apply_report_filters(records, filters):
     if year:
         records = records.filter(created_at__year=year)
     if filters["status"] == "OVERDUE":
-        records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+        # Reports still speaks the older spelling in its own dropdown, but it
+        # delegates rather than repeating the expression — one definition of
+        # "past its deadline" in the query layer, or this page and Tracking
+        # drift the way they did over the status vocabulary.
+        records = records.filter(tracking_services.overdue_q())
     elif filters["status"]:
         records = records.filter(status=filters["status"])
     if filters["document_type"]:
@@ -1423,8 +1430,14 @@ class ReportExportView(AppLoginRequiredMixin, View):
         writer.writerow(["Active filters", "; ".join(f"{key}={value}" for key, value in filters.items() if value) or "none"])
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
         writer.writerow(
+            # Overdue as its own column. The Status column used to carry
+            # "Overdue" in place of the stage, so an exported sheet had no
+            # record at all of what stage the late documents were at — and a
+            # spreadsheet attached to a memo is read by somebody who cannot
+            # re-run the query. This is the one place the old behaviour
+            # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
-             "Status", "Created", "Last movement", "Completed"]
+             "Status", "Overdue", "Created", "Last movement", "Completed"]
         )
         for record in records[:cap]:
             writer.writerow(
@@ -1435,7 +1448,8 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     record.document_type.name if record.document_type_id else "",
                     record.originating_office.code,
                     record.current_office.code if record.current_office_id else "",
-                    record.display_status_label,
+                    record.get_status_display(),
+                    "Yes" if record.is_overdue else "No",
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",

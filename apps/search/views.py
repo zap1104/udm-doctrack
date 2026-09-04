@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import View
 
 from apps.accounts.models import Office
+from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
@@ -99,24 +100,29 @@ class SearchView(AppLoginRequiredMixin, View):
         data = getattr(form, "cleaned_data", {})
 
         records = tracking_services.active_for(request.user)
+        resolved = core_filters.resolve(request)
         records = tracking_services.filter_records(
             records,
             query=data.get("q"),
-            status=data.get("status"),
+            # Resolved, not raw: this is what turns `?status=OVERDUE` into the
+            # overdue condition, so the two pages answer the legacy spellings
+            # the same way.
+            status=resolved.status,
             offices=data.get("offices"),
+            overdue=resolved.overdue,
         )
         # The same office resolution the Tracking page uses. Without it this
         # page fell back to the viewer's own office, so the two shared
         # filter_records and apply_scope and still disagreed — 3 records against
         # 0 for the same query string. The drift was never in the queues; it was
         # in who resolved the office.
-        as_office = tracking_services.scope_office(request.user, request.GET.get("office"))
-        if as_office and data.get("scope") not in tracking_services.OFFICE_SCOPED:
+        as_office = resolved.as_office
+        if as_office and resolved.scope not in tracking_services.OFFICE_SCOPED:
             records = records.filter(
                 Q(originating_office=as_office) | Q(current_office=as_office)
             )
         records = tracking_services.apply_scope(
-            records, data.get("scope"), request.user, office=as_office
+            records, resolved.scope, request.user, office=as_office
         )
         if data.get("owner"):
             records = tracking_services.apply_scope(records, data["owner"], request.user)

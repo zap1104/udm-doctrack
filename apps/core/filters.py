@@ -42,17 +42,26 @@ from django.http import QueryDict
 from apps.accounts.models import Office
 from apps.tracking.models import ACTIVE_STATUSES, Status
 
-#: Statuses a page listing live records may be filtered by. OVERDUE is here and
-#: is not a status: it is a deadline condition, accepted as a status value
-#: because that is the vocabulary the filter row speaks.
+#: Statuses a page listing live records may be filtered by. OVERDUE is not among
+#: them: it is a deadline condition that lies across the stages, and it had the
+#: status parameter to itself — so a record could be filtered as overdue or as
+#: pending receipt but never as both. It has its own parameter now.
 ACTIVE_STATUS_VALUES = {status.value for status in Status if status in ACTIVE_STATUSES}
-TRACKING_STATUS_VALUES = ACTIVE_STATUS_VALUES | {"OVERDUE"}
+TRACKING_STATUS_VALUES = set(ACTIVE_STATUS_VALUES)
 
 #: Reports covers finished work too, so it accepts the whole enum. Stated here
 #: beside the narrower list rather than in two forms, because the difference is
 #: deliberate and was previously only discoverable by trying a link: a link from
 #: Reports to Tracking carrying `status=COMPLETED` widened instead of narrowing.
-REPORT_STATUS_VALUES = {value for value, _ in Status.choices} | {"OVERDUE"}
+REPORT_STATUS_VALUES = {value for value, _ in Status.choices}
+
+#: What `?overdue=` accepts, normalised to the three states the resolver keeps.
+#: Three and not two: "what is still on time" is a question the offices ask, and
+#: an absent parameter has to go on meaning "do not filter".
+OVERDUE_VALUES = {
+    "yes": "yes", "1": "yes", "true": "yes", "on": "yes",
+    "no": "no", "0": "no", "false": "no", "off": "no",
+}
 
 
 @dataclass(frozen=True)
@@ -65,8 +74,15 @@ class ResolvedFilters:
     scope: str = ""
     owner: str = ""
     query: str = ""
+    #: "", "yes" or "no" — see OVERDUE_VALUES.
+    overdue: str = ""
     #: Parameter names that were supplied and refused. Never silently dropped.
     invalid: list[str] = field(default_factory=list)
+    #: Parameter names carrying a legacy spelling this resolver understood and
+    #: rewrote. The forms still validate against the current vocabulary, so
+    #: without this a bookmark reading `?status=OVERDUE` would be honoured and
+    #: warned about in the same breath.
+    translated: list[str] = field(default_factory=list)
 
     @property
     def raised_by_ids(self) -> list[str]:
@@ -127,18 +143,42 @@ def resolve(request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True) -> R
             raised_by.append(office)
 
     status = (params.get("status") or "").strip()
+    scope = (params.get("scope") or "").strip()
+
+    overdue = ""
+    raw_overdue = (params.get("overdue") or "").strip().lower()
+    if raw_overdue:
+        overdue = OVERDUE_VALUES.get(raw_overdue, "")
+        if not overdue:
+            invalid.append("overdue")
+
+    # `?status=OVERDUE` and `?scope=overdue` predate the overdue parameter and
+    # are what every saved bookmark, the dashboard's card and the queue pill
+    # emit. Both mean "overdue, any stage", so they translate into exactly that
+    # here rather than surviving as a second code path — keeping one was what
+    # made overdue a status in the first place.
+    translated = []
+    if status == "OVERDUE":
+        status, overdue = "", "yes"
+        translated.append("status")
+    if scope == "overdue":
+        scope, overdue = "", "yes"
+        translated.append("scope")
+
     if status and status not in statuses:
         invalid.append("status")
         status = ""
 
     return ResolvedFilters(
+        overdue=overdue,
         as_office=as_office,
         raised_by=raised_by,
         status=status,
-        scope=(params.get("scope") or "").strip(),
+        scope=scope,
         owner=(params.get("owner") or "").strip(),
         query=(params.get("q") or "").strip(),
         invalid=sorted(set(invalid)),
+        translated=translated,
     )
 
 
@@ -177,6 +217,12 @@ def link(base: str, request=None, **overrides) -> str:
 #: no direction at all. The page says so instead of showing an empty table and
 #: letting the reader conclude the filter is broken.
 IMPOSSIBLE_PAIRS = [
+    (
+        {"overdue": {"yes"}, "status": {Status.COMPLETED_PENDING_UPLOAD.value,
+                                        Status.COMPLETED.value}},
+        "A document that has been completed is not late, whatever its deadline "
+        "said — nothing is owed on it any more.",
+    ),
     (
         {"scope": {"incoming", "received", "pending-receipt", "inbox"}, "owner": {"mine"}},
         "Documents addressed to your office were created by another office, so "

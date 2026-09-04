@@ -10,7 +10,7 @@
     <p class="sub">
       <span class="mono">{{ record.display_tracking_number }}</span>
       {% include "partials/_direction_tag.html" with direction=record.direction %}
-      {% include "partials/_status_pill.html" with status=record.display_status %}
+      {% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
       {% if record.priority == "URGENT" %}<span class="pill pill-overdue">Urgent</span>{% endif %}
     </p>
   </div>

@@ -816,7 +816,33 @@ _HELD_STATUSES = (Status.RECEIVED, Status.IN_PROCESS)
 PAGE_SIZE = 20
 
 
-def filter_records(records, *, query=None, status=None, offices=None):
+#: One definition of "past its deadline" in the query layer. Both the queue and
+#: the filter read it, so the pill and the checkbox cannot drift apart.
+def overdue_q():
+    """Records past their deadline with work still owed on them."""
+    return Q(due_at__lt=timezone.now()) & ~Q(status__in=COMPLETED_STATUSES)
+
+
+def on_time_q():
+    """Everything that is not overdue — stated, not negated.
+
+    `.exclude(due_at__lt=now)` looks equivalent and is not: it throws out every
+    record whose deadline passed *before the work finished*, which is neither
+    overdue nor on time under that expression and so appears under neither
+    filter. Measured on 280 records, the naive version returned 13 where this
+    returns 248, losing 235 rows from a page offering only those two choices.
+
+    A document finished after its deadline is not late — nothing is owed on it —
+    so it belongs here, with the ones that have no deadline at all.
+    """
+    return (
+        Q(due_at__isnull=True)
+        | Q(due_at__gte=timezone.now())
+        | Q(status__in=COMPLETED_STATUSES)
+    )
+
+
+def filter_records(records, *, query=None, status=None, offices=None, overdue=None):
     """Free-text, status and originating-office filtering for tracking records.
 
     Kept here rather than inline in a view because two pages need it: the
@@ -842,11 +868,15 @@ def filter_records(records, *, query=None, status=None, offices=None):
             | Q(originating_office__code__icontains=query)
             | Q(current_office__name__icontains=query)
         )
-    if status == "OVERDUE":
-        # Overdue is derived, never stored — see TrackingRecord.display_status.
-        records = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
-    elif status:
+    if status:
         records = records.filter(status=status)
+    # Independent of the stage, which is the point: a record can be pending
+    # receipt *and* overdue, and "overdue" used to occupy the status parameter
+    # so the two could not both be asked for.
+    if overdue == "yes":
+        records = records.filter(overdue_q())
+    elif overdue == "no":
+        records = records.filter(on_time_q())
     if offices:
         records = records.filter(originating_office__in=offices)
     return records
@@ -926,10 +956,14 @@ def apply_scope(records, scope, user, office=None):
     if scope == SCOPE_MINE:
         return records.filter(created_by=user)
     if scope == SCOPE_OVERDUE:
+        # Kept as a queue because the pill is a useful shortcut, but it delegates
+        # rather than repeating the expression — one definition of overdue in the
+        # query layer, or the pill and the filter drift.
+        #
         # Not office-scoped: `visible_to` has already limited the set to records
         # this user has something to do with, and an overdue document sitting in
         # another office is precisely what the person who sent it needs to see.
-        return records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+        return records.filter(overdue_q())
     if scope == SCOPE_PENDING_UPLOAD:
         return records.filter(
             status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True

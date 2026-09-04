@@ -1,0 +1,17 @@
+{% comment %}
+  Past its action deadline. A condition lying across the live stages rather than
+  one of them: a document can be pending receipt and overdue at the same time,
+  and a clerk needs both — the stage says what to do next, the tag says how
+  urgent it is.
+
+  It used to replace the stage. `display_status` returned "OVERDUE" whenever the
+  deadline had passed, so a reader who opened the Pending receipt slice counted
+  two records and one Pending receipt pill, and the exported CSV had no record at
+  all of what stage the late documents were at.
+
+  Derived from due_at, never stored. A completed record is never overdue: a
+  deadline that passed before the work finished is not a debt anybody still owes.
+
+  Usage: {% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+{% endcomment %}
+{% if overdue %}<span class="pill pill-overdue">Overdue</span>{% endif %}

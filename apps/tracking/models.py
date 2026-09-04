@@ -291,18 +291,13 @@ class TrackingRecord(TimeStampedModel):
     def awaiting_receipt(self) -> bool:
         return self.status in AWAITING_RECEIPT_STATUSES
 
-    @property
-    def display_status(self) -> str:
-        """Status shown in lists — overdue wins over everything except completed."""
-        if self.status not in COMPLETED_STATUSES and self.is_overdue:
-            return "OVERDUE"
-        return self.status
-
-    @property
-    def display_status_label(self) -> str:
-        if self.display_status == "OVERDUE":
-            return "Overdue"
-        return self.get_status_display()
+    # `display_status` and `display_status_label` stood here and returned
+    # "Overdue" in place of the stage whenever the deadline had passed. Three of
+    # six records then showed a stage the reader could not see: "overdue" says
+    # the deadline went by, not whether anybody has signed for the document,
+    # which is the part somebody has to act on. Overdue is a tag beside the
+    # status now — see templates/partials/_overdue_tag.html — so read `status`
+    # and `get_status_display()` directly and render the tag alongside.
 
     @property
     def has_tracking_number(self) -> bool:

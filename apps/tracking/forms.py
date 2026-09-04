@@ -404,7 +404,11 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         # that shows active records only — picking it always returned nothing,
         # which reads as "there are none" rather than "they are not kept here".
         # Derived from ACTIVE_STATUSES so the two cannot drift apart again.
-        choices=[("", "All statuses"), ("OVERDUE", "Overdue")]
+        # "Overdue" is no longer here. It is a deadline condition lying across
+        # the stages, and while it sat in this list it had the parameter to
+        # itself: a record could be filtered as overdue *or* as pending
+        # receipt, never as both. It has `?overdue=` of its own now.
+        choices=[("", "All statuses")]
         + [(value, label) for value, label in Status.choices if value in ACTIVE_STATUSES],
     )
     #: Originating office, and only originating office.

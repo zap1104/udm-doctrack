@@ -30,7 +30,16 @@ def test_the_status_filter_offers_only_statuses_this_page_can_show():
     offered = {value for value, _label in TrackingFilterForm().fields["status"].choices}
 
     assert "COMPLETED" not in offered, "completed records live in Documents, not here"
-    assert offered == {"", "OVERDUE"} | {str(s) for s in ACTIVE_STATUSES}
+    assert offered == {""} | {str(s) for s in ACTIVE_STATUSES}
+
+
+def test_overdue_is_not_offered_as_a_status():
+    """It sat in this list and had the parameter to itself, so a record could be
+    filtered as overdue *or* as pending receipt and never as both. It is a
+    deadline condition lying across the stages, with `?overdue=` of its own."""
+    offered = {value for value, _label in TrackingFilterForm().fields["status"].choices}
+
+    assert "OVERDUE" not in offered
 
 
 def test_the_status_filter_uses_the_new_name():
