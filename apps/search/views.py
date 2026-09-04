@@ -116,7 +116,9 @@ class SearchView(AppLoginRequiredMixin, View):
         # filter_records and apply_scope and still disagreed — 3 records against
         # 0 for the same query string. The drift was never in the queues; it was
         # in who resolved the office.
-        as_office = resolved.as_office
+        as_office = (
+            tracking_services.ALL_OFFICES if resolved.all_offices else resolved.as_office
+        )
         if as_office and resolved.scope not in tracking_services.OFFICE_SCOPED:
             records = records.filter(
                 Q(originating_office=as_office) | Q(current_office=as_office)

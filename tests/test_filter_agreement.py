@@ -849,3 +849,81 @@ def test_no_picker_submits_through_an_inline_handler(client, users):
         body = client.get(path).content.decode()
         assert "onchange=" not in body, path
         assert "data-auto-submit" in body, path
+
+
+# --- viewing as every office -----------------------------------------------
+@pytest.mark.django_db
+def test_only_a_system_administrator_is_offered_every_office(client, users):
+    """An office administrator's rights stop at their own office, so "every
+    office" is not theirs to ask for. The option is hidden *and* the value
+    refused — hiding a control is not the permission."""
+    client.force_login(users["med_admin"])
+    assert '<option value="all"' not in client.get(TRACKING).content.decode()
+
+    client.force_login(users["admin"])
+    assert '<option value="all"' in client.get(TRACKING).content.decode()
+
+
+@pytest.mark.django_db
+def test_every_office_is_refused_for_an_office_administrator(client, users, traffic):
+    """`?office=all` is gated the same way the option is, so the URL cannot be
+    a way around the control."""
+    client.force_login(users["med_admin"])
+
+    own = page_records(client, f"{TRACKING}?scope=incoming")
+    asked = page_records(client, f"{TRACKING}?scope=incoming&office=all")
+
+    assert asked == own
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "scope", ["incoming", "outgoing", "received", "pending-receipt", "in-process"]
+)
+def test_every_office_widens_each_queue_for_a_system_administrator(
+    client, users, offices, traffic, scope
+):
+    """The queues answer for every office at once rather than falling back to
+    the viewer's, which is what `office=all` is for — a system administrator
+    reading their own desk under a heading saying "All offices" was the gap."""
+    client.force_login(users["admin"])
+
+    own = page_records(client, f"{TRACKING}?scope={scope}")
+    everywhere = page_records(client, f"{TRACKING}?scope={scope}&office=all")
+    one_office = page_records(client, f"{TRACKING}?scope={scope}&office={offices['SUP'].pk}")
+
+    assert own <= everywhere
+    assert one_office <= everywhere
+
+
+@pytest.mark.django_db
+def test_every_office_is_the_union_of_the_offices(client, users, offices, traffic):
+    """Not merely wider — it is exactly every office's queue put together, which
+    is the property that makes the option mean what it says."""
+    client.force_login(users["admin"])
+    from apps.accounts.models import Office
+
+    everywhere = page_records(client, f"{TRACKING}?scope=incoming&office=all")
+    union = set()
+    for office in Office.active.all():
+        union |= page_records(client, f"{TRACKING}?scope=incoming&office={office.pk}")
+
+    assert everywhere == union
+
+
+@pytest.mark.django_db
+def test_the_deadline_row_is_gone_and_the_pill_still_filters(client, users, deadlines):
+    """Two controls drove one parameter. The pill kept it — it is where the
+    reader already is — and `?overdue=no` is still resolved even though it no
+    longer has a control of its own."""
+    client.force_login(users["sup"])
+    body = client.get(TRACKING).content.decode()
+
+    assert "filter-deadline-label" not in body, "the duplicate row is gone"
+    assert "{% filter_url 'overdue' 'yes' %}" not in body
+    assert "overdue=yes" in body, "the pill is still there"
+
+    late = page_records(client, f"{TRACKING}?overdue=yes")
+    on_time = page_records(client, f"{TRACKING}?overdue=no")
+    assert late and on_time, "both still filter, control or no control"
+    assert not (late & on_time)

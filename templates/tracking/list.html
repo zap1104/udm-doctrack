@@ -78,6 +78,17 @@
     <a class="pill-toggle pill-toggle--alert{% if request.GET.overdue == 'yes' %} is-active{% endif %}"
        href="{% filter_url 'overdue' 'yes' %}">Overdue</a>
     {% comment %}
+      A three-state Deadline row sat in the filter panel below and drove this
+      same parameter, so the page had two controls for one filter — the shape of
+      confusion the rest of this work has been removing. The pill kept it: it is
+      where the reader already is, and Overdue is the most-asked question on the
+      page.
+
+      `?overdue=no` — "on time only" — is still resolved and still filters; it
+      just has no control of its own any more. The pill toggles between any and
+      overdue, which is the pair people use.
+    {% endcomment %}
+    {% comment %}
       Necessary once the pills preserve state: "click All Active" used to be the
       way out and no longer is, because it now keeps everything else set.
     {% endcomment %}
@@ -134,6 +145,15 @@
         <select class="form-select form-select-sm" id="tracking-as-office" name="office"
                 aria-labelledby="filter-as-office-label" data-auto-submit>
           <option value="">Your office</option>
+          {% comment %}
+            System administrators only. An office administrator's rights stop at
+            their own office, so "every office" is not theirs to ask for — and
+            services.scope_office refuses the value for them, so the option is
+            hidden rather than offered and then ignored.
+          {% endcomment %}
+          {% if user.is_system_admin %}
+            <option value="all" {% if resolved.all_offices %}selected{% endif %}>All offices</option>
+          {% endif %}
           {% for office in filter_offices %}
             <option value="{{ office.pk }}"
                     {% if resolved.as_office.pk == office.pk %}selected{% endif %}>
@@ -162,24 +182,6 @@
               </span>
             </a>
           {% endwith %}
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <div class="tracking-filter-row">
-    <span class="tracking-filter-label" id="filter-deadline-label">Deadline</span>
-    <div class="pill-row">
-      <div class="pill-row-list" role="group" aria-labelledby="filter-deadline-label">
-        {% comment %}
-          Three states, not two: "what is still on time" is a question the
-          offices ask when planning a week, and an absent parameter has to go on
-          meaning "do not filter". The two named ones partition the total.
-        {% endcomment %}
-        {% for value, label in deadline_choices %}
-          <a class="pill-toggle{% if request.GET.overdue|default:'' == value %} is-active{% endif %}"
-             href="{% filter_url 'overdue' value %}"
-             {% if request.GET.overdue|default:'' == value %}aria-current="true"{% endif %}>{{ label }}</a>
         {% endfor %}
       </div>
     </div>

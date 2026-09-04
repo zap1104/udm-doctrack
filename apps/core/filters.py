@@ -69,6 +69,10 @@ class ResolvedFilters:
     """What the query string actually asked for, after validation."""
 
     as_office: Office | None = None
+    #: A system administrator asked for every office at once. Kept beside
+    #: `as_office` rather than inside it: "every office" is not an Office, and
+    #: the caller has to tell it from both "this one" and "nobody picked".
+    all_offices: bool = False
     raised_by: list[Office] = field(default_factory=list)
     status: str = ""
     scope: str = ""
@@ -119,13 +123,18 @@ def resolve(request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True) -> R
     # The gate lives in tracking.services, next to the queues it governs, and is
     # imported here rather than reimplemented — two answers to "may this person
     # name another office" is exactly the shape of bug this module exists to end.
-    from apps.tracking.services import scope_office
+    from apps.tracking.services import ALL_OFFICES, scope_office
 
     as_office = None
+    all_offices = False
     raw_office = (params.get("office") or "").strip()
     if raw_office and allow_office:
-        as_office = scope_office(user, raw_office)
-        if as_office is None:
+        picked = scope_office(user, raw_office)
+        if picked is ALL_OFFICES:
+            all_offices = True
+            picked = None
+        as_office = picked
+        if as_office is None and not all_offices:
             # Either the value names nothing, or this account may not pick. Both
             # are worth saying; the page decides how loudly.
             as_office = _office_by_pk_or_code(raw_office) if _may_pick(user) else None
@@ -172,6 +181,7 @@ def resolve(request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True) -> R
     return ResolvedFilters(
         overdue=overdue,
         as_office=as_office,
+        all_offices=all_offices,
         raised_by=raised_by,
         status=status,
         scope=scope,

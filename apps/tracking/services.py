@@ -898,6 +898,16 @@ OFFICE_SCOPED = {
 }
 
 
+#: "Every office", as opposed to a named one or none at all. A sentinel rather
+#: than None, because None already means "nobody picked, fall back to the
+#: viewer's own office" and the two have to stay tellable apart — conflating
+#: them is how Overdue once went from 32 records to 3.
+#:
+#: System administrators only. An office administrator's rights stop at their
+#: own office, so "every office" is not theirs to ask for.
+ALL_OFFICES = "__all__"
+
+
 def scope_office(user, requested):
     """Which office the per-office queues answer for.
 
@@ -919,7 +929,11 @@ def scope_office(user, requested):
     not an error.
     """
     raw = str(requested or "").strip()
-    if not raw.isdigit() or not getattr(user, "is_office_admin", False):
+    if not getattr(user, "is_office_admin", False):
+        return None
+    if raw == "all":
+        return ALL_OFFICES if getattr(user, "is_system_admin", False) else None
+    if not raw.isdigit():
         return None
 
     from apps.accounts.models import Office
@@ -940,7 +954,14 @@ def apply_scope(records, scope, user, office=None):
     as that office's incoming rather than the administrator's, and the card's
     link carries it so the page shows the queue the number counted.
     """
-    office_id = getattr(office, "pk", None) or user.office_id
+    every_office = office is ALL_OFFICES
+    office_id = None if every_office else (getattr(office, "pk", None) or user.office_id)
+
+    # The office term as a Q, so "every office" is the empty one and each queue
+    # below reads the same either way. Branching per queue would be seven places
+    # to forget, which is how these predicates drifted apart before.
+    to_office = Q() if every_office else Q(routing_steps__to_office_id=office_id)
+    from_office = Q() if every_office else Q(routing_steps__from_office_id=office_id)
 
     if scope == SCOPE_AWAITING:
         # Returned before the office branch, so the picker used to narrow it
@@ -951,11 +972,10 @@ def apply_scope(records, scope, user, office=None):
         # Broader than pending-receipt on purpose, which is why it survives the
         # two-directional fix: this ignores status, so a batch where one office
         # has confirmed and another has not still counts as awaiting somebody.
-        if not office_id:
+        if not office_id and not every_office:
             return awaiting_receipt(records, user)
         return records.filter(
-            Q(routing_steps__to_office_id=office_id)
-            | Q(routing_steps__from_office_id=office_id),
+            to_office | from_office,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
@@ -977,7 +997,7 @@ def apply_scope(records, scope, user, office=None):
 
     if scope not in OFFICE_SCOPED:
         return records
-    if not office_id:
+    if not office_id and not every_office:
         return records.none()
 
     if scope == SCOPE_INCOMING:
@@ -985,7 +1005,7 @@ def apply_scope(records, scope, user, office=None):
         # not the receipt has been confirmed — Pending receipt, Received and
         # In process together, which is what "our incoming" means to a clerk.
         return records.filter(
-            routing_steps__to_office_id=office_id,
+            to_office,
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_OUTGOING:
@@ -993,7 +1013,7 @@ def apply_scope(records, scope, user, office=None):
         # older "sent" queue this does not drop a document the moment somebody
         # confirms it: what left the office is still what left the office.
         return records.filter(
-            routing_steps__from_office_id=office_id,
+            from_office,
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_PENDING_RECEIPT:
@@ -1011,8 +1031,7 @@ def apply_scope(records, scope, user, office=None):
         # checks to_office_id independently, so the outgoing rows joining this
         # queue show no button.
         return records.filter(
-            Q(routing_steps__to_office_id=office_id)
-            | Q(routing_steps__from_office_id=office_id),
+            to_office | from_office,
             status=Status.PENDING_RECEIPT,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
@@ -1022,28 +1041,30 @@ def apply_scope(records, scope, user, office=None):
         # two pills are halves of one queue rather than two different questions
         # sitting next to each other.
         return records.filter(
+            to_office,
             status=Status.IN_PROCESS,
-            routing_steps__to_office_id=office_id,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_RECEIVED:
         return records.filter(
+            to_office,
             status__in=_HELD_STATUSES,
-            routing_steps__to_office_id=office_id,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_INBOX:
         return records.filter(
-            routing_steps__to_office_id=office_id,
+            to_office,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_CUSTODY:
+        if every_office:
+            return records.filter(current_office__isnull=False)
         return records.filter(current_office_id=office_id)
     return records.filter(
-        routing_steps__from_office_id=office_id,
+        from_office,
         routing_steps__received_at__isnull=True,
         routing_steps__batch=F("current_batch"),
     )

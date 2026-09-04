@@ -100,7 +100,10 @@ class RecordListView(AppLoginRequiredMixin, View):
         # viewer's. For one that does not — Overdue, Pending upload — there is
         # no such office to replace, so the picker narrows by the same
         # originating-or-current pairing the dashboard scopes its panels with.
-        as_office = resolved.as_office
+        # The sentinel, not an Office, when a system administrator asked for
+        # every office — apply_scope drops the office term rather than
+        # falling back to the viewer's own.
+        as_office = services.ALL_OFFICES if resolved.all_offices else resolved.as_office
         if as_office and scope not in services.OFFICE_SCOPED:
             records = records.filter(
                 Q(originating_office=as_office) | Q(current_office=as_office)
@@ -176,11 +179,6 @@ class RecordListView(AppLoginRequiredMixin, View):
                 # The picker is offered to whoever `scope_office` would honour
                 # the parameter for, so the control and the gate cannot drift.
                 "can_pick_office": request.user.is_office_admin,
-                # Labels live here rather than in the template so the three
-                # states are named once, beside the values the resolver accepts.
-                "deadline_choices": [
-                    ("", "Any deadline"), ("yes", "Overdue only"), ("no", "On time only"),
-                ],
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses
                 # them on its own; this only stops offering a dead end.
