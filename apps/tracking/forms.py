@@ -453,6 +453,7 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
             ("incoming", "Incoming"),
             ("pending-receipt", "Pending receipt"),
             ("received", "Received"),
+            ("in-process", "In process"),
             ("overdue", "Overdue"),
             ("outgoing", "Outgoing"),
             ("pending-upload", "Completed - pending upload"),

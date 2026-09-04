@@ -731,3 +731,51 @@ def test_finished_work_is_never_late(client, users, deadlines):
 
     assert response.context["page_obj"].paginator.count == 0
     assert "is not late" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_in_process_is_the_started_half_of_received(client, users, deadlines):
+    """Two halves of one queue, not two questions side by side.
+
+    SCOPE_RECEIVED is "here with us" and spans Received and In process together,
+    so the new pill asks the same custody question and then pins the stage. It
+    is therefore always a subset — a property a `?status=` pill would not have,
+    since a status says nothing about who is holding the document.
+    """
+    client.force_login(users["sup"])
+
+    held = page_records(client, f"{TRACKING}?scope=received")
+    started = page_records(client, f"{TRACKING}?scope=in-process")
+
+    assert started <= held
+    assert all(
+        record.status == Status.IN_PROCESS
+        for record in client.get(f"{TRACKING}?scope=in-process").context["page_obj"].object_list
+    )
+
+
+@pytest.mark.django_db
+def test_the_in_process_queue_is_office_scoped_like_its_neighbours(
+    client, users, offices, memo_type, deadlines
+):
+    """The distinction the pill exists to preserve: everything in that status
+    anywhere is a wider set than what this office is holding, and the row's
+    label promises the second."""
+    # A record SUP sent onward that HR is now working on. SUP can see it — it
+    # raised it — but SUP is not holding it, which is the whole distinction.
+    theirs = create_draft_record(
+        user=users["sup"], subject="Sent on, worked on elsewhere", instructions="x",
+        document_type=memo_type,
+    )
+    route_record(theirs, [offices["HR"]], user=users["sup"])
+    confirm_receipt(theirs, user=users["hr"])
+    mark_in_process(theirs, user=users["hr"])
+
+    client.force_login(users["sup"])
+
+    held = page_records(client, f"{TRACKING}?scope=in-process")
+    anywhere = page_records(client, f"{TRACKING}?status={Status.IN_PROCESS}")
+
+    assert theirs.pk in anywhere, "SUP can see it"
+    assert theirs.pk not in held, "but SUP is not holding it"
+    assert held < anywhere, "a status pill here would answer the wrong question"

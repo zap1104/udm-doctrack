@@ -49,6 +49,18 @@
     <a class="pill-toggle{% if scope == 'received' %} is-active{% endif %}"
        href="{% filter_url 'scope' 'received' %}">Received</a>
     {% comment %}
+      A scope, like every other pill in this row, and not `?status=IN_PROCESS`.
+      A605c14 made this row scope-based on purpose: the mixed status pills it
+      replaced meant different things from each other, and a status-based
+      "Received" put documents *another* office had received into your queue,
+      because a status says nothing about who is holding the document.
+
+      SCOPE_IN_PROCESS asks the same custody question Received asks and then
+      pins the stage, so the two are halves of one queue.
+    {% endcomment %}
+    <a class="pill-toggle{% if scope == 'in-process' %} is-active{% endif %}"
+       href="{% filter_url 'scope' 'in-process' %}">In Process</a>
+    {% comment %}
       Set apart, because it is not a peer of the queues beside it — it is a
       modifier that composes with them. Incoming + Overdue is one click from
       either pill now, and both light up together; while overdue was a `scope`

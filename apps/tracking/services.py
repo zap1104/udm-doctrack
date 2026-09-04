@@ -777,6 +777,12 @@ SCOPE_INCOMING = "incoming"
 SCOPE_OUTGOING = "outgoing"
 SCOPE_PENDING_RECEIPT = "pending-receipt"
 SCOPE_RECEIVED = "received"
+#: The started half of SCOPE_RECEIVED. A scope and not a `?status=` pill: a
+#: status-based pill in this row is what put another office's records in your
+#: Received queue once already, because a status says nothing about who is
+#: holding the document. This asks the same custody question its neighbours do
+#: and then narrows by stage.
+SCOPE_IN_PROCESS = "in-process"
 SCOPE_OVERDUE = "overdue"
 #: The completed-but-unapproved queue. It lives on this page rather than on the
 #: repository page because the records in it have not reached the repository —
@@ -888,7 +894,7 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
 OFFICE_SCOPED = {
     SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT,
     SCOPE_INCOMING, SCOPE_OUTGOING, SCOPE_PENDING_RECEIPT, SCOPE_RECEIVED,
-    SCOPE_AWAITING,
+    SCOPE_AWAITING, SCOPE_IN_PROCESS,
 }
 
 
@@ -1009,6 +1015,16 @@ def apply_scope(records, scope, user, office=None):
             | Q(routing_steps__from_office_id=office_id),
             status=Status.PENDING_RECEIPT,
             routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        )
+    if scope == SCOPE_IN_PROCESS:
+        # SCOPE_RECEIVED with the stage pinned. Same custody predicate, so the
+        # two pills are halves of one queue rather than two different questions
+        # sitting next to each other.
+        return records.filter(
+            status=Status.IN_PROCESS,
+            routing_steps__to_office_id=office_id,
+            routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_RECEIVED:

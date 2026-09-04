@@ -333,7 +333,7 @@ def test_the_owner_filter_narrows_within_the_pill_rather_than_replacing_it(
 
 # --- what the page renders --------------------------------------------------
 @pytest.mark.django_db
-def test_the_page_has_no_search_box_and_no_in_process_pill(client, users):
+def test_the_page_has_no_search_box(client, users):
     client.force_login(users["admin"])
     body = client.get("/tracking/").content.decode()
     # The page's own markup, not the chrome around it. The topbar carries the
@@ -343,10 +343,28 @@ def test_the_page_has_no_search_box_and_no_in_process_pill(client, users):
     content = body.split('<main id="main-content"', 1)[1]
 
     assert 'name="q"' not in content
-    assert "?status=IN_PROCESS" not in content, "In Process is not one of the pills"
 
-    for label in ("All Active", "Incoming", "Outgoing", "Pending Receipt", "Received", "Overdue"):
+    for label in ("All Active", "Incoming", "Outgoing", "Pending Receipt",
+                  "Received", "In Process", "Overdue"):
         assert label in body, label
+
+
+@pytest.mark.django_db
+def test_the_in_process_pill_is_a_scope_and_not_a_status(client, users):
+    """It was left off this row when a607c14 made the pills scope-based, and is
+    back by request — as a scope, which is the part that matters.
+
+    The mixed status pills that commit replaced meant different things from each
+    other: a status-based "Received" put documents *another* office had received
+    into your queue, because a status says nothing about who is holding one.
+    Measured on the demo data, one office saw 3 in-process records it was
+    holding against 9 in that status anywhere.
+    """
+    client.force_login(users["admin"])
+    content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
+
+    assert "?scope=in-process" in content
+    assert "?status=IN_PROCESS" not in content, "a status pill answers the wrong question here"
 
 
 @pytest.mark.django_db
