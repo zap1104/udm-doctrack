@@ -316,12 +316,22 @@ def test_an_empty_system_still_says_something(client, users):
 
 
 @pytest.mark.django_db
-def test_the_dashboard_is_printable(client, users):
+def test_the_memo_is_what_the_dashboard_offers_to_print(client, users):
+    """The dashboard prints nothing itself any more.
+
+    It used to carry a print button and a `data-print-trigger` in the memo
+    dialog, both calling window.print() on the dashboard. The dialog one was
+    the bug: the print stylesheet hides dialogs, so pressing Print inside the
+    memo printed the dashboard behind it. Both are gone, and the memo's Print
+    is a link to a page that contains only the memo.
+    """
+    from django.urls import reverse
+
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "data-print-trigger" in body
-    assert "dashboard-print-header" in body
+    assert "data-print-trigger" not in body
+    assert reverse("core:dashboard_memo_print") in body
 
 
 @pytest.mark.django_db

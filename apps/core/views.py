@@ -76,90 +76,22 @@ BREAKDOWN_COLOURS = {
 }
 
 
-class DashboardView(AppLoginRequiredMixin, TemplateView):
-    template_name = "core/dashboard.html"
+class DashboardMemoMixin:
+    """The figures the memo is written from, and the scoping that decides whose.
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        user = self.request.user
-        scope = self._scope()
+    Held here rather than on DashboardView because two views need them: the
+    dashboard, which shows the memo in a dialog, and the print page, which sets
+    the same memo on paper. The print page must show exactly what the dialog
+    showed — a document changing status between opening the dialog and pressing
+    Print is enough to make two independent computations disagree, and a printed
+    memo that contradicts the screen it came from is worse than no memo.
 
-        inbox = tracking_services.inbox_for(user)
-        custody = tracking_services.in_custody_for(user)
-        outgoing = tracking_services.outgoing_for(user)
-        overdue = tracking_services.overdue_for(user)
-
-        attention = list(inbox[:5])
-        if len(attention) < 5:
-            attention += [record for record in overdue[: 5 - len(attention)] if record not in attention]
-        if len(attention) < 5:
-            attention += [record for record in custody[: 5 - len(attention)] if record not in attention]
-
-        today = timezone.localdate()
-        office_today = TrackingRecord.objects.none()
-        if user.office_id:
-            office_today = TrackingRecord.objects.visible_to(user).filter(
-                routing_steps__to_office_id=user.office_id, routing_steps__received_at__date=today
-            )
-
-        forwarded_today = 0
-        if user.office_id:
-            forwarded_today = (
-                TrackingRecord.objects.visible_to(user)
-                .filter(routing_steps__sent_at__date=today, routing_steps__from_office_id=user.office_id)
-                .distinct()
-                .count()
-            )
-        completed_today = (
-            TrackingRecord.objects.visible_to(user)
-            # Both halves of completion: the work was finished today whether or
-            # not an administrator has approved it into the repository yet.
-            # Counting only COMPLETED would report zero for an office that
-            # finished ten documents this morning and is waiting on approval.
-            .filter(status__in=COMPLETED_STATUSES, completed_at__date=today)
-            .distinct()
-            .count()
-        )
-
-        attention = attention[:5]
-        tracking_services.annotate_can_confirm(attention, user)
-        # Same test the tracking list uses (apps/tracking/views.py): the bulk
-        # footer only appears when at least one row on this page could actually
-        # be received, so nobody is shown an attestation they cannot satisfy.
-        can_bulk_receive = any(record.can_confirm_now for record in attention)
-
-        recent = list(tracking_services.active_for(user)[:8])
-        show_office_columns = user.is_records_staff
-        if show_office_columns:
-            # Both panels in one pass — the helper groups by record, so a
-            # second call would only repeat the same query.
-            _annotate_destinations(attention + recent)
-
-        breakdown = self._combined_breakdown(user, scope["office"])
-        context.update(self._analytics(user, scope, breakdown))
-        context.update(
-            {
-                "inbox_count": inbox.count(),
-                "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
-                "custody_count": custody.count(),
-                "outgoing_count": outgoing.count(),
-                "overdue_count": overdue.count(),
-                "attention_records": attention,
-                "recent_records": recent,
-                "show_office_columns": show_office_columns,
-                "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:5],
-                "received_today": office_today.distinct().count(),
-                "forwarded_today": forwarded_today,
-                "completed_today": completed_today,
-                "greeting": _greeting(),
-                "can_bulk_receive": can_bulk_receive,
-                "can_start_work": _can_start_work(user),
-                "breakdown": breakdown,
-                "breakdown_summary": self._breakdown_summary(breakdown),
-                "printed_at": timezone.localtime(),
-            }
-        )
-        return context
+    `_scope` lives here for the same reason, and it matters more: it is the
+    authorization, not a display preference. A viewer who cannot see another
+    office's figures on the dashboard must not reach them by putting an office
+    id in the print page's query string, and the way to guarantee that is for
+    both views to ask the same method rather than each deciding for itself.
+    """
 
     # -- scope ------------------------------------------------------------
     def _scope(self):
@@ -202,177 +134,6 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             records = records.filter(Q(originating_office=office) | Q(current_office=office))
             documents = documents.filter(office=office)
         return records.distinct(), documents.distinct()
-
-    # -- analytics panels --------------------------------------------------
-    def _analytics(self, user, scope, breakdown):
-        """The six chart panels, all from apps/core/analytics.py.
-
-        Every figure comes from the same scoped querysets the tables above use,
-        so nothing on the page can disagree with anything else on it.
-        """
-        records, documents = self._scoped(user, scope["office"])
-
-        overdue_rows = analytics.overdue_offices(records)
-        overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
-        uploads = analytics.uploads_by_office(documents, records)
-        trend = analytics.turnaround_by_month(records)
-
-        return {
-            "scope": scope,
-            "overdue_offices": overdue_rows,
-            "overdue_summary": overdue,
-            "tracking_donut": self._domain_donut(breakdown, "tracking"),
-            "repository_donut": self._domain_donut(breakdown, "repository"),
-            "monthly": analytics.monthly_volume(records),
-            "turnaround_trend": trend,
-            "turnaround_trend_points": self._trend_points(trend),
-            "turnaround_trend_geometry": self._trend_geometry(),
-            "turnaround": analytics.turnaround(records),
-            "uploads_by_office": uploads,
-            "live_by_status": analytics.live_records_by_status(records),
-            "memo": self._memo(scope, breakdown, overdue, overdue_rows, trend, uploads),
-        }
-
-    def _domain_donut(self, breakdown, group):
-        """Ring segments for one domain's slice of the combined breakdown.
-
-        One ring per domain rather than a single combined one. The combined
-        version could show the split between tracking and the repository but
-        not the shape of either: five tracking stages competing with two
-        repository ones in a single ring left the tracking slices too thin to
-        read, which is the half somebody acts on.
-
-        The ring is drawn with one `conic-gradient`, which needs its stops as
-        cumulative percentages — computed here rather than in the template,
-        because a running total is arithmetic and templates in this codebase do
-        not do arithmetic.
-
-        Percentages are recomputed against this domain's own subtotal. Reusing
-        the grand-total percentages already on the slices would leave each ring
-        summing to its share of everything rather than to 100%, so a Repository
-        ring covering a third of all documents would be drawn as a third of a
-        circle with two thirds of it blank.
-
-        Rounding is absorbed by the final segment so the ring always closes:
-        independently rounded values leave either a hairline gap or an overlap,
-        and a ring with a slit in it reads as a rendering fault.
-        """
-        domain = [
-            row for row in breakdown["slices"]
-            if row["group"] == group and row["total"]
-        ]
-        if not domain:
-            return {"stops": "", "slices": [], "total": 0}
-
-        subtotal = sum(row["total"] for row in domain)
-        # Copied, not mutated: `_breakdown_summary` and `_memo` read the
-        # grand-total percentages off these same dicts, and rewriting them here
-        # would silently change what the prose beneath the rings says.
-        domain = [{**row, "percent": _percent(row["total"], subtotal)} for row in domain]
-
-        stops, running = [], 0
-        for index, row in enumerate(domain):
-            share = row["percent"] if index < len(domain) - 1 else 100 - running
-            start, running = running, running + share
-            stops.append("{} {}% {}%".format(row["colour"], start, running))
-        return {"stops": ", ".join(stops), "slices": domain, "total": subtotal}
-
-    #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
-    #: polyline can be built from plain numbers here and scaled by CSS in the
-    #: browser rather than recomputed per viewport.
-    #:
-    #: 640x170. It was briefly 640x240, to compensate for the panel being moved
-    #: into a half-width column where the flatter ratio resolved to about 110px
-    #: of height — not enough to see one of three series cross another. The panel
-    #: spans the page again, so the plot is roughly 630px wide beside its summary
-    #: and 170 gives it about 168px of height. The compensation went with the
-    #: width that caused it.
-    #:
-    #: No left gutter, and that part stays: it used to reserve 34 units for
-    #: y-axis labels that were never drawn — the scale is stated in words beneath
-    #: the chart — so the gutter was dead space at any width.
-    TREND_WIDTH, TREND_HEIGHT = 640, 170
-    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 0, 12, 24
-
-    #: Horizontal rules behind the plot, as fractions of the ceiling. The last
-    #: is the baseline and is drawn heavier.
-    TREND_GRID_STEPS = (1.0, 0.75, 0.5, 0.25, 0.0)
-
-    def _trend_geometry(self):
-        """The plot box and its grid lines, in the units the viewBox declares.
-
-        Computed here rather than written into the template as literals. They
-        were literals, and the plot's own geometry lived in Python: the two
-        agreed only because they had been matched by hand, so changing the box
-        moved the lines off the data silently.
-        """
-        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
-        lines = []
-        for index, step in enumerate(self.TREND_GRID_STEPS):
-            lines.append(
-                {
-                    "y": round(self.TREND_PAD_TOP + (1 - step) * plot_h, 1),
-                    # The baseline is the axis, not another rule behind the data.
-                    "axis": index == len(self.TREND_GRID_STEPS) - 1,
-                }
-            )
-        return {
-            "width": self.TREND_WIDTH,
-            "height": self.TREND_HEIGHT,
-            "view_box": f"0 0 {self.TREND_WIDTH} {self.TREND_HEIGHT}",
-            "grid": lines,
-        }
-
-    def _trend_points(self, trend):
-        """The three turnaround series as SVG polylines.
-
-        Months with no completions are skipped rather than plotted at zero: a
-        month in which nothing was finished did not take zero days to finish
-        things, and a line dropping to the axis would say exactly that.
-        """
-        rows = trend["rows"]
-        if not rows or not trend["has_data"]:
-            return []
-
-        plot_w = self.TREND_WIDTH - self.TREND_PAD_LEFT
-        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
-        step = plot_w / len(rows)
-        ceiling = trend["ceiling"] or 1
-
-        def place(index, value):
-            x = self.TREND_PAD_LEFT + (index + 0.5) * step
-            y = self.TREND_PAD_TOP + (1 - value / ceiling) * plot_h
-            return round(x, 1), round(y, 1)
-
-        # "Receipt" is time-to-confirm-receipt, and "In process" is the span
-        # from that confirmation to completion. The second is a stage, not the
-        # IN_PROCESS status: a document is in somebody's hands for the whole of
-        # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
-        series = [
-            ("receipt", "Receipt", "var(--chart-two)"),
-            ("processing", "In process", "var(--chart-one)"),
-            ("lifetime", "Total lifetime", "var(--chart-three)"),
-        ]
-        built = []
-        for key, label, colour in series:
-            points = [
-                place(index, row[key])
-                for index, row in enumerate(rows)
-                if row[key] is not None
-            ]
-            if not points:
-                continue
-            built.append(
-                {
-                    "key": key,
-                    "label": label,
-                    "colour": colour,
-                    "polyline": " ".join(f"{x},{y}" for x, y in points),
-                    "dots": [{"x": x, "y": y} for x, y in points],
-                }
-            )
-        return built
-
     @staticmethod
     def _memo_line(label, value):
         """One row of the memo. An empty label makes it a standalone statement.
@@ -542,6 +303,287 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             "tracking_percent": _percent(tracking_total, total),
             "repository_percent": _percent(total - tracking_total, total),
         }
+    def get_memo_context(self):
+        """Everything the memo needs, computed once from one set of querysets.
+
+        Returned as a context dict rather than a bare memo so a caller that
+        also draws the charts can reuse the aggregates instead of running them
+        again — every figure on the dashboard comes from the same scoped
+        querysets, which is what stops anything on the page disagreeing with
+        anything else on it.
+        """
+        user = self.request.user
+        scope = self._scope()
+        breakdown = self._combined_breakdown(user, scope["office"])
+        records, documents = self._scoped(user, scope["office"])
+
+        overdue_rows = analytics.overdue_offices(records)
+        overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
+        uploads = analytics.uploads_by_office(documents, records)
+        trend = analytics.turnaround_by_month(records)
+
+        return {
+            "scope": scope,
+            "breakdown": breakdown,
+            "overdue_offices": overdue_rows,
+            "overdue_summary": overdue,
+            "uploads_by_office": uploads,
+            "turnaround_trend": trend,
+            "turnaround": analytics.turnaround(records),
+            "memo": self._memo(scope, breakdown, overdue, overdue_rows, trend, uploads),
+            "printed_at": timezone.localtime(),
+        }
+
+
+class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
+    template_name = "core/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        # The memo's figures and the charts' come from one pass over one set of
+        # scoped querysets, which is what stops anything on the page
+        # disagreeing with anything else on it — and with the printed memo.
+        memo_context = self.get_memo_context()
+        scope = memo_context["scope"]
+
+        inbox = tracking_services.inbox_for(user)
+        custody = tracking_services.in_custody_for(user)
+        outgoing = tracking_services.outgoing_for(user)
+        overdue = tracking_services.overdue_for(user)
+
+        attention = list(inbox[:5])
+        if len(attention) < 5:
+            attention += [record for record in overdue[: 5 - len(attention)] if record not in attention]
+        if len(attention) < 5:
+            attention += [record for record in custody[: 5 - len(attention)] if record not in attention]
+
+        today = timezone.localdate()
+        office_today = TrackingRecord.objects.none()
+        if user.office_id:
+            office_today = TrackingRecord.objects.visible_to(user).filter(
+                routing_steps__to_office_id=user.office_id, routing_steps__received_at__date=today
+            )
+
+        forwarded_today = 0
+        if user.office_id:
+            forwarded_today = (
+                TrackingRecord.objects.visible_to(user)
+                .filter(routing_steps__sent_at__date=today, routing_steps__from_office_id=user.office_id)
+                .distinct()
+                .count()
+            )
+        completed_today = (
+            TrackingRecord.objects.visible_to(user)
+            # Both halves of completion: the work was finished today whether or
+            # not an administrator has approved it into the repository yet.
+            # Counting only COMPLETED would report zero for an office that
+            # finished ten documents this morning and is waiting on approval.
+            .filter(status__in=COMPLETED_STATUSES, completed_at__date=today)
+            .distinct()
+            .count()
+        )
+
+        attention = attention[:5]
+        tracking_services.annotate_can_confirm(attention, user)
+        # Same test the tracking list uses (apps/tracking/views.py): the bulk
+        # footer only appears when at least one row on this page could actually
+        # be received, so nobody is shown an attestation they cannot satisfy.
+        can_bulk_receive = any(record.can_confirm_now for record in attention)
+
+        recent = list(tracking_services.active_for(user)[:8])
+        show_office_columns = user.is_records_staff
+        if show_office_columns:
+            # Both panels in one pass — the helper groups by record, so a
+            # second call would only repeat the same query.
+            _annotate_destinations(attention + recent)
+
+        breakdown = memo_context["breakdown"]
+        context.update(memo_context)
+        context.update(self._analytics(user, scope, memo_context))
+        context.update(
+            {
+                "inbox_count": inbox.count(),
+                "inbox_new_today": inbox.filter(last_movement_at__date=today).count(),
+                "custody_count": custody.count(),
+                "outgoing_count": outgoing.count(),
+                "overdue_count": overdue.count(),
+                "attention_records": attention,
+                "recent_records": recent,
+                "show_office_columns": show_office_columns,
+                "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:5],
+                "received_today": office_today.distinct().count(),
+                "forwarded_today": forwarded_today,
+                "completed_today": completed_today,
+                "greeting": _greeting(),
+                "can_bulk_receive": can_bulk_receive,
+                "can_start_work": _can_start_work(user),
+                "breakdown": breakdown,
+                "breakdown_summary": self._breakdown_summary(breakdown),
+            }
+        )
+        return context
+
+    # -- analytics panels --------------------------------------------------
+    def _analytics(self, user, scope, memo_context):
+        """The chart panels the memo does not already carry.
+
+        The aggregates both need — the overdue rows, the uploads, the trend —
+        arrive in `memo_context` rather than being computed a second time here.
+        What is left is the drawing: two rings, the bars, and the geometry the
+        trend plot is laid out on.
+        """
+        records, _ = self._scoped(user, scope["office"])
+        breakdown = memo_context["breakdown"]
+
+        return {
+            "tracking_donut": self._domain_donut(breakdown, "tracking"),
+            "repository_donut": self._domain_donut(breakdown, "repository"),
+            "monthly": analytics.monthly_volume(records),
+            "turnaround_trend_points": self._trend_points(memo_context["turnaround_trend"]),
+            "turnaround_trend_geometry": self._trend_geometry(),
+            "live_by_status": analytics.live_records_by_status(records),
+        }
+
+    def _domain_donut(self, breakdown, group):
+        """Ring segments for one domain's slice of the combined breakdown.
+
+        One ring per domain rather than a single combined one. The combined
+        version could show the split between tracking and the repository but
+        not the shape of either: five tracking stages competing with two
+        repository ones in a single ring left the tracking slices too thin to
+        read, which is the half somebody acts on.
+
+        The ring is drawn with one `conic-gradient`, which needs its stops as
+        cumulative percentages — computed here rather than in the template,
+        because a running total is arithmetic and templates in this codebase do
+        not do arithmetic.
+
+        Percentages are recomputed against this domain's own subtotal. Reusing
+        the grand-total percentages already on the slices would leave each ring
+        summing to its share of everything rather than to 100%, so a Repository
+        ring covering a third of all documents would be drawn as a third of a
+        circle with two thirds of it blank.
+
+        Rounding is absorbed by the final segment so the ring always closes:
+        independently rounded values leave either a hairline gap or an overlap,
+        and a ring with a slit in it reads as a rendering fault.
+        """
+        domain = [
+            row for row in breakdown["slices"]
+            if row["group"] == group and row["total"]
+        ]
+        if not domain:
+            return {"stops": "", "slices": [], "total": 0}
+
+        subtotal = sum(row["total"] for row in domain)
+        # Copied, not mutated: `_breakdown_summary` and `_memo` read the
+        # grand-total percentages off these same dicts, and rewriting them here
+        # would silently change what the prose beneath the rings says.
+        domain = [{**row, "percent": _percent(row["total"], subtotal)} for row in domain]
+
+        stops, running = [], 0
+        for index, row in enumerate(domain):
+            share = row["percent"] if index < len(domain) - 1 else 100 - running
+            start, running = running, running + share
+            stops.append("{} {}% {}%".format(row["colour"], start, running))
+        return {"stops": ", ".join(stops), "slices": domain, "total": subtotal}
+
+    #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
+    #: polyline can be built from plain numbers here and scaled by CSS in the
+    #: browser rather than recomputed per viewport.
+    #:
+    #: 640x170. It was briefly 640x240, to compensate for the panel being moved
+    #: into a half-width column where the flatter ratio resolved to about 110px
+    #: of height — not enough to see one of three series cross another. The panel
+    #: spans the page again, so the plot is roughly 630px wide beside its summary
+    #: and 170 gives it about 168px of height. The compensation went with the
+    #: width that caused it.
+    #:
+    #: No left gutter, and that part stays: it used to reserve 34 units for
+    #: y-axis labels that were never drawn — the scale is stated in words beneath
+    #: the chart — so the gutter was dead space at any width.
+    TREND_WIDTH, TREND_HEIGHT = 640, 170
+    TREND_PAD_LEFT, TREND_PAD_TOP, TREND_PAD_BOTTOM = 0, 12, 24
+
+    #: Horizontal rules behind the plot, as fractions of the ceiling. The last
+    #: is the baseline and is drawn heavier.
+    TREND_GRID_STEPS = (1.0, 0.75, 0.5, 0.25, 0.0)
+
+    def _trend_geometry(self):
+        """The plot box and its grid lines, in the units the viewBox declares.
+
+        Computed here rather than written into the template as literals. They
+        were literals, and the plot's own geometry lived in Python: the two
+        agreed only because they had been matched by hand, so changing the box
+        moved the lines off the data silently.
+        """
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        lines = []
+        for index, step in enumerate(self.TREND_GRID_STEPS):
+            lines.append(
+                {
+                    "y": round(self.TREND_PAD_TOP + (1 - step) * plot_h, 1),
+                    # The baseline is the axis, not another rule behind the data.
+                    "axis": index == len(self.TREND_GRID_STEPS) - 1,
+                }
+            )
+        return {
+            "width": self.TREND_WIDTH,
+            "height": self.TREND_HEIGHT,
+            "view_box": f"0 0 {self.TREND_WIDTH} {self.TREND_HEIGHT}",
+            "grid": lines,
+        }
+
+    def _trend_points(self, trend):
+        """The three turnaround series as SVG polylines.
+
+        Months with no completions are skipped rather than plotted at zero: a
+        month in which nothing was finished did not take zero days to finish
+        things, and a line dropping to the axis would say exactly that.
+        """
+        rows = trend["rows"]
+        if not rows or not trend["has_data"]:
+            return []
+
+        plot_w = self.TREND_WIDTH - self.TREND_PAD_LEFT
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        step = plot_w / len(rows)
+        ceiling = trend["ceiling"] or 1
+
+        def place(index, value):
+            x = self.TREND_PAD_LEFT + (index + 0.5) * step
+            y = self.TREND_PAD_TOP + (1 - value / ceiling) * plot_h
+            return round(x, 1), round(y, 1)
+
+        # "Receipt" is time-to-confirm-receipt, and "In process" is the span
+        # from that confirmation to completion. The second is a stage, not the
+        # IN_PROCESS status: a document is in somebody's hands for the whole of
+        # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
+        series = [
+            ("receipt", "Receipt", "var(--chart-two)"),
+            ("processing", "In process", "var(--chart-one)"),
+            ("lifetime", "Total lifetime", "var(--chart-three)"),
+        ]
+        built = []
+        for key, label, colour in series:
+            points = [
+                place(index, row[key])
+                for index, row in enumerate(rows)
+                if row[key] is not None
+            ]
+            if not points:
+                continue
+            built.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "colour": colour,
+                    "polyline": " ".join(f"{x},{y}" for x, y in points),
+                    "dots": [{"x": x, "y": y} for x, y in points],
+                }
+            )
+        return built
 
     def _breakdown_summary(self, breakdown) -> list[str]:
         """The numbers, said in sentences.
@@ -1283,6 +1325,35 @@ class NotificationMarkAllReadView(AppLoginRequiredMixin, View):
 
         mark_all_read(request.user, Notification.objects.filter(office_id=request.user.office_id, resolved_at__isnull=True))
         return redirect("core:notifications")
+
+
+class DashboardMemoPrintView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
+    """The memo on its own page, so printing it produces the memo.
+
+    The dashboard's Print button used to call `window.print()` on the dashboard
+    with the memo dialog open over it. The print stylesheet hid the dialog —
+    correctly, a dialog is a control surface — so what reached the paper was the
+    dashboard behind it. Pressing Print in a dialog about the memo printed
+    everything except the memo.
+
+    A page rather than a stylesheet patch, following Reports and the routing
+    slip: one thing on the page at print time, its own header and footer, and
+    fixed units so the result does not depend on the width of the window it
+    happened to be opened from.
+
+    Read-only, and scoped by the same `_scope()` the dashboard uses — not a
+    second authorization path. `?office=` is honoured only for a user the
+    dashboard would already give the picker to, and even then it narrows
+    `visible_to(user)` rather than replacing it, so this URL cannot show
+    anybody a figure the dashboard would not.
+    """
+
+    template_name = "core/dashboard_memo_print.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(self.get_memo_context())
+        return context
 
 
 class PrintLogView(AppLoginRequiredMixin, View):

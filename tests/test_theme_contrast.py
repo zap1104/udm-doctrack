@@ -32,9 +32,11 @@ CSS = pathlib.Path("static/css/doctrack.css")
 FLOOR = 3.0
 
 #: Painted on a fixed light ground in both themes on purpose: the sign-in and
-#: lockout screens are their own full-bleed composition, and the routing slip is
-#: a print artefact that happens to be shown on screen.
-PINNED = (".login", ".lockout", ".routing-slip")
+#: lockout screens are their own full-bleed composition, the routing slip is a
+#: print artefact that happens to be shown on screen, and the printed memo is a
+#: document — each pins the light tokens back on itself, so reading them through
+#: the dark table would describe a page that does not exist.
+PINNED = (".login", ".lockout", ".routing-slip", ".memo-print")
 
 #: Elements whose ground is painted by an ancestor rather than by themselves.
 #: Without this the sidebar's white-on-navy text reads as white-on-canvas and

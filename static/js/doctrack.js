@@ -329,6 +329,23 @@
   });
 
   /* ----------------------------------------------------------------------
+     Auto-print: a page that exists only to be printed opens the dialog on
+     arrival, so reaching it is one click rather than two.
+
+     Declared as a data attribute rather than an inline script because
+     django-csp allows no inline script content. On `load` rather than
+     immediately: printing before the stylesheet has applied lays the page out
+     with no styles at all, which is exactly what this page exists to avoid.
+
+     The tab is left open afterwards. `afterprint` fires when the dialog is
+     cancelled as well as when it prints, so closing on it would throw away the
+     memo of anybody who opened the dialog to look at the preview.
+  ---------------------------------------------------------------------- */
+  if (document.querySelector("[data-auto-print]")) {
+    window.addEventListener("load", function () { window.print(); });
+  }
+
+  /* ----------------------------------------------------------------------
      Print auditing.
      Printing happens entirely in the browser, so a paper copy would otherwise
      leave no trace at all. Pages that opt in carry a [data-print-log] element;

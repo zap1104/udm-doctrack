@@ -708,7 +708,21 @@
           Durations are counted in office hours. {{ turnaround.office_hours_caveat }}
         </span>
         <button class="btn btn-udm-outline" type="button" data-bs-dismiss="modal">Close</button>
-        <button class="btn btn-udm" type="button" data-print-trigger>Print</button>
+        {% comment %}
+          A link to the memo's own page, not window.print() on this one. The
+          print stylesheet hides dialogs — correctly, a dialog is a control
+          surface — so printing from in here printed the dashboard behind it:
+          everything except the memo somebody had just asked for.
+
+          The scope travels with it, or the printed memo would cover a
+          different set of offices than the one on screen. `?office=` is
+          re-checked by the view against the same _scope() the dashboard uses,
+          so carrying it here grants nothing.
+        {% endcomment %}
+        <a class="btn btn-udm" target="_blank" rel="noopener"
+           href="{% url 'core:dashboard_memo_print' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+          Print
+        </a>
       </div>
     </div>
   </div>

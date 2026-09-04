@@ -1486,3 +1486,111 @@ def test_the_real_sidebar_was_left_alone(client, users):
     for marker in ("Create Routing Slip", "Upload &amp; Archive", "Offices &amp; Users",
                    "Incoming &amp; Outgoing"):
         assert marker not in body, marker
+
+
+# ------------------------------------------------------ the memo print page
+MEMO_PRINT = "/memo/print/"
+
+
+@pytest.mark.django_db
+def test_the_print_page_renders_the_same_figures_as_the_dashboard(
+    client, users, overdue_record
+):
+    """The whole point of sharing the assembly rather than repeating it.
+
+    If the print page computed its own answer the two could disagree — a
+    document changing status between opening the dialog and pressing Print is
+    enough — and a printed memo that contradicts the screen it came from is
+    worse than no memo.
+    """
+    client.force_login(users["admin"])
+    dashboard = client.get(DASHBOARD)
+    printed = client.get(MEMO_PRINT)
+
+    assert printed.status_code == 200
+    assert printed.context["memo"] == dashboard.context["memo"]
+    assert printed.context["breakdown"]["total"] == dashboard.context["breakdown"]["total"]
+    assert str(dashboard.context["breakdown"]["total"]) in printed.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_print_page_carries_none_of_the_app_chrome(client, users, finished_record):
+    """A page that exists to be printed, not a dashboard with a stylesheet over
+    it. The sidebar, topbar and dashboard grid are not hidden here — they are
+    not on the page."""
+    client.force_login(users["admin"])
+    body = client.get(MEMO_PRINT).content.decode()
+
+    for chrome in ("app-sidebar", "app-topbar", "app-footer", "card-udm", "memo-sheet"):
+        assert chrome not in body, chrome
+    assert "memo-print" in body
+
+
+@pytest.mark.django_db
+def test_the_print_page_logs_the_copy_it_produces(client, users, finished_record):
+    """Printing happens in the browser, so a paper copy leaves no trace unless
+    the page asks for one to be recorded. PRINT events are never deduplicated,
+    which makes the marker not optional on a page whose purpose is paper."""
+    client.force_login(users["admin"])
+    body = client.get(MEMO_PRINT).content.decode()
+
+    assert 'data-print-log="the dashboard memo"' in body
+    assert "data-print-log-url" in body
+    assert "data-print-log-csrf" in body
+
+
+@pytest.mark.django_db
+def test_the_print_page_opens_its_own_dialog_without_inline_script(
+    client, users, finished_record
+):
+    """django-csp allows no inline script, so the behaviour is declared as data
+    and read by doctrack.js — the same way every other behaviour on the site is
+    wired."""
+    client.force_login(users["admin"])
+    body = client.get(MEMO_PRINT).content.decode()
+
+    assert "data-auto-print" in body
+    assert "<script>" not in body, "inline script would be blocked by CSP"
+    assert "onload=" not in body
+
+
+@pytest.mark.django_db
+def test_the_print_page_ignores_an_office_a_user_may_not_pick(
+    client, users, offices, finished_record
+):
+    """The URL is not a second authorization path.
+
+    An ordinary user gets no office picker on the dashboard, so `?office=` must
+    do nothing here either. Were it honoured, anybody could read another
+    office's figures by typing an id into the query string.
+    """
+    client.force_login(users["med"])
+    plain = client.get(MEMO_PRINT)
+    with_param = client.get(f"{MEMO_PRINT}?office={offices['SUP'].pk}")
+
+    assert with_param.context["scope"]["office"] is None
+    assert with_param.context["scope"]["can_pick"] is False
+    assert with_param.context["memo"] == plain.context["memo"]
+
+
+@pytest.mark.django_db
+def test_the_print_page_honours_an_office_an_admin_may_pick(
+    client, users, offices, finished_record
+):
+    """The other half of the same rule: the scope the dashboard showed has to
+    travel to the paper, or the printed memo covers a different set of offices
+    than the one it was generated from."""
+    client.force_login(users["admin"])
+    narrowed = client.get(f"{MEMO_PRINT}?office={offices['SUP'].pk}")
+
+    assert narrowed.context["scope"]["office"] == offices["SUP"]
+    assert {"label": "Scope", "value": offices["SUP"].name} in narrowed.context["memo"][0]["lines"]
+
+
+@pytest.mark.django_db
+def test_the_print_page_needs_a_login(client):
+    """It reads office figures, so it is behind the same gate as everything
+    else that does."""
+    response = client.get(MEMO_PRINT)
+
+    assert response.status_code in (302, 403)

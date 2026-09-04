@@ -874,6 +874,47 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   The dashboard memo, printed
+   Its own page — templates/core/dashboard_memo_print.html — rather than the
+   dashboard with a print stylesheet over it. Fixed units throughout: pt for
+   type, mm for the page. The dashboard's rem/%/flex grid lays out against the
+   viewport, so printing it gave a different result depending on how wide the
+   window happened to be when somebody pressed the button. A memo is a document
+   and has to come out the same every time.
+
+   None of the screen's classes are reused here. .memo-sheet and .card-udm
+   carry borders, radii and shadows that belong to a panel sitting on a canvas,
+   and there is no canvas on paper.
+   ================================================================ */
+/* A sheet of paper that happens to be shown on a screen first, so it stays
+   white and dark-inked in both themes. Written in tokens and pinned below
+   rather than hardcoded, which is how .login-wrap holds the sign-in screen
+   light — a hardcoded surface cannot re-point, and the rule against it is
+   what keeps the dark theme a matter of re-aiming tokens.
+
+   Following the dark palette here would give a readable tab and a blank
+   printout; inheriting the dark canvas without a ground of its own would put
+   document ink on a dark page, which tests/test_theme_contrast.py caught. */
+.memo-print { max-width: 180mm; margin: 0 auto; padding: 14mm 12mm; background: var(--udm-surface); color: var(--udm-ink); font-size: 10.5pt; line-height: 1.5; }
+.memo-print-head { display: flex; justify-content: space-between; gap: 10mm; padding-bottom: 3mm; border-bottom: 1px solid #8793a3; font-size: 9pt; color: var(--udm-slate-text); }
+.memo-print-title { margin: 6mm 0 2mm; font-size: 17pt; font-weight: 700; letter-spacing: -0.01em; }
+.memo-print-meta { display: flex; flex-wrap: wrap; gap: 2mm 8mm; padding-bottom: 4mm; border-bottom: 1px solid #cfd6e0; font-size: 9pt; color: var(--udm-slate-text); }
+.memo-print-section { margin-top: 6mm; break-inside: avoid; }
+.memo-print-heading { margin: 0 0 2mm; font-size: 9pt; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--udm-slate-ink); }
+/* Label and figure as two columns. The label column takes its width from the
+   longest label — office names here — and the figures line up against it. */
+.memo-print-lines { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 1.5mm 8mm; margin: 0; }
+.memo-print-lines dt { color: var(--udm-slate-text); }
+.memo-print-lines dd { margin: 0; font-weight: 600; }
+.memo-print-statement { grid-column: 1 / -1; font-weight: 400 !important; }
+.memo-print-foot { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid #8793a3; font-size: 8.5pt; color: var(--udm-slate-ink); }
+
+@media print {
+  /* The page owns the margin, so the wrapper stops adding a second one. */
+  .memo-print { max-width: none; margin: 0; padding: 0; }
+}
+
+/* ================================================================
    PHASE 6: final polish, accessibility, and responsive navigation
    ================================================================ */
 html { scroll-behavior:smooth; }
@@ -1799,6 +1840,18 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    full-bleed composition on fixed navy, and they are shown before there is a
    person to have a preference. Pinning the tokens back is enough — every rule
    inside reads them. */
+/* The printed memo is a document, and a document is white. Same treatment as
+   the sign-in screen: pin the tokens back and every rule inside reads them. */
+:root[data-theme="dark"] .memo-print {
+  --udm-surface: #ffffff;
+  --udm-ink: #16202c;
+  --udm-slate-text: #41506a;
+  --udm-slate-ink: #55637a;
+  --udm-muted: #63718a;
+  --udm-line: #dfe5ec;
+  color-scheme: light;
+}
+
 :root[data-theme="dark"] .login-wrap {
   --udm-canvas: #f5f7fa;
   --udm-surface: #ffffff;
