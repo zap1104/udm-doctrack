@@ -1149,6 +1149,43 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
 
 
 @pytest.mark.django_db
+def test_the_two_desk_blocks_are_told_apart(client, users, awaiting_receipt):
+    """They were reading as one list with a line through it.
+
+    Same grey, same weight, same size on both titles meant the half that needs
+    doing looked like the half that already happened. Each block carries a
+    modifier so the stylesheet can say which is which; without them the card is
+    two identical tables stacked.
+    """
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "desk-block desk-block--primary" in body
+    assert "desk-block desk-block--secondary" in body
+
+
+def test_only_the_action_half_is_marked_out():
+    """The distinction is carried by the titles, not by a heavier rule: a louder
+    line divides the card without saying which side to read first.
+
+    Gold and not red — red is overdue, which is a property of individual rows
+    and not of the block, and some of these rows are only waiting.
+    """
+    import pathlib as _pathlib
+
+    css = _pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+    block = css[css.index("/* ------------------------------------------------------------ Action Centre */"):
+                css.index("/* --------------------------------------------------------- scope picker */")]
+
+    assert ".desk-block--primary .desk-block-title::before" in block, "no mark on the action half"
+    assert "var(--udm-gold)" in block
+    assert "var(--udm-red)" not in block
+    # The secondary title keeps the muted default rather than gaining a mark of
+    # its own; two emphasised headings are the state this fixed.
+    assert ".desk-block--secondary .desk-block-title::before" not in block
+
+
+@pytest.mark.django_db
 def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awaiting_receipt):
     """Merging the panels is a template change. Renaming the context would make
     it a view change nobody asked for."""

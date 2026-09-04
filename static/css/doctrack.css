@@ -1550,10 +1550,14 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    ================================================================ */
 
 /* ------------------------------------------------------------ Action Centre */
-/* Two blocks in one card. The rule between them is what separates "what needs
-   doing" from "what already happened" now that they no longer have a card edge
-   each to do it. */
-.desk-block--secondary { border-top:1px solid var(--udm-line); }
+/* Two blocks in one card, and they were reading as one list with a line through
+   it: same grey, same weight, same size, so the half that needs doing looked
+   like the half that already happened.
+
+   The separation is carried by the titles rather than by a heavier rule. A
+   stronger line would divide the card more loudly without saying which side to
+   read first, which is the only thing the reader actually needs to know here. */
+.desk-block--secondary { border-top:1px solid var(--udm-line); margin-top:8px; }
 /* Sits at the same weight as the card heading it lives under rather than at
    browser-default h3 size, which next to a 16px h2 would read as the larger of
    the two. Uppercase and tracked so it reads as a divider, not a second title
@@ -1563,6 +1567,22 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   color:var(--udm-muted); font-size:11.5px; font-weight:700;
   letter-spacing:.11em; text-transform:uppercase;
 }
+/* "Needs action" is the half somebody acts on, so it takes full ink and a gold
+   rule beside it — the same mark the page's section eyebrows use, so this reads
+   as the app's existing "here is a section" language rather than a new signal.
+   Gold and not red: red is overdue, which is a property of individual rows here
+   and not of the block, and some of these rows are merely waiting. */
+.desk-block--primary .desk-block-title {
+  display:flex; align-items:center; gap:8px;
+  color:var(--udm-navy-text);
+}
+.desk-block--primary .desk-block-title::before {
+  content:""; flex:0 0 3px; width:3px; height:12px;
+  border-radius:2px; background:var(--udm-gold);
+}
+/* Left muted and unmarked on purpose. It is a record of what already happened,
+   so it recedes; making both stand out would put them back where they started. */
+.desk-block--secondary .desk-block-title { padding-top:16px; }
 /* The tables carry their own top padding through .card-udm-body.p-0, so the
    title would otherwise sit hard against the first row. */
 .desk-block-title + .card-udm-body { padding-top:10px; }

@@ -224,7 +224,7 @@
         <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
       {% endif %}
 
-      <div class="desk-block">
+      <div class="desk-block desk-block--primary">
         <h3 class="desk-block-title">Needs action</h3>
         <div class="card-udm-body p-0">
           {% if attention_records %}
