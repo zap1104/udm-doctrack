@@ -153,6 +153,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "form": form,
                 "page_obj": page,
                 "documents": page.object_list,
+                # Hides the create/upload button from the accounts the
+                # target view would turn away. The view still refuses
+                # them on its own; this only stops offering a dead end.
+                "can_start_work": request.user.can_start_work,
                 "smart_folders": smart_folders,
                 "selected_office": selected_office,
                 # The paginator has already counted this queryset; .count()

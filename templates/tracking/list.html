@@ -13,13 +13,14 @@
     <p class="sub">Documents still moving, plus completed work awaiting approval into the Document Repository.</p>
   </div>
   {% comment %}
-    FIXME: shown to viewers, who RecordCreateView then turns away with a
-    redirect and a warning — WriteAccessRequiredMixin refuses them. The
-    dashboard gates the same button on `can_start_work` (apps/core/views.py
-    `_can_start_work`); this page and templates/documents/repository.html
-    should use the same test so a viewer is not offered a dead end.
+    Hidden from the accounts RecordCreateView would turn away — a viewer, and an
+    account with no office. Hiding it is not the permission: the view still
+    refuses the request on its own, and the URL stays reachable to anyone who
+    knows it. This only stops offering a button that answers with a redirect.
   {% endcomment %}
-  <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
+  {% if can_start_work %}
+    <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
+  {% endif %}
 </div>
 {% with scope=request.GET.scope status=request.GET.status %}
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">

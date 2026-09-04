@@ -132,6 +132,10 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "form": form,
                 "page_obj": page,
                 "records": page_records,
+                # Hides the create/upload button from the accounts the
+                # target view would turn away. The view still refuses
+                # them on its own; this only stops offering a dead end.
+                "can_start_work": request.user.can_start_work,
                 "pending_upload": pending_upload,
                 "pending_upload_more": pending_upload_more,
                 # The pills need to know which of them are on. Resolved here as

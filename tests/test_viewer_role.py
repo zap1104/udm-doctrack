@@ -223,3 +223,92 @@ def test_views_are_kept_out_of_the_rendered_timeline(client, med_record, users):
 
     assert med_record.activities.filter(event=RecordActivity.Event.VIEWED).exists()
     assert "opened the document" not in body
+
+
+# ------------------------------------------- buttons that would refuse them
+TRACKING_LIST = "/tracking/"
+REPOSITORY = "/documents/"
+
+
+@pytest.mark.django_db
+def test_can_start_work_is_false_for_a_viewer(users):
+    """The gate behind the create and upload buttons, at the model rather than
+    in a view: three pages ask it, and two of them are in other apps."""
+    assert users["viewer"].can_start_work is False
+
+
+@pytest.mark.django_db
+def test_can_start_work_is_false_without_an_office(db, offices):
+    """`OfficeAssignedMixin` sends these accounts back with a warning, which is
+    a poor answer to a button."""
+    from django.contrib.auth import get_user_model
+
+    orphan = get_user_model().objects.create_user(
+        username="no-office", password="TestPass123!", office=None, role="USER",
+    )
+
+    assert orphan.can_start_work is False
+
+
+@pytest.mark.django_db
+def test_can_start_work_is_true_for_an_ordinary_office_user(users):
+    assert users["med"].can_start_work is True
+
+
+@pytest.mark.django_db
+def test_a_superuser_may_start_work_without_an_office(db):
+    """The one account that is not office-scoped. Kept explicit because the
+    office test above would otherwise read as "no office means no"."""
+    from django.contrib.auth import get_user_model
+
+    root = get_user_model().objects.create_superuser(
+        username="root", password="TestPass123!", office=None,
+    )
+
+    assert root.can_start_work is True
+
+
+@pytest.mark.django_db
+def test_a_viewer_is_not_offered_the_new_tracking_slip_button(client, users):
+    """RecordCreateView turns a viewer away with a redirect and a warning, so
+    the list page stops offering the button that leads there."""
+    client.force_login(users["viewer"])
+    body = client.get(TRACKING_LIST).content.decode()
+
+    assert "New Tracking Slip" not in body
+
+
+@pytest.mark.django_db
+def test_an_ordinary_user_still_gets_the_new_tracking_slip_button(client, users):
+    client.force_login(users["med"])
+    body = client.get(TRACKING_LIST).content.decode()
+
+    assert "+ New Tracking Slip" in body
+
+
+@pytest.mark.django_db
+def test_a_viewer_is_not_offered_the_upload_button(client, users):
+    """Both places the repository offers it — the page head and the empty
+    state — since a viewer with no matching documents sees the second one."""
+    client.force_login(users["viewer"])
+    body = client.get(REPOSITORY).content.decode()
+
+    assert "Upload Document" not in body
+
+
+@pytest.mark.django_db
+def test_an_ordinary_user_still_gets_the_upload_button(client, users):
+    client.force_login(users["med"])
+    body = client.get(REPOSITORY).content.decode()
+
+    assert "Upload Document" in body
+
+
+@pytest.mark.django_db
+def test_hiding_those_buttons_is_not_the_permission(client, users):
+    """The endpoints stay reachable to anyone who knows the URL, so the views
+    have to refuse on their own. The hidden button is a courtesy."""
+    client.force_login(users["viewer"])
+
+    assert client.get("/tracking/new/").status_code in (302, 403)
+    assert client.get("/documents/upload/").status_code in (302, 403)

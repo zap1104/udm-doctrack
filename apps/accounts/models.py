@@ -290,6 +290,29 @@ class User(AbstractUser):
         """
         return not self.is_viewer
 
+    @property
+    def can_start_work(self) -> bool:
+        """Whether to offer a button that starts new tracking or a new upload.
+
+        Mirrors the two gates the target views apply — `WriteAccessRequiredMixin`
+        turns a viewer away, `OfficeAssignedMixin` turns away an account with no
+        office — so no page offers a button that only answers with a redirect and
+        a warning.
+
+        This hides a control; it does not grant one. Both views still refuse the
+        request on their own, which is the check that matters: a hidden button is
+        not a permission, and the endpoints stay reachable to anyone who knows the
+        URL.
+
+        Lives here rather than in `apps.core.views` because three pages ask it —
+        the dashboard, the tracking list and the repository — and two of them
+        would otherwise be importing from another app's view module for a
+        question that needs nothing but the user.
+        """
+        if self.is_viewer:
+            return False
+        return self.office_id is not None or self.is_superuser
+
     def can_administer(self, other) -> bool:
         """May this user create or edit `other`'s account?
 

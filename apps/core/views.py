@@ -417,7 +417,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "completed_today": completed_today,
                 "greeting": _greeting(),
                 "can_bulk_receive": can_bulk_receive,
-                "can_start_work": _can_start_work(user),
+                "can_start_work": user.can_start_work,
                 "breakdown": breakdown,
                 "breakdown_summary": self._breakdown_summary(breakdown),
             }
@@ -717,26 +717,6 @@ def _annotate_destinations(records) -> None:
         outstanding = awaiting or destinations
         record.pending_offices_shown = outstanding[:DESTINATIONS_SHOWN]
         record.pending_more = max(0, len(outstanding) - DESTINATIONS_SHOWN)
-
-
-def _can_start_work(user) -> bool:
-    """Whether to offer the New Tracking Slip / Upload buttons.
-
-    Mirrors the two gates the target views apply — `WriteAccessRequiredMixin`
-    turns a viewer away, and `OfficeAssignedMixin` turns away an account with no
-    office — so the dashboard does not offer a button that answers with a
-    redirect and a warning.
-
-    This hides a control; it does not grant one. Both views still refuse the
-    request on their own, which is the check that matters: a hidden button is
-    not a permission, and the endpoints stay reachable to anyone who knows the
-    URL. The tracking list and the repository show these buttons to everyone and
-    let the redirect explain, which is defensible but reads as a dead end on the
-    one page a viewer is most likely to start from.
-    """
-    if user.is_viewer:
-        return False
-    return user.office_id is not None or user.is_superuser
 
 
 def _greeting() -> str:

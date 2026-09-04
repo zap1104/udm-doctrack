@@ -9,13 +9,19 @@
     <p class="sub">Completed records, archived documents, and historical office uploads. Active work remains in Tracking.</p>
   </div>
   {% comment %}
-    FIXME: same as templates/tracking/list.html — shown to viewers, whom
-    UploadView refuses. Gate on the same test the dashboard uses.
+    Hidden from the accounts UploadView would turn away — a viewer, and an
+    account with no office. Hiding it is not the permission: the view still
+    refuses the request on its own.
 
-    FIXME: this says "Upload Document" while the dashboard button for the same
-    view says "Upload to Repository". Pick one and use it in both.
+    FIXME: the label. This says "Upload Document" and the upload page's own
+    title agrees, so nothing contradicts it today — the dashboard's "Upload to
+    Repository" button that used to disagree was removed in c17f417. What is
+    left is whether "Upload Document" is the right name for putting something
+    into the repository, which is a wording decision rather than a mismatch.
   {% endcomment %}
-  <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
+  {% if can_start_work %}
+    <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
+  {% endif %}
 </div>
 
 {% comment %}
@@ -156,7 +162,9 @@
           <div class="card-udm"><div class="card-udm-body empty-state">
             <h3>No documents match this view</h3>
             <p>Clear the filters or upload a historical office document.</p>
-            <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
+            {% if can_start_work %}
+              <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
+            {% endif %}
           </div></div>
         </div>
       {% endfor %}
