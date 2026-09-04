@@ -1518,15 +1518,24 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    rings, so the border and the offset would draw a line under nothing. */
 .dashboard-writeup--standalone { margin-top:0; padding-top:0; border-top:0; }
 
-.dashboard-print-header { display:none; }
+/* No .dashboard-print-header any more. It gave Ctrl+P a letterheaded,
+   timestamped sheet that looked official and was never recorded, since the
+   audit marker belongs to a document and this page is not one. What is left is
+   the page size and the rings' fills — a plain printout that prints what is on
+   screen rather than a document pretending to be one.
+
+   The .dashboard-writeup print rule went too: the panel was removed with the
+   wireframe rebuild and its figures in 3cc3226, so there is nothing left to
+   keep off a page break. FIXME: its screen rules above (.dashboard-writeup and
+   --standalone) are dead for the same reason and outlive this comment.
+
+   .report-print-header, the shared base class, stays — Reports and the memo
+   print page both use it. */
 @media print {
   @page { size:A4 portrait; margin:12mm; }
-  .dashboard-print-header { display:flex; justify-content:space-between; gap:18px; margin-bottom:8mm; padding-bottom:3mm; border-bottom:1px solid #8793a3; color:var(--udm-slate-text); font-size:9pt; }
-  .dashboard-print-header strong,.dashboard-print-header span { display:block; }
   /* Segment fills and swatches are background paint; without this they print blank. */
   .breakdown-seg,.breakdown-swatch,.breakdown-bar { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .breakdown-item { break-inside:avoid; }
-  .dashboard-writeup { break-inside:avoid; }
 }
 
 /* ================================================================

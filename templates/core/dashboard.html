@@ -64,19 +64,15 @@
       putting on paper, and it now has a page of its own to do it from.
 
       Ctrl+P still opens the browser's own dialog — no button can prevent that
-      — and that printout is not recorded in the audit log, because the marker
-      that logs one belongs to a document and this page is not one.
+      — and what it produces is deliberately plain: no letterhead, no scope
+      line, no timestamp, and no entry in the audit log. A page that printed a
+      letterheaded, timestamped sheet without recording it would look official
+      and be untraceable, which is the worse half of both options. The memo is
+      the document, and it is the thing that prints and gets logged.
     {% endcomment %}
     <button class="btn btn-udm-outline" type="button"
             data-bs-toggle="modal" data-bs-target="#dashboard-memo">Generate memo</button>
   </div>
-</div>
-
-{# Printed copies carry their own heading: the sidebar and buttons do not print. #}
-<div class="report-print-header dashboard-print-header">
-  <strong>{{ SITE_LONG_NAME }} — Dashboard</strong>
-  <span>{{ scope.display }}</span>
-  <span>Printed {{ printed_at|date:"d M Y, g:i A" }} by {{ user.display_name }}</span>
 </div>
 
 <div class="row g-3 mb-4">

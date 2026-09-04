@@ -1513,6 +1513,22 @@ def test_the_dashboard_no_longer_offers_to_print_itself(client, users, finished_
 
 
 @pytest.mark.django_db
+def test_the_dashboard_has_no_print_letterhead(client, users, finished_record):
+    """The header was hidden on screen and shown only to Ctrl+P.
+
+    That is the worse half of both options: a letterheaded, timestamped sheet
+    that looks official and is recorded nowhere, reachable only by a route the
+    app does not advertise. The memo is the document; this page is not, so it
+    prints plainly or not at all.
+    """
+    client.force_login(users["admin"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "dashboard-print-header" not in body
+    assert "— Dashboard" not in body, "the letterhead line"
+
+
+@pytest.mark.django_db
 def test_ctrl_p_on_the_dashboard_is_not_recorded(client, users, finished_record):
     """An accepted gap, asserted so it stays a decision rather than a surprise.
 
