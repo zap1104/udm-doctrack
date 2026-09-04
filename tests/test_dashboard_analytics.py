@@ -627,20 +627,45 @@ def test_nothing_measured_means_nothing_plotted(client, users):
 
 
 # --- the memo --------------------------------------------------------------
+def memo_text(memo):
+    """Every label and value in the memo as one string, for substring checks."""
+    return " ".join(
+        "{} {}".format(line["label"], line["value"]).strip()
+        for section in memo
+        for line in section["lines"]
+    )
+
+
+def memo_headings(memo):
+    return [section["heading"] for section in memo]
+
+
 @pytest.mark.django_db
 def test_the_memo_is_composed_server_side(client, users, finished_record):
-    """Sentence-building stays out of the template, like the rest of the app."""
+    """Composition stays out of the template, like the rest of the app.
+
+    The memo is a list of sections, each a heading and a list of label/value
+    lines, so the template renders headings and rows rather than deciding what
+    the memo says.
+    """
     client.force_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
 
-    assert memo and all(isinstance(line, str) for line in memo)
+    assert memo_headings(memo) == [
+        "Overview", "Needs attention", "Turnaround", "Repository activity this month",
+    ]
+    for section in memo:
+        assert section["lines"], section["heading"]
+        for line in section["lines"]:
+            assert set(line) == {"label", "value"}
+            assert isinstance(line["label"], str) and isinstance(line["value"], str)
 
 
 @pytest.mark.django_db
 def test_the_memo_agrees_with_the_figures_beside_it(client, users, overdue_record):
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
-    memo = " ".join(response.context["memo"])
+    memo = memo_text(response.context["memo"])
 
     assert str(response.context["breakdown"]["total"]) in memo
     assert str(response.context["overdue_summary"]["total"]) in memo
@@ -649,9 +674,13 @@ def test_the_memo_agrees_with_the_figures_beside_it(client, users, overdue_recor
 @pytest.mark.django_db
 def test_the_memo_says_so_when_nothing_is_late(client, users, finished_record):
     client.force_login(users["admin"])
-    memo = " ".join(client.get(DASHBOARD).context["memo"])
+    memo = client.get(DASHBOARD).context["memo"]
+    attention = next(s for s in memo if s["heading"] == "Needs attention")
 
-    assert "Nothing is past its deadline." in memo
+    # Stated in words, not as a figure: "0 documents are past the deadline"
+    # reads as a finding, "Nothing is past its deadline" as the absence of one.
+    assert attention["lines"] == [{"label": "", "value": "Nothing is past its deadline."}]
+    assert "0" not in memo_text([attention])
 
 
 @pytest.mark.django_db
@@ -660,7 +689,7 @@ def test_the_memo_uses_office_language_not_a_bare_decimal(client, users, finishe
     The chart plots days because an axis needs a number; the prose beside it
     gets the same wording Reports uses."""
     client.force_login(users["admin"])
-    memo = " ".join(client.get(DASHBOARD).context["memo"])
+    memo = memo_text(client.get(DASHBOARD).context["memo"])
 
     assert "0.0 working day" not in memo
     assert "counted in office hours" in memo
@@ -681,13 +710,79 @@ def test_the_memo_names_the_scope_it_describes(client, users, offices, finished_
     anything once it leaves the screen."""
     client.force_login(users["admin"])
 
-    everything = " ".join(client.get(DASHBOARD).context["memo"])
-    assert "all offices hold" in everything
+    everything = client.get(DASHBOARD).context["memo"]
+    assert {"label": "Scope", "value": "All offices"} in everything[0]["lines"]
 
-    narrowed = " ".join(
-        client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context["memo"]
+    narrowed = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context["memo"]
+    assert {"label": "Scope", "value": offices["SUP"].name} in narrowed[0]["lines"]
+
+
+@pytest.mark.django_db
+def test_the_memo_lists_every_office_holding_something_late(
+    client, users, offices, memo_type
+):
+    """The per-office breakdown was computed on this request and thrown away.
+
+    `_memo` read one field of it — the single oldest figure across all offices —
+    so a memo about twelve overdue documents could not say where any of them
+    were. It now carries a line per office, in the order `overdue_offices`
+    returns them, which is by count descending: a queue to work through, not a
+    ranking. Two offices here, so the ordering is actually exercised.
+    """
+    # Received, not merely routed: overdue_offices groups by `current_office`,
+    # which only moves to the destination once receipt is confirmed. Routing
+    # alone would leave every record attributed to MED, which is the office
+    # that raised them rather than the one holding them.
+    for office, holder, days, count in (
+        (offices["SUP"], users["sup"], 9, 2),
+        (offices["HR"], users["hr"], 3, 1),
+    ):
+        for index in range(count):
+            record = create_draft_record(
+                user=users["med"], subject=f"Late {office.code} {index}",
+                instructions="For action.", document_type=memo_type,
+            )
+            route_record(record, [office], user=users["med"])
+            confirm_receipt(record, user=holder)
+            TrackingRecord.objects.filter(pk=record.pk).update(
+                due_at=timezone.now() - timedelta(days=days)
+            )
+
+    client.force_login(users["admin"])
+    response = client.get(DASHBOARD)
+    attention = next(
+        s for s in response.context["memo"] if s["heading"] == "Needs attention"
     )
-    assert f"{offices['SUP'].name} holds" in narrowed
+    rows = response.context["overdue_offices"]
+
+    assert [row["name"] for row in rows] == [
+        offices["SUP"].name, offices["HR"].name
+    ], "busiest queue first"
+    # The office lines are whatever overdue_offices returned, in that order,
+    # after the two headline lines.
+    assert attention["lines"][-len(rows):] == [
+        {"label": offices["SUP"].name, "value": "2 overdue, oldest 9 days"},
+        {"label": offices["HR"].name, "value": "1 overdue, oldest 3 days"},
+    ]
+
+
+@pytest.mark.django_db
+def test_the_memo_lists_every_office_that_added_to_the_repository(
+    client, users, offices, filed_record
+):
+    """`uploads_by_office` returns every contributing office and the memo read
+    only `leader`. Naming one office and dropping the rest turned a record of
+    who contributed into an award."""
+    client.force_login(users["admin"])
+    response = client.get(DASHBOARD)
+    activity = next(
+        s for s in response.context["memo"]
+        if s["heading"] == "Repository activity this month"
+    )
+    rows = response.context["uploads_by_office"]["rows"]
+
+    assert rows, "the fixture should have put something in the repository"
+    assert [line["label"] for line in activity["lines"]] == [row["name"] for row in rows]
 
 
 @pytest.mark.django_db
@@ -695,7 +790,7 @@ def test_the_memo_never_compares_month_to_month(client, users, finished_record):
     """Descriptive, never comparative — a printed memo carrying a verdict on an
     office outlives the context that produced it."""
     client.force_login(users["admin"])
-    memo = " ".join(client.get(DASHBOARD).context["memo"]).lower()
+    memo = memo_text(client.get(DASHBOARD).context["memo"]).lower()
 
     for word in ("increase", "decrease", "improved", "worse", "better than", "up from", "down from"):
         assert word not in memo, word

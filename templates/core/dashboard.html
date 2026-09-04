@@ -680,7 +680,27 @@
             <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
             <span><strong>By</strong> · {{ user.display_name }}</span>
           </div>
-          {% for line in memo %}<p>{{ line }}</p>{% endfor %}
+          {% comment %}
+            Sections, not one block of prose. The memo carries a per-office
+            breakdown now, and a list of offices set as running sentences is
+            unreadable — the heading is what tells you which question each
+            group of figures answers.
+          {% endcomment %}
+          {% for section in memo %}
+            <section class="memo-section">
+              <h3>{{ section.heading }}</h3>
+              <dl class="memo-lines">
+                {% for line in section.lines %}
+                  {% if line.label %}
+                    <dt>{{ line.label }}</dt>
+                    <dd>{{ line.value }}</dd>
+                  {% else %}
+                    <dd class="memo-line-statement">{{ line.value }}</dd>
+                  {% endif %}
+                {% endfor %}
+              </dl>
+            </section>
+          {% endfor %}
         </div>
       </div>
       <div class="modal-footer">

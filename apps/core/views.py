@@ -230,7 +230,7 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             "turnaround": analytics.turnaround(records),
             "uploads_by_office": uploads,
             "live_by_status": analytics.live_records_by_status(records),
-            "memo": self._memo(scope, breakdown, overdue, trend, uploads),
+            "memo": self._memo(scope, breakdown, overdue, overdue_rows, trend, uploads),
         }
 
     def _domain_donut(self, breakdown, group):
@@ -373,86 +373,104 @@ class DashboardView(AppLoginRequiredMixin, TemplateView):
             )
         return built
 
-    def _memo(self, scope, breakdown, overdue, trend, uploads):
-        """The dashboard's own numbers, said in sentences.
+    @staticmethod
+    def _memo_line(label, value):
+        """One row of the memo. An empty label makes it a standalone statement.
+
+        Label and value stay separate rather than being padded into one string
+        because the print page sets them in two columns, and a column of dot
+        leaders written in Python would only line up in the font it was
+        measured against.
+        """
+        return {"label": label, "value": value}
+
+    @staticmethod
+    def _plural(count, noun):
+        return "{} {}{}".format(count, noun, "" if count == 1 else "s")
+
+    def _memo(self, scope, breakdown, overdue, overdue_rows, trend, uploads):
+        """The dashboard's own numbers, as labelled sections.
 
         Assembled here rather than in the template for the same reason
-        `_breakdown_summary` is: a memo is prose about figures, and prose built
-        beside the figures cannot drift from them.
+        `_breakdown_summary` is: a memo is a statement about figures, and one
+        built beside the figures cannot drift from them.
 
         Descriptive, never comparative. It reports what is on the page; it does
         not say whether that is better or worse than last month, because this
         page has no basis for a verdict on an office and a printed memo carrying
-        one would outlive the context that produced it.
+        one would outlive the context that produced it. The per-office lists are
+        in the order the queries already return them — by count, descending —
+        which is a queue to work through and not a ranking. Nothing here labels
+        a top or a bottom.
+
+        Zero is stated in words, never as a figure: "0 documents are past the
+        deadline" reads as a finding, "Nothing is past its deadline" as the
+        absence of one.
         """
+        line = self._memo_line
         total = breakdown["total"]
-        # "All offices" takes a plural verb; a named office and "Your office"
-        # take a singular one. The generic labels are lowercased mid-sentence —
-        # an office's real name keeps its capitals, "All offices" should not.
-        several = scope["can_pick"] and not scope["office"]
-        holder = scope["label"] if scope["office"] else scope["label"].lower()
-        lines = [
-            "As at {:%d %B %Y}, {} {} {} document{} across tracking and the "
-            "repository: {} still moving ({}%) and {} filed ({}%).".format(
-                timezone.localtime(),
-                holder,
-                "hold" if several else "holds",
-                total,
-                "" if total == 1 else "s",
-                breakdown["tracking_total"],
-                breakdown["tracking_percent"],
-                breakdown["repository_total"],
-                breakdown["repository_percent"],
-            )
+
+        overview = [
+            line("Scope", scope["label"]),
+            line("Total", self._plural(total, "document")),
+            line("Still moving", "{} ({}%)".format(
+                breakdown["tracking_total"], breakdown["tracking_percent"])),
+            line("Filed", "{} ({}%)".format(
+                breakdown["repository_total"], breakdown["repository_percent"])),
         ]
 
         late = overdue["total"]
         if late:
-            sentence = (
-                "{} document{} {} past the deadline set for {} ({}% of everything "
-                "on record)".format(
-                    late,
-                    "" if late == 1 else "s",
-                    "is" if late == 1 else "are",
-                    "it" if late == 1 else "them",
-                    overdue["percent_of_all"],
-                )
-            )
+            attention = [
+                line("Past deadline", "{} ({}% of everything on record)".format(
+                    late, overdue["percent_of_all"])),
+            ]
             if overdue["oldest_days"]:
-                sentence += ", the oldest by {} day{}".format(
-                    overdue["oldest_days"], "" if overdue["oldest_days"] == 1 else "s"
+                attention.append(
+                    line("Oldest", self._plural(overdue["oldest_days"], "day"))
                 )
-            lines.append(sentence + ".")
+            # One row per office holding something late, capped by
+            # `overdue_offices` at the same limit the panel above uses.
+            for row in overdue_rows:
+                attention.append(line(row["name"], "{} overdue, oldest {}".format(
+                    row["total"], self._plural(row["oldest_days"], "day"))))
         else:
-            lines.append("Nothing is past its deadline.")
+            attention = [line("", "Nothing is past its deadline.")]
 
+        turnaround = []
         latest = trend["latest"]
         if latest and latest["lifetime"] is not None:
-            lines.append(
-                "Documents completed in {:%B} took an average of {} from being raised "
-                "to being finished, counted in office hours.".format(
-                    latest["month"], latest["lifetime_label"]
+            turnaround.append(
+                line(
+                    "Average lifetime, {:%B}".format(latest["month"]),
+                    "{}, counted in office hours".format(latest["lifetime_label"]),
                 )
             )
         if latest and latest["has_on_time"]:
-            lines.append(
-                "{} of {} document{} with a deadline {} completed on time ({}%).".format(
-                    latest["on_time"],
-                    latest["closed"],
-                    "" if latest["closed"] == 1 else "s",
-                    "was" if latest["closed"] == 1 else "were",
-                    latest["on_time_percent"],
-                )
+            turnaround.append(
+                line("Completed on time", "{} of {} ({}%)".format(
+                    latest["on_time"], latest["closed"], latest["on_time_percent"]))
             )
+        if not turnaround:
+            turnaround = [line("", "Nothing has been completed yet.")]
 
-        leader = uploads["leader"]
-        if leader:
-            lines.append(
-                "{} added the most to the repository this month ({} of {}, {}%).".format(
-                    leader["name"], leader["total"], uploads["total"], leader["percent"]
-                )
-            )
-        return lines
+        if uploads["rows"]:
+            # Every office that added something, not only the leader. Naming one
+            # office and dropping the rest turned a record of who contributed
+            # into an award.
+            activity = [
+                line(row["name"], self._plural(row["total"], "document"))
+                for row in uploads["rows"]
+            ]
+        else:
+            activity = [line("", "Nothing was added to the repository this month.")]
+
+        return [
+            {"heading": "Overview", "lines": overview},
+            {"heading": "Needs attention", "lines": attention},
+            {"heading": "Turnaround", "lines": turnaround},
+            {"heading": "Repository activity this month", "lines": activity},
+        ]
 
     def _combined_breakdown(self, user, office=None):
         """One percentage across both modules, sliced six ways.
