@@ -29,7 +29,9 @@ import pytest
 from apps.tracking.models import Status, TrackingRecord
 from apps.tracking.services import (
     SCOPE_INCOMING,
+    SCOPE_OUTGOING,
     active_for,
+    annotate_direction,
     apply_scope,
     confirm_receipt,
     create_draft_record,
@@ -202,6 +204,88 @@ def test_only_the_incoming_half_can_be_confirmed(client, users, traffic):
 
     assert traffic["arriving"].pk in confirmable
     assert traffic["sent"].pk not in confirmable, "we cannot sign for what we sent"
+
+
+# --- the direction tag -----------------------------------------------------
+@pytest.mark.django_db
+def test_the_tag_agrees_with_the_queues(users, traffic):
+    """The tag and the pill that would list the row are derived from the same
+    predicate, so they cannot disagree."""
+    user = users["sup"]
+    records = list(active_for(user))
+    annotate_direction(records, user)
+
+    tagged_in = {r.pk for r in records if r.direction == "incoming"}
+    tagged_out = {r.pk for r in records if r.direction == "outgoing"}
+    scope_in = set(apply_scope(active_for(user), SCOPE_INCOMING, user).distinct().values_list("pk", flat=True))
+    scope_out = set(apply_scope(active_for(user), SCOPE_OUTGOING, user).distinct().values_list("pk", flat=True))
+
+    assert tagged_in == scope_in
+    assert tagged_out == scope_out
+
+
+@pytest.mark.django_db
+def test_a_record_the_office_never_touched_carries_no_tag(users, traffic):
+    """A records officer or an administrator sees these. A direction they do not
+    have would be a worse answer than none."""
+    records = list(TrackingRecord.objects.visible_to(users["admin"]))
+    annotate_direction(records, users["admin"])
+
+    elsewhere = next(r for r in records if r.pk == traffic["elsewhere"].pk)
+    assert elsewhere.direction == ""
+
+
+@pytest.mark.django_db
+def test_no_record_is_ever_both_directions(users, traffic):
+    """route_record refuses to send an office its own document, and every step
+    in a batch shares a from_office, so this cannot happen today. Asserted so a
+    change to routing does not start mislabelling rows in silence."""
+    for user in (users["sup"], users["hr"], users["med"]):
+        records = list(active_for(user))
+        annotate_direction(records, user)
+        both = [
+            r.pk for r in records
+            if r.direction == "incoming"
+            and r.routing_steps.filter(
+                from_office_id=user.office_id, batch=r.current_batch
+            ).exists()
+        ]
+        assert both == [], f"{user.username} sees a record in both directions"
+
+
+@pytest.mark.django_db
+def test_the_same_record_reads_both_ways_at_once(users, traffic):
+    """Outgoing for the sender and incoming for the recipient at the same
+    instant — which is why direction cannot be a column."""
+    sent = traffic["sent"]
+
+    for user, expected in ((users["sup"], "outgoing"), (users["hr"], "incoming")):
+        records = [TrackingRecord.objects.get(pk=sent.pk)]
+        annotate_direction(records, user)
+        assert records[0].direction == expected, user.username
+
+
+@pytest.mark.django_db
+def test_the_tag_renders_on_both_listing_pages(client, users, traffic):
+    client.force_login(users["sup"])
+
+    for url in (f"{TRACKING}?scope=incoming", "/search/?mode=tracking&scope=incoming"):
+        body = client.get(url).content.decode()
+        assert "pill-incoming" in body or "pill-outgoing" in body, url
+
+
+@pytest.mark.django_db
+def test_the_tag_costs_one_query_for_the_whole_page(
+    django_assert_num_queries, client, users, traffic
+):
+    """One grouped query, like annotate_can_confirm beside it. The per-row
+    version is twenty queries on a twenty-row page."""
+    user = users["sup"]
+    records = list(active_for(user))
+    assert len(records) > 1, "needs several rows to be worth asserting"
+
+    with django_assert_num_queries(1):
+        annotate_direction(records, user)
 
 
 # --- the aliases -----------------------------------------------------------

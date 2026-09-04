@@ -118,6 +118,11 @@ class SearchView(AppLoginRequiredMixin, View):
         records = records.distinct().order_by("-last_movement_at")
         page = Paginator(records, tracking_services.PAGE_SIZE).get_page(request.GET.get("page"))
         page_records = list(page.object_list)
+        # This page listed tracking records without either annotator, so its
+        # rows carried no direction and no receiving offices while the Tracking
+        # page's did. Same rows, same columns, so the same one query each.
+        tracking_services.annotate_direction(page_records, request.user)
+        tracking_services.annotate_receiving_offices(page_records)
 
         # Searched only once something was asked for. An empty box should offer
         # the prompt, not a paginated dump of every active record.

@@ -1,0 +1,18 @@
+{% comment %}
+  Which way a document is moving relative to the office looking at it.
+
+  Direction is a property of a document *and* an office — the batch that is
+  outgoing for Supply is incoming for HR at the same instant — so it is set on
+  the record by services.annotate_direction rather than read from a column.
+
+  Blank for records the office neither sent nor received: a records officer or
+  an administrator sees those, and a direction they do not have would be a worse
+  answer than none.
+
+  Usage: {% include "partials/_direction_tag.html" with direction=record.direction %}
+{% endcomment %}
+{% if direction == "incoming" %}
+  <span class="pill pill-incoming">Incoming</span>
+{% elif direction == "outgoing" %}
+  <span class="pill pill-outgoing">Outgoing</span>
+{% endif %}

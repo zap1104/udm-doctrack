@@ -9,6 +9,7 @@
     <h1>{{ record.subject }}</h1>
     <p class="sub">
       <span class="mono">{{ record.display_tracking_number }}</span>
+      {% include "partials/_direction_tag.html" with direction=record.direction %}
       {% include "partials/_status_pill.html" with status=record.display_status %}
       {% if record.priority == "URGENT" %}<span class="pill pill-overdue">Urgent</span>{% endif %}
     </p>

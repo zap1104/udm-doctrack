@@ -244,6 +244,21 @@ a:hover { text-decoration: underline; }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
+/* Direction, not status — which way the document is moving relative to the
+   office reading the page. Deliberately outside the status hues: gold, teal,
+   green and red all mean a stage, and a direction wearing one of them would
+   read as a stage the document is at.
+
+   Filled for what is here to act on, outline for what has left — the same
+   contrast the draft pill below draws between "in the workflow" and "not yet". */
+.pill-incoming  { background: var(--udm-slate-soft); color: var(--udm-navy-text); }
+.pill-outgoing  { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
+/* Draft is the one status that is not in the workflow yet: nobody has been
+   sent it, nobody owes anything on it, and it is visible only to the office
+   writing it. So it is drawn as an outline rather than a fill — the difference
+   between "a stage this document is at" and "a document that has not started".
+   It also stops Draft reading as another solid chip alongside Pending receipt,
+   which is the one it was being confused with. */
 .pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 

@@ -107,6 +107,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         page_records = list(page.object_list)
         services.annotate_can_confirm(page_records, request.user)
         services.annotate_receiving_offices(page_records)
+        services.annotate_direction(page_records, request.user)
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the
@@ -305,6 +306,9 @@ class RecordDetailView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
         record = _get_record(request, pk)
         services.log_view(record, user=request.user)
+        # Takes a list, so one record is the same call the listing pages make.
+        # It answers "is this ours to act on" without reading the routing table.
+        services.annotate_direction([record], request.user)
         # Split here rather than with |slice in the template. Django's slice
         # filter fails *silently* on a queryset — negative indexing is
         # unsupported, and the filter swallows the error and returns the whole

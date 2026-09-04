@@ -1006,6 +1006,54 @@ def annotate_receiving_offices(records) -> None:
         record.receiving_more = max(0, len(offices) - RECEIVING_SHOWN)
 
 
+def annotate_direction(records, user) -> None:
+    """Set `direction` on each record: "incoming", "outgoing" or "".
+
+    Direction is not a property of a document — it is a property of a document
+    *and* an office. The batch that is outgoing for Supply is incoming for HR at
+    the same instant, so there is no column this could live in.
+
+    Derived from the current batch with the same predicate `apply_scope` uses
+    for the Incoming and Outgoing queues, so a row's tag and the queue that
+    would list it can never disagree.
+
+    Blank for records the office neither sent nor received. A records officer or
+    an administrator sees those, and giving them a direction they do not have
+    would be a worse answer than giving them none.
+
+    One grouped query, like `annotate_can_confirm` beside it — the per-row
+    version is twenty queries on a twenty-row page.
+    """
+    if not records:
+        return
+    if not user.is_authenticated or not user.office_id:
+        for record in records:
+            record.direction = ""
+        return
+
+    incoming, outgoing = set(), set()
+    rows = RoutingStep.objects.filter(
+        record__in=records, batch=F("record__current_batch")
+    ).values_list("record_id", "from_office_id", "to_office_id")
+    for record_id, from_office_id, to_office_id in rows:
+        if to_office_id == user.office_id:
+            incoming.add(record_id)
+        if from_office_id == user.office_id:
+            outgoing.add(record_id)
+
+    for record in records:
+        # Incoming wins if a record were ever both. It cannot be today —
+        # route_record refuses to send an office its own document, and every
+        # step in a batch shares a from_office — but "it is here for us to act
+        # on" is the more useful of the two answers if routing ever changes.
+        if record.pk in incoming:
+            record.direction = "incoming"
+        elif record.pk in outgoing:
+            record.direction = "outgoing"
+        else:
+            record.direction = ""
+
+
 def annotate_can_confirm(records, user) -> None:
     """Set `can_confirm_now` on each record in one query.
 
