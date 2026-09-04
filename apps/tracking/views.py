@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import F
+from django.db.models import F, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -84,7 +84,20 @@ class RecordListView(AppLoginRequiredMixin, View):
         # tracking record gets filtered" has one implementation. This page
         # passes no `query` — it has queue pills instead of a search box.
         records = services.filter_records(records, status=status, offices=offices)
-        records = services.apply_scope(records, scope, request.user)
+        # "View this page as office X", the same thing the dashboard's picker
+        # means, and gated the same way — services.scope_office decides, so the
+        # two pages cannot answer "whose queue is this" differently.
+        #
+        # For a queue that answers *for* an office the chosen one replaces the
+        # viewer's. For one that does not — Overdue, Pending upload — there is
+        # no such office to replace, so the picker narrows by the same
+        # originating-or-current pairing the dashboard scopes its panels with.
+        as_office = services.scope_office(request.user, request.GET.get("office"))
+        if as_office and scope not in services.OFFICE_SCOPED:
+            records = records.filter(
+                Q(originating_office=as_office) | Q(current_office=as_office)
+            )
+        records = services.apply_scope(records, scope, request.user, office=as_office)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while
         # on Overdue means overdue records in your office, not one or the other.

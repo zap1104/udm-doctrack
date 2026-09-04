@@ -852,14 +852,59 @@ def filter_records(records, *, query=None, status=None, offices=None):
     return records
 
 
-def apply_scope(records, scope, user):
+#: Scopes that answer *for an office* rather than for a queryset. The picker
+#: swaps which office they answer for; everything else it narrows by the
+#: originating/current pairing instead — see `scope_office`.
+OFFICE_SCOPED = {
+    SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT,
+    SCOPE_INCOMING, SCOPE_OUTGOING, SCOPE_PENDING_RECEIPT, SCOPE_RECEIVED,
+}
+
+
+def scope_office(user, requested):
+    """Which office the per-office queues answer for.
+
+    None unless an administrator named one. Same gate as the dashboard's scope
+    picker — `is_office_admin` — and defined here so the dashboard and the
+    Tracking page cannot answer it differently. Two answers to "whose queue is
+    this" is the shape of bug this module has already had once.
+
+    None rather than the viewer's own office on purpose. `apply_scope` falls
+    back to the viewer for the queues that need *an* office, and the caller can
+    tell "nobody picked one" from "somebody picked mine" — which matters,
+    because narrowing a page to the viewer's office when nobody asked is how
+    Overdue went from 32 records to 3.
+
+    Naming an office grants nothing. It is applied on top of `visible_to`, never
+    instead of it, so it can only narrow what the viewer already sees. Anything
+    that is not a digit, or comes from somebody without the picker, is ignored
+    rather than refused — a stale link should show the reader their own desk,
+    not an error.
+    """
+    raw = str(requested or "").strip()
+    if not raw.isdigit() or not getattr(user, "is_office_admin", False):
+        return None
+
+    from apps.accounts.models import Office
+
+    return Office.objects.filter(pk=raw).first()
+
+
+def apply_scope(records, scope, user, office=None):
     """Narrow a record queryset to one of the Tracking page's queues.
 
     Kept here rather than inline in the view so the queues have one definition,
     and so every office-based queue gets the same guard: a user with no office
     matches nothing, instead of `to_office_id=None` quietly matching no rows in
     a way that looks like an empty database.
+
+    `office` is which office the queues answer for, defaulting to the viewer's
+    own. The dashboard's picker passes the selected one so that "Incoming" reads
+    as that office's incoming rather than the administrator's, and the card's
+    link carries it so the page shows the queue the number counted.
     """
+    office_id = getattr(office, "pk", None) or user.office_id
+
     if scope == SCOPE_AWAITING:
         return awaiting_receipt(records, user)
     if scope == SCOPE_MINE:
@@ -874,13 +919,9 @@ def apply_scope(records, scope, user):
             status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True
         )
 
-    office_scoped = {
-        SCOPE_INBOX, SCOPE_CUSTODY, SCOPE_SENT,
-        SCOPE_INCOMING, SCOPE_OUTGOING, SCOPE_PENDING_RECEIPT, SCOPE_RECEIVED,
-    }
-    if scope not in office_scoped:
+    if scope not in OFFICE_SCOPED:
         return records
-    if not user.office_id:
+    if not office_id:
         return records.none()
 
     if scope == SCOPE_INCOMING:
@@ -888,7 +929,7 @@ def apply_scope(records, scope, user):
         # not the receipt has been confirmed — Pending receipt, Received and
         # In process together, which is what "our incoming" means to a clerk.
         return records.filter(
-            routing_steps__to_office_id=user.office_id,
+            routing_steps__to_office_id=office_id,
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_OUTGOING:
@@ -896,7 +937,7 @@ def apply_scope(records, scope, user):
         # older "sent" queue this does not drop a document the moment somebody
         # confirms it: what left the office is still what left the office.
         return records.filter(
-            routing_steps__from_office_id=user.office_id,
+            routing_steps__from_office_id=office_id,
             routing_steps__batch=F("current_batch"),
         ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_PENDING_RECEIPT:
@@ -914,8 +955,8 @@ def apply_scope(records, scope, user):
         # checks to_office_id independently, so the outgoing rows joining this
         # queue show no button.
         return records.filter(
-            Q(routing_steps__to_office_id=user.office_id)
-            | Q(routing_steps__from_office_id=user.office_id),
+            Q(routing_steps__to_office_id=office_id)
+            | Q(routing_steps__from_office_id=office_id),
             status=Status.PENDING_RECEIPT,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
@@ -923,20 +964,20 @@ def apply_scope(records, scope, user):
     if scope == SCOPE_RECEIVED:
         return records.filter(
             status__in=_HELD_STATUSES,
-            routing_steps__to_office_id=user.office_id,
+            routing_steps__to_office_id=office_id,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_INBOX:
         return records.filter(
-            routing_steps__to_office_id=user.office_id,
+            routing_steps__to_office_id=office_id,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_CUSTODY:
-        return records.filter(current_office_id=user.office_id)
+        return records.filter(current_office_id=office_id)
     return records.filter(
-        routing_steps__from_office_id=user.office_id,
+        routing_steps__from_office_id=office_id,
         routing_steps__received_at__isnull=True,
         routing_steps__batch=F("current_batch"),
     )

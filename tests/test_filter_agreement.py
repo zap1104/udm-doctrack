@@ -336,3 +336,69 @@ def test_the_status_of_a_slice_and_its_page_agree(client, users, traffic):
         row = next(r for r in response.context["breakdown"]["slices"] if r["key"] == key)
         listed = client.get(row["url"]).context["page_obj"].object_list
         assert all(record.status == status for record in listed), key
+
+
+# --- the office picker -----------------------------------------------------
+@pytest.mark.django_db
+def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traffic):
+    """The picker filtered the ring and the memo and left the cards alone.
+
+    They counted through `apply_scope`, which resolved against the viewer's own
+    office, so an administrator looking at MED was reading their own desk under
+    MED's heading — the same figures whichever office they named.
+    """
+    client.force_login(users["admin"])
+
+    own = client.get(DASHBOARD).context
+    picked = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context
+
+    assert picked["incoming_count"] != own["incoming_count"], "the picker did nothing"
+    # SUP's desk, as SUP sees it.
+    client.force_login(users["sup"])
+    theirs = client.get(DASHBOARD).context
+    assert picked["incoming_count"] == theirs["incoming_count"]
+    assert picked["outgoing_count"] == theirs["outgoing_count"]
+    assert picked["received_count"] == theirs["received_count"]
+
+
+@pytest.mark.django_db
+def test_a_picked_office_travels_to_the_page_the_card_opens(client, users, offices, traffic):
+    """Half a fix is worse than none here: counting the picked office while
+    linking to the viewer's would put the disagreement back."""
+    client.force_login(users["admin"])
+    response = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}")
+    body = response.content.decode()
+
+    assert f"?scope=incoming&office={offices['SUP'].pk}" in body
+    counted = response.context["incoming_count"]
+    listed = page_records(client, f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}")
+
+    assert counted == len(listed)
+
+
+@pytest.mark.django_db
+def test_an_ordinary_user_cannot_read_another_office_by_url(client, users, offices, traffic):
+    """`?office=` is gated by the same `is_office_admin` test as the picker
+    itself, so the queue param cannot become a way around it."""
+    client.force_login(users["med"])
+
+    own = page_records(client, f"{TRACKING}?scope=incoming")
+    forged = page_records(client, f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}")
+
+    assert forged == own, "the office param was honoured for a non-admin"
+
+
+@pytest.mark.django_db
+def test_no_office_picked_does_not_narrow_the_queues_that_have_no_office(
+    client, users, traffic
+):
+    """Overdue is not a per-office queue, so nothing should narrow it until
+    somebody asks. Falling back to the viewer's own office here took an
+    administrator's Overdue from 32 records to 3."""
+    client.force_login(users["admin"])
+
+    unpicked = page_records(client, f"{TRACKING}?scope=overdue")
+    everything = page_records(client, TRACKING)
+
+    assert unpicked <= everything
+    assert client.get(DASHBOARD).context["overdue_count"] == len(unpicked)

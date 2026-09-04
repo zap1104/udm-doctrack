@@ -376,6 +376,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # disagreeing with anything else on it — and with the printed memo.
         memo_context = self.get_memo_context()
         scope = memo_context["scope"]
+        # None means "the viewer's own office", which apply_scope resolves.
+        scope_office = scope["office"]
 
         # The cards count what their own page lists, so both start from the
         # queryset the Tracking page starts from and go through `apply_scope`.
@@ -385,19 +387,29 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         desk = tracking_services.active_for(user)
 
         def queue(scope):
-            return tracking_services.apply_scope(desk, scope, user).distinct()
+            # `scope["office"]` when the picker names one, so an administrator
+            # looking at MED is counting MED's queues rather than their own.
+            # The cards' links carry the same office, which is what keeps the
+            # number and the page it opens the same query.
+            return tracking_services.apply_scope(
+                desk, scope, user, office=scope_office
+            ).distinct()
 
         incoming = queue(tracking_services.SCOPE_INCOMING)
         received = queue(tracking_services.SCOPE_RECEIVED)
         outgoing = queue(tracking_services.SCOPE_OUTGOING)
-        overdue = tracking_services.overdue_for(user)
+        # Was overdue_for(user), which has no office in it at all — so the card
+        # read the same figure whichever office the picker named. This is the
+        # figure the ring and the memo already use, over the scoped queryset.
+        overdue_count = memo_context["overdue_summary"]["total"]
 
         # Needs action leads with what is waiting to be confirmed, which is the
         # part of Incoming somebody has to do something about today.
         pending = queue(tracking_services.SCOPE_PENDING_RECEIPT)
         attention = list(pending[:5])
         if len(attention) < 5:
-            attention += [record for record in overdue[: 5 - len(attention)] if record not in attention]
+            late = queue(tracking_services.SCOPE_OVERDUE)
+            attention += [record for record in late[: 5 - len(attention)] if record not in attention]
         if len(attention) < 5:
             attention += [record for record in received[: 5 - len(attention)] if record not in attention]
 
@@ -453,7 +465,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "incoming_new_today": incoming.filter(last_movement_at__date=today).count(),
                 "received_count": received.count(),
                 "outgoing_count": outgoing.count(),
-                "overdue_count": overdue.count(),
+                "overdue_count": overdue_count,
                 "attention_records": attention,
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,

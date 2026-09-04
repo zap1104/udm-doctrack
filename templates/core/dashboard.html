@@ -75,9 +75,15 @@
   </div>
 </div>
 
+{% comment %}
+  Each card carries the picked office into the page it opens. The cards count
+  one office's queues — the viewer's, or the one an administrator picked above —
+  and without the office on the link the page would answer for the viewer's while
+  the number answered for the picked one.
+{% endcomment %}
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
-    <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming">
+    <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
       <div class="value">{{ incoming_count }}</div>
       {% comment %}
@@ -90,7 +96,7 @@
     </a>
   </div>
   <div class="col-6 col-md-3">
-    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing">
+    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
@@ -105,7 +111,7 @@
       landing somewhere else makes this one card behave unlike its neighbours.
       The per-office breakdown is still a click away in Reports.
     {% endcomment %}
-    <a class="stat-card red" href="{% url 'tracking:list' %}?scope=overdue">
+    <a class="stat-card red" href="{% url 'tracking:list' %}?scope=overdue{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
@@ -123,7 +129,7 @@
     ?scope=received, which is what this card has always meant.
   {% endcomment %}
   <div class="col-6 col-md-3">
-    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=received">
+    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=received{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Held by your office</div>
       <div class="value">{{ received_count }}</div>
       <div class="hint">Received and not yet forwarded or completed</div>
