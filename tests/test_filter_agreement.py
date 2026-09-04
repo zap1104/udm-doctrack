@@ -978,3 +978,77 @@ def test_every_office_narrows_nothing_by_office(client, users, traffic, offices,
     one = page_records(client, f"{TRACKING}?{plain}&office={offices['SUP'].pk}")
 
     assert one <= everywhere
+
+
+# --- the sweep: every filter, every page -----------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", ["abc", "__all__", "<script>", "-1", "99999"])
+def test_the_user_list_office_filter_cannot_crash(client, users, value):
+    """`office_id=<anything>` went straight to the ORM, so a stale link or a
+    typo took the page down with "Field 'id' expected a number". Every other
+    page validated; this one had been missed."""
+    client.force_login(users["admin"])
+    response = client.get(f"/accounts/users/?office={value}")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_an_ordinary_user_can_still_use_the_repository_folders(client, users, offices):
+    """The regression this sweep was for.
+
+    `?office=` means two different things. On a page of queues it is "view as
+    that office", an administrator's control. On the Repository it is a content
+    filter over documents `visible_to` has already cleared, and it is that
+    page's primary navigation — the smart folders are office links. Gating it
+    there left every folder rendered and none of them filtering, for everybody
+    who was not an administrator.
+    """
+    from apps.documents.models import Document, Source
+
+    for office in (offices["HR"], offices["MED"]):
+        Document.objects.create(
+            title=f"Filed by {office.code}", office=office, year=2026,
+            source=Source.UPLOAD, uploaded_by=users["admin"], ocr_status="SKIPPED",
+        )
+
+    client.force_login(users["med"])
+    assert users["med"].is_office_admin is False
+
+    everything = client.get("/documents/").context["total"]
+    narrowed = client.get(f"/documents/?office={offices['HR'].pk}").context
+
+    assert narrowed["selected_office"] == offices["HR"]
+    assert narrowed["total"] < everything
+
+
+@pytest.mark.django_db
+def test_the_repository_still_reports_an_office_it_cannot_find(client, users):
+    """Ungating it must not go back to failing open."""
+    client.force_login(users["med"])
+    body = client.get("/documents/?office=99999").content.decode().lower()
+
+    assert "not recognised" in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", ["office=99999", "office=abc", "overdue=maybe", "status=NOPE"])
+def test_search_says_what_it_refused_too(client, users, traffic, query):
+    """It shares every filter with the Tracking page and reported none of them,
+    so the same bad value warned there and passed silently here — the reader
+    believing a narrowed page while looking at all of it."""
+    client.force_login(users["admin"])
+    body = client.get(f"/search/?mode=tracking&{query}").content.decode().lower()
+
+    assert "could not apply" in body or "ignored a filter" in body
+
+
+@pytest.mark.django_db
+def test_an_unknown_notification_kind_is_reported(client, users):
+    """Silently ignoring it showed every notification under a heading naming
+    one kind, which reads as "there are this many of these"."""
+    client.force_login(users["admin"])
+    response = client.get("/notifications/?kind=NOPE")
+
+    assert response.status_code == 200
+    assert "not recognised" in response.content.decode().lower()

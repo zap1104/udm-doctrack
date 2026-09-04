@@ -110,11 +110,25 @@ def _office_by_pk_or_code(raw: str) -> Office | None:
     return Office.active.filter(code__iexact=raw).first()
 
 
-def resolve(request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True) -> ResolvedFilters:
+def resolve(
+    request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True, gate_office=True
+) -> ResolvedFilters:
     """Read every filter this request carries, once.
 
     `allow_office` is for a page with no office control at all. `statuses` is
     the vocabulary that page speaks — see the two sets above.
+
+    `gate_office` is what separates the two things `?office=` is asked to do.
+    On a page of *queues* it is "view this page as that office", which is an
+    administrator's control, because a queue answers for an office and reading
+    another office's desk is not an ordinary user's business. On the Repository
+    it is a content filter — "documents owned by that office" — over records
+    `visible_to` has already cleared the reader to see, and it is that page's
+    primary navigation: the smart folders are office links.
+
+    Gating it there broke them. Every folder still rendered and none of them
+    filtered, for every user who was not an administrator, which is most of
+    them.
     """
     params = request.GET
     user = request.user
@@ -128,7 +142,12 @@ def resolve(request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True) -> R
     as_office = None
     all_offices = False
     raw_office = (params.get("office") or "").strip()
-    if raw_office and allow_office:
+    if raw_office and allow_office and not gate_office:
+        # Open to everybody: `visible_to` is the bound, not the picker.
+        as_office = _office_by_pk_or_code(raw_office)
+        if as_office is None:
+            invalid.append("office")
+    elif raw_office and allow_office:
         picked = scope_office(user, raw_office)
         if picked is ALL_OFFICES:
             all_offices = True

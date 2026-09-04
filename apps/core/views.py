@@ -1262,6 +1262,13 @@ class NotificationListView(AppLoginRequiredMixin, View):
         active_kind = request.GET.get("kind", "")
         valid_kinds = {value for value, _label in Notification.Kind.choices}
         if active_kind not in valid_kinds:
+            # Dropped *and* said. Silently ignoring it showed every notification
+            # under a heading naming one kind, which reads as "there are this
+            # many of these" — the same fail-open the other pages had.
+            if active_kind:
+                messages.warning(
+                    request, "Ignored a notification filter that was not recognised."
+                )
             active_kind = ""
         if active_kind:
             notification_query = notification_query.filter(kind=active_kind)

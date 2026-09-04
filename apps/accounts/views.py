@@ -196,7 +196,17 @@ class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         users = self.administrable_users()
         query = self.request.GET.get("q", "").strip()
-        office = self.request.GET.get("office", "")
+        # Validated, not passed through. `office_id=<anything>` handed a
+        # non-numeric value straight to the ORM, so `?office=abc` — a stale
+        # link, a typo, or a probe — took the page down with "Field 'id'
+        # expected a number". A filter that cannot be honoured is dropped and
+        # said, never crashed on.
+        raw_office = self.request.GET.get("office", "").strip()
+        office = raw_office if raw_office.isdigit() else ""
+        if raw_office and not office:
+            messages.warning(
+                self.request, "Ignored an office filter that was not recognised."
+            )
         if query:
             users = users.filter(
                 Q(username__icontains=query) | Q(first_name__icontains=query) | Q(last_name__icontains=query)

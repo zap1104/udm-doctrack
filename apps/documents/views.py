@@ -83,7 +83,11 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # the smart folders have been emitting them and people have bookmarked
         # those links; what has changed is that a value matching nothing is
         # reported instead of ignored.
-        resolved = core_filters.resolve(request, allow_office=True)
+        # Ungated: on this page `?office=` is a content filter over documents
+        # the reader may already see, and the smart folders above the list are
+        # office links. Gated, every folder rendered and none of them filtered
+        # for anybody who was not an administrator.
+        resolved = core_filters.resolve(request, allow_office=True, gate_office=False)
         selected_office = resolved.as_office
         if selected_office:
             documents = documents.filter(office=selected_office)

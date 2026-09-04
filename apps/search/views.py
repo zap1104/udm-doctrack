@@ -101,6 +101,16 @@ class SearchView(AppLoginRequiredMixin, View):
 
         records = tracking_services.active_for(request.user)
         resolved = core_filters.resolve(request)
+        # Said out loud here as well as on the Tracking page. This branch shares
+        # every filter with that one and reported none of them, so the same bad
+        # office id warned there and passed silently here — the reader believing
+        # a narrowed page while looking at all of it.
+        if resolved.invalid:
+            messages.warning(
+                request,
+                "Could not apply: " + ", ".join(resolved.invalid)
+                + ". The value was not recognised, or your account may not filter by office.",
+            )
         records = tracking_services.filter_records(
             records,
             query=data.get("q"),
