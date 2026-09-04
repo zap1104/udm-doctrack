@@ -927,3 +927,54 @@ def test_the_deadline_row_is_gone_and_the_pill_still_filters(client, users, dead
     on_time = page_records(client, f"{TRACKING}?overdue=no")
     assert late and on_time, "both still filter, control or no control"
     assert not (late & on_time)
+
+
+#: Every query string the picker can produce, not only the office-scoped ones.
+#: The first release of `office=all` was parametrised over the office-scoped
+#: queues alone, so the branch that narrows *everything else* by the chosen
+#: office was never exercised with it — and that branch put the sentinel into an
+#: `originating_office=` lookup, so the page died with "Field 'id' expected a
+#: number but got '__all__'" for a bare `?office=all`.
+EVERY_OFFICE_QUERIES = [
+    "office=all",
+    "scope=incoming&office=all",
+    "scope=outgoing&office=all",
+    "scope=received&office=all",
+    "scope=pending-receipt&office=all",
+    "scope=in-process&office=all",
+    "scope=pending-upload&office=all",
+    "scope=overdue&office=all",
+    "scope=awaiting&office=all",
+    "scope=mine&office=all",
+    "status=RECEIVED&office=all",
+    "overdue=yes&office=all",
+    "owner=mine&office=all",
+]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", EVERY_OFFICE_QUERIES)
+@pytest.mark.parametrize("path", [TRACKING, "/search/?mode=tracking&"])
+def test_every_office_loads_with_any_other_filter(client, users, traffic, path, query):
+    """The sentinel is truthy and is not an office, so a variable holding it and
+    an Office by turns will reach a query that wants a primary key. It is
+    confined to `apply_scope`; every other branch takes a real Office or None."""
+    client.force_login(users["admin"])
+    url = f"{path}{query}" if path.endswith("&") else f"{path}?{query}"
+
+    assert client.get(url).status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", EVERY_OFFICE_QUERIES)
+def test_every_office_narrows_nothing_by_office(client, users, traffic, offices, query):
+    """"Every office" is the absence of an office filter, not a filter naming
+    one — so it must return at least what the same query returns for any single
+    office, on the queues the office does not scope as well as the ones it does.
+    """
+    client.force_login(users["admin"])
+    plain = query.replace("&office=all", "").replace("office=all", "")
+    everywhere = page_records(client, f"{TRACKING}?{query}")
+    one = page_records(client, f"{TRACKING}?{plain}&office={offices['SUP'].pk}")
+
+    assert one <= everywhere

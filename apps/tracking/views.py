@@ -103,12 +103,22 @@ class RecordListView(AppLoginRequiredMixin, View):
         # The sentinel, not an Office, when a system administrator asked for
         # every office — apply_scope drops the office term rather than
         # falling back to the viewer's own.
-        as_office = services.ALL_OFFICES if resolved.all_offices else resolved.as_office
-        if as_office and scope not in services.OFFICE_SCOPED:
+        # Two variables because they are two jobs, and one name doing both is
+        # what broke: `queue_office` may be the ALL_OFFICES sentinel, which only
+        # apply_scope understands, while `narrow_office` is always a real Office
+        # or None. The sentinel is truthy and is not an office, so a single
+        # variable sent "__all__" into an `originating_office=` lookup and the
+        # page died with "Field 'id' expected a number".
+        narrow_office = resolved.as_office
+        queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
+
+        # "Every office" narrows nothing: it is the absence of an office filter,
+        # not a filter naming one.
+        if narrow_office and scope not in services.OFFICE_SCOPED:
             records = records.filter(
-                Q(originating_office=as_office) | Q(current_office=as_office)
+                Q(originating_office=narrow_office) | Q(current_office=narrow_office)
             )
-        records = services.apply_scope(records, scope, request.user, office=as_office)
+        records = services.apply_scope(records, scope, request.user, office=queue_office)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while
         # on Overdue means overdue records in your office, not one or the other.
@@ -146,7 +156,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         services.annotate_receiving_offices(page_records)
         # The same office the queue was built for. Tagged from the viewer's
         # instead, every row of another office's Incoming read "Outgoing".
-        services.annotate_direction(page_records, request.user, office=as_office)
+        services.annotate_direction(page_records, request.user, office=narrow_office)
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the

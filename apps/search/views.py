@@ -116,15 +116,18 @@ class SearchView(AppLoginRequiredMixin, View):
         # filter_records and apply_scope and still disagreed — 3 records against
         # 0 for the same query string. The drift was never in the queues; it was
         # in who resolved the office.
-        as_office = (
-            tracking_services.ALL_OFFICES if resolved.all_offices else resolved.as_office
+        # Same split as RecordListView: only apply_scope understands the
+        # ALL_OFFICES sentinel, and it is truthy without being an office.
+        narrow_office = resolved.as_office
+        queue_office = (
+            tracking_services.ALL_OFFICES if resolved.all_offices else narrow_office
         )
-        if as_office and resolved.scope not in tracking_services.OFFICE_SCOPED:
+        if narrow_office and resolved.scope not in tracking_services.OFFICE_SCOPED:
             records = records.filter(
-                Q(originating_office=as_office) | Q(current_office=as_office)
+                Q(originating_office=narrow_office) | Q(current_office=narrow_office)
             )
         records = tracking_services.apply_scope(
-            records, resolved.scope, request.user, office=as_office
+            records, resolved.scope, request.user, office=queue_office
         )
         if data.get("owner"):
             records = tracking_services.apply_scope(records, data["owner"], request.user)
@@ -142,7 +145,7 @@ class SearchView(AppLoginRequiredMixin, View):
         # This page listed tracking records without either annotator, so its
         # rows carried no direction and no receiving offices while the Tracking
         # page's did. Same rows, same columns, so the same one query each.
-        tracking_services.annotate_direction(page_records, request.user, office=as_office)
+        tracking_services.annotate_direction(page_records, request.user, office=narrow_office)
         tracking_services.annotate_receiving_offices(page_records)
 
         # Searched only once something was asked for. An empty box should offer
