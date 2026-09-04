@@ -1024,43 +1024,49 @@ def test_the_desk_comes_before_the_memo_dialog(client, users, awaiting_receipt):
 
 # ------------------------------------------------------------ quick actions
 @pytest.mark.django_db
-def test_a_document_can_be_started_from_the_dashboard(client, users):
-    """Neither view was reachable from here or from the sidebar: somebody
-    landing on the dashboard had to go out to a list page to find the button."""
+def test_the_dashboard_no_longer_offers_the_two_start_work_buttons(client, users):
+    """Removed on request.
+
+    They were added so somebody landing on the dashboard could start a document
+    without going out to a list page first. Taking them off reverses that: the
+    dashboard now links to neither view for anybody, including a user who is
+    allowed to use them, and starting work is reached from the page that owns
+    the act. That is the trade the removal makes, not an oversight.
+    """
     from django.urls import reverse
 
     client.force_login(users["med"])
-    body = client.get(DASHBOARD).content.decode()
+    response = client.get(DASHBOARD)
+    body = response.content.decode()
 
-    assert reverse("tracking:create") in body
-    assert reverse("documents:upload") in body
+    assert response.context["can_start_work"] is True, "still permitted, just not offered"
+    assert reverse("tracking:create") not in body
+    assert reverse("documents:upload") not in body
+    assert "New Tracking Slip" not in body
+    assert "Upload to Repository" not in body
 
 
-@pytest.mark.django_db
-def test_the_new_record_button_uses_the_same_words_as_the_tracking_list(client, users):
-    """One act, one label. Two names for the same button is two buttons as far
-    as somebody learning the system is concerned."""
-    client.force_login(users["med"])
-    body = client.get(DASHBOARD).content.decode()
+def test_the_tracking_list_keeps_its_own_create_button():
+    """The removal was from the dashboard. The list page's button is that
+    page's own primary action and predates the dashboard ever offering one."""
     listing = pathlib.Path("templates/tracking/list.html").read_text(encoding="utf-8")
 
-    assert "+ New Tracking Slip" in body
     assert "+ New Tracking Slip" in listing
 
 
 @pytest.mark.django_db
-def test_a_viewer_is_not_offered_buttons_that_would_turn_them_away(client, users):
-    """Both target views refuse a viewer, so offering the button promises a page
-    that answers with a redirect and a warning."""
-    from django.urls import reverse
+def test_the_gate_still_reads_false_for_a_viewer(client, users):
+    """Asserting the flag, not the markup.
 
+    This used to check that a viewer was offered neither button, because both
+    target views refuse them and a button promising a redirect is worse than no
+    button. Now that nobody is offered them the markup half of that would pass
+    whatever the gate did, so only the gate is worth asserting — it is what
+    those buttons would be restored behind.
+    """
     client.force_login(users["viewer"])
-    response = client.get(DASHBOARD)
-    body = response.content.decode()
 
-    assert response.context["can_start_work"] is False
-    assert reverse("tracking:create") not in body
-    assert reverse("documents:upload") not in body
+    assert client.get(DASHBOARD).context["can_start_work"] is False
 
 
 @pytest.mark.django_db
