@@ -1534,7 +1534,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 @media print {
   @page { size:A4 portrait; margin:12mm; }
   /* Segment fills and swatches are background paint; without this they print blank. */
-  .breakdown-seg,.breakdown-swatch,.breakdown-bar { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .breakdown-seg,.breakdown-swatch,.breakdown-bar,.desk-block-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .breakdown-item { break-inside:avoid; }
 }
 
@@ -1557,32 +1557,36 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    The separation is carried by the titles rather than by a heavier rule. A
    stronger line would divide the card more loudly without saying which side to
    read first, which is the only thing the reader actually needs to know here. */
-.desk-block--secondary { border-top:1px solid var(--udm-line); margin-top:8px; }
+.desk-block--secondary { margin-top:10px; }
 /* Sits at the same weight as the card heading it lives under rather than at
    browser-default h3 size, which next to a 16px h2 would read as the larger of
    the two. Uppercase and tracked so it reads as a divider, not a second title
    competing with the h2 above it. */
 .desk-block-title {
-  margin:0; padding:14px 20px 0;
-  color:var(--udm-muted); font-size:11.5px; font-weight:700;
+  margin:0; padding:9px 20px;
+  font-size:11.5px; font-weight:700;
   letter-spacing:.11em; text-transform:uppercase;
 }
-/* "Needs action" is the half somebody acts on, so it takes full ink and a gold
-   rule beside it — the same mark the page's section eyebrows use, so this reads
-   as the app's existing "here is a section" language rather than a new signal.
-   Gold and not red: red is overdue, which is a property of individual rows here
-   and not of the block, and some of these rows are merely waiting. */
+/* A colour each, as a band rather than as coloured lettering: a band is picked
+   up before anything is read, which is the point — these two tables look
+   identical from a distance and only one of them is work.
+
+   Both use the soft-background / ink-text pairing the status pills already use
+   (.pill-pending, .pill-process), so the card introduces no colour the page has
+   not already taught. The darker ink of each pair, not the plain one: gold-ink
+   on gold-soft is 4.34:1, which misses AA for text this size, and these run at
+   11.5px. The dark variants clear 7:1 in both themes.
+
+   Gold for what needs doing and teal for what has already happened — the same
+   two hues those states wear on the pills in these very rows. Not red: red is
+   overdue, which is a property of individual rows here and not of the block,
+   and some of the rows waiting for action are not late at all. */
 .desk-block--primary .desk-block-title {
-  display:flex; align-items:center; gap:8px;
-  color:var(--udm-navy-text);
+  background:var(--udm-gold-soft); color:var(--udm-gold-ink-dark);
 }
-.desk-block--primary .desk-block-title::before {
-  content:""; flex:0 0 3px; width:3px; height:12px;
-  border-radius:2px; background:var(--udm-gold);
+.desk-block--secondary .desk-block-title {
+  background:var(--udm-teal-soft); color:var(--udm-teal-ink-dark);
 }
-/* Left muted and unmarked on purpose. It is a record of what already happened,
-   so it recedes; making both stand out would put them back where they started. */
-.desk-block--secondary .desk-block-title { padding-top:16px; }
 /* The tables carry their own top padding through .card-udm-body.p-0, so the
    title would otherwise sit hard against the first row. */
 .desk-block-title + .card-udm-body { padding-top:10px; }

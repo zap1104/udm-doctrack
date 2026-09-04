@@ -1164,25 +1164,41 @@ def test_the_two_desk_blocks_are_told_apart(client, users, awaiting_receipt):
     assert "desk-block desk-block--secondary" in body
 
 
-def test_only_the_action_half_is_marked_out():
-    """The distinction is carried by the titles, not by a heavier rule: a louder
-    line divides the card without saying which side to read first.
+def test_the_two_blocks_carry_different_colours():
+    """A band each, not two greys. The card is two identical-looking tables and
+    only one of them is work, so the difference has to survive being glanced at.
 
-    Gold and not red — red is overdue, which is a property of individual rows
-    and not of the block, and some of these rows are only waiting.
+    Asserted as the pairing rather than the exact hex: both reuse the
+    soft-background / ink-text tokens the status pills already use, so the card
+    introduces no colour the page has not already taught.
+
+    Not red — red is overdue here, a property of individual rows and not of the
+    block, and some rows waiting for action are not late at all.
     """
     import pathlib as _pathlib
+    import re as _re
 
     css = _pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
     block = css[css.index("/* ------------------------------------------------------------ Action Centre */"):
                 css.index("/* --------------------------------------------------------- scope picker */")]
 
-    assert ".desk-block--primary .desk-block-title::before" in block, "no mark on the action half"
-    assert "var(--udm-gold)" in block
-    assert "var(--udm-red)" not in block
-    # The secondary title keeps the muted default rather than gaining a mark of
-    # its own; two emphasised headings are the state this fixed.
-    assert ".desk-block--secondary .desk-block-title::before" not in block
+    def rule(selector):
+        m = _re.search(_re.escape(selector) + r"\s*\{([^}]*)\}", block)
+        assert m, f"{selector} is gone — this guard needs rewriting"
+        return m.group(1)
+
+    primary = rule(".desk-block--primary .desk-block-title")
+    secondary = rule(".desk-block--secondary .desk-block-title")
+
+    assert "var(--udm-gold-soft)" in primary and "var(--udm-gold-ink-dark)" in primary
+    assert "var(--udm-teal-soft)" in secondary and "var(--udm-teal-ink-dark)" in secondary
+    assert primary != secondary, "the two blocks would look identical again"
+    assert "var(--udm-red" not in block
+
+    # The plain inks miss AA at this size on their own tint — gold-ink on
+    # gold-soft is 4.34:1 and the titles run at 11.5px.
+    assert "var(--udm-gold-ink)" not in primary
+    assert "var(--udm-teal-ink)" not in secondary
 
 
 @pytest.mark.django_db
