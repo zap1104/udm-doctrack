@@ -42,6 +42,40 @@ def idle_seconds_for(user) -> int:
     return settings.SESSION_COOKIE_AGE
 
 
+def configured_idle_windows() -> set[int]:
+    """Every idle window this deployment actually enforces."""
+    return {
+        settings.SESSION_COOKIE_AGE,
+        getattr(settings, "SESSION_COOKIE_AGE_ADMIN", settings.SESSION_COOKIE_AGE),
+    }
+
+
+def idle_seconds_for_request(request) -> int:
+    """The window to *quote* on this page, which is not always the reader's own.
+
+    The sign-in page is the exception, and it is the whole reason this exists:
+    "you were signed out after N minutes" is rendered once the session is gone,
+    so the request is anonymous and `idle_seconds_for` answers with the ordinary
+    30 minutes no matter who was actually signed out. An administrator idled out
+    at 15 was told 30 — a message about a security control, stating the wrong
+    figure, on the one screen where it cannot be checked.
+
+    The browser knows the right number: it counted down with it. So the
+    redirect carries it back, and it is honoured only when it names a window
+    this deployment really enforces. That keeps a value from the query string
+    from putting an arbitrary number on the page — the worst a crafted link can
+    do is quote the other real window.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return idle_seconds_for(user)
+
+    raw = (request.GET.get("timeout") or "").strip()
+    if raw.isdigit() and int(raw) in configured_idle_windows():
+        return int(raw)
+    return idle_seconds_for(None)
+
+
 class RoleIdleTimeoutMiddleware:
     """Gives administrators a shorter idle window than ordinary users.
 

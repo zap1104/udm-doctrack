@@ -635,7 +635,12 @@
       if (signedOut) return;
       signedOut = true;
       var here = window.location.pathname + window.location.search;
-      window.location.href = loginUrl + "?timeout=1&next=" + encodeURIComponent(here);
+      /* The window this page counted down with, not a bare flag. Once the
+         session is gone the sign-in page has no way to tell whose it was, so
+         an administrator idled out at 15 minutes was told 30. The server
+         honours this only if it names a window it actually enforces. */
+      window.location.href =
+        loginUrl + "?timeout=" + idleSeconds + "&next=" + encodeURIComponent(here);
     }
 
     /* "Sign out now", on the other hand, has to actually sign out. Sending the
