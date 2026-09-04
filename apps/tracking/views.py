@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views.generic import View
 
 from apps.accounts.models import Office
+from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.utils import log_action, qr_svg
@@ -112,6 +113,16 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "Ignored a filter that was not recognised: "
                 + ", ".join(sorted(form.errors)) + ". Showing the rest.",
             )
+        # A filter that fails open is worse than one that errors: the reader
+        # believes the page is narrowed to one office and it is the whole
+        # university. `resolve` records what it refused rather than dropping it.
+        resolved = core_filters.resolve(request)
+        if resolved.invalid:
+            messages.warning(
+                request,
+                "Could not apply: " + ", ".join(resolved.invalid)
+                + ". The value was not recognised, or your account may not filter by office.",
+            )
 
         records = records.distinct().order_by("-last_movement_at")
         page = Paginator(records, services.PAGE_SIZE).get_page(request.GET.get("page"))
@@ -120,7 +131,9 @@ class RecordListView(AppLoginRequiredMixin, View):
         page_records = list(page.object_list)
         services.annotate_can_confirm(page_records, request.user)
         services.annotate_receiving_offices(page_records)
-        services.annotate_direction(page_records, request.user)
+        # The same office the queue was built for. Tagged from the viewer's
+        # instead, every row of another office's Incoming read "Outgoing".
+        services.annotate_direction(page_records, request.user, office=as_office)
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the
@@ -146,6 +159,10 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "form": form,
                 "page_obj": page,
                 "records": page_records,
+                # Why an empty table is empty, when it can never be anything
+                # else. Without it the reader concludes the filter is broken.
+                "impossible_reason": core_filters.impossible_reason(resolved),
+                "resolved": resolved,
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses
                 # them on its own; this only stops offering a dead end.
@@ -376,6 +393,25 @@ class RecordDetailView(AppLoginRequiredMixin, View):
         )
 
 
+#: Where the bulk-receipt form may send somebody afterwards. A list, not a free
+#: `next`: an unchecked one is an open redirect, and this form is posted from a
+#: page that already knows every destination it has.
+BULK_RECEIPT_RETURNS = {"dashboard": "core:dashboard", "tracking": "tracking:list"}
+
+
+def _bulk_receipt_return(request):
+    """Back where the form was submitted from, defaulting to Tracking.
+
+    It always went to the Tracking list, on success *and* on failure, so a
+    validation error from the dashboard's panel was reported on a page the user
+    had never submitted from and could not see their mistake on.
+    """
+    target = BULK_RECEIPT_RETURNS.get(request.POST.get("next", ""), "tracking:list")
+    if target == "core:dashboard":
+        return reverse(target)
+    return f"{reverse(target)}?scope=incoming"
+
+
 class BulkConfirmReceiptView(OfficeAssignedMixin, View):
     def post(self, request):
         available = services.inbox_for(request.user).with_related().distinct()
@@ -383,7 +419,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
         if not form.is_valid():
             message = next(iter(form.errors.values()))[0] if form.errors else "Choose documents to receive."
             messages.error(request, message)
-            return redirect(f"{reverse('tracking:list')}?scope=incoming")
+            return redirect(_bulk_receipt_return(request))
         try:
             steps = services.bulk_confirm_receipts(
                 form.cleaned_data["record_ids"], user=request.user, note=form.cleaned_data.get("note", "")
@@ -395,7 +431,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
             request,
             f"Receipt recorded for {len(steps)} selected document{'s' if len(steps) != 1 else ''}.",
         )
-        return redirect(f"{reverse('tracking:list')}?scope=incoming")
+        return redirect(_bulk_receipt_return(request))
 
 
 class ConfirmReceiptView(OfficeAssignedMixin, View):

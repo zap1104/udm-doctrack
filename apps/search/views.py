@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import View
@@ -104,7 +105,19 @@ class SearchView(AppLoginRequiredMixin, View):
             status=data.get("status"),
             offices=data.get("offices"),
         )
-        records = tracking_services.apply_scope(records, data.get("scope"), request.user)
+        # The same office resolution the Tracking page uses. Without it this
+        # page fell back to the viewer's own office, so the two shared
+        # filter_records and apply_scope and still disagreed — 3 records against
+        # 0 for the same query string. The drift was never in the queues; it was
+        # in who resolved the office.
+        as_office = tracking_services.scope_office(request.user, request.GET.get("office"))
+        if as_office and data.get("scope") not in tracking_services.OFFICE_SCOPED:
+            records = records.filter(
+                Q(originating_office=as_office) | Q(current_office=as_office)
+            )
+        records = tracking_services.apply_scope(
+            records, data.get("scope"), request.user, office=as_office
+        )
         if data.get("owner"):
             records = tracking_services.apply_scope(records, data["owner"], request.user)
 
@@ -121,7 +134,7 @@ class SearchView(AppLoginRequiredMixin, View):
         # This page listed tracking records without either annotator, so its
         # rows carried no direction and no receiving offices while the Tracking
         # page's did. Same rows, same columns, so the same one query each.
-        tracking_services.annotate_direction(page_records, request.user)
+        tracking_services.annotate_direction(page_records, request.user, office=as_office)
         tracking_services.annotate_receiving_offices(page_records)
 
         # Searched only once something was asked for. An empty box should offer

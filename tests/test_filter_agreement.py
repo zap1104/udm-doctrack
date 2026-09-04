@@ -24,6 +24,8 @@ count-only assertion would have called that agreement.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from apps.tracking.models import Status, TrackingRecord
@@ -402,3 +404,175 @@ def test_no_office_picked_does_not_narrow_the_queues_that_have_no_office(
 
     assert unpicked <= everything
     assert client.get(DASHBOARD).context["overdue_count"] == len(unpicked)
+
+
+# --- whole-system integration ----------------------------------------------
+QUERYSTRINGS = [
+    "", "scope=incoming", "scope=outgoing", "scope=pending-receipt",
+    "scope=received", "scope=overdue", "scope=awaiting", "scope=pending-upload",
+    "status=RECEIVED", "status=IN_PROCESS", "owner=mine", "scope=incoming&owner=",
+]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", QUERYSTRINGS)
+def test_tracking_and_search_answer_identically(client, users, traffic, query):
+    """Two pages, one question. They shared `filter_records` and `apply_scope`
+    and still disagreed — 3 records against 0 — because the *office resolution*
+    was never shared. Looped so a filter added later is covered the same day."""
+    client.force_login(users["sup"])
+
+    listed = {r.pk for r in client.get(f"{TRACKING}?{query}").context["page_obj"].object_list}
+    searched = {
+        r.pk for r in client.get(f"/search/?mode=tracking&{query}").context["page_obj"].object_list
+    }
+
+    assert listed == searched
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", ["", "scope=incoming", "scope=overdue", "scope=awaiting"])
+def test_the_two_pages_agree_under_a_picked_office(client, users, offices, traffic, query):
+    """Including the office, which search dropped entirely."""
+    client.force_login(users["admin"])
+    full = f"{query}&office={offices['SUP'].pk}"
+
+    listed = {r.pk for r in client.get(f"{TRACKING}?{full}").context["page_obj"].object_list}
+    searched = {
+        r.pk for r in client.get(f"/search/?mode=tracking&{full}").context["page_obj"].object_list
+    }
+
+    assert listed == searched
+
+
+@pytest.mark.django_db
+def test_every_dashboard_link_agrees_under_a_picked_office(client, users, offices, traffic):
+    """The stat cards learned to carry the office and the ring slices did not,
+    so a slice counted one office and opened another's page."""
+    client.force_login(users["admin"])
+
+    for query in ("", f"?office={offices['SUP'].pk}"):
+        response = client.get(DASHBOARD + query)
+        body = response.content.decode()
+
+        for key, scope in (("incoming_count", "incoming"), ("outgoing_count", "outgoing"),
+                           ("received_count", "received"), ("overdue_count", "overdue")):
+            href = re.search(rf'href="(/tracking/\?scope={scope}[^"]*)"', body).group(1)
+            assert response.context[key] == len(page_records(client, href)), (scope, query)
+
+        for row in response.context["breakdown"]["slices"]:
+            if row["url"].startswith(TRACKING):
+                assert row["total"] == len(page_records(client, row["url"])), (row["label"], query)
+
+
+@pytest.mark.django_db
+def test_the_direction_tag_follows_the_picked_office(client, users, offices, traffic):
+    """Every row of a page headed another office's Incoming used to read
+    Outgoing: the queue was built for them, the tag for the viewer."""
+    client.force_login(users["admin"])
+    listing = client.get(
+        f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}"
+    ).context["page_obj"].object_list
+
+    assert listing, "needs rows to be worth asserting"
+    assert {record.direction for record in listing} == {"incoming"}
+
+
+@pytest.mark.django_db
+def test_the_ring_total_is_the_tracking_page_minus_drafts(client, users, traffic, memo_type):
+    """DRAFT is in ACTIVE_STATUSES and the page lists drafts, so the ring ran
+    one short while its docstring claimed they were excluded. They are excluded
+    now, deliberately: a draft is visible only to its author, so a Draft slice
+    would make the ring mean something different for every viewer."""
+    create_draft_record(
+        user=users["sup"], subject="Unsent", instructions="x", document_type=memo_type,
+    )
+    client.force_login(users["sup"])
+
+    ring = client.get(DASHBOARD).context["breakdown"]["tracking_total"]
+    page = len(page_records(client, TRACKING))
+    drafts = len(page_records(client, f"{TRACKING}?status={Status.DRAFT}"))
+
+    assert drafts == 1, "the fixture should have made one"
+    assert ring == page - drafts
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", ["/tracking/", "/documents/", "/reports/"])
+def test_no_office_filter_fails_open(client, users, path):
+    """A filter that fails open is worse than one that errors: the reader
+    believes the page is narrowed to one office and it is the whole
+    university. An unresolvable value has to be *said*, not dropped."""
+    client.force_login(users["admin"])
+    response = client.get(f"{path}?office=99999")
+    body = response.content.decode().lower()
+
+    assert response.status_code == 200
+    assert "not recognised" in body or "could not apply" in body, path
+
+
+@pytest.mark.django_db
+def test_the_two_office_filters_are_different_questions(client, users, offices, traffic):
+    """`office` is "view as that office"; `offices` is "raised by that office".
+    Both legitimate, and nothing said so — same office, same page, one letter
+    apart, different answers. Asserted so a later tidy-up cannot merge them."""
+    client.force_login(users["admin"])
+    # SUP, not MED: MED raised everything it touches in this fixture, so the two
+    # questions happen to coincide there. `traffic["received"]` was raised by
+    # MED and now sits at SUP, which is exactly the case that separates them.
+    sup = offices["SUP"].pk
+
+    as_office = page_records(client, f"{TRACKING}?office={sup}")
+    raised_by = page_records(client, f"{TRACKING}?offices={sup}")
+
+    assert as_office != raised_by
+    assert traffic["received"].pk in as_office, "sitting at SUP"
+    assert traffic["received"].pk not in raised_by, "but raised by MED"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("query", "phrase"),
+    [
+        ("scope=incoming&owner=mine", "created by another office"),
+        ("scope=received&owner=mine", "created by another office"),
+        (f"scope=outgoing&status={Status.DRAFT}", "has not been sent"),
+    ],
+)
+def test_an_impossible_combination_says_why(client, users, traffic, query, phrase):
+    """Empty by construction, not empty today. Without a reason the reader
+    concludes the filter is broken and stops trusting the others."""
+    client.force_login(users["sup"])
+    response = client.get(f"{TRACKING}?{query}")
+
+    assert response.context["page_obj"].paginator.count == 0
+    assert phrase in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_queue_pill_keeps_the_filters_already_applied(client, users, traffic):
+    """They were bare `?scope=` links, so a reader with a filter set watched
+    the count drop and concluded the queue had narrowed their own files, when
+    it had replaced their filter with everybody's."""
+    client.force_login(users["sup"])
+    body = client.get(f"{TRACKING}?owner=mine&status={Status.RECEIVED}").content.decode()
+
+    pill = re.search(r'href="([^"]*scope=incoming[^"]*)"', body).group(1)
+
+    assert "owner=mine" in pill
+    assert f"status={Status.RECEIVED}" in pill
+
+
+@pytest.mark.django_db
+def test_the_action_centre_is_the_queue_its_button_opens(client, users, traffic):
+    """It was pending-receipt padded with overdue and then received — three
+    queues behind one link, so the panel showed five rows and the page opened
+    five, two of them different."""
+    client.force_login(users["sup"])
+    response = client.get(DASHBOARD)
+    panel = {record.pk for record in response.context["attention_records"]}
+    body = response.content.decode()
+
+    href = re.search(r'href="(/tracking/\?scope=pending-receipt[^"]*)"', body).group(1)
+
+    assert panel <= page_records(client, href)

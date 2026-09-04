@@ -215,7 +215,8 @@
             </div>
           {% endif %}
         </div>
-        <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=incoming">
+        <a class="btn btn-dashboard-action btn-sm"
+           href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
           <span>Open Tracking</span>
           <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -242,6 +243,8 @@
       {% endcomment %}
       {% if can_bulk_receive %}
         <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
+          {# Back here, on success and on failure — not to a page nobody submitted from. #}
+          <input type="hidden" name="next" value="dashboard">
       {% endif %}
 
       <div class="desk-block desk-block--primary">
@@ -312,7 +315,7 @@
             <div class="empty-state">
               <h3>No incoming documents are waiting</h3>
               <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=incoming">Open Incoming</a>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">Open Pending receipt</a>
             </div>
           {% endif %}
         </div>

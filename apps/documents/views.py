@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.generic import View
 
-from apps.accounts.models import Office
+from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, DocumentType, Tag
 from apps.core.utils import log_action
@@ -75,10 +75,24 @@ class RepositoryView(AppLoginRequiredMixin, View):
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
         form = RepositoryFilterForm(request.GET or None, **self._options(visible))
 
-        office_code = request.GET.get("office", "")
-        selected_office = Office.objects.filter(code=office_code).first() if office_code else None
+        # Through the shared resolver, so `office` is a primary key here as it
+        # is on every other page. It read a *code*, from `Office.objects` rather
+        # than `Office.active` — so an archived office went on filtering — and an
+        # unmatched value fell through to no filter at all, showing the whole
+        # university under one office's heading. A code still resolves, because
+        # the smart folders have been emitting them and people have bookmarked
+        # those links; what has changed is that a value matching nothing is
+        # reported instead of ignored.
+        resolved = core_filters.resolve(request, allow_office=True)
+        selected_office = resolved.as_office
         if selected_office:
             documents = documents.filter(office=selected_office)
+        elif "office" in resolved.invalid:
+            messages.warning(
+                request,
+                "That office was not recognised, so every office is shown. "
+                "It may have been archived.",
+            )
 
         # Apply every filter that validated, not the all-or-nothing case. The
         # whole block used to hang off `if form.is_valid()`, so one unrecognised
@@ -128,7 +142,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
 
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
         smart_folders = (
-            visible.values("office__code", "office__name")
+            # office__id so the folder links can carry a primary key, which is
+            # what `office` means everywhere else; the code stays for the active
+            # check and the title.
+            visible.values("office__id", "office__code", "office__name")
             .annotate(total=Count("id", distinct=True))
             .order_by("office__name")
         )

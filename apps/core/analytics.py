@@ -513,10 +513,15 @@ def combined_totals(records, documents) -> dict:
     circle, because the percentages are normalised to their own sum. Overdue is
     a stat card now, which is where a cross-cutting condition belongs.
 
-    Counted over ACTIVE_STATUSES, the set the Tracking page itself lists, so
-    each slice equals the rows behind `?status=`. Drafts are excluded: a draft
-    has not been sent, so it is not yet moving between offices, and it is
-    visible only to the office writing it.
+    Counted over ACTIVE_STATUSES minus drafts, so each slice equals the rows
+    behind `?status=`. The docstring claimed drafts were excluded while the
+    filter it named included them, so the ring ran one short of the page it
+    describes without anything saying why.
+
+    Excluded rather than given a slice of their own, because a draft is visible
+    only to its author: a Draft slice would make the ring mean something
+    different for every viewer of the same data. The ring is therefore
+    documents *in circulation*, which is what the caption now says.
 
     Not office-scoped, and deliberately so — the slices link to `?status=`,
     which is not office-scoped either. The per-office queues are the stat cards,
@@ -525,7 +530,7 @@ def combined_totals(records, documents) -> dict:
     queues resolve against the viewer's own office, so a system administrator
     saw their own office's three records where the page showed the university's.
     """
-    live = records.filter(status__in=ACTIVE_STATUSES)
+    live = records.filter(status__in=ACTIVE_STATUSES).exclude(status=Status.DRAFT)
 
     def by_status(status):
         return live.filter(status=status).distinct().count()

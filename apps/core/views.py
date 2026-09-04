@@ -22,6 +22,7 @@ from apps.tracking import services as tracking_services
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
 
 from . import analytics
+from . import filters as core_filters
 from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
@@ -129,8 +130,10 @@ class DashboardMemoMixin:
                 "display": user.office_label,
             }
 
-        raw = self.request.GET.get("office", "")
-        office = Office.objects.filter(pk=raw).first() if raw.isdigit() else None
+        # Through the same gate the Tracking page, the Repository and Reports
+        # use. It was a fourth reading of `office` with its own rules, which is
+        # how the system ended up with four answers to one question.
+        office = tracking_services.scope_office(self.request.user, self.request.GET.get("office"))
         label = office.name if office else "All offices"
         return {
             "office": office,
@@ -289,6 +292,17 @@ class DashboardMemoMixin:
         completed = totals["completed"]
 
         tracking_url = reverse("tracking:list")
+
+        def tracking_link(**overrides):
+            """The office the slice was counted for rides along.
+
+            The stat cards learned this in aaa5607 and the slices did not, so a
+            slice reading "Pending receipt 1" for Supply opened a page listing
+            2 — Records's own. `office` is a pk here, as it is everywhere.
+            """
+            if office is not None:
+                overrides["office"] = office.pk
+            return core_filters.link(tracking_url, **overrides)
         slices = [
             # Every slice links through to the list behind it, and the count is
             # taken from that same query — see analytics.combined_totals. A
@@ -299,14 +313,14 @@ class DashboardMemoMixin:
             # slice it counted the same records twice; it has its own stat card.
             {"key": "pending_receipt", "label": "Pending receipt",
              "total": totals["pending_receipt"],
-             "url": f"{tracking_url}?status={Status.PENDING_RECEIPT}", "group": "tracking"},
+             "url": tracking_link(status=Status.PENDING_RECEIPT), "group": "tracking"},
             {"key": "received", "label": "Received", "total": totals["received"],
-             "url": f"{tracking_url}?status={Status.RECEIVED}", "group": "tracking"},
+             "url": tracking_link(status=Status.RECEIVED), "group": "tracking"},
             {"key": "in_process", "label": "In process", "total": totals["in_process"],
-             "url": f"{tracking_url}?status={Status.IN_PROCESS}", "group": "tracking"},
+             "url": tracking_link(status=Status.IN_PROCESS), "group": "tracking"},
             {"key": "pending_upload", "label": "Completed - pending upload",
              "total": totals["pending_upload"],
-             "url": f"{tracking_url}?status={Status.COMPLETED_PENDING_UPLOAD}",
+             "url": tracking_link(status=Status.COMPLETED_PENDING_UPLOAD),
              "group": "tracking"},
             {"key": "historical", "label": "Repository - historical", "total": historical,
              "url": f"{reverse('documents:repository')}?source={Source.UPLOAD}",
@@ -403,16 +417,11 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # figure the ring and the memo already use, over the scoped queryset.
         overdue_count = memo_context["overdue_summary"]["total"]
 
-        # Needs action leads with what is waiting to be confirmed, which is the
-        # part of Incoming somebody has to do something about today.
-        pending = queue(tracking_services.SCOPE_PENDING_RECEIPT)
-        attention = list(pending[:5])
-        if len(attention) < 5:
-            late = queue(tracking_services.SCOPE_OVERDUE)
-            attention += [record for record in late[: 5 - len(attention)] if record not in attention]
-        if len(attention) < 5:
-            attention += [record for record in received[: 5 - len(attention)] if record not in attention]
-
+        # One queue, not three. It was pending-receipt padded with overdue and
+        # then received, so the panel could not have an honest link: it showed
+        # five rows and its button opened five, two of them different. Short
+        # when it is short, which is what "Needs action" means.
+        attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:5])
         today = timezone.localdate()
         office_today = TrackingRecord.objects.none()
         if user.office_id:
@@ -768,7 +777,11 @@ def _office_from_name(raw: str):
 
 def report_filters_from_request(request):
     params = request.GET
-    office = Office.objects.filter(pk=params["office"]).first() if params.get("office", "").isdigit() else None
+    # The same gate the dashboard picker and the Tracking page use. It was open
+    # here and closed there, which made it an accident of which function got
+    # there first rather than a policy. Reports itself stays open to everyone;
+    # it is naming *another* office that is an administrator's control.
+    office = tracking_services.scope_office(request.user, params.get("office"))
     # The dropdown wins when both are set, so a stale name in the box cannot
     # silently override the office somebody just picked from the list.
     office_name = params.get("office_name", "").strip()
@@ -814,7 +827,22 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     template_name = "reports/reports.html"
 
     def _filters(self):
-        """Read the filter row, ignoring anything that is not a real choice."""
+        """Read the filter row, saying what it refused rather than ignoring it.
+
+        The office was resolved silently, so a value naming nothing — or one
+        this account may not use — left the page showing every office under the
+        reader's chosen heading. Same rule as Tracking and the Repository now:
+        no filter fails open.
+        """
+        refused = core_filters.resolve(
+            self.request, statuses=core_filters.REPORT_STATUS_VALUES
+        ).invalid
+        if refused:
+            messages.warning(
+                self.request,
+                "Could not apply: " + ", ".join(refused)
+                + ". The value was not recognised, or your account may not filter by office.",
+            )
         return report_filters_from_request(self.request)
 
     def _apply(self, records, filters):

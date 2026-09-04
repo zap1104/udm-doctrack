@@ -52,7 +52,7 @@
       </a>
       {% for folder in smart_folders %}
         <a class="folder-tile {% if selected_office.code == folder.office__code %}active{% endif %}"
-           href="?office={{ folder.office__code }}" title="{{ folder.office__name }}">
+           href="?office={{ folder.office__id }}" title="{{ folder.office__name }}">
           <span class="folder-tile-name">{{ folder.office__name }}</span>
           <span class="folder-tile-count num">{{ folder.total }}</span>
         </a>
@@ -86,7 +86,7 @@
         is, then when it is from.
       {% endcomment %}
       <form method="get" class="row g-2">
-        {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.code }}">{% endif %}
+        {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.pk }}">{% endif %}
         <div class="col-12 col-lg-9">{{ form.q }}</div>
         <div class="col-12 col-lg-3 d-flex gap-2">
           <button class="btn btn-udm flex-grow-1" type="submit">Filter</button>

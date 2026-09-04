@@ -28,6 +28,12 @@
     <a class="pill-toggle{% if not scope and not status %} is-active{% endif %}"
        href="{% url 'tracking:list' %}">All Active</a>
     {% comment %}
+      Through `filter_url`, like the filter pills below, so a queue keeps the
+      filters already applied. They were bare `?scope=` links: a reader with
+      "Files created by me only" set watched 4 rows become 3 on clicking
+      Incoming and concluded the queue had narrowed their own files, when it had
+      replaced their filter with everybody's.
+
       Each queue is now one `scope`, computed in tracking.services.apply_scope.
       Incoming and Received used to be a mix of `scope` and `status`, which made
       them mean different things from each other: Received filtered on the
@@ -35,15 +41,22 @@
       office had received showed up in your Received queue.
     {% endcomment %}
     <a class="pill-toggle{% if scope == 'incoming' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=incoming">Incoming</a>
+       href="{% filter_url 'scope' 'incoming' %}">Incoming</a>
     <a class="pill-toggle{% if scope == 'outgoing' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=outgoing">Outgoing</a>
+       href="{% filter_url 'scope' 'outgoing' %}">Outgoing</a>
     <a class="pill-toggle{% if scope == 'pending-receipt' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=pending-receipt">Pending Receipt</a>
+       href="{% filter_url 'scope' 'pending-receipt' %}">Pending Receipt</a>
     <a class="pill-toggle{% if scope == 'received' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=received">Received</a>
+       href="{% filter_url 'scope' 'received' %}">Received</a>
     <a class="pill-toggle pill-toggle--alert{% if scope == 'overdue' %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}?scope=overdue">Overdue</a>
+       href="{% filter_url 'scope' 'overdue' %}">Overdue</a>
+    {% comment %}
+      Necessary once the pills preserve state: "click All Active" used to be the
+      way out and no longer is, because it now keeps everything else set.
+    {% endcomment %}
+    {% if request.GET.scope or request.GET.status or request.GET.offices or request.GET.owner or request.GET.office %}
+      <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
+    {% endif %}
   </div>
 </nav>
 {% endwith %}
@@ -145,10 +158,21 @@
             </td>
           </tr>
         {% empty %}
+          {% comment %}
+            Some combinations are empty by construction rather than empty today
+            — route_record refuses to send an office its own document, so
+            "Incoming" and "Created by me" can never both hold. Saying so beats
+            an empty table the reader reads as a broken filter.
+          {% endcomment %}
           <tr><td colspan="{% if can_bulk_receive %}8{% else %}7{% endif %}">
             <div class="empty-state">
               <h3>No active records match this view</h3>
-              <p>Clear the filters or choose another queue above to see more records.</p>
+              {% if impossible_reason %}
+                <p>{{ impossible_reason }}</p>
+              {% else %}
+                <p>Clear the filters or choose another queue above to see more records.</p>
+              {% endif %}
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Clear filters</a>
             </div>
           </td></tr>
         {% endfor %}
