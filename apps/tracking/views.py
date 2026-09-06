@@ -156,7 +156,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         services.annotate_receiving_offices(page_records)
         # The same office the queue was built for. Tagged from the viewer's
         # instead, every row of another office's Incoming read "Outgoing".
-        services.annotate_direction(page_records, request.user, office=narrow_office)
+        services.annotate_direction(page_records, request.user, office=queue_office)
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the

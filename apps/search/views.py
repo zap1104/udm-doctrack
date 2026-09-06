@@ -155,7 +155,7 @@ class SearchView(AppLoginRequiredMixin, View):
         # This page listed tracking records without either annotator, so its
         # rows carried no direction and no receiving offices while the Tracking
         # page's did. Same rows, same columns, so the same one query each.
-        tracking_services.annotate_direction(page_records, request.user, office=narrow_office)
+        tracking_services.annotate_direction(page_records, request.user, office=queue_office)
         tracking_services.annotate_receiving_offices(page_records)
 
         # Searched only once something was asked for. An empty box should offer

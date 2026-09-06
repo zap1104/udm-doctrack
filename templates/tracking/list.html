@@ -169,6 +169,20 @@
         <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
       </form>
     </div>
+    {% if resolved.all_offices %}
+      {% comment %}
+        Said here, beside the control that answers it, rather than leaving the
+        rows silently untagged. Incoming and Outgoing describe a document
+        relative to one office — a record moving MED to SUP is neither, read
+        from the whole university — so across every office there is nothing for
+        the tag to say. From and Receiving office still carry the movement.
+      {% endcomment %}
+      <p class="tracking-filter-note">
+        Incoming and Outgoing are relative to one office, so they are not shown
+        across all of them. Pick an office above to see which way each document
+        is moving for it.
+      </p>
+    {% endif %}
   {% endif %}
 
   <div class="tracking-filter-row">

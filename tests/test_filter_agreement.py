@@ -1104,3 +1104,78 @@ def test_neither_picker_offers_a_your_office_entry(client, users):
         client.force_login(users[who])
         for path in (TRACKING, DASHBOARD):
             assert "Your office</option>" not in client.get(path).content.decode(), (who, path)
+
+
+# --- the direction tag, wherever there is an office to describe it from ----
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["sup", "med_admin"])
+@pytest.mark.parametrize("query", ["", "scope=incoming", "scope=outgoing"])
+def test_every_routed_row_carries_a_direction(client, users, traffic, who, query):
+    """Only some rows were tagged. The tag is computed from one office and the
+    page had stopped answering for one, so rows the viewer's office had never
+    touched came back blank — and on a queue built for another office the few
+    that were tagged described the wrong one."""
+    client.force_login(users[who])
+    rows = client.get(f"{TRACKING}?{query}").context["page_obj"].object_list
+
+    routed = [r for r in rows if r.routing_steps.exists()]
+    if not routed:
+        # This office simply has nothing in that queue — MED sends more than it
+        # receives. Nothing to assert, and the default view below proves the
+        # fixture is not empty.
+        pytest.skip(f"{who} has no routed rows for ?{query}")
+    untagged = [r.tracking_number for r in routed if not r.direction]
+    assert not untagged, untagged
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["sup", "med_admin"])
+def test_the_default_view_has_rows_and_tags_all_of_them(client, users, traffic, who):
+    """So the skip above cannot hide an empty fixture."""
+    client.force_login(users[who])
+    rows = client.get(TRACKING).context["page_obj"].object_list
+
+    routed = [r for r in rows if r.routing_steps.exists()]
+    assert len(routed) >= 2
+    assert all(r.direction in ("incoming", "outgoing") for r in routed)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("query", ["scope=incoming", "scope=outgoing"])
+def test_the_tag_never_contradicts_the_queue(client, users, offices, traffic, query):
+    """A page headed Incoming showed rows marked Outgoing: the queue answered
+    for the picked office and the tag for the viewer's. They take the same
+    office now, so the tag cannot disagree with the heading above it."""
+    client.force_login(users["admin"])
+    expected = query.split("=")[1]
+
+    for suffix in ("", f"&office={offices['SUP'].pk}"):
+        rows = client.get(f"{TRACKING}?{query}{suffix}").context["page_obj"].object_list
+        assert all(r.direction in ("", expected) for r in rows), (query, suffix)
+
+
+@pytest.mark.django_db
+def test_across_every_office_the_tag_is_blank_and_the_page_says_why(client, users, traffic):
+    """"Incoming" means arriving *at us*, and a page answering for every office
+    has no us — a record moving MED to SUP is neither. Falling back to the
+    viewer's own office there tagged three rows in twenty, and those three
+    described a different office from the one on screen."""
+    client.force_login(users["admin"])
+    response = client.get(TRACKING)
+
+    assert response.context["resolved"].all_offices is True
+    assert all(r.direction == "" for r in response.context["page_obj"].object_list)
+    assert "relative to one office" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_picking_an_office_brings_the_tags_back(client, users, offices, traffic):
+    """Which is what the note beside the picker tells the reader to do."""
+    client.force_login(users["admin"])
+    rows = client.get(
+        f"{TRACKING}?office={offices['SUP'].pk}"
+    ).context["page_obj"].object_list
+
+    routed = [r for r in rows if r.routing_steps.exists()]
+    assert routed
+    assert all(r.direction in ("incoming", "outgoing") for r in routed)

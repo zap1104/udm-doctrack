@@ -1153,17 +1153,28 @@ def annotate_direction(records, user, office=None) -> None:
     an administrator sees those, and giving them a direction they do not have
     would be a worse answer than giving them none.
 
-    `office` is which office the row is described *from*, defaulting to the
-    viewer's own — the same parameter `apply_scope` takes, and it has to be
-    given the same value. Tagged from the viewer's office while the queue was
-    built for another, every row in a page headed "Supply's Incoming" read
-    Outgoing: a tag contradicting the heading it sits under, which is worse than
-    no tag at all.
+    `office` is which office the row is described *from*, and it has to be the
+    same value `apply_scope` was given — the two answer the same question and a
+    row's tag must agree with the queue it is sitting in. Tagged from the
+    viewer's office while the queue was built for another, every row of a page
+    headed "Supply's Incoming" read Outgoing.
+
+    ALL_OFFICES blanks every tag, and that is the honest answer rather than a
+    gap. "Incoming" means arriving *at us*; a page answering for every office
+    has no us, so a record moving MED to SUP is neither. Falling back to the
+    viewer's own office there was worse than blank: a system administrator
+    reading the whole university saw three rows in twenty tagged, and those
+    three described their own office rather than the queue on screen — so
+    `?scope=incoming` displayed rows marked Outgoing.
 
     One grouped query, like `annotate_can_confirm` beside it — the per-row
     version is twenty queries on a twenty-row page.
     """
     if not records:
+        return
+    if office is ALL_OFFICES:
+        for record in records:
+            record.direction = ""
         return
     office_id = getattr(office, "pk", None) or getattr(user, "office_id", None)
     if not getattr(user, "is_authenticated", False) or not office_id:
