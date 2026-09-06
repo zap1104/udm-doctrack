@@ -139,6 +139,12 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
     just how many there are. A count alone cannot tell an office holding twelve
     documents one day late apart from an office holding three that have been
     late for a month, and the second is the one somebody has to go and see.
+
+    `share` is that office's portion of every overdue document, and it is taken
+    over the *whole* grouping before the `limit` slice. Summing the returned
+    rows instead would divide by a truncated total and report shares adding up
+    to 100% across the few offices shown — the same trap `overdue_summary`
+    documents for its own headline figure.
     """
     now = timezone.now()
     late = (
@@ -146,11 +152,15 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
         .exclude(status__in=COMPLETED_STATUSES)
         .exclude(current_office__isnull=True)
     )
-    rows = list(
+    grouped = list(
         late.values("current_office__code", "current_office__name")
         .annotate(total=Count("id", distinct=True))
-        .order_by("-total")[:limit]
+        .order_by("-total")
     )
+    everywhere = sum(row["total"] for row in grouped)
+    # Plain slicing, so `limit=0` still returns nothing — that is what the
+    # dashboard's summary test leans on to prove the total survives the cap.
+    rows = grouped[:limit]
 
     # The earliest deadline per office, in one pass over the same queryset,
     # rather than a query per row.
@@ -170,6 +180,11 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
         # The reports template reads `percent`; the dashboard reads
         # `bar_percent` like every other bar on that page. Same number.
         row["bar_percent"] = row["percent"]
+        # Distinct from both: `percent` scales the bar against the *longest*
+        # queue so the widest bar fills its track, which is a drawing
+        # instruction. `share` is the reportable figure — this office's portion
+        # of every overdue document there is.
+        row["share"] = percent(row["total"], everywhere)
         due_at = earliest.get(code)
         # Whole days late, floored: "3 days" must mean the deadline is three
         # full days behind, never "some part of a third day".

@@ -87,6 +87,8 @@
       {% endcomment %}
       <form method="get" class="row g-2">
         {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.pk }}">{% endif %}
+        {# Carried so filtering does not reset a reader who asked for a longer page. #}
+        <input type="hidden" name="per_page" value="{{ page_size }}">
         <div class="col-12 col-lg-9">{{ form.q }}</div>
         <div class="col-12 col-lg-3 d-flex gap-2">
           <button class="btn btn-udm flex-grow-1" type="submit">Filter</button>
@@ -133,6 +135,13 @@
       <a class="small" href="{% url 'search:index' %}?mode=repository">Advanced relevance search →</a>
     </div>
 
+    {% comment %}
+      Above the grid, beside the count it belongs to. Under a full page of tiles
+      the control is a scroll away, which is the wrong end of a list somebody is
+      trying to make shorter.
+    {% endcomment %}
+    {% pager section="size" %}
+
     <div class="row g-3">
       {% for document in documents %}
         <div class="col-md-6 col-xl-4">
@@ -170,7 +179,7 @@
       {% endfor %}
     </div>
 
-    {% include "partials/_pagination.html" %}
+    {% pager section="steps" %}
   </div>
 </div>
 {% endblock %}

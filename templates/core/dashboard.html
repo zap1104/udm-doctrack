@@ -80,8 +80,14 @@
   and without the office on the link the page would answer for the viewer's while
   the number answered for the picked one.
 {% endcomment %}
+{% comment %}
+  Three cards, not four. "Held by your office" was the fourth and it counted
+  ?scope=received, which is a queue you reach in one click from Incoming — the
+  card was reporting a stage of the same pile the card beside it already
+  counted, and it cost a fifth count query on every dashboard load.
+{% endcomment %}
 <div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-4">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
       <div class="value">{{ incoming_count }}</div>
@@ -94,14 +100,14 @@
       <div class="hint">{{ incoming_new_today }} moved today · addressed to your office</div>
     </a>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-4">
     <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-4">
     {% comment %}
       Overdue opens the tracking list, like the three cards beside it. It used
       to open Reports on the argument that "why are these late and whose are
@@ -110,28 +116,10 @@
       landing somewhere else makes this one card behave unlike its neighbours.
       The per-office breakdown is still a click away in Reports.
     {% endcomment %}
-    <a class="stat-card red" href="{% url 'tracking:list' %}?scope=overdue{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
+    <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
-    </a>
-  </div>
-  {% comment %}
-    Held by your office. It was a line inside Office Flow Today, which the
-    wireframe drops; of the four figures that panel carried this is the one
-    that says how much work is sitting with you right now, so it takes a card
-    rather than going with the others.
-
-    It opens ?scope=received, not ?scope=custody. Custody is every record whose
-    current_office is this office — completed and filed ones included — so the
-    card counted 1 and its page listed 9. The hint below already described
-    ?scope=received, which is what this card has always meant.
-  {% endcomment %}
-  <div class="col-6 col-md-3">
-    <a class="stat-card green" href="{% url 'tracking:list' %}?scope=received{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
-      <div class="label">Held by your office</div>
-      <div class="value">{{ received_count }}</div>
-      <div class="hint">Received and not yet forwarded or completed</div>
     </a>
   </div>
 </div>
@@ -272,8 +260,16 @@
                   {% endif %}
                   {% if show_office_columns %}
                     <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-                    <td>
-                      {{ record.subject|truncatechars:46 }}
+                    <td class="desk-cell">
+                      {% comment %}
+                        The subject decides the width of this whole panel if it
+                        is allowed to. .desk-cell-title caps it and wraps to a
+                        second line, so a long subject makes a row slightly
+                        taller instead of pushing the card sideways and leaving
+                        the panel beside it half as wide. The full text is on
+                        the title attribute and on the record page.
+                      {% endcomment %}
+                      <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                       <div class="text-muted" style="font-size:12.5px;">
                         updated {{ record.last_movement_at|timesince }} ago
                       </div>
@@ -281,9 +277,10 @@
                     <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
                     <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
                   {% else %}
-                    <td>
+                    <td class="desk-cell desk-cell--wide">
                       <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
-                      <div style="font-size:14px;">{{ record.subject }}</div>
+                      {# Same cap as the records-staff view above, one column wider. #}
+                      <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                       <div class="text-muted" style="font-size:12.5px;">
                         From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
                       </div>
@@ -355,7 +352,9 @@
             {% for record in recent_records %}
               <tr>
                 <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-                <td>{{ record.subject|truncatechars:52 }}</td>
+                <td class="desk-cell">
+                  <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
+                </td>
                 {% if show_office_columns %}
                   <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
                   <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
@@ -383,10 +382,16 @@
             </a>
           </div>
           <div class="card-udm-body">
+            {% comment %}
+              Five rows, each one a fixed two lines of title over one line of
+              detail. A repository title runs to a sentence often enough that
+              letting it set its own height made this card a different height on
+              every load, and it shares a row with the Action Centre.
+            {% endcomment %}
             {% for document in recent_documents %}
-              <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
-                <div class="text-muted" style="font-size:12.5px;">
+              <div class="newest-row py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                <a class="newest-title" href="{{ document.get_absolute_url }}" title="{{ document.title }}">{{ document.title|truncatechars:120 }}</a>
+                <div class="newest-meta text-muted">
                   {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
                 </div>
               </div>

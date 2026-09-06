@@ -6,102 +6,107 @@
   <div>
     <div class="eyebrow">Reports and Analytics</div>
     <h1>Records Overview</h1>
-    <p class="sub">All totals respect the signed-in user’s document and office permissions.</p>
+    {% comment %}
+      What this report describes, said in the heading rather than left to be
+      inferred from a filter row that most accounts cannot see. `scope_label`
+      names the office on paper — "Your office" answers a reader looking at
+      their own screen and answers nobody once the page has left the building.
+    {% endcomment %}
+    <p class="sub">
+      <strong>{{ scope_label }}</strong> ·
+      all totals respect the signed-in user’s document and office permissions.
+    </p>
   </div>
   <div class="d-flex flex-wrap gap-2 no-print">
     <button class="btn btn-udm-outline" type="button" data-print-trigger>Print Report</button>
-    <a class="btn btn-udm" href="{% url 'core:report_export' %}">Export CSV</a>
+    {% comment %}
+      The office rides along. This was a bare URL, so the export re-read its
+      filters from its own empty query string: exporting from a report narrowed
+      to one office handed back every record the exporter could see, under a
+      filename that did not say so either.
+    {% endcomment %}
+    <a class="btn btn-udm"
+       href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>
   </div>
 </div>
 
-{# One filter row above everything it scopes — every panel below re-renders against the same slice. #}
-<section class="card-udm mb-4 no-print" aria-labelledby="report-filters-title">
-  <div class="card-udm-head">
-    <div>
-      <h2 id="report-filters-title">Report Filters</h2>
-      <div class="report-caption">Applied to every figure and chart on this page.</div>
+{% comment %}
+  One control, and only for the accounts it is for.
+
+  Reports carried five filters — office, office by name, year, status and
+  document type — shown to everybody. Two of those were about the office and
+  three narrowed a page whose panels already break the same records down by
+  month, by status and by type, so setting one filtered a chart into agreeing
+  with itself.
+
+  Worse, the two office controls disagreed about who may use them: the dropdown
+  went through `scope_office` and the name box did not, so an ordinary account
+  was shown a list whose picks were silently dropped, beside a box that really
+  did filter to another office. Both are administrators' controls now, and an
+  account without them is not shown a filter row at all — its report is its own
+  office, which is the only one it could describe.
+{% endcomment %}
+{% if filters.can_pick %}
+  <section class="card-udm mb-4 no-print" aria-labelledby="report-filters-title">
+    <div class="card-udm-head">
+      <div>
+        <h2 id="report-filters-title">Report scope</h2>
+        <div class="report-caption">Applied to every figure and chart on this page.</div>
+      </div>
+      {% if filters.office or filters.office_name %}
+        <a class="small" href="{% url 'core:reports' %}">Clear</a>
+      {% endif %}
     </div>
-    {% if has_filters %}
-      <a class="small" href="{% url 'core:reports' %}">Clear filters</a>
-    {% endif %}
-  </div>
-  <div class="card-udm-body">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-sm-6 col-lg-3">
-        <label class="form-label" for="report-office">Office</label>
-        <select class="form-select" id="report-office" name="office">
-          <option value="">All authorized offices</option>
-          {% for office in filter_offices %}
-            <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
-              {{ office.code }} — {{ office.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      {% comment %}
-        By name as well as by dropdown. A list of every office in the university
-        is a scrolling exercise once this reaches past OVPA, and somebody who
-        knows the office already knows its name. The dropdown wins when both are
-        set, so a name left in the box cannot override a fresh pick from the list.
-      {% endcomment %}
-      <div class="col-sm-6 col-lg-2">
-        <label class="form-label" for="report-office-name">…or by name</label>
-        <input class="form-control" id="report-office-name" name="office_name" type="text"
-               list="report-office-names" value="{{ filters.office_name }}"
-               placeholder="e.g. MED or Supply"
-               {% if filters.office_name_unmatched %}aria-describedby="report-office-name-error"{% endif %}>
-        <datalist id="report-office-names">
-          {% for office in filter_offices %}
-            <option value="{{ office.name }}">{{ office.code }}</option>
-          {% endfor %}
-        </datalist>
-        {% if filters.office_name_unmatched %}
-          <div class="form-text text-danger" id="report-office-name-error">
-            No single office matches “{{ filters.office_name }}” — showing all offices.
-            Use the full name or the code.
-          </div>
-        {% endif %}
-      </div>
-      <div class="col-sm-6 col-lg-2">
-        <label class="form-label" for="report-year">Year</label>
-        <select class="form-select" id="report-year" name="year">
-          <option value="">All years</option>
-          {% for year in filter_years %}
-            <option value="{{ year }}" {% if filters.year == year %}selected{% endif %}>{{ year }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-sm-6 col-lg-2">
-        <label class="form-label" for="report-status">Status</label>
-        <select class="form-select" id="report-status" name="status">
-          <option value="">All statuses</option>
-          <option value="PENDING_RECEIPT" {% if filters.status == "PENDING_RECEIPT" %}selected{% endif %}>Pending receipt</option>
-          <option value="RECEIVED" {% if filters.status == "RECEIVED" %}selected{% endif %}>Received</option>
-          <option value="IN_PROCESS" {% if filters.status == "IN_PROCESS" %}selected{% endif %}>In process</option>
-          <option value="COMPLETED" {% if filters.status == "COMPLETED" %}selected{% endif %}>Completed</option>
-          <option value="OVERDUE" {% if filters.status == "OVERDUE" %}selected{% endif %}>Overdue</option>
-        </select>
-      </div>
-      <div class="col-sm-8 col-lg-3">
-        <label class="form-label" for="report-document-type">Document type</label>
-        <select class="form-select" id="report-document-type" name="document_type">
-          <option value="">All types</option>
-          {% for type in filter_types %}
-            <option value="{{ type.pk }}" {% if filters.document_type.pk == type.pk %}selected{% endif %}>{{ type.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-sm-4 col-lg-2 d-grid">
-        <button class="btn btn-udm-outline" type="submit">Apply</button>
-      </div>
-    </form>
-  </div>
-</section>
+    <div class="card-udm-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-sm-6 col-lg-4">
+          <label class="form-label" for="report-office">Office</label>
+          <select class="form-select" id="report-office" name="office">
+            <option value="">All offices you can see</option>
+            {% for office in filter_offices %}
+              <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
+                {{ office.code }} — {{ office.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% comment %}
+          By name as well as by dropdown — requirement 3.11. A list of every
+          office in the university is a scrolling exercise once this reaches
+          past OVPA, and somebody who knows the office already knows its name.
+          The dropdown wins when both are set, so a name left in the box cannot
+          override a fresh pick from the list.
+        {% endcomment %}
+        <div class="col-sm-6 col-lg-4">
+          <label class="form-label" for="report-office-name">…or by name</label>
+          <input class="form-control" id="report-office-name" name="office_name" type="text"
+                 list="report-office-names" value="{{ filters.office_name }}"
+                 placeholder="e.g. MED or Supply"
+                 {% if filters.office_name_unmatched %}aria-describedby="report-office-name-error"{% endif %}>
+          <datalist id="report-office-names">
+            {% for office in filter_offices %}
+              <option value="{{ office.name }}">{{ office.code }}</option>
+            {% endfor %}
+          </datalist>
+          {% if filters.office_name_unmatched %}
+            <div class="form-text text-danger" id="report-office-name-error">
+              No single office matches “{{ filters.office_name }}” — showing all offices.
+              Use the full name or the code.
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-sm-6 col-lg-2 d-grid">
+          <button class="btn btn-udm-outline" type="submit">Apply</button>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endif %}
 
 <div class="report-print-header">
   <div>
     <strong>{{ SITE_NAME }} · Reports and Analytics</strong>
-    <span>Generated for {{ user.office_label }} by {{ user.display_name|default:user.username }}</span>
+    <span>Generated for {{ scope_label }} by {{ user.display_name|default:user.username }}</span>
   </div>
   <span>{{ report_generated_at|date:"d M Y, g:i A" }}</span>
 </div>
@@ -348,72 +353,23 @@
           </div>
         </div>
         <div class="card-udm-body">
+          {% comment %}
+            Code, count and share. The share is this office's portion of every
+            overdue document, which the bar cannot say: the bar is scaled
+            against the *longest* queue so the widest one fills its track, so
+            two offices holding 6 and 5 draw almost the same bar whether that is
+            half the backlog each or a tenth.
+          {% endcomment %}
           {% for row in overdue_offices %}
             <div class="report-series-item report-series-item--wide">
-              <span>{{ row.current_office__code }} — {{ row.current_office__name|truncatechars:44 }}</span>
+              <span>{{ row.code }} — {{ row.name|truncatechars:44 }}</span>
               <div class="report-bar"><i class="bar-alert" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{{ row.share }}%</span>
             </div>
           {% empty %}
             <div class="report-empty">Nothing is overdue. Every document is inside its deadline.</div>
           {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    {% comment %}
-      Turnaround per office. An overall average hides the thing management
-      actually wants to know: one office taking a fortnight is invisible inside
-      a mean that eleven prompt offices also contribute to. Attributed to the
-      office that received the document, since that is who could act on it.
-    {% endcomment %}
-    <div class="col-12">
-      <div class="card-udm">
-        <div class="card-udm-head">
-          <div>
-            <h2>Turnaround by office</h2>
-            <div class="report-caption">
-              The same four measures, per office, in office hours.
-              {{ turnaround.office_hours_caveat }}
-            </div>
-          </div>
-        </div>
-        <div class="card-udm-body p-0 table-responsive">
-          <table class="table-udm">
-            <thead>
-              <tr>
-                <th>Office</th>
-                <th>To confirm receipt</th>
-                <th>In process</th>
-                <th>Total lifetime</th>
-                <th>On time</th>
-                <th>Completed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in turnaround_by_office %}
-                <tr>
-                  <td title="{{ row.name }}"><strong>{{ row.code }}</strong> · {{ row.name|truncatechars:32 }}</td>
-                  <td style="white-space:nowrap;">{{ row.receipt }}</td>
-                  <td style="white-space:nowrap;">{{ row.processing }}</td>
-                  <td style="white-space:nowrap;">{{ row.lifetime }}</td>
-                  <td style="white-space:nowrap;">
-                    {% if row.on_time_total %}
-                      {{ row.on_time_percent }}%
-                      <small class="text-muted">({{ row.on_time }}/{{ row.on_time_total }})</small>
-                    {% else %}
-                      <span class="text-muted">no deadlines</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ row.records }}</td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="6" class="p-4 text-muted">
-                  No office has received a document for these filters yet.
-                </td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -506,7 +462,7 @@
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>
-      <p>Repository volume, archive quality, metadata completeness, and search activity.</p>
+      <p>Repository volume, document types, and search activity.</p>
     </div>
   </div>
 
@@ -603,29 +559,13 @@
       </div>
     </div>
 
-    <div class="col-lg-6">
-      <div class="card-udm h-100">
-        <div class="card-udm-head"><h2>Archive quality</h2></div>
-        <div class="card-udm-body">
-          <div class="report-quality-row"><span>Documents in the repository</span><strong class="num">{{ total_documents }}</strong></div>
-          <div class="report-quality-row"><span>Missing tags</span><strong class="num">{{ untagged_documents }}</strong></div>
-          <div class="report-quality-row"><span>Missing extracted text</span><strong class="num">{{ documents_without_text }}</strong></div>
-          <p class="form-text mt-3 mb-0">
-            Lower incomplete-metadata totals improve search quality and repository organization.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-lg-6">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head"><h2>Most used searches</h2></div>
         <div class="card-udm-body">
           <div class="row g-2 mb-3">
             <div class="col-6"><div class="report-quality-row"><span>Queries</span><strong class="num">{{ search_analytics.queries }}</strong></div></div>
             <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
-            <div class="col-6"><div class="report-quality-row"><span>Queries with a click</span><strong class="num">{{ search_analytics.clicked_query_percent }}%</strong></div></div>
-            <div class="col-6"><div class="report-quality-row"><span>Average clicked rank</span><strong class="num">{{ search_analytics.average_rank|default:"—" }}</strong></div></div>
           </div>
           {% for row in top_searches %}
             <div class="report-series-item report-series-item--wide">

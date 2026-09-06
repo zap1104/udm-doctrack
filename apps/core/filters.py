@@ -55,6 +55,13 @@ TRACKING_STATUS_VALUES = set(ACTIVE_STATUS_VALUES)
 #: Reports to Tracking carrying `status=COMPLETED` widened instead of narrowing.
 REPORT_STATUS_VALUES = {value for value, _ in Status.choices}
 
+#: Queues that describe a document's movement *relative to one office*. The
+#: batch that is outgoing for Supply is incoming for HR at the same instant, so
+#: across every office at once neither is a question with an answer — and
+#: `apply_scope` proves it: with no office the two predicates become the empty Q
+#: and both queues return every active record, identically.
+DIRECTION_SCOPES = {"incoming", "outgoing"}
+
 #: What `?overdue=` accepts, normalised to the three states the resolver keeps.
 #: Three and not two: "what is still on time" is a question the offices ask, and
 #: an absent parameter has to go on meaning "do not filter".
@@ -74,12 +81,22 @@ class ResolvedFilters:
     #: the caller has to tell it from both "this one" and "nobody picked".
     all_offices: bool = False
     raised_by: list[Office] = field(default_factory=list)
-    status: str = ""
+    #: Stages, plural. `?status=` was single-valued, so narrowing to "pending
+    #: receipt and received" — the two halves of what an office has not finished
+    #: with — could not be asked at all; you picked one and re-read the page for
+    #: the other. Repeated values, like `?offices=`.
+    statuses: list[str] = field(default_factory=list)
     scope: str = ""
     owner: str = ""
     query: str = ""
     #: "", "yes" or "no" — see OVERDUE_VALUES.
     overdue: str = ""
+    #: A direction queue was asked for across every office, where it cannot
+    #: mean anything, and was dropped. Incoming and Outgoing are properties of a
+    #: document *and* an office; with no single office the predicates collapse
+    #: to the empty Q and both queues silently return every active record. The
+    #: page says so rather than heading that list "Incoming".
+    direction_dropped: bool = False
     #: Parameter names that were supplied and refused. Never silently dropped.
     invalid: list[str] = field(default_factory=list)
     #: Parameter names carrying a legacy spelling this resolver understood and
@@ -92,6 +109,17 @@ class ResolvedFilters:
     def raised_by_ids(self) -> list[str]:
         """As strings, which is what a template compares a pill against."""
         return [str(office.pk) for office in self.raised_by]
+
+    @property
+    def status(self) -> str:
+        """The single selected stage, or "".
+
+        Kept so callers that only ever meant one — the impossible-pair table,
+        and anything reading a link that carries one — go on working. Empty when
+        several are selected, which is the honest answer to a question phrased
+        in the singular.
+        """
+        return self.statuses[0] if len(self.statuses) == 1 else ""
 
 
 def _office_by_pk_or_code(raw: str) -> Office | None:
@@ -183,7 +211,7 @@ def resolve(
         else:
             raised_by.append(office)
 
-    status = (params.get("status") or "").strip()
+    raw_statuses = [value.strip() for value in params.getlist("status") if value.strip()]
     scope = (params.get("scope") or "").strip()
 
     overdue = ""
@@ -199,23 +227,38 @@ def resolve(
     # here rather than surviving as a second code path — keeping one was what
     # made overdue a status in the first place.
     translated = []
-    if status == "OVERDUE":
-        status, overdue = "", "yes"
+    if "OVERDUE" in raw_statuses:
+        raw_statuses = [value for value in raw_statuses if value != "OVERDUE"]
+        overdue = "yes"
         translated.append("status")
     if scope == "overdue":
         scope, overdue = "", "yes"
         translated.append("scope")
 
-    if status and status not in statuses:
-        invalid.append("status")
-        status = ""
+    # Order preserved and duplicates dropped, so `?status=A&status=A` is one
+    # pill lit rather than two and the same selection always renders the same.
+    chosen: list[str] = []
+    for value in raw_statuses:
+        if value not in statuses:
+            invalid.append("status")
+        elif value not in chosen:
+            chosen.append(value)
+
+    # Asked for across every office, where it has no answer. Dropped rather than
+    # honoured: `apply_scope` would return every active record under a heading
+    # reading "Incoming", which is the fail-open this module exists to prevent.
+    direction_dropped = False
+    if all_offices and scope in DIRECTION_SCOPES:
+        scope = ""
+        direction_dropped = True
 
     return ResolvedFilters(
         overdue=overdue,
         as_office=as_office,
         all_offices=all_offices,
         raised_by=raised_by,
-        status=status,
+        statuses=chosen,
+        direction_dropped=direction_dropped,
         scope=scope,
         owner=(params.get("owner") or "").strip(),
         query=(params.get("q") or "").strip(),
@@ -260,8 +303,8 @@ def link(base: str, request=None, **overrides) -> str:
 #: letting the reader conclude the filter is broken.
 IMPOSSIBLE_PAIRS = [
     (
-        {"overdue": {"yes"}, "status": {Status.COMPLETED_PENDING_UPLOAD.value,
-                                        Status.COMPLETED.value}},
+        {"overdue": {"yes"}, "statuses": {Status.COMPLETED_PENDING_UPLOAD.value,
+                                          Status.COMPLETED.value}},
         "A document that has been completed is not late, whatever its deadline "
         "said — nothing is owed on it any more.",
     ),
@@ -272,16 +315,32 @@ IMPOSSIBLE_PAIRS = [
     ),
     (
         {"scope": {"incoming", "outgoing", "received", "pending-receipt", "inbox", "sent"},
-         "status": {Status.DRAFT.value}},
+         "statuses": {Status.DRAFT.value}},
         "A draft has not been sent yet, so it has no sending or receiving "
         "office and cannot appear in a routing queue.",
     ),
 ]
 
 
+def _holds(selected, values: set) -> bool:
+    """Whether one resolved filter sits entirely inside an impossible set.
+
+    A list satisfies it only when it is non-empty and *every* value is in the
+    set. Selecting Draft and Received together inside a routing queue is not
+    impossible — the Received half still has rows — so "any" would report a
+    contradiction over a page that is about to show results.
+    """
+    if isinstance(selected, list):
+        return bool(selected) and all(value in values for value in selected)
+    return selected in values
+
+
 def impossible_reason(resolved: ResolvedFilters) -> str:
     """Why this combination can never match, or "" if it can."""
     for conditions, reason in IMPOSSIBLE_PAIRS:
-        if all(getattr(resolved, key, "") in values for key, values in conditions.items()):
+        if all(
+            _holds(getattr(resolved, key, ""), values)
+            for key, values in conditions.items()
+        ):
             return reason
     return ""

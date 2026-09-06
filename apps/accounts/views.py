@@ -22,6 +22,7 @@ from django.views.generic import TemplateView, View
 from apps.core.middleware import idle_seconds_for
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, SystemAdminRequiredMixin
 from apps.core.models import AuditLog, NotificationPreference
+from apps.core.pagination import paginate
 from apps.core.utils import log_action
 
 from .forms import (
@@ -213,9 +214,14 @@ class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
             )
         if office:
             users = users.filter(office_id=office)
+        # Paged, where it used to render every account on one screen. A single
+        # office is a short list; the system administrator's view is every
+        # account in the university.
+        page_context = paginate(self.request, users.order_by("username"))
         context.update(
             {
-                "users": users,
+                **page_context,
+                "users": page_context["page_obj"].object_list,
                 "offices": self.selectable_offices(),
                 "query": query,
                 "selected_office": office,

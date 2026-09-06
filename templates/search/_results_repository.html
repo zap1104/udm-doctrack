@@ -4,15 +4,26 @@
   it is computed from extracted text and a tsvector, neither of which a live
   tracking record has — so none of this is shared with tracking mode.
 {% endcomment %}
-<div class="search-results-head d-flex justify-content-between align-items-center mb-2">
-  <div>
-    <strong>{{ response.results|length }}</strong> result{{ response.results|length|pluralize }} shown
-    {% if response.total_matches > response.results|length %}
+<div class="search-results-head">
+  <div class="search-results-summary">
+    {% comment %}
+      `shown_count` is what is on the page, which is now the reader's choice —
+      `response.results|length` counted everything the ranking returned, so once
+      the size control could cut the list short this line said 200 above 25 rows.
+    {% endcomment %}
+    <strong>{{ shown_count }}</strong> result{{ shown_count|pluralize }} shown
+    {% if response.total_matches > shown_count %}
       of {{ response.total_matches }} matched
     {% endif %}
-    <span class="text-muted">· {{ response.duration_ms }} ms</span>
+    <span class="text-muted">· {{ response.duration_ms }} ms · Sorted by relevance</span>
   </div>
-  <span class="text-muted" style="font-size:13px;">Sorted by relevance</span>
+  {% comment %}
+    The size row only, on the same line as the count it governs. This is a
+    relevance ranking rather than a paged list — the control moves the cut-off,
+    so it belongs beside the count of what the cut-off produced, and there is
+    nothing underneath to step through.
+  {% endcomment %}
+  {% pager section="size" %}
 </div>
 
 {% if response.hidden_count %}

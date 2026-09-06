@@ -1,16 +1,94 @@
 {% load doctrack %}
 {% comment %}
-  Links come from {% pagination_url %}, which rewrites the `page` parameter of
-  the real query string. Hand-building "?page=N&{{ request.GET.urlencode }}"
-  here appended a second `page` value instead of replacing the first, and a
-  page that forgot to pass its filters in dropped them on every click.
+  The rows-per-page control and the Previous/Next steps.
+
+  Rendered through {% pager %} (apps/core/templatetags/doctrack.py) rather than
+  included directly, so a page with two independent lists on it can render this
+  twice against two different page objects.
+
+  The two halves are usually asked for separately — `{% pager section="size" %}`
+  above the list and `{% pager section="steps" %}` below it — because they are
+  wanted at different moments: how long the page is before you read it, and how
+  to leave the page after you have. `section="both"` renders one bar, which is
+  what a list with nothing to step through wants.
+
+  Links come from {% pagination_url %} / {% page_size_url %}, which rewrite one
+  parameter of the real query string. Hand-building
+  "?page=N&{{ request.GET.urlencode }}" here appended a second `page` value
+  instead of replacing the first, and a page that forgot to pass its filters in
+  dropped them on every click.
+
+  The size row renders even when there is only one page. The reader who has
+  asked for a hundred rows needs a way back to ten, and hiding the control at
+  exactly the moment one page holds everything hides the only way out of it.
 {% endcomment %}
-{% if page_obj.has_other_pages %}
+{% if page_size_choices %}
+  {% if show_size %}
+    <div class="page-controls page-controls--size no-print">
+      {% if page_obj.has_other_pages %}
+        {% comment %}
+          Where in the results this page sits. Above the rows rather than under
+          them: "1–25 of 312" is what tells the reader whether the answer they
+          want is on this screen at all, and that is worth knowing first.
+
+          Before the picker in the markup as well as on screen, so the reading
+          order and the tab order match what the eye does — the count is the
+          fact, the picker is the thing you act on, and the thing you act on is
+          the one that wants the edge.
+
+          Only when there is more than one page. What this adds over the total
+          the page has already stated in its own words — "312 active records
+          matched", "312 active records" — is the *position*, and on a single
+          page there is no position: it read "1–3 of 3" directly beneath "3
+          active records matched", which is the same fact twice in two
+          vocabularies.
+        {% endcomment %}
+        <span class="page-size-count">{{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</span>
+      {% endif %}
+      <nav class="page-size" aria-label="Rows per page">
+        {% comment %}
+          "Per page" rather than "Show": the Tracking page already has a filter
+          row labelled Show (all I can see / mine / in my custody), and two
+          controls one above the other under the same word are two answers to a
+          question the reader only asked once. "Per page" also survives the
+          Repository, where the things being counted are cards rather than rows.
+        {% endcomment %}
+        <span class="page-size-label" id="page-size-label-{{ size_param }}">Per page</span>
+        <span class="page-size-options" role="group" aria-labelledby="page-size-label-{{ size_param }}">
+          {% for token, label in page_size_choices %}
+            {% if token == page_size %}
+              <span class="page-size-option is-active" aria-current="true">{{ label }}</span>
+            {% else %}
+              <a class="page-size-option" href="{% page_size_url token size_param page_param %}"
+                 {% if token == page_size_all %}title="Every row, up to {{ page_size_cap }} on a page"{% endif %}>{{ label }}</a>
+            {% endif %}
+          {% endfor %}
+        </span>
+      </nav>
+    </div>
+  {% endif %}
+  {% if show_steps and page_obj.has_other_pages %}
+    <div class="page-controls page-controls--steps no-print">
+      <nav class="page-steps" aria-label="Pagination">
+        <ul class="pagination pagination-sm mb-0 app-pagination">
+          {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
+          <li class="page-item disabled"><span class="page-link" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+          {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
+        </ul>
+      </nav>
+    </div>
+  {% endif %}
+{% elif show_steps and page_obj.has_other_pages %}
+  {% comment %}
+    A list that pages but has not been given the size control. Kept so this
+    partial stays safe to render from anywhere rather than silently disappearing
+    and stranding the reader on page one.
+  {% endcomment %}
   <nav class="mt-4" aria-label="Pagination">
     <ul class="pagination pagination-sm justify-content-center app-pagination">
-      {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number %}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
+      {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
       <li class="page-item disabled"><span class="page-link" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-      {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number %}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
+      {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
     </ul>
   </nav>
 {% endif %}

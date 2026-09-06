@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, notify_offices, resolve_for_record
+from apps.core.pagination import DEFAULT_PAGE_SIZE
 from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
@@ -777,7 +778,7 @@ SCOPE_INCOMING = "incoming"
 SCOPE_OUTGOING = "outgoing"
 SCOPE_PENDING_RECEIPT = "pending-receipt"
 SCOPE_RECEIVED = "received"
-#: The started half of SCOPE_RECEIVED. A scope and not a `?status=` pill: a
+#: The other half of SCOPE_RECEIVED. A scope and not a `?status=` pill: a
 #: status-based pill in this row is what put another office's records in your
 #: Received queue once already, because a status says nothing about who is
 #: holding the document. This asks the same custody question its neighbours do
@@ -810,16 +811,15 @@ SCOPE_CUSTODY = "custody"
 SCOPE_SENT = "sent"
 SCOPE_MINE = "mine"
 
-#: Statuses that count as "the document is here, with us" for the Received
-#: queue. In process belongs to Incoming, per the queue definitions, so it is
-#: not a separate top-level queue of its own.
-_HELD_STATUSES = (Status.RECEIVED, Status.IN_PROCESS)
-
-
-#: Records per page wherever tracking records are listed. Lives here rather
-#: than on one of the two views that page them, so the Tracking workspace and
-#: the unified search page cannot drift to different page sizes.
-PAGE_SIZE = 20
+#: Records per page wherever tracking records are listed, when the reader has
+#: not asked for another size. Lives here rather than on one of the two views
+#: that page them, so the Tracking workspace and the unified search page cannot
+#: drift to different page sizes.
+#:
+#: Taken from apps.core.pagination rather than set to a number of its own: the
+#: size control lights the option matching the current size, and a default that
+#: is not one of the offered sizes leaves every option looking unselected.
+PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 
 #: One definition of "past its deadline" in the query layer. Both the queue and
@@ -849,7 +849,7 @@ def on_time_q():
 
 
 def filter_records(records, *, query=None, status=None, offices=None, overdue=None):
-    """Free-text, status and originating-office filtering for tracking records.
+    """Free-text, stage and originating-office filtering for tracking records.
 
     Kept here rather than inline in a view because two pages need it: the
     Tracking workspace, and the tracking half of the unified search page. The
@@ -875,7 +875,12 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
             | Q(current_office__name__icontains=query)
         )
     if status:
-        records = records.filter(status=status)
+        # A list or a single value, so a caller holding one stage need not wrap
+        # it. `?status=` became repeatable when the stages turned into a
+        # multi-select row; a lone string here would have filtered on its first
+        # character through __in.
+        wanted = [status] if isinstance(status, str) else list(status)
+        records = records.filter(status__in=wanted)
     # Independent of the stage, which is the point: a record can be pending
     # receipt *and* overdue, and "overdue" used to occupy the status parameter
     # so the two could not both be asked for.
@@ -1051,9 +1056,16 @@ def apply_scope(records, scope, user, office=None):
             routing_steps__batch=F("current_batch"),
         )
     if scope == SCOPE_RECEIVED:
+        # RECEIVED only. It matched (RECEIVED, IN_PROCESS), which made this
+        # queue a superset of the In Process pill sitting beside it: a record
+        # somebody had started work on appeared under both, so the two counts
+        # overlapped and "Received" answered a question nobody asked — "received
+        # or started". Signed for and not yet started is a real queue and the
+        # one this pill is named for; In Process is its other half, and the two
+        # are now disjoint.
         return records.filter(
             to_office,
-            status__in=_HELD_STATUSES,
+            status=Status.RECEIVED,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )

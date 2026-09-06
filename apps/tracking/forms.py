@@ -386,6 +386,66 @@ class GrantAccessForm(BootstrapFormMixin, forms.Form):
         return cleaned
 
 
+#: The queues offered as pills, in the order the pills run.
+#:
+#: Direction only. Pending receipt, Received, In process and Pending upload were
+#: here too, and they are stages of a document rather than directions it is
+#: moving — one row wearing one pill shape for two different questions, and a
+#: `scope` holds one value, so you could ask only one of them at a time.
+#: They are the Stage row now (PILL_STATUSES), multi-select.
+#:
+#: The custody meaning they carried is composed rather than lost: Incoming plus
+#: Stage "Received" is the old Received queue, and Incoming plus "Pending
+#: receipt" *and* "Received" is a question this page could not be asked before.
+#: What does change is a bare Stage click: `?status=RECEIVED` alone is every
+#: record in that stage, including ones another office is holding, where
+#: `?scope=received` meant "this office signed for it". The queue pill is the
+#: half that carries custody, which is why direction stayed a scope.
+#:
+#: Every value in `scope` is still honoured — the dashboard's links and saved
+#: bookmarks carry the narrower cuts, and `?scope=received` still means exactly
+#: what it always did. Only which of them get a pill has changed.
+#:
+#: `overdue` is deliberately absent too, and for its own reason: it is a
+#: deadline condition lying across the stages, and as a queue it *replaced*
+#: whichever queue you were in instead of qualifying it. It has `?overdue=` and
+#: a three-state row of its own.
+#:
+#: Here rather than in either template because two pages draw this row and the
+#: whole point of the shared form is that they cannot drift apart.
+PILL_SCOPES = ("", "incoming", "outgoing")
+
+
+#: The stages offered as pills, in the order they run. Draft is not among them:
+#: it is visible only to its author, so a Draft pill would mean something
+#: different for every reader of the same page — and a draft has no routing at
+#: all, which is why the impossible-pair table has to name it. `?status=DRAFT`
+#: still resolves; it simply has no pill.
+PILL_STATUSES = (
+    Status.PENDING_RECEIPT,
+    Status.RECEIVED,
+    Status.IN_PROCESS,
+    Status.COMPLETED_PENDING_UPLOAD,
+)
+
+
+def status_pills(form) -> list[tuple[str, str]]:
+    """`form.status`'s choices, narrowed and ordered to the ones shown."""
+    labels = dict(form.fields["status"].choices)
+    return [(status.value, labels[status.value]) for status in PILL_STATUSES
+            if status.value in labels]
+
+
+def queue_pills(form) -> list[tuple[str, str]]:
+    """`form.scope`'s choices, narrowed and ordered to the ones shown as pills.
+
+    Reads the labels off the field rather than restating them, so renaming a
+    queue is one edit and the pill follows it.
+    """
+    labels = dict(form.fields["scope"].choices)
+    return [(value, labels[value]) for value in PILL_SCOPES if value in labels]
+
+
 class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     """Filters for the Document Tracking list.
 
@@ -396,7 +456,7 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     would sail past the form and be handed to `apply_scope` unchecked.
     """
 
-    status = forms.ChoiceField(
+    status = forms.MultipleChoiceField(
         required=False,
         label="",
         # Only the statuses this page can actually show. The list used to be
@@ -408,8 +468,12 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         # the stages, and while it sat in this list it had the parameter to
         # itself: a record could be filtered as overdue *or* as pending
         # receipt, never as both. It has `?overdue=` of its own now.
-        choices=[("", "All statuses")]
-        + [(value, label) for value, label in Status.choices if value in ACTIVE_STATUSES],
+        #
+        # Multiple, and no "All statuses" entry. Selecting none *is* all of
+        # them, so an explicit entry would be a second way to say the same
+        # thing — and on a multi-select it would also be selectable alongside a
+        # stage, which reads as "all of them and this one".
+        choices=[(value, label) for value, label in Status.choices if value in ACTIVE_STATUSES],
     )
     #: Originating office, and only originating office.
     #:
@@ -448,8 +512,14 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         # pending receipt, received and overdue — then outgoing, then the older
         # narrower cuts, which stay because dashboard tiles and saved bookmarks
         # still link to them.
+        #
+        # The empty choice is "All active", matching the word the workspace's
+        # own queue nav has always used. It read "All I can see" — which is
+        # `owner`'s empty label, two fields down — so on the search page, where
+        # both rows are rendered as pills, the reader was offered two pills with
+        # identical wording answering different questions one row apart.
         choices=[
-            ("", "All I can see"),
+            ("", "All active"),
             ("incoming", "Incoming"),
             ("pending-receipt", "Pending receipt"),
             ("received", "Received"),

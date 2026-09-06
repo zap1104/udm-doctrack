@@ -10,11 +10,19 @@
 
 <div class="card-udm mb-3"><div class="card-udm-body">
   <form method="get" class="row g-2">
+    {# Carried so searching does not snap a reader who asked for 100 rows back to 25. #}
+    <input type="hidden" name="per_page" value="{{ page_size }}">
     <div class="col-md-10"><input class="form-control" name="q" value="{{ query }}" placeholder="Search {{ config.label|lower }}…"></div>
     <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Search</button></div>
   </form>
 </div></div>
 
+{% comment %}
+  Above the list. The page length and where in the results this page sits are
+  both wanted before working down the rows, and under a full page they are a
+  scroll away.
+{% endcomment %}
+{% pager section="size" %}
 <div class="card-udm"><div class="card-udm-body p-0 table-responsive">
   <table class="table-udm">
     <thead><tr>{% for name, label in config.columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr></thead>
@@ -32,4 +40,5 @@
     </tbody>
   </table>
 </div></div>
+{% pager section="steps" %}
 {% endblock %}

@@ -5,7 +5,6 @@ from datetime import date
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import F, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,6 +16,7 @@ from apps.accounts.models import Office
 from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
+from apps.core.pagination import paginate
 from apps.core.utils import log_action, qr_svg
 
 from . import services
@@ -33,6 +33,7 @@ from .forms import (
     ReviewRouteForm,
     RouteForm,
     TrackingFilterForm,
+    status_pills,
 )
 from .models import (
     QUIET_EVENTS,
@@ -81,7 +82,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         # `?scope=overdue` — into the overdue condition, so nothing downstream
         # has to know they exist. Offices and owner the form still validates.
         resolved = core_filters.resolve(request)
-        status = resolved.status
+        statuses = resolved.statuses
         scope = resolved.scope
         offices = data.get("offices")
         owner = data.get("owner")
@@ -90,7 +91,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         # tracking record gets filtered" has one implementation. This page
         # passes no `query` — it has queue pills instead of a search box.
         records = services.filter_records(
-            records, status=status, offices=offices, overdue=resolved.overdue
+            records, status=statuses, offices=offices, overdue=resolved.overdue
         )
         # "View this page as office X", the same thing the dashboard's picker
         # means, and gated the same way — services.scope_office decides, so the
@@ -148,7 +149,10 @@ class RecordListView(AppLoginRequiredMixin, View):
             )
 
         records = records.distinct().order_by("-last_movement_at")
-        page = Paginator(records, services.PAGE_SIZE).get_page(request.GET.get("page"))
+        # Page size comes from the reader (`?per_page=`), defaulting to the
+        # workspace's own. See apps/core/pagination.py.
+        page_context = paginate(request, records, services.PAGE_SIZE)
+        page = page_context["page_obj"]
         # Materialised once so the annotation below lands on the very objects
         # the template iterates, not on a throwaway copy of the queryset.
         page_records = list(page.object_list)
@@ -180,8 +184,13 @@ class RecordListView(AppLoginRequiredMixin, View):
             self.template_name,
             {
                 "form": form,
-                "page_obj": page,
+                **page_context,
                 "records": page_records,
+                # The four stages offered as pills, and which are lit. A set of
+                # strings because that is what a template `in` test compares
+                # against — the resolver validated them already.
+                "status_choices": status_pills(form),
+                "selected_statuses": set(resolved.statuses),
                 # Why an empty table is empty, when it can never be anything
                 # else. Without it the reader concludes the filter is broken.
                 "impossible_reason": core_filters.impossible_reason(resolved),

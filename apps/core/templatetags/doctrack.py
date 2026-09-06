@@ -12,7 +12,7 @@ register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
-def pagination_url(context, page_number) -> str:
+def pagination_url(context, page_number, param: str = "page") -> str:
     """A link to `page_number` that keeps the current filters and nothing else.
 
     The pagination partial used to build this by hand as
@@ -30,11 +30,86 @@ def pagination_url(context, page_number) -> str:
     the key rather than appending to it, and every other parameter rides along.
     The return value is escaped by the template engine, which is what turns the
     separators into `&amp;` for the href.
+
+    `param` names the page key, so a screen carrying two independent lists —
+    the audit log's system trail and its record-access panel — can page one
+    without moving the other.
     """
     request = context.get("request")
     params = request.GET.copy() if request is not None else QueryDict(mutable=True)
-    params["page"] = page_number
+    params[param] = page_number
     return f"?{params.urlencode()}"
+
+
+@register.simple_tag(takes_context=True)
+def page_size_url(context, value, param: str = "per_page", page_param: str = "page") -> str:
+    """A link that asks for a different number of rows, keeping every filter.
+
+    A row of links rather than a `<select>` for the same reason the filter pills
+    are links: there is no form to submit, so it needs no JavaScript, and
+    django-csp allows no inline handler to give it any.
+
+    `page_param` is dropped, always. Page four at ten rows is not page four at a
+    hundred — it is usually past the end — and landing the reader on an empty
+    table is the one outcome a size change must not produce.
+    """
+    request = context.get("request")
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    params.pop(page_param, None)
+    params[param] = str(value)
+    return f"?{params.urlencode()}"
+
+
+@register.inclusion_tag("partials/_pagination.html", takes_context=True)
+def pager(context, data=None, section: str = "both") -> dict:
+    """Render the rows-per-page control, the Previous/Next steps, or both.
+
+    Called bare — `{% pager %}` — it reads the page out of the surrounding
+    context, which is what every page carrying a single list already has from
+    `apps.core.pagination.paginate`.
+
+    Called with a dict — `{% pager system_page %}` — it renders that one
+    instead. That is what lets the audit screen carry two independent lists
+    whose Next links and size controls do not move each other; passing seven
+    variables through `{% include ... with %}` twice was the alternative and it
+    was unreadable.
+
+    `section` splits the bar in two so each half can sit where it is used:
+
+    * `"size"` above the list — how long the page is, and where in the results
+      you are, are things you want to know *before* reading the rows, not after
+      scrolling past all of them.
+    * `"steps"` below it — Previous and Next belong at the end of the rows,
+      which is where you are standing when you want them.
+
+    `"both"` keeps them together, which is what a list with no rows to scroll
+    past wants — repository search, whose ranking has no pages to step through.
+
+    An inclusion tag rather than a plain include because it has to inject
+    `request` itself: the URL tags inside the partial build their links from the
+    live query string, and an inclusion tag renders in a context of only what is
+    returned here.
+    """
+    source = data if isinstance(data, dict) else context
+    rendered = {
+        key: source.get(key)
+        for key in (
+            "page_obj",
+            "page_size",
+            "page_size_choices",
+            "page_size_all",
+            "page_size_cap",
+        )
+    }
+    rendered["show_size"] = section in {"both", "size"}
+    rendered["show_steps"] = section in {"both", "steps"}
+    # Named defaults rather than `{% firstof %}` in the template: firstof
+    # stringifies whatever it assigns, which is right for these two and wrong
+    # for the page object and the choice list beside them.
+    rendered["page_param"] = source.get("page_param") or "page"
+    rendered["size_param"] = source.get("size_param") or "per_page"
+    rendered["request"] = context.get("request")
+    return rendered
 
 
 @register.simple_tag(takes_context=True)

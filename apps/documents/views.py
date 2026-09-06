@@ -5,7 +5,6 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +14,7 @@ from django.views.generic import View
 from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, DocumentType, Tag
+from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.utils import log_action
 
 from . import services
@@ -22,7 +22,11 @@ from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, Upl
 from .models import Document, DocumentFile
 from .suggestions import Suggestion
 
-PAGE_SIZE = 24
+#: Documents per page when the reader has not asked for another size. The
+#: shared default rather than a grid-friendly 24: the size control offers one
+#: set of sizes across the whole app, and a default outside that set would
+#: leave every option looking unselected here.
+PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 #: Rows of the pending-filing queue shown before it collapses to a count. It is
 #: a to-do list that should be worked down, not another table to page through.
@@ -142,7 +146,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
             )
 
         documents = documents.distinct().order_by("-document_date", "-created_at")
-        page = Paginator(documents, PAGE_SIZE).get_page(request.GET.get("page"))
+        # `?per_page=` decides how many cards a page carries. See
+        # apps/core/pagination.py.
+        page_context = paginate(request, documents, PAGE_SIZE)
+        page = page_context["page_obj"]
 
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
         smart_folders = (
@@ -172,7 +179,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
             self.template_name,
             {
                 "form": form,
-                "page_obj": page,
+                **page_context,
                 "documents": page.object_list,
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses

@@ -106,7 +106,6 @@ def page_records(client, url):
     [
         ("incoming_count", "incoming"),
         ("outgoing_count", "outgoing"),
-        ("received_count", "received"),
         ("overdue_count", "overdue"),
     ],
 )
@@ -362,7 +361,6 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     theirs = client.get(DASHBOARD).context
     assert picked["incoming_count"] == theirs["incoming_count"]
     assert picked["outgoing_count"] == theirs["outgoing_count"]
-    assert picked["received_count"] == theirs["received_count"]
 
 
 @pytest.mark.django_db
@@ -457,10 +455,17 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         response = client.get(DASHBOARD + query)
         body = response.content.decode()
 
-        for key, scope in (("incoming_count", "incoming"), ("outgoing_count", "outgoing"),
-                           ("received_count", "received"), ("overdue_count", "overdue")):
-            href = re.search(rf'href="(/tracking/\?scope={scope}[^"]*)"', body).group(1)
-            assert response.context[key] == len(page_records(client, href)), (scope, query)
+        # Overdue is the odd one: it links to `?overdue=yes`, because it is a
+        # condition across the stages and not a queue. Its query is named here
+        # rather than assumed, so a card that stops carrying the office is still
+        # caught — a missing match raises on .group() rather than passing.
+        for key, filter_query in (("incoming_count", "scope=incoming"),
+                                  ("outgoing_count", "scope=outgoing"),
+                                  ("overdue_count", "overdue=yes")):
+            match = re.search(rf'href="(/tracking/\?{filter_query}[^"]*)"', body)
+            assert match, (filter_query, query)
+            href = match.group(1)
+            assert response.context[key] == len(page_records(client, href)), (filter_query, query)
 
         for row in response.context["breakdown"]["slices"]:
             if row["url"].startswith(TRACKING):
@@ -734,24 +739,26 @@ def test_finished_work_is_never_late(client, users, deadlines):
 
 
 @pytest.mark.django_db
-def test_in_process_is_the_started_half_of_received(client, users, deadlines):
-    """Two halves of one queue, not two questions side by side.
+def test_received_and_in_process_are_disjoint_halves(client, users, deadlines):
+    """Two halves of one custody question, and no record in both.
 
-    SCOPE_RECEIVED is "here with us" and spans Received and In process together,
-    so the new pill asks the same custody question and then pins the stage. It
-    is therefore always a subset — a property a `?status=` pill would not have,
-    since a status says nothing about who is holding the document.
+    SCOPE_RECEIVED used to span Received and In process together, so In process
+    was a strict subset of it and a started record was counted twice across two
+    pills sitting next to each other. Both still ask the same custody question —
+    which is why neither is a `?status=` pill, a status saying nothing about who
+    holds the document — they now pin different stages of it.
     """
     client.force_login(users["sup"])
 
     held = page_records(client, f"{TRACKING}?scope=received")
     started = page_records(client, f"{TRACKING}?scope=in-process")
 
-    assert started <= held
-    assert all(
-        record.status == Status.IN_PROCESS
-        for record in client.get(f"{TRACKING}?scope=in-process").context["page_obj"].object_list
-    )
+    assert not (held & started), "a record cannot be waiting to start and started"
+    for scope, status in (("received", Status.RECEIVED), ("in-process", Status.IN_PROCESS)):
+        assert all(
+            record.status == status
+            for record in client.get(f"{TRACKING}?scope={scope}").context["page_obj"].object_list
+        ), scope
 
 
 @pytest.mark.django_db
@@ -785,7 +792,12 @@ def test_the_in_process_queue_is_office_scoped_like_its_neighbours(
 @pytest.mark.django_db
 def test_the_pending_upload_pill_agrees_with_its_dashboard_slice(client, users, deadlines):
     """The last stage a record has on this page: finished, waiting for an
-    administrator to approve it into the repository."""
+    administrator to approve it into the repository.
+
+    Its pill moved to the Stage row with the other three, so the page now offers
+    it as `?status=COMPLETED_PENDING_UPLOAD`. The dashboard slice keeps linking
+    to `?scope=pending-upload`, which still resolves — what matters is that the
+    count and every route to it stay the same set of records."""
     client.force_login(users["sup"])
     body = client.get(TRACKING).content.decode()
     slice_row = next(
@@ -793,8 +805,12 @@ def test_the_pending_upload_pill_agrees_with_its_dashboard_slice(client, users, 
         if row["key"] == "pending_upload"
     )
 
-    assert "?scope=pending-upload" in body, "the pill is in the queue row"
-    assert slice_row["total"] == len(page_records(client, f"{TRACKING}?scope=pending-upload"))
+    assert "?status=COMPLETED_PENDING_UPLOAD" in body, "the pill is in the Stage row"
+    by_scope = page_records(client, f"{TRACKING}?scope=pending-upload")
+    by_stage = page_records(client, f"{TRACKING}?status=COMPLETED_PENDING_UPLOAD")
+
+    assert slice_row["total"] == len(by_scope)
+    assert by_scope == by_stage, "the pill and the bookmarked queue are one set"
 
 
 @pytest.mark.django_db
@@ -912,20 +928,24 @@ def test_every_office_is_the_union_of_the_offices(client, users, offices, traffi
 
 
 @pytest.mark.django_db
-def test_the_deadline_row_is_gone_and_the_pill_still_filters(client, users, deadlines):
-    """Two controls drove one parameter. The pill kept it — it is where the
-    reader already is — and `?overdue=no` is still resolved even though it no
-    longer has a control of its own."""
+def test_one_control_drives_the_deadline_parameter(client, users, deadlines):
+    """There must be exactly one, wherever it lives.
+
+    A three-state row and an Overdue pill once both drove `?overdue=`, which is
+    the duplication this file exists to catch. The row won: the pill could say
+    "late" and could not say "on time", so `?overdue=no` filtered with nothing
+    to set it. What matters is that the pill did not survive alongside it.
+    """
     client.force_login(users["sup"])
     body = client.get(TRACKING).content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
-    assert "filter-deadline-label" not in body, "the duplicate row is gone"
-    assert "{% filter_url 'overdue' 'yes' %}" not in body
-    assert "overdue=yes" in body, "the pill is still there"
+    assert "filter-deadline-label" in body, "the row is the control"
+    assert "overdue" not in queue_nav, "and it is the only one"
 
     late = page_records(client, f"{TRACKING}?overdue=yes")
     on_time = page_records(client, f"{TRACKING}?overdue=no")
-    assert late and on_time, "both still filter, control or no control"
+    assert late and on_time, "both states filter"
     assert not (late & on_time)
 
 

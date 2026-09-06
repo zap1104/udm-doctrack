@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,8 +9,15 @@ from django.views.generic import View
 from apps.accounts.models import Office
 from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin
+from apps.core.pagination import (
+    DEFAULT_PAGE_SIZE,
+    page_size_context,
+    paginate,
+    resolve_page_size,
+)
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
+from apps.tracking.forms import queue_pills, status_pills
 
 from .forms import REPOSITORY, TRACKING, SearchForm, TrackingSearchForm, mode_from_request
 from .services import autocomplete_terms, search_documents
@@ -55,6 +61,14 @@ class SearchView(AppLoginRequiredMixin, View):
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
         form = SearchForm(request.GET or None, years=years)
 
+        # Relevance-ranked results are a top-N, not a paged list: page four of
+        # a ranking is a worse answer than page one, and the reader who wants
+        # more asks for more rather than walking forward through diminishing
+        # matches. So the size control moves the cut-off rather than the page —
+        # "Show 10" is the ten best matches — using the same parameter and the
+        # same words as everywhere else, so there is one control to learn.
+        shown, size_token = resolve_page_size(request, DEFAULT_PAGE_SIZE)
+
         response = None
         if form.is_valid() and (form.cleaned_data.get("q") or self._has_filters(form)):
             response = search_documents(
@@ -71,11 +85,23 @@ class SearchView(AppLoginRequiredMixin, View):
                 show_below_threshold=form.cleaned_data.get("show_all", False),
             )
 
+        # Sliced here rather than passed into `search_documents` as its limit:
+        # that limit also sizes the candidate window the ranking is drawn from
+        # and feeds `total_matches` and `hidden_count`, so narrowing it to the
+        # display size would quietly change the answers as well as the length of
+        # the list. SEARCH_RESULT_LIMIT stays the ceiling on what is scored;
+        # this is only how much of that scoring is put on the page.
+        results = response.results[:shown] if response else []
+
         return {
             "form": form,
             "response": response,
-            "results": response.results if response else [],
+            "results": results,
+            "shown_count": len(results),
             "has_searched": response is not None,
+            # No `page_obj`: there are no pages to move between here, so the
+            # partial renders the size row and nothing else.
+            **page_size_context(size_token),
         }
 
     @staticmethod
@@ -117,7 +143,7 @@ class SearchView(AppLoginRequiredMixin, View):
             # Resolved, not raw: this is what turns `?status=OVERDUE` into the
             # overdue condition, so the two pages answer the legacy spellings
             # the same way.
-            status=resolved.status,
+            status=resolved.statuses,
             offices=data.get("offices"),
             overdue=resolved.overdue,
         )
@@ -150,7 +176,11 @@ class SearchView(AppLoginRequiredMixin, View):
             )
 
         records = records.distinct().order_by("-last_movement_at")
-        page = Paginator(records, tracking_services.PAGE_SIZE).get_page(request.GET.get("page"))
+        # Same page-size control, same parameter, same default as the Tracking
+        # workspace — the two pages list the same records and a querystring has
+        # to mean the same thing on both.
+        page_context = paginate(request, records, tracking_services.PAGE_SIZE)
+        page = page_context["page_obj"]
         page_records = list(page.object_list)
         # This page listed tracking records without either annotator, so its
         # rows carried no direction and no receiving offices while the Tracking
@@ -169,13 +199,31 @@ class SearchView(AppLoginRequiredMixin, View):
             "response": None,
             "results": page_records,
             "has_searched": asked,
-            "page_obj": page,
+            **page_context,
             "total": page.paginator.count,
             "query": data.get("q") or "",
             "filter_offices": Office.active.all(),
             "selected_office_ids": {str(office.pk) for office in (data.get("offices") or [])},
-            "selected_status": data.get("status") or "",
+            "status_choices": status_pills(form),
+            "selected_statuses": set(resolved.statuses),
             "selected_scope": data.get("scope") or "",
+            # The owner filter was honoured above and had no control on the
+            # page, so it could only be reached by hand-editing the URL — and
+            # once set there was nothing to say it was on. Same field, same
+            # values and same words as the workspace's Show row.
+            "selected_owner": data.get("owner") or "",
+            # The workspace has always passed this; this page read the raw
+            # query string instead, so its Deadline row could not light up for
+            # the spellings `resolve` normalises (`?overdue=1`, `true`, `on`)
+            # even though they filtered.
+            "resolved": resolved,
+            # The queues the workspace offers, not all thirteen scope values.
+            # See apps.tracking.forms.PILL_SCOPES.
+            "queue_choices": queue_pills(form),
+            # Which of them the template must draw disabled. Named by the
+            # resolver rather than repeated as a literal here, so the pill and
+            # the rule that drops the scope cannot disagree.
+            "direction_scopes": core_filters.DIRECTION_SCOPES,
         }
 
 

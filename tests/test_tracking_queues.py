@@ -68,8 +68,16 @@ def test_incoming_holds_both_pending_receipt_and_received(in_flight, users):
 
 
 @pytest.mark.django_db
-def test_in_process_belongs_to_incoming(in_flight, users):
-    from apps.tracking.services import mark_in_process
+def test_in_process_belongs_to_incoming_and_leaves_received(in_flight, users):
+    """Incoming spans the stages; Received and In process split them.
+
+    Received matched (RECEIVED, IN_PROCESS), which made it a superset of the In
+    process pill beside it: a record somebody had started work on was counted
+    under both, so "Received" answered "received or started" — a question with
+    no pill and nobody asking it. Signed for and not yet started is the queue it
+    is named for.
+    """
+    from apps.tracking.services import SCOPE_IN_PROCESS, mark_in_process
 
     confirm_receipt(in_flight, user=users["sup"])
     in_flight.refresh_from_db()
@@ -78,7 +86,8 @@ def test_in_process_belongs_to_incoming(in_flight, users):
 
     assert in_flight.status == Status.IN_PROCESS
     assert in_flight in scoped(users["sup"], SCOPE_INCOMING)
-    assert in_flight in scoped(users["sup"], SCOPE_RECEIVED)
+    assert in_flight in scoped(users["sup"], SCOPE_IN_PROCESS)
+    assert in_flight not in scoped(users["sup"], SCOPE_RECEIVED)
 
 
 @pytest.mark.django_db

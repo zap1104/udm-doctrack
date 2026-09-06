@@ -1,35 +1,101 @@
 {% load doctrack %}
 {% comment %}
-  Tracking's filters, as pills — the same control language as the queue nav on
-  the Tracking workspace and the filter rows beneath it. Each pill is a link
-  whose href already carries the selection clicking it would produce, so there
-  is no Apply button here either.
+  Tracking's filters, in the shape the Tracking workspace uses: a queue nav,
+  then the narrowing rows beneath it. The two pages list the same records
+  through the same `apply_scope`, so a reader who has learned one row of pills
+  should not have to learn a second arrangement of the same pills here.
+
+  Each pill is a link whose href already carries the selection clicking it would
+  produce, so there is no Apply button on this page either.
 
   No relevance slider and no threshold note: nothing scores a tracking record.
   A record either matches the words or it does not.
 {% endcomment %}
+{% comment %}
+  The queues, from apps.tracking.forms.PILL_SCOPES — the seven the workspace
+  offers, not all thirteen `scope` values. The full list wrapped into a
+  three-line block and put "In my office" and "Created by me" up as queues
+  beside the Show row that already asks that question. Every value still works
+  as a URL; they are simply not all offered as pills.
+{% endcomment %}
+<nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
+  <div class="tracking-queue-list">
+    {% comment %}
+      Incoming and Outgoing are properties of a document *and* an office — the
+      batch that is outgoing for Supply is incoming for HR at the same instant —
+      so across every office at once neither is a question with an answer.
+
+      Shown disabled rather than hidden: a row that loses two pills when the
+      picker changes reads as the page breaking. `apply_scope` proves the point
+      — with no office its two predicates become the empty Q and both queues
+      return every active record, so honouring the click would head the full
+      list "Incoming". core_filters.resolve drops the scope for the same reason,
+      which is what makes a hand-typed URL behave like the disabled pill.
+    {% endcomment %}
+    {% for value, label in queue_choices %}
+      {% if resolved.all_offices and value in direction_scopes %}
+        <span class="pill-toggle is-disabled" aria-disabled="true"
+              title="Incoming and Outgoing describe a document relative to one office. Pick an office to use them.">{{ label }}</span>
+      {% else %}
+        <a class="pill-toggle{% if selected_scope == value %} is-active{% endif %}"
+           href="{% filter_url 'scope' value %}"
+           {% if selected_scope == value %}aria-current="true"{% endif %}>{{ label }}</a>
+      {% endif %}
+    {% endfor %}
+    {% comment %}
+      Necessary because the pills preserve each other: with four rows of them
+      set, there was no way back short of retyping the URL. It clears the
+      filters and keeps the search — the words in the box are the search, the
+      pills are what narrows it, and clearing one is not clearing the other.
+    {% endcomment %}
+    {% if selected_scope or selected_statuses or selected_owner or selected_office_ids or resolved.overdue %}
+      <a class="pill-toggle"
+         href="{% url 'search:index' %}?mode={{ tracking_mode }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Clear filters</a>
+    {% endif %}
+  </div>
+</nav>
+
 <div class="tracking-filters">
+  {% comment %}
+    Said out loud, because this row and the queues above it share four words —
+    Pending receipt, Received, In process, Completed - pending upload — and mean
+    different things by them. That is the exact confusion the workspace removed
+    by dropping its status control altogether; both pages keep the filter now,
+    so both have to keep the distinction legible instead.
+  {% endcomment %}
+  <p class="tracking-filter-note tracking-filter-note--lead">
+    Stage is the record's own, wherever it is held. The queues above ask which
+    office is holding it — so a document another office has received is
+    <em>Received</em> by stage and not in your Received queue.
+  </p>
+  {% comment %}
+    Stage, as its own row and multi-select. `?status=` was single-valued, so
+    "pending receipt and received" — the two halves of what an office has not
+    finished with — could not be asked at all: you picked one and re-read the
+    page for the other. Repeated values now, like the office row above.
+
+    Selecting none is all of them, so there is no "All statuses" pill: on a
+    multi-select it would be selectable *beside* a stage, which reads as "all of
+    them and this one".
+
+    A stage is not a queue and this row is not the queue nav. The queues ask
+    which office is holding the document; a status says nothing about who holds
+    it — filtering by one is how another office's records reached your Received
+    queue once already, which is why those pills stayed scopes.
+  {% endcomment %}
   <div class="tracking-filter-row">
-    <span class="tracking-filter-label" id="search-status-label">Status</span>
+    <span class="tracking-filter-label" id="search-status-label">Stage</span>
     <div class="pill-row">
       <div class="pill-row-list" role="group" aria-labelledby="search-status-label">
-        {% for value, label in form.status.field.choices %}
-          <a class="pill-toggle{% if selected_status == value %} is-active{% endif %}{% if value == 'OVERDUE' %} pill-toggle--alert{% endif %}"
-             href="{% filter_url 'status' value %}"
-             {% if selected_status == value %}aria-current="true"{% endif %}>{{ label }}</a>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <div class="tracking-filter-row">
-    <span class="tracking-filter-label" id="search-scope-label">Queue</span>
-    <div class="pill-row">
-      <div class="pill-row-list" role="group" aria-labelledby="search-scope-label">
-        {% for value, label in form.scope.field.choices %}
-          <a class="pill-toggle{% if selected_scope == value %} is-active{% endif %}"
-             href="{% filter_url 'scope' value %}"
-             {% if selected_scope == value %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% for value, label in status_choices %}
+          <a class="pill-toggle{% if value in selected_statuses %} is-active{% endif %}"
+             href="{% filter_url 'status' value multi=True %}"
+             {% if value in selected_statuses %}aria-current="true"{% endif %}>
+            {{ label }}
+            <span class="visually-hidden">
+              {% if value in selected_statuses %}selected — activate to remove{% else %}activate to add{% endif %}
+            </span>
+          </a>
         {% endfor %}
       </div>
     </div>
@@ -51,6 +117,43 @@
               </span>
             </a>
           {% endwith %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% comment %}
+    The row this page was missing. `_tracking()` has always run `owner` through
+    `apply_scope`, so `?owner=mine` narrowed the results — with no control to
+    set it and nothing on screen to say it was set. Same field, same values and
+    same label as the workspace's Show row, because it is the same filter.
+  {% endcomment %}
+  {# The same Deadline row the workspace carries — see tracking/list.html. #}
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-deadline-label">Deadline</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="search-deadline-label">
+        <a class="pill-toggle{% if not resolved.overdue %} is-active{% endif %}"
+           href="{% filter_url 'overdue' '' %}"
+           {% if not resolved.overdue %}aria-current="true"{% endif %}>All deadlines</a>
+        <a class="pill-toggle{% if resolved.overdue == 'no' %} is-active{% endif %}"
+           href="{% filter_url 'overdue' 'no' %}"
+           {% if resolved.overdue == 'no' %}aria-current="true"{% endif %}>On time</a>
+        <a class="pill-toggle pill-toggle--alert{% if resolved.overdue == 'yes' %} is-active{% endif %}"
+           href="{% filter_url 'overdue' 'yes' %}"
+           {% if resolved.overdue == 'yes' %}aria-current="true"{% endif %}>Overdue</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-owner-label">Show</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="search-owner-label">
+        {% for value, label in form.owner.field.choices %}
+          <a class="pill-toggle{% if selected_owner == value %} is-active{% endif %}"
+             href="{% filter_url 'owner' value %}"
+             {% if selected_owner == value %}aria-current="true"{% endif %}>{{ label }}</a>
         {% endfor %}
       </div>
     </div>

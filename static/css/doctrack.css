@@ -19,6 +19,12 @@
   --udm-green: #2e7d5b;
   --udm-green-soft: #e4f2ea;
   --udm-red: #b4342b;
+  /* The hovered fill, the counterpart of --udm-navy-600. Darker than --udm-red
+     in both themes, so white keeps its contrast going *up* on hover rather than
+     down. Not --udm-red-ink: that is the text colour for --udm-red-soft, and it
+     inverts between themes — used as a ground it is #f3ada6 in dark mode, which
+     is white-on-pink at 1.85:1. The contrast test caught exactly that. */
+  --udm-red-600: #93291f;
   --udm-red-soft: #fbe7e5;
   --udm-canvas: #f5f7fa;
   /* The raised surface: cards, tables, the topbar. Was #fff literal in 30-odd
@@ -151,6 +157,7 @@ a:hover { text-decoration: underline; }
   flex: 0 0 9px;
 }
 .nav-item.active { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
+.nav-item.active:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
 .nav-item.active .dot { background: var(--udm-gold); }
 .nav-section {
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -255,11 +262,12 @@ a:hover { text-decoration: underline; }
    pills. Wrapping rather than overflowing: the Status column is already narrow
    and the routing slip is print CSS with no room to grow. */
 .pill-stack { display:flex; flex-wrap:wrap; gap:4px; }
-/* Separates the deadline modifier from the queue pills it composes with. A hair
-   rule rather than a gap: a gap alone reads as the row wrapping. */
-.queue-modifier-rule { align-self:stretch; width:1px; margin:2px 4px; background:var(--udm-line); }
 /* Why a column is empty, beside the control that fills it. */
 .tracking-filter-note { margin:6px 0 0; color:var(--udm-muted); font-size:12.5px; }
+/* The same note doing the opposite job: a caption for the row *below* it rather
+   than an aside about the row above, so it carries no top margin of its own and
+   lets the .tracking-filters gap do the spacing on both sides. */
+.tracking-filter-note--lead { margin:0; }
 .pill-incoming  { background: var(--udm-slate-soft); color: var(--udm-navy-text); }
 .pill-outgoing  { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 /* Draft is the one status that is not in the workflow yet: nobody has been
@@ -361,6 +369,7 @@ a:hover { text-decoration: underline; }
 }
 .smart-folder:hover { background: var(--udm-canvas); text-decoration: none; }
 .smart-folder.active { background: var(--udm-teal-soft); color: var(--udm-teal-ink); font-weight: 600; }
+.smart-folder.active:hover { background: var(--udm-teal-soft); color: var(--udm-teal-ink); }
 .smart-folder .count { color: var(--udm-muted); font-size: 12.5px; }
 
 .doc-tile {
@@ -555,6 +564,9 @@ a:hover { text-decoration: underline; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-filter:focus-visible { outline:3px solid rgba(22,105,122,.2); outline-offset:2px; }
 	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+	.notification-filter.is-active:hover,.notification-filter.is-active:focus-visible {
+	  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+	}
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); }
@@ -602,9 +614,31 @@ a:hover { text-decoration: underline; }
 }
 .pill-toggle:hover,.pill-toggle:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
 .pill-toggle.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+/* Selected *and* hovered, said out loud rather than left to the cascade.
+   Written down, the pair cannot come apart: whatever later rule sets the
+   background here also sets the text, so there is no arrangement of these rules
+   that paints navy on navy. It also gives the state some feedback — without it
+   a selected pill was the one control on the page that did not respond to the
+   pointer at all. Same lightening .btn-udm uses on hover, so the whole app
+   answers a hover the same way. */
+.pill-toggle.is-active:hover,.pill-toggle.is-active:focus {
+  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+}
+/* A queue that cannot be asked from where the reader is standing. Dimmed and
+   inert rather than removed: a row that loses two pills when the office picker
+   changes reads as the page breaking, and the pill's title says why it is off.
+   Not a <button disabled>, because it never was a button — it is a link that
+   has nowhere to go, so it becomes a <span>. */
+.pill-toggle.is-disabled {
+  border-style:dashed; background:var(--udm-surface); color:var(--udm-muted);
+  cursor:not-allowed; opacity:.7;
+}
 .pill-toggle--alert { color:var(--udm-red-ink); }
 .pill-toggle--alert:hover,.pill-toggle--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
 .pill-toggle--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
+.pill-toggle--alert.is-active:hover,.pill-toggle--alert.is-active:focus {
+  border-color:var(--udm-red-600); background:var(--udm-red-600); color:#fff;
+}
 
 /* A row of pills: scrolls sideways rather than stacking into a tall column,
    which is what a wrapped checkbox list did on a phone. */
@@ -729,16 +763,38 @@ a:hover { text-decoration: underline; }
    Clickable text visibility
    ================================================================ */
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip),
-.app-sidebar a:not(.nav-item):not(.brand) {
+/* Prose links — the ones running through a sentence — are underlined and bold
+   so they can be found without hovering for them.
+
+   Wrapped in :where(), which contributes no specificity, so the whole thing
+   weighs `a` and `a:hover` and nothing more. That is the entire fix to a bug
+   this rule caused everywhere at once: written as
+   `.app-content a:not(.btn):not(.nav-link)…:hover`, each :not() counted as a
+   class, so the hover rule weighed eight classes and beat every component's own
+   colour. A selected pill kept its navy *background* from .is-active and took
+   its *text* colour from here — navy on navy, so the label vanished the moment
+   the pointer touched it. The same went for the notification filters and the
+   rows-per-page control, and every pill in the app was underlined at rest by
+   the declaration above.
+
+   The :not() list still reads as documentation of what is not prose, but it no
+   longer has to be complete: at zero specificity a component's own rule wins by
+   being a class, so a control added tomorrow needs no entry here. That is the
+   property worth having — the old list could only ever be one component behind.
+
+   `text-decoration: underline` rather than leaving it to the browser default:
+   Bootstrap's reboot removes it, and the two stylesheets tie on specificity, so
+   this file has to put it back explicitly. */
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)),
+:where(.app-sidebar) a:not(:where(.nav-item, .brand)) {
   font-weight: 700;
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
 }
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):hover,
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):focus {
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)):hover,
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)):focus {
   color: var(--udm-navy-text);
   text-decoration-thickness: 2px;
 }
@@ -756,6 +812,7 @@ a:hover { text-decoration: underline; }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }
 .reports-tab.active { background:var(--udm-navy); color:#fff; }
+.reports-tab.active:hover,.reports-tab.active:focus { background:var(--udm-navy-600); color:#fff; }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
@@ -956,6 +1013,61 @@ body.sidebar-open { overflow:hidden; }
 .app-alert-icon { width:9px; height:9px; margin-top:7px; border-radius:50%; background:currentColor; opacity:.75; }
 .app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy-text); font-weight:700; text-decoration:none; }
 .app-pagination .page-item:not(.disabled) .page-link:hover { border-color:var(--udm-teal); background:var(--udm-teal-soft); }
+
+/* ------------------------------------------------- rows-per-page control */
+/* Two halves of one control, in the two places they are wanted. The size row
+   sits above the list — "1–25 of 312 · Per page 10 25 50 100 All" is read
+   before the rows, since it is what says whether the answer is on this screen
+   at all — and the step buttons sit under the rows, which is where the reader
+   is standing when they want the next page.
+
+   The size options are links rather than a <select> for the same reason the
+   filter pills are — no form to submit, so no JavaScript, which django-csp
+   would not let us attach inline anyway.
+
+   No justify-content on the base rule: neither half wants the same one, and a
+   default here would only be a value both of them override. */
+.page-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+/* The size row is ranged right, with the picker last in it, so the control
+   lands on the same edge as the "Export CSV" and "Advanced relevance search"
+   links these lists already carry — the right-hand column is where this app
+   puts the things you do to a list, as against the headings that say what it
+   is. The count sits to its left rather than at the far edge: it is a fact to
+   read, not a control to reach for.
+
+   Margin below rather than above, because it sits over the list it describes;
+   the step buttons take the mirror of that. */
+.page-controls--size { margin:0 0 10px; justify-content:flex-end; }
+.page-controls--steps { margin-top:16px; justify-content:center; }
+.page-size { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.page-size-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; }
+/* A single bordered strip rather than five separate buttons: these are one
+   choice with five values, and five outlines read as five unrelated actions. */
+.page-size-options {
+  display:inline-flex; overflow:hidden;
+  border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface);
+}
+.page-size-option {
+  padding:4px 11px; border-left:1px solid var(--udm-line);
+  color:var(--udm-navy-text); font-size:12.5px; font-weight:700;
+  text-decoration:none; line-height:1.6;
+}
+.page-size-option:first-child { border-left:0; }
+.page-size-option:hover,.page-size-option:focus-visible { background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
+/* The same navy-on-white the filter pills and the notification filters use for
+   "this is the state you are in", rather than a colour of its own: navy is dark
+   in both themes, so white stays legible on it without a second rule below. */
+.page-size-option.is-active { background:var(--udm-navy); color:#fff; cursor:default; }
+/* It renders as a <span>, so it takes no pointer — stated anyway, because the
+   day it becomes a link again is the day it would otherwise go dark-on-dark. */
+.page-size-option.is-active:hover { background:var(--udm-navy); color:#fff; }
+.page-size-count { color:var(--udm-muted); font-size:12.5px; }
+
+@media (max-width: 575.98px) {
+  /* Wrapped onto two lines on a phone, a right-ragged block reads worse than a
+     left-aligned one — there is no facing column left to align to. */
+  .page-controls--size { justify-content:flex-start; }
+}
 .account-facts th { width:130px; color:var(--udm-muted); font-weight:500; }
 .account-sticky-note { position:sticky; top:86px; }
 .login-brand { position:relative; z-index:1; display:inline-flex; align-items:center; gap:11px; color:#fff; text-decoration:none; }
@@ -976,11 +1088,23 @@ body.sidebar-open { overflow:hidden; }
 .table-responsive > .table-udm { min-width: 720px; }
 .search-filters-card .card-udm-body { min-width: 0; }
 .search-query-card .form-control { min-width: 0; }
-.search-results-head { gap: 12px; }
+/* What matched and how it is ordered on the left; the page-length control on
+   the right. One line, because these were three stacked rows answering one
+   question — and two of them answered it with the same number. */
+.search-results-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px 16px; margin-bottom: 10px;
+}
+.search-results-summary { font-size: 13.5px; }
+/* The row owns the spacing now, so the control inside it brings none of its own. */
+.search-results-head .page-controls--size { margin: 0; }
 
 @media (max-width: 767.98px) {
   .table-responsive > .table-udm { min-width: 660px; }
-  .search-results-head { align-items: flex-start !important; flex-direction: column; }
+  /* Stacked on a phone, and the control ranges left with the summary above it
+     rather than hanging off the right edge of a column it no longer faces. */
+  .search-results-head { align-items: flex-start; flex-direction: column; }
+  .search-results-head .page-controls--size { justify-content: flex-start; }
   .search-filters-card .card-udm-body { padding-top: 14px; }
 }
 
@@ -1611,6 +1735,61 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    title would otherwise sit hard against the first row. */
 .desk-block-title + .card-udm-body { padding-top:10px; }
 
+/* ------------------------------------------ fixed-width panel cells */
+/* The two Action Centre tables and the Repository list beside them sit in a
+   two-column row, and every one of them is a list of documents whose subject or
+   title is written by whoever filed it. Left to size themselves, one long
+   subject set the width of a column and therefore of the card, and the card
+   beside it got whatever was left — so the same dashboard looked different
+   every day depending on what had been filed.
+
+   The cap has to reach the block inside the cell, not only the cell: a
+   `max-width` on a `<td>` in an auto-layout table is advisory and the browser
+   overrides it whenever the content wants more, which is exactly the case this
+   is here to handle. It is a custom property so the two cannot drift apart —
+   the `<td>` takes it as the hint browsers may honour, the block as the rule
+   they must.
+
+   Two lines rather than one. One line ellipsised at this width cuts most real
+   subjects at about four words, which is not enough to tell two memos apart;
+   two is enough to recognise a document you are looking for, and the full text
+   is on the title attribute for the case where it is not. */
+.desk-cell { --desk-cell-cap: 300px; max-width: var(--desk-cell-cap); }
+.desk-cell--wide { --desk-cell-cap: 420px; }
+.desk-cell-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  max-width: var(--desk-cell-cap, 100%);
+  overflow: hidden; overflow-wrap: anywhere;
+}
+/* Fallback for engines without the line clamp: one ellipsised line beats a
+   subject that runs to six. */
+@supports not (-webkit-line-clamp: 2) {
+  .desk-cell-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
+
+/* Newest in the Document Repository. A list rather than a table, so the cap is
+   the row's own width; the fixed minimum height is what keeps five rows the
+   same height whether the titles are short or long, which is what stops this
+   card and the Action Centre disagreeing about how tall their shared row is. */
+.newest-row { min-height: 62px; }
+.newest-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere;
+  max-width: 100%; font-weight: 600;
+}
+@supports not (-webkit-line-clamp: 2) {
+  .newest-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
+.newest-meta { font-size: 12.5px; }
+
+@media (max-width: 1199.98px) {
+  /* Below xl the two panels stack, so each has the full width and a 300px cap
+     is no longer earning anything — it would only cut subjects there is room
+     for. One property to raise, and the cell and its block move together. */
+  .desk-cell { --desk-cell-cap: 480px; }
+  .desk-cell--wide { --desk-cell-cap: 620px; }
+}
+
 /* --------------------------------------------------------- scope picker */
 .dashboard-scope { display:flex; align-items:center; gap:8px; }
 .dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
@@ -1755,6 +1934,9 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 }
 .folder-tile:hover,.folder-tile:focus { border-color:var(--udm-teal); text-decoration:none; }
 .folder-tile.active { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); font-weight:600; }
+.folder-tile.active:hover,.folder-tile.active:focus {
+  background:var(--udm-teal-soft); color:var(--udm-teal-ink);
+}
 /* Two lines before it clips, so an office name is legible rather than cut to a
    prefix that reads the same as its neighbour's. */
 .folder-tile-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -1808,6 +1990,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --udm-teal: #4aa9bd;
   --udm-green: #56b287;
   --udm-red: #e2695f;
+  --udm-red-600: #cf5348;
 
   /* Tints become low-lightness washes of the same hue, not pale panels. */
   --udm-gold-soft: #3a2f14;

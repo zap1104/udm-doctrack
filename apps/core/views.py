@@ -6,8 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
-from django.db.models import Avg, Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -27,10 +26,10 @@ from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
-from .business_time import average_business_seconds, humanise_business_seconds
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
+from .pagination import DEFAULT_PAGE_SIZE, paginate
 from .utils import log_action
 
 NOTIFICATION_KIND_META = {
@@ -388,6 +387,17 @@ class DashboardMemoMixin:
         }
 
 
+#: Rows in each of the dashboard's list panels — Needs action, Recently moved,
+#: Newest in the Document Repository. One number rather than three, because the
+#: panels sit in a two-column row and a taller one drags the shorter one's card
+#: out with it: Recently moved carried eight against Needs action's five and
+#: the Repository panel's five, so the row was always ragged.
+#:
+#: Five is a glance. Every panel carries a link to the page that holds the rest,
+#: and none of these lists is a queue you work down from the dashboard.
+DASHBOARD_ROWS = 5
+
+
 class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     template_name = "core/dashboard.html"
 
@@ -422,7 +432,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             ).distinct()
 
         incoming = queue(tracking_services.SCOPE_INCOMING)
-        received = queue(tracking_services.SCOPE_RECEIVED)
         outgoing = queue(tracking_services.SCOPE_OUTGOING)
         # Was overdue_for(user), which has no office in it at all — so the card
         # read the same figure whichever office the picker named. This is the
@@ -433,7 +442,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # then received, so the panel could not have an honest link: it showed
         # five rows and its button opened five, two of them different. Short
         # when it is short, which is what "Needs action" means.
-        attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:5])
+        attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:DASHBOARD_ROWS])
         today = timezone.localdate()
         office_today = TrackingRecord.objects.none()
         if user.office_id:
@@ -460,14 +469,17 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             .count()
         )
 
-        attention = attention[:5]
         tracking_services.annotate_can_confirm(attention, user)
         # Same test the tracking list uses (apps/tracking/views.py): the bulk
         # footer only appears when at least one row on this page could actually
         # be received, so nobody is shown an attestation they cannot satisfy.
         can_bulk_receive = any(record.can_confirm_now for record in attention)
 
-        recent = list(tracking_services.active_for(user)[:8])
+        # Five, like Needs action above it and like Newest in the Repository
+        # beside it. Eight made the card taller than the one it shares a row
+        # with, and a dashboard panel is a glance with a link to the full list
+        # underneath — the reader who wants row six wants the Tracking page.
+        recent = list(tracking_services.active_for(user)[:DASHBOARD_ROWS])
         show_office_columns = user.is_records_staff
         if show_office_columns:
             # Both panels in one pass — the helper groups by record, so a
@@ -484,13 +496,12 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # different queue from the one their card opened.
                 "incoming_count": incoming.count(),
                 "incoming_new_today": incoming.filter(last_movement_at__date=today).count(),
-                "received_count": received.count(),
                 "outgoing_count": outgoing.count(),
                 "overdue_count": overdue_count,
                 "attention_records": attention,
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,
-                "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:5],
+                "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:DASHBOARD_ROWS],
                 "received_today": office_today.distinct().count(),
                 "forwarded_today": forwarded_today,
                 "completed_today": completed_today,
@@ -788,54 +799,54 @@ def _office_from_name(raw: str):
 
 
 def report_filters_from_request(request):
+    """Which office the report answers for. That is the whole filter now.
+
+    The row carried five controls — office, office by name, year, status and
+    document type — and only the first two answer the question this page is
+    for. Reports is the dashboard's figures at full detail, and the dashboard
+    scopes by one thing: whose records these are. Year, status and document type
+    narrowed a page whose panels already break the same records down by month,
+    by status and by type, so setting one filtered a chart into agreeing with
+    itself.
+
+    Both office controls are gated together on `is_office_admin`. They were not:
+    the dropdown went through `scope_office` and the name box did not, so an
+    ordinary account was shown a list whose picks were silently dropped and
+    could still filter to another office by typing its name into the box beside
+    it. Naming *another* office is an administrator's control; everybody else
+    gets their own office, which is the only one their report could describe.
+
+    Nothing here grants anything. The office is applied on top of
+    `visible_to(user)`, never instead of it, so it can only narrow what the
+    reader already sees.
+    """
     params = request.GET
-    # The same gate the dashboard picker and the Tracking page use. It was open
-    # here and closed there, which made it an accident of which function got
-    # there first rather than a policy. Reports itself stays open to everyone;
-    # it is naming *another* office that is an administrator's control.
-    office = tracking_services.scope_office(request.user, params.get("office"))
+    can_pick = bool(getattr(request.user, "is_office_admin", False))
+    picked = tracking_services.scope_office(request.user, params.get("office"))
+    # The sentinel means "every office", not an office. Handing it to a lookup
+    # is the bug the Tracking page and the search page each had once; Reports
+    # had never been given the `all` option, so it had never hit it — and would
+    # have, on a hand-typed `?office=all`, with `Q(originating_office="__all__")`.
+    all_offices = picked == tracking_services.ALL_OFFICES
+    office = None if all_offices else picked
     # The dropdown wins when both are set, so a stale name in the box cannot
     # silently override the office somebody just picked from the list.
-    office_name = params.get("office_name", "").strip()
-    if office is None and office_name:
+    office_name = params.get("office_name", "").strip() if can_pick else ""
+    if office is None and not all_offices and office_name:
         office = _office_from_name(office_name)
-    year = _filter_year(params.get("year", ""))
-    status = params.get("status", "")
-    # "OVERDUE" is not a status and is accepted here as the vocabulary Reports'
-    # own filter row speaks — see apps.core.filters for the translation the
-    # listing pages do with the same string.
-    if status not in dict(Status.choices) and status != "OVERDUE":
-        status = ""
-    document_type = (
-        DocumentType.objects.filter(pk=params["document_type"]).first()
-        if params.get("document_type", "").isdigit() else None
-    )
     return {
         "office": office,
         "office_name": office_name,
         "office_name_unmatched": bool(office_name) and office is None,
-        "year": year,
-        "status": status,
-        "document_type": document_type,
+        "all_offices": all_offices,
+        "can_pick": can_pick,
     }
 
 
 def apply_report_filters(records, filters):
-    office, year = filters["office"], filters["year"]
+    office = filters["office"]
     if office:
         records = records.filter(Q(originating_office=office) | Q(current_office=office))
-    if year:
-        records = records.filter(created_at__year=year)
-    if filters["status"] == "OVERDUE":
-        # Reports still speaks the older spelling in its own dropdown, but it
-        # delegates rather than repeating the expression — one definition of
-        # "past its deadline" in the query layer, or this page and Tracking
-        # drift the way they did over the status vocabulary.
-        records = records.filter(tracking_services.overdue_q())
-    elif filters["status"]:
-        records = records.filter(status=filters["status"])
-    if filters["document_type"]:
-        records = records.filter(document_type=filters["document_type"])
     return records
 
 
@@ -846,23 +857,42 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     template_name = "reports/reports.html"
 
     def _filters(self):
-        """Read the filter row, saying what it refused rather than ignoring it.
+        """The office this report answers for, saying what it refused.
 
-        The office was resolved silently, so a value naming nothing — or one
-        this account may not use — left the page showing every office under the
-        reader's chosen heading. Same rule as Tracking and the Repository now:
-        no filter fails open.
+        A filter that fails open is worse than one that errors: the reader
+        believes the page is narrowed to one office and it is the whole
+        university. `?office=99999` resolves to nothing, and dropping it
+        silently leaves every office on screen under a heading naming one.
+
+        Only for an account that has the picker. Without it, `?office=` is
+        ignored by design rather than refused — `scope_office` says why: a stale
+        link should show the reader their own desk, not an error. The other way
+        it can fail, a name matching nothing or several offices, is reported
+        inline under the box that took it.
         """
-        refused = core_filters.resolve(
-            self.request, statuses=core_filters.REPORT_STATUS_VALUES
-        ).invalid
-        if refused:
+        filters = report_filters_from_request(self.request)
+        asked = (self.request.GET.get("office") or "").strip()
+        if filters["can_pick"] and asked and not filters["office"] and not filters["all_offices"]:
             messages.warning(
                 self.request,
-                "Could not apply: " + ", ".join(refused)
-                + ". The value was not recognised, or your account may not filter by office.",
+                f"Could not apply: office. “{asked}” was not recognised, so this "
+                "report covers every office you can see.",
             )
-        return report_filters_from_request(self.request)
+        return filters
+
+    def _scope_label(self, filters):
+        """What the page says it is describing, in the heading and in print.
+
+        A printed report leaves the building, so "Your office" — which answers
+        a reader looking at their own screen — answers nobody once it is on
+        paper. The office is named instead.
+        """
+        user = self.request.user
+        if filters["office"]:
+            return filters["office"].name
+        if not filters["can_pick"]:
+            return user.office_label
+        return "All offices" if user.is_system_admin else user.office_label
 
     def _apply(self, records, filters):
         return apply_report_filters(records, filters)
@@ -876,10 +906,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         documents = Document.objects.visible_to(user)
         if filters["office"]:
             documents = documents.filter(office=filters["office"])
-        if filters["year"]:
-            documents = documents.filter(created_at__year=filters["year"])
-        if filters["document_type"]:
-            documents = documents.filter(document_type=filters["document_type"])
         documents = documents.distinct()
 
         total_records = records.count()
@@ -899,10 +925,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             {
                 "filters": filters,
                 "report_generated_at": timezone.localtime(),
-                "filter_offices": Office.active.all().order_by("name"),
-                "filter_types": DocumentType.active.all().order_by("name"),
-                "filter_years": self._years(user),
-                "has_filters": any(filters.values()),
+                # Only offered to the accounts that may act on it — the template
+                # renders no office control at all without this.
+                "filter_offices": (
+                    Office.active.all().order_by("name") if filters["can_pick"] else []
+                ),
+                "scope_label": self._scope_label(filters),
                 "total_records": total_records,
                 "total_documents": total_documents,
                 "overdue": overdue,
@@ -914,7 +942,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "monthly": self._monthly(records),
                 "office_volume": self._office_volume(records),
                 "turnaround": self._turnaround(records),
-                "turnaround_by_office": self._turnaround_by_office(records),
                 "overdue_offices": self._overdue_offices(records),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
@@ -925,14 +952,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             }
         )
         return context
-
-    # -- filter options ---------------------------------------------------
-    def _years(self, user):
-        years = (
-            TrackingRecord.objects.visible_to(user)
-            .dates("created_at", "year", order="DESC")
-        )
-        return [value.year for value in years]
 
     # -- tracking panels ---------------------------------------------------
     # The aggregations below live in apps/core/analytics.py because the
@@ -1073,90 +1092,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     def _turnaround(self, records):
         return analytics.turnaround(records)
 
-    def _turnaround_by_office(self, records):
-        """The same four metrics, per office.
-
-        An overall average hides the thing management actually wants to know:
-        which office is slow. One office taking a fortnight is invisible inside
-        a mean that eleven prompt offices also contribute to.
-
-        Attributed by the office that *received* the step or holds the record,
-        because that is who had the document and could act on it — attributing
-        by originating office would charge the raiser for everybody else's wait.
-        """
-        steps = list(
-            RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-            .select_related("to_office")
-            .values_list("to_office__code", "to_office__name", "sent_at", "received_at")
-        )
-        done = list(
-            records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
-            .select_related("current_office")
-            .values_list(
-                "current_office__code", "current_office__name",
-                "created_at", "first_received_at", "completed_at", "due_at",
-            )
-        )
-
-        offices: dict[str, dict] = {}
-
-        def bucket(code, name):
-            if not code:
-                return None
-            return offices.setdefault(
-                code,
-                {
-                    "code": code, "name": name or code,
-                    "receipt_pairs": [], "processing_pairs": [], "lifetime_pairs": [],
-                    "on_time": 0, "on_time_total": 0, "records": 0,
-                },
-            )
-
-        for code, name, sent_at, received_at in steps:
-            row = bucket(code, name)
-            if row is not None:
-                row["receipt_pairs"].append((sent_at, received_at))
-
-        for code, name, created_at, first_received_at, completed_at, due_at in done:
-            row = bucket(code, name)
-            if row is None:
-                continue
-            row["records"] += 1
-            row["lifetime_pairs"].append((created_at, completed_at))
-            if first_received_at:
-                row["processing_pairs"].append((first_received_at, completed_at))
-            if due_at:
-                row["on_time_total"] += 1
-                if completed_at <= due_at:
-                    row["on_time"] += 1
-
-        rows = []
-        for row in offices.values():
-            rows.append(
-                {
-                    "code": row["code"],
-                    "name": row["name"],
-                    "records": row["records"],
-                    "receipt": humanise_business_seconds(
-                        average_business_seconds(row["receipt_pairs"])
-                    ),
-                    "processing": humanise_business_seconds(
-                        average_business_seconds(row["processing_pairs"])
-                    ),
-                    "lifetime": humanise_business_seconds(
-                        average_business_seconds(row["lifetime_pairs"])
-                    ),
-                    "on_time": row["on_time"],
-                    "on_time_total": row["on_time_total"],
-                    "on_time_percent": _percent(row["on_time"], row["on_time_total"]),
-                    # Sorted on, not shown: the office with the longest wait to
-                    # be received is the one worth putting at the top.
-                    "_sort": average_business_seconds(row["receipt_pairs"]) or 0,
-                }
-            )
-        rows.sort(key=lambda row: row["_sort"], reverse=True)
-        return rows
-
     def _overdue_offices(self, records):
         return analytics.overdue_offices(records)
 
@@ -1198,15 +1133,17 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _search_analytics(self):
-        total_queries = SearchQueryLog.objects.count()
-        clicked_queries = SearchQueryLog.objects.filter(result_clicks__isnull=False).distinct().count()
-        clicks = SearchResultClick.objects.count()
-        average_rank = SearchResultClick.objects.aggregate(value=Avg("rank"))["value"]
+        """The two counters the Most used searches panel states.
+
+        "Queries with a click" and "Average clicked rank" were computed here and
+        shown beside these; they are click-through diagnostics for tuning the
+        ranking rather than records figures, and the report does not claim them
+        any more. Their two extra queries — a DISTINCT join and an Avg over
+        every click ever logged — went with them.
+        """
         return {
-            "queries": total_queries,
-            "clicks": clicks,
-            "clicked_query_percent": _percent(clicked_queries, total_queries),
-            "average_rank": round(average_rank, 1) if average_rank is not None else None,
+            "queries": SearchQueryLog.objects.count(),
+            "clicks": SearchResultClick.objects.count(),
         }
 
 
@@ -1255,7 +1192,9 @@ class HealthzView(View):
 
 
 class NotificationListView(AppLoginRequiredMixin, View):
-    PAGE_SIZE = 25
+    #: The size used when the reader has not asked for another one. Taken from
+    #: the shared list so the size control has an option to light up.
+    PAGE_SIZE = DEFAULT_PAGE_SIZE
 
     def get(self, request):
         user = request.user
@@ -1286,7 +1225,8 @@ class NotificationListView(AppLoginRequiredMixin, View):
             notification_query = notification_query.filter(kind=active_kind)
 
         notification_query = notification_query.order_by("is_read", "-created_at")
-        page_obj = Paginator(notification_query, self.PAGE_SIZE).get_page(request.GET.get("page"))
+        page_context = paginate(request, notification_query, self.PAGE_SIZE)
+        page_obj = page_context["page_obj"]
         today = timezone.localdate()
         yesterday = today - timedelta(days=1)
         previous_day_group = None
@@ -1302,7 +1242,7 @@ class NotificationListView(AppLoginRequiredMixin, View):
             "core/notifications.html",
             {
                 "notifications": page_obj.object_list,
-                "page_obj": page_obj,
+                **page_context,
                 "notification_count": page_obj.paginator.count,
                 "active_filter": active_filter,
                 "active_kind": active_kind,
@@ -1440,13 +1380,15 @@ class ReportExportView(AppLoginRequiredMixin, View):
         parts = ["doctrack-records"]
         if filters["office"]:
             parts.append(filters["office"].code)
-        if filters["year"]:
-            parts.append(str(filters["year"]))
-        if filters["status"]:
-            parts.append(filters["status"].lower())
         response["Content-Disposition"] = f'attachment; filename="{"-".join(parts)}-{stamp}.csv"'
         writer = csv.writer(response)
-        writer.writerow(["Active filters", "; ".join(f"{key}={value}" for key, value in filters.items() if value) or "none"])
+        # The office this sheet covers, named. A CSV attached to a memo is read
+        # by somebody who cannot re-run the query, so the scope has to travel
+        # with it. It used to dump the whole filter dict, which after the row
+        # was cut to one office would have printed "can_pick=True".
+        writer.writerow(
+            ["Office", filters["office"].name if filters["office"] else "All offices visible to the exporter"]
+        )
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
@@ -1613,10 +1555,16 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
         if query:
             first_field = config["columns"][0][0]
             objects = objects.filter(**{f"{first_field}__icontains": query})
+        # Tags are the reason this pages at all: they are created by the tagging
+        # rules as documents arrive, so the section that started with a dozen
+        # rows is the one that grows without anybody adding to it by hand.
+        page_context = paginate(request, objects)
         return render(
             request,
             self.template_name,
-            {"slug": slug, "config": config, "objects": objects, "query": query,
+            {"slug": slug, "config": config, "query": query,
+             **page_context,
+             "objects": page_context["page_obj"].object_list,
              "master_data": master_data_for(request.user)},
         )
 
@@ -1671,8 +1619,18 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         )
 
 
-#: Rows shown per panel on the audit screen.
-AUDIT_ROWS = 300
+#: Rows shown per panel on the audit screen when nobody has asked for another
+#: size. Both panels are now paged rather than truncated at a flat 300: the
+#: trail is append-only and grows for the life of the installation, so a hard
+#: slice meant that after a busy month the older half of the log existed and
+#: could not be reached from the screen built to read it.
+AUDIT_ROWS = DEFAULT_PAGE_SIZE
+
+#: The record-access panel's own parameters. Two lists on one page cannot share
+#: `page` — one Next link would move both — so this panel carries its own pair
+#: and the system-log panel keeps the defaults.
+ACCESS_PAGE_PARAM = "access_page"
+ACCESS_SIZE_PARAM = "access_per_page"
 
 
 class AuditLogView(AdminRequiredMixin, TemplateView):
@@ -1759,13 +1717,28 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
             entries = entries.filter(Q(summary__icontains=query) | Q(actor_label__icontains=query))
 
         access_entries, record_query, who_query = self.record_access_entries()
+
+        # Two paginators, two sets of parameters. The template renders a
+        # `{% pager %}` per panel against its own page object, so filtering or
+        # paging one leaves the other where the administrator left it.
+        system_page = paginate(self.request, entries, AUDIT_ROWS)
+        access_page = paginate(
+            self.request,
+            access_entries,
+            AUDIT_ROWS,
+            page_param=ACCESS_PAGE_PARAM,
+            size_param=ACCESS_SIZE_PARAM,
+        )
+
         context.update(
             {
-                "entries": entries[:AUDIT_ROWS],
+                "entries": system_page["page_obj"].object_list,
+                "system_page": system_page,
                 "actions": AuditLog.Action.choices,
                 "selected_action": action,
                 "query": query,
-                "access_entries": access_entries[:AUDIT_ROWS],
+                "access_entries": access_page["page_obj"].object_list,
+                "access_page": access_page,
                 "record_query": record_query,
                 "who_query": who_query,
                 "view_dedup_minutes": settings.VIEW_LOG_DEDUP_MINUTES,

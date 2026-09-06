@@ -47,6 +47,8 @@
   {% include "partials/_form_errors.html" %}
   {# Carried so the mode survives a submit of the search box. #}
   <input type="hidden" name="mode" value="{{ mode }}">
+  {# And the page length, which is a property of the reader rather than the query. #}
+  <input type="hidden" name="per_page" value="{{ page_size }}">
   <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
     <div class="row g-2">
       {# Each form's own q carries the placeholder that describes its corpus. #}
@@ -63,9 +65,20 @@
     {% include "search/_filters_tracking.html" %}
 
     {% if has_searched %}
-      <div class="search-results-head d-flex justify-content-between align-items-center mb-2">
-        <div><strong>{{ total }}</strong> active record{{ total|pluralize }} matched</div>
-        <span class="text-muted" style="font-size:13px;">Newest movement first</span>
+      {% comment %}
+        One row over the table, not two. The count, the sort order and the page
+        length were three separate lines stacked on each other, and the first
+        and third said the same number — "3 active records matched" directly
+        above "1–3 of 3". They are all answers to "what am I looking at", so
+        they belong on one line: what matched and how it is ordered on the left,
+        what to do about the length on the right.
+      {% endcomment %}
+      <div class="search-results-head">
+        <div class="search-results-summary">
+          <strong>{{ total }}</strong> active record{{ total|pluralize }} matched
+          <span class="text-muted">· Newest movement first</span>
+        </div>
+        {% pager section="size" %}
       </div>
       {% include "search/_results_tracking.html" %}
     {% else %}

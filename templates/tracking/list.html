@@ -34,60 +34,44 @@
       Incoming and concluded the queue had narrowed their own files, when it had
       replaced their filter with everybody's.
 
-      Each queue is now one `scope`, computed in tracking.services.apply_scope.
-      Incoming and Received used to be a mix of `scope` and `status`, which made
-      them mean different things from each other: Received filtered on the
-      record's status regardless of which office held it, so a document another
-      office had received showed up in your Received queue.
-    {% endcomment %}
-    <a class="pill-toggle{% if scope == 'incoming' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'incoming' %}">Incoming</a>
-    <a class="pill-toggle{% if scope == 'outgoing' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'outgoing' %}">Outgoing</a>
-    <a class="pill-toggle{% if scope == 'pending-receipt' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'pending-receipt' %}">Pending Receipt</a>
-    <a class="pill-toggle{% if scope == 'received' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'received' %}">Received</a>
-    {% comment %}
-      A scope, like every other pill in this row, and not `?status=IN_PROCESS`.
-      A605c14 made this row scope-based on purpose: the mixed status pills it
-      replaced meant different things from each other, and a status-based
-      "Received" put documents *another* office had received into your queue,
-      because a status says nothing about who is holding the document.
+      Each queue is one `scope`, computed in tracking.services.apply_scope.
 
-      SCOPE_IN_PROCESS asks the same custody question Received asks and then
-      pins the stage, so the two are halves of one queue.
-    {% endcomment %}
-    <a class="pill-toggle{% if scope == 'in-process' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'in-process' %}">In Process</a>
-    {% comment %}
-      The last stage a record has on this page: finished, and waiting for an
-      administrator to approve it into the repository. `scope`, like the rest of
-      the row; it resolves to the same records as the dashboard's
-      Completed - pending upload slice, which is where the count comes from.
-    {% endcomment %}
-    <a class="pill-toggle{% if scope == 'pending-upload' %} is-active{% endif %}"
-       href="{% filter_url 'scope' 'pending-upload' %}">Pending Upload</a>
-    {% comment %}
-      Set apart, because it is not a peer of the queues beside it — it is a
-      modifier that composes with them. Incoming + Overdue is one click from
-      either pill now, and both light up together; while overdue was a `scope`
-      it replaced the queue instead of qualifying it.
-    {% endcomment %}
-    <span class="queue-modifier-rule" aria-hidden="true"></span>
-    <a class="pill-toggle pill-toggle--alert{% if request.GET.overdue == 'yes' %} is-active{% endif %}"
-       href="{% filter_url 'overdue' 'yes' %}">Overdue</a>
-    {% comment %}
-      A three-state Deadline row sat in the filter panel below and drove this
-      same parameter, so the page had two controls for one filter — the shape of
-      confusion the rest of this work has been removing. The pill kept it: it is
-      where the reader already is, and Overdue is the most-asked question on the
-      page.
+      Direction only, now: All active, Incoming, Outgoing. Pending Receipt,
+      Received, In Process and Pending Upload have moved to the Stage row below
+      as multi-select pills — they were stages of a document wearing the same
+      pill as a direction, so one row was answering two questions and you could
+      only ask one of them at a time.
 
-      `?overdue=no` — "on time only" — is still resolved and still filters; it
-      just has no control of its own any more. The pill toggles between any and
-      overdue, which is the pair people use.
+      The custody meaning those four used to carry is not lost, it is composed:
+      Incoming + Stage "Received" is the old Received queue, and now
+      Incoming + "Pending receipt" *and* "Received" is a question the page could
+      not previously be asked at all. Every `?scope=` value still resolves, so
+      the dashboard's links and saved bookmarks are unaffected — see
+      apps.tracking.forms.PILL_SCOPES.
     {% endcomment %}
+    {% comment %}
+      Incoming and Outgoing are properties of a document *and* an office — the
+      batch that is outgoing for Supply is incoming for HR at the same instant —
+      so across every office at once neither is a question with an answer.
+
+      Shown disabled rather than hidden: a row that loses two pills when the
+      picker changes reads as the page breaking. `apply_scope` proves the point
+      — with no office its two predicates become the empty Q and both queues
+      return every active record, so honouring the click would head the full
+      list "Incoming". core_filters.resolve drops the scope for the same reason,
+      which is what makes a hand-typed URL behave like the disabled pill.
+    {% endcomment %}
+    {% if resolved.all_offices %}
+      <span class="pill-toggle is-disabled" aria-disabled="true"
+            title="Incoming and Outgoing describe a document relative to one office. Pick an office to use them.">Incoming</span>
+      <span class="pill-toggle is-disabled" aria-disabled="true"
+            title="Incoming and Outgoing describe a document relative to one office. Pick an office to use them.">Outgoing</span>
+    {% else %}
+      <a class="pill-toggle{% if scope == 'incoming' %} is-active{% endif %}"
+         href="{% filter_url 'scope' 'incoming' %}">Incoming</a>
+      <a class="pill-toggle{% if scope == 'outgoing' %} is-active{% endif %}"
+         href="{% filter_url 'scope' 'outgoing' %}">Outgoing</a>
+    {% endif %}
     {% comment %}
       Necessary once the pills preserve state: "click All Active" used to be the
       way out and no longer is, because it now keeps everything else set.
@@ -134,6 +118,12 @@
         {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
         {% if request.GET.owner %}<input type="hidden" name="owner" value="{{ request.GET.owner }}">{% endif %}
         {% if request.GET.overdue %}<input type="hidden" name="overdue" value="{{ request.GET.overdue }}">{% endif %}
+        {% comment %}
+          Carried like every other filter above: a GET form submits only its own
+          fields, so without this a reader who asked for 100 rows is snapped back
+          to 25 the moment they change office.
+        {% endcomment %}
+        <input type="hidden" name="per_page" value="{{ page_size }}">
         {% for raised in resolved.raised_by_ids %}
           <input type="hidden" name="offices" value="{{ raised }}">
         {% endfor %}
@@ -206,6 +196,70 @@
     </div>
   </div>
 
+  {% comment %}
+    Stage, as its own row and multi-select. `?status=` was single-valued, so
+    "pending receipt and received" — the two halves of what an office has not
+    finished with — could not be asked at all: you picked one and re-read the
+    page for the other. Repeated values now, like the office row above.
+
+    Selecting none is all of them, so there is no "All statuses" pill: on a
+    multi-select it would be selectable *beside* a stage, which reads as "all of
+    them and this one".
+
+    A stage is not a queue and this row is not the queue nav. The queues ask
+    which office is holding the document; a status says nothing about who holds
+    it — filtering by one is how another office's records reached your Received
+    queue once already, which is why those pills stayed scopes.
+  {% endcomment %}
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-status-label">Stage</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-status-label">
+        {% for value, label in status_choices %}
+          <a class="pill-toggle{% if value in selected_statuses %} is-active{% endif %}"
+             href="{% filter_url 'status' value multi=True %}"
+             {% if value in selected_statuses %}aria-current="true"{% endif %}>
+            {{ label }}
+            <span class="visually-hidden">
+              {% if value in selected_statuses %}selected — activate to remove{% else %}activate to add{% endif %}
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% comment %}
+    Deadline, as a row of its own. It was a single Overdue pill in the queue
+    nav above, which could say "late" and could not say "on time": `?overdue=no`
+    was resolved and filtered all along and simply had no control, so the one
+    question an office asks in two directions had a button for one of them.
+
+    Three states because an absent parameter has to go on meaning "do not
+    filter" — see apps.core.filters.OVERDUE_VALUES. All deadlines is that
+    absent parameter, so clicking it clears rather than sets.
+
+    Still a modifier and not a queue: it composes with whichever queue is
+    selected, which is why it sits in the filter rows with Status and Show
+    rather than back among the pills it used to live in.
+  {% endcomment %}
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-deadline-label">Deadline</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-deadline-label">
+        <a class="pill-toggle{% if not resolved.overdue %} is-active{% endif %}"
+           href="{% filter_url 'overdue' '' %}"
+           {% if not resolved.overdue %}aria-current="true"{% endif %}>All deadlines</a>
+        <a class="pill-toggle{% if resolved.overdue == 'no' %} is-active{% endif %}"
+           href="{% filter_url 'overdue' 'no' %}"
+           {% if resolved.overdue == 'no' %}aria-current="true"{% endif %}>On time</a>
+        <a class="pill-toggle pill-toggle--alert{% if resolved.overdue == 'yes' %} is-active{% endif %}"
+           href="{% filter_url 'overdue' 'yes' %}"
+           {% if resolved.overdue == 'yes' %}aria-current="true"{% endif %}>Overdue</a>
+      </div>
+    </div>
+  </div>
+
   <div class="tracking-filter-row">
     <span class="tracking-filter-label" id="filter-owner-label">Show</span>
     <div class="pill-row">
@@ -220,6 +274,12 @@
   </div>
 </div>
 
+{% comment %}
+  Above the table, not under it. The page length and where in the results this
+  page sits are both things the reader wants before working down the rows, and
+  under a full page they are a scroll away.
+{% endcomment %}
+{% pager section="size" %}
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
   <div class="card-udm-head">
@@ -243,7 +303,21 @@
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
                 {% include "partials/_direction_tag.html" with direction=record.direction %}
-                {{ record.document_type.name|default:"No type" }} · from {% include "partials/_office_badge.html" with office=record.originating_office %}
+                {{ record.document_type.name|default:"No type" }} ·
+                {% comment %}
+                "Originating office", not "from". Every row here already
+                carries a Current office column, and the two are different
+                offices for any document in transit — so a bare "from SUP"
+                beside "Current office SUP" read as one fact stated twice
+                instead of two facts that happen to agree today.
+
+                It is the same ambiguity the office filter was split to remove:
+                the dropdown it replaced matched originating OR current office,
+                so picking Supply returned both what Supply raised and what was
+                merely passing through it. The row now uses the filter's word
+                and the detail page's word, so all three name the same thing.
+                {% endcomment %}
+                Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>
             </td>
             <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
@@ -308,7 +382,7 @@
   {% endif %}
 </div>
 {% if can_bulk_receive %}</form>{% endif %}
-{% include "partials/_pagination.html" %}
+{% pager section="steps" %}
 
 <div class="help-note mt-3">
   <strong>Where is the document?</strong> Current Office shows the office that most recently confirmed custody.

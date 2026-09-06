@@ -12,6 +12,8 @@ Two things went wrong here and both read to a user as "there are none":
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from apps.tracking.forms import TrackingFilterForm
@@ -25,12 +27,16 @@ from apps.tracking.services import (
 )
 
 
-# --- the status dropdown ---------------------------------------------------
+# --- the status filter -----------------------------------------------------
 def test_the_status_filter_offers_only_statuses_this_page_can_show():
     offered = {value for value, _label in TrackingFilterForm().fields["status"].choices}
 
     assert "COMPLETED" not in offered, "completed records live in Documents, not here"
-    assert offered == {""} | {str(s) for s in ACTIVE_STATUSES}
+    # No empty choice. It became a multi-select, where selecting none already
+    # means all of them — so an "All statuses" entry would be a second way to
+    # say the same thing, and selectable *beside* a stage, reading as "all of
+    # them and this one".
+    assert offered == {str(status) for status in ACTIVE_STATUSES}
 
 
 def test_overdue_is_not_offered_as_a_status():
@@ -344,9 +350,284 @@ def test_the_page_has_no_search_box(client, users):
 
     assert 'name="q"' not in content
 
-    for label in ("All Active", "Incoming", "Outgoing", "Pending Receipt",
-                  "Received", "In Process", "Overdue"):
+    # The queue nav is direction; the rows below carry stage and deadline.
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+    for label in ("All Active", "Incoming", "Outgoing"):
+        assert label in queue_nav, label
+    for label in ("Pending receipt", "Received", "In process",
+                  "Completed - pending upload", "Overdue"):
         assert label in body, label
+        assert label not in queue_nav, f"{label} belongs in its own row"
+
+
+# --- the stage row ----------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("url", ["/tracking/", "/search/?mode=tracking&q=a"])
+def test_the_stage_row_offers_the_four_live_stages(client, users, url):
+    client.force_login(users["med"])
+    body = client.get(url).content.decode()
+    row = body[body.index("status-label"):]
+    row = row[:row.index("</nav>") if "</nav>" in row else len(row)]
+
+    for value in ("PENDING_RECEIPT", "RECEIVED", "IN_PROCESS", "COMPLETED_PENDING_UPLOAD"):
+        assert f"status={value}" in row, value
+    # Selecting none is all of them, so an "All statuses" pill would be a second
+    # way to say the same thing — and beside a stage it reads as "all and this".
+    assert "All statuses" not in row
+    # Visible only to its author, so a Draft pill would mean something different
+    # for every reader of the same page.
+    assert "status=DRAFT" not in row
+
+
+@pytest.mark.django_db
+def test_two_stages_can_be_asked_for_at_once(client, users, offices, memo_type):
+    """`?status=` was single-valued, so "pending receipt and received" — the two
+    halves of what an office has not finished with — could not be asked at all.
+    You picked one and re-read the page for the other."""
+    waiting = create_draft_record(
+        user=users["med"], subject="Still waiting", instructions="x", document_type=memo_type,
+    )
+    route_record(waiting, [offices["SUP"]], user=users["med"])
+    signed = create_draft_record(
+        user=users["med"], subject="Signed for", instructions="x", document_type=memo_type,
+    )
+    route_record(signed, [offices["SUP"]], user=users["med"])
+    confirm_receipt(signed, user=users["sup"])
+
+    client.force_login(users["med"])
+
+    def subjects(query):
+        return {
+            record.subject
+            for record in client.get(f"/tracking/{query}").context["page_obj"].object_list
+        }
+
+    assert subjects("?status=PENDING_RECEIPT") == {"Still waiting"}
+    assert subjects("?status=RECEIVED") == {"Signed for"}
+    assert subjects("?status=PENDING_RECEIPT&status=RECEIVED") == {"Still waiting", "Signed for"}
+
+
+@pytest.mark.django_db
+def test_a_repeated_stage_lights_one_pill(client, users):
+    """`?status=A&status=A` is one selection, not two."""
+    client.force_login(users["med"])
+
+    resolved = client.get("/tracking/?status=RECEIVED&status=RECEIVED").context["resolved"]
+
+    assert resolved.statuses == ["RECEIVED"]
+
+
+@pytest.mark.django_db
+def test_an_unknown_stage_is_refused_and_the_rest_kept(client, users):
+    """Not all-or-nothing: a stale link with one bad value must narrow by the
+    values it does understand rather than quietly returning everything."""
+    client.force_login(users["med"])
+
+    response = client.get("/tracking/?status=RECEIVED&status=BOGUS")
+
+    assert response.context["resolved"].statuses == ["RECEIVED"]
+    assert "status" in response.context["resolved"].invalid
+
+
+@pytest.mark.django_db
+def test_the_stage_row_composes_with_the_queue(client, users, offices, memo_type):
+    """What the four stage pills lost by leaving the queue nav, and how it comes
+    back. `?scope=received` meant "addressed to my office *and* signed for";
+    `?status=RECEIVED` alone is that stage anywhere. Selecting the queue and the
+    stage together asks the original question — and asks two stages at once,
+    which a single `scope` never could."""
+    waiting = create_draft_record(
+        user=users["med"], subject="Waiting", instructions="x", document_type=memo_type,
+    )
+    route_record(waiting, [offices["SUP"]], user=users["med"])
+    signed = create_draft_record(
+        user=users["med"], subject="Signed", instructions="x", document_type=memo_type,
+    )
+    route_record(signed, [offices["SUP"]], user=users["med"])
+    confirm_receipt(signed, user=users["sup"])
+
+    client.force_login(users["sup"])
+
+    def subjects(query):
+        return {
+            record.subject
+            for record in client.get(f"/tracking/{query}").context["page_obj"].object_list
+        }
+
+    # The old queue, rebuilt out of its two halves.
+    assert subjects("?scope=incoming&status=RECEIVED") == subjects("?scope=received")
+    # And the question it could not be asked.
+    assert subjects("?scope=incoming&status=PENDING_RECEIPT&status=RECEIVED") == {
+        "Waiting", "Signed",
+    }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "scope", ["pending-receipt", "received", "in-process", "pending-upload"],
+)
+def test_a_stage_queue_that_lost_its_pill_still_resolves(client, users, scope):
+    """The dashboard's links and saved bookmarks carry these. Only which of them
+    get a pill has changed — `?scope=received` still means what it always did."""
+    client.force_login(users["sup"])
+
+    response = client.get(f"/tracking/?scope={scope}")
+
+    assert response.status_code == 200
+    assert response.context["resolved"].scope == scope
+
+
+# --- direction queues need an office ----------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("url", ["/tracking/?office=all", "/search/?mode=tracking&q=a&office=all"])
+def test_incoming_and_outgoing_are_disabled_across_every_office(client, users, url):
+    """They are properties of a document *and* an office — the batch that is
+    outgoing for Supply is incoming for HR at the same instant. Disabled rather
+    than hidden: a row that loses two pills when the picker changes reads as the
+    page breaking."""
+    client.force_login(users["admin"])
+    body = client.get(url).content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+
+    assert queue_nav.count("pill-toggle is-disabled") == 2
+    assert "scope=incoming" not in queue_nav
+    assert "scope=outgoing" not in queue_nav
+
+
+@pytest.mark.django_db
+def test_a_direction_queue_asked_across_every_office_is_dropped_not_honoured(client, users):
+    """`apply_scope` with no office turns both predicates into the empty Q, so
+    honouring the click would head the full active list "Incoming" — the
+    fail-open the filter module exists to prevent."""
+    client.force_login(users["admin"])
+
+    response = client.get("/tracking/?office=all&scope=incoming")
+    resolved = response.context["resolved"]
+
+    assert resolved.scope == ""
+    assert resolved.direction_dropped is True
+    everything = client.get("/tracking/?office=all").context["page_obj"].paginator.count
+    assert response.context["page_obj"].paginator.count == everything
+
+
+@pytest.mark.django_db
+def test_the_direction_queues_still_work_for_one_office(client, users, offices):
+    """Only "every office" removes them."""
+    client.force_login(users["admin"])
+    body = client.get(f"/tracking/?office={offices['SUP'].pk}").content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+
+    assert "is-disabled" not in queue_nav
+    assert "scope=incoming" in queue_nav
+
+
+# --- the deadline row -------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("url", ["/tracking/", "/search/?mode=tracking&q=a"])
+def test_the_deadline_row_offers_all_three_states(client, users, url):
+    """A single Overdue pill could say "late" and could not say "on time".
+    `?overdue=no` was resolved and filtered all along and simply had no control,
+    so the one question an office asks in two directions had a button for one."""
+    client.force_login(users["med"])
+    body = client.get(url).content.decode()
+
+    for label in ("All deadlines", "On time", "Overdue"):
+        assert f">{label}</a>" in body, label
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url", ["/tracking/", "/search/?mode=tracking&q=a"])
+def test_the_overdue_pill_left_the_queue_nav(client, users, url):
+    """It is a modifier, not a queue — it composes with whichever queue is
+    selected, so it belongs with Status and Show rather than among the pills
+    that replace each other."""
+    client.force_login(users["med"])
+    body = client.get(url).content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+
+    assert "Overdue" not in queue_nav
+    assert "overdue=yes" not in queue_nav
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("query", "lit"),
+    [("", "All deadlines"), ("?overdue=no", "On time"), ("?overdue=yes", "Overdue")],
+)
+def test_the_deadline_row_lights_the_state_it_is_in(client, users, query, lit):
+    client.force_login(users["med"])
+    body = client.get(f"/tracking/{query}").content.decode()
+    # From this row's label to the next row's, so the Show row below — which
+    # always has an active pill of its own — cannot be counted as this one's.
+    row = body[body.index('id="filter-deadline-label"'):]
+    row = row[:row.index("tracking-filter-label")] if "tracking-filter-label" in row else row
+
+    active = re.findall(r'<a class="pill-toggle[^"]*is-active[^"]*"[^>]*>([^<]+)</a>', row)
+
+    assert [label.strip() for label in active] == [lit], row
+
+
+@pytest.mark.django_db
+def test_on_time_actually_narrows(client, users, offices, memo_type):
+    """The state that had no control. It has to filter, not merely light up."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    late = create_draft_record(
+        user=users["med"], subject="Late one", instructions="x", document_type=memo_type,
+    )
+    route_record(late, [offices["SUP"]], user=users["med"])
+    late.due_at = timezone.now() - timedelta(days=3)
+    late.save(update_fields=["due_at"])
+
+    punctual = create_draft_record(
+        user=users["med"], subject="Punctual one", instructions="x", document_type=memo_type,
+    )
+    route_record(punctual, [offices["SUP"]], user=users["med"])
+    punctual.due_at = timezone.now() + timedelta(days=3)
+    punctual.save(update_fields=["due_at"])
+
+    client.force_login(users["med"])
+
+    def subjects(query):
+        return {
+            record.subject
+            for record in client.get(f"/tracking/{query}").context["page_obj"].object_list
+        }
+
+    assert subjects("?overdue=no") == {"Punctual one"}
+    assert subjects("?overdue=yes") == {"Late one"}
+    assert {"Late one", "Punctual one"} <= subjects("")
+
+
+# --- what a row says about which office is which ----------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("url", ["/tracking/", "/search/?mode=tracking&q=electrical"])
+def test_a_row_names_the_originating_office_rather_than_saying_from(
+    client, users, offices, memo_type, url
+):
+    """Every row here already carries a Current office column, and for a
+    document in transit the two are different offices — so a bare "from SUP"
+    beside "Current office SUP" read as one fact stated twice.
+
+    It is the ambiguity the office filter was split to remove: the dropdown it
+    replaced matched originating OR current office, so picking Supply returned
+    both what Supply raised and what was merely passing through it. The row now
+    uses the filter's word and the detail page's word."""
+    record = create_draft_record(
+        user=users["med"], subject="Electrical supplies request", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    client.force_login(users["med"])
+
+    body = client.get(url).content.decode()
+    cell = body[body.index("Electrical supplies request"):]
+    cell = cell[:cell.index("</td>")]
+
+    assert "Originating office" in cell
+    assert "· from " not in cell
 
 
 @pytest.mark.django_db
@@ -360,11 +641,23 @@ def test_the_in_process_pill_is_a_scope_and_not_a_status(client, users):
     Measured on the demo data, one office saw 3 in-process records it was
     holding against 9 in that status anywhere.
     """
-    client.force_login(users["admin"])
-    content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
+    # An office user, not the system administrator: the administrator defaults
+    # to every office, where Incoming and Outgoing are drawn disabled and carry
+    # no href at all.
+    client.force_login(users["sup"])
+    body = client.get("/tracking/").content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
-    assert "?scope=in-process" in content
-    assert "?status=IN_PROCESS" not in content, "a status pill answers the wrong question here"
+    # In process is a Stage pill now, and the queue nav is direction only. What
+    # the original point survives as: the two ideas are not in one row wearing
+    # one pill shape, so neither can be mistaken for the other.
+    assert "?status=IN_PROCESS" in body, "still filterable, in the Stage row"
+    assert "?status=IN_PROCESS" not in queue_nav
+    assert "?scope=in-process" not in queue_nav
+
+    # And the custody question it used to ask is still askable, by composing:
+    # the queue carries the office, the stage carries the stage.
+    assert "?scope=incoming" in queue_nav
 
 
 @pytest.mark.django_db

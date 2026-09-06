@@ -1,8 +1,13 @@
 """The report panels and the dashboard breakdown.
 
 Covers the reworked reports (office-hours turnaround kept beside calendar time,
-per-office breakdowns, cumulative series, the office leaderboard, selection by
-name, print isolation) and the dashboard's combined percentage.
+cumulative series, the office leaderboard, selection by name, print isolation)
+and the dashboard's combined percentage.
+
+The report is the dashboard's figures at full detail, split into the two corpora
+the app keeps apart everywhere else: what is moving, and what has been filed. The
+panel list is named here rather than inferred from the template — see
+TRACKING_PANELS and REPOSITORY_PANELS.
 """
 
 from __future__ import annotations
@@ -62,27 +67,89 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
     assert "holidays not" in body
 
 
-# --- 3.2 per office --------------------------------------------------------
+# --- the panels the report is specified to carry ----------------------------
+#: Document Tracking Reports, in order. The page is the dashboard's figures at
+#: full detail, so it is a named list rather than whatever the template happens
+#: to hold: a panel arriving without a decision behind it is how this page grew
+#: a per-office turnaround table and an "Archive quality" card that restated
+#: three stat cards verbatim.
+TRACKING_PANELS = (
+    "Cumulative tracking volume",
+    "Records by status",
+    "Turnaround",
+    "Overdue documents by holding office",
+    "Documents handled by office",
+    "Transferred vs received by office",
+)
+
+#: Document Repository Report, in order.
+REPOSITORY_PANELS = (
+    "Monthly repository volume",
+    "Documents by type",
+    "Most used searches",
+)
+
+
 @pytest.mark.django_db
-def test_turnaround_is_broken_down_per_office(client, finished_record, users, offices):
-    """An overall mean hides the one slow office inside eleven prompt ones."""
-    client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["turnaround_by_office"]
-
-    codes = {row["code"] for row in rows}
-    assert offices["SUP"].code in codes, "the office that received it"
-
-    row = next(row for row in rows if row["code"] == offices["SUP"].code)
-    for key in ("receipt", "processing", "lifetime", "on_time_percent", "records"):
-        assert key in row
-
-
-@pytest.mark.django_db
-def test_the_per_office_table_is_rendered(client, finished_record, users):
+def test_the_report_carries_exactly_the_specified_panels(client, finished_record, users):
     client.force_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
-    assert "Turnaround by office" in body
+    headings = [
+        line.split("<h2>", 1)[1].split("</h2>", 1)[0]
+        for line in body.splitlines()
+        if "<h2>" in line and "</h2>" in line
+    ]
+
+    assert headings == list(TRACKING_PANELS) + list(REPOSITORY_PANELS)
+
+
+@pytest.mark.django_db
+def test_the_two_sections_stay_apart(client, finished_record, users):
+    """Tracking answers "where is the work"; the repository answers "what did we
+    file". They are different corpora and the page keeps them in two panels."""
+    client.force_login(users["admin"])
+    body = client.get(REPORTS).content.decode()
+
+    tracking = body.index('data-report-panel="tracking"')
+    documents = body.index('data-report-panel="documents"')
+
+    assert tracking < body.index(TRACKING_PANELS[-1]) < documents
+    assert documents < body.index(REPOSITORY_PANELS[0])
+
+
+@pytest.mark.django_db
+def test_the_dropped_panels_are_gone_from_the_page_and_the_context(
+    client, finished_record, users
+):
+    """"Turnaround by office" is not in the specified list, and "Archive
+    quality" restated three of the stat cards above it word for word. Their
+    view code went with them rather than being left computing figures nothing
+    renders — the per-office table cost two queries and a Python aggregation."""
+    client.force_login(users["admin"])
+    response = client.get(REPORTS)
+    body = response.content.decode()
+
+    assert "Turnaround by office" not in body
+    assert "Archive quality" not in body
+    assert "turnaround_by_office" not in response.context
+
+
+# --- 3.2 overdue by holding office -----------------------------------------
+@pytest.mark.django_db
+def test_overdue_offices_report_a_share_of_the_whole_backlog(
+    client, finished_record, users
+):
+    """Code, count and share. The bar cannot say the share: it is scaled against
+    the *longest* queue so the widest one fills its track, so two offices
+    holding 6 and 5 draw almost the same bar whether that is half the backlog
+    each or a tenth of it."""
+    client.force_login(users["admin"])
+    rows = client.get(REPORTS).context["overdue_offices"]
+
+    for row in rows:
+        assert row["share"] <= 100
+    assert sum(row["share"] for row in rows) <= 100
 
 
 # --- 3.3 cumulative three-series -------------------------------------------
@@ -161,6 +228,99 @@ def test_the_two_report_sections_are_named_exactly(client, users):
     assert "Document Tracking Reports" in body
     assert "Document Repository Report" in body
     assert "Document Management Reports" not in body
+
+
+# --- who gets the filter at all ---------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["admin", "med_admin"])
+def test_an_administrator_gets_the_office_filter(client, users, who):
+    client.force_login(users[who])
+    body = client.get(REPORTS).content.decode()
+
+    assert 'id="report-office"' in body
+    assert 'id="report-office-name"' in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["med", "viewer"])
+def test_an_ordinary_account_goes_straight_to_its_own_office(client, users, who):
+    """No filter row at all. The dropdown they used to be shown went through
+    `scope_office`, which drops a pick from an account without the picker — so
+    it was a control that appeared to work and did nothing."""
+    client.force_login(users[who])
+    response = client.get(REPORTS)
+    body = response.content.decode()
+
+    assert 'id="report-office"' not in body
+    assert 'id="report-office-name"' not in body
+    assert response.context["filters"]["can_pick"] is False
+    assert users[who].office.name in body, "the heading names the office it describes"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["med", "viewer"])
+def test_an_ordinary_account_cannot_name_another_office_by_hand(
+    client, users, offices, who
+):
+    """The two office controls disagreed about who may use them: the dropdown
+    was gated and the name box was not, so `?office_name=Supply` filtered this
+    page to another office for an account with no picker at all."""
+    client.force_login(users[who])
+    filters = client.get(
+        f"{REPORTS}?office={offices['SUP'].pk}&office_name=Supply and Property Management"
+    ).context["filters"]
+
+    assert filters["office"] is None
+    assert filters["office_name"] == ""
+
+
+@pytest.mark.django_db
+def test_the_all_offices_sentinel_never_reaches_an_office_lookup(client, users):
+    """`scope_office` answers "all" with a string sentinel. Reports had never
+    been given the option, so it had never hit it — and would have, on a
+    hand-typed URL, with Q(originating_office="__all__")."""
+    client.force_login(users["admin"])
+
+    response = client.get(f"{REPORTS}?office=all")
+
+    assert response.status_code == 200
+    assert response.context["filters"]["office"] is None
+    assert response.context["filters"]["all_offices"] is True
+
+
+@pytest.mark.django_db
+def test_the_report_filters_down_to_the_office_only(client, users):
+    """Year, status and document type are gone. The panels below already break
+    the same records down by month, by status and by type, so those three
+    filtered a chart into agreeing with itself."""
+    client.force_login(users["admin"])
+    body = client.get(REPORTS).content.decode()
+
+    for gone in ('id="report-year"', 'id="report-status"', 'id="report-document-type"'):
+        assert gone not in body, gone
+
+
+@pytest.mark.django_db
+def test_the_export_button_carries_the_office_it_was_pressed_under(
+    client, finished_record, users, offices
+):
+    """A bare URL meant the export re-read its filters from its own empty query
+    string, so exporting a one-office report handed back everything."""
+    client.force_login(users["admin"])
+    body = client.get(f"{REPORTS}?office={offices['SUP'].pk}").content.decode()
+
+    assert f"/reports/export/?office={offices['SUP'].pk}" in body
+
+
+@pytest.mark.django_db
+def test_the_export_names_the_office_it_covers(client, finished_record, users, offices):
+    """A CSV attached to a memo is read by somebody who cannot re-run the
+    query, so the scope travels with it."""
+    client.force_login(users["admin"])
+
+    body = client.get(f"/reports/export/?office={offices['SUP'].pk}").content.decode()
+
+    assert offices["SUP"].name in body.splitlines()[0]
 
 
 # --- 3.11 selection by name ------------------------------------------------

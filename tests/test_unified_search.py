@@ -279,6 +279,120 @@ def test_every_mode_renders_without_error(client, med_to_sup, users, url):
     assert client.get(url).status_code == 200
 
 
+# --- tracking mode wears the workspace's shape --------------------------------
+@pytest.mark.django_db
+def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup, users):
+    """All thirteen `scope` values were rendered as pills here, wrapping into a
+    three-line block and putting "In my office" and "Created by me" up as queues
+    beside the Show row that asks that same question.
+
+    The nav is direction now — the stages moved to their own multi-select row —
+    and this page draws it from the same PILL_SCOPES the workspace does, so the
+    two cannot drift."""
+    client.force_login(users["med"])
+    body = client.get(f"{TRACK}&q=electrical").content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+
+    for label in ("All active", "Incoming", "Outgoing"):
+        assert f">{label}</a>" in queue_nav, label
+    for elsewhere in ("Pending receipt", "Received", "In process",
+                      "Completed - pending upload"):
+        assert elsewhere not in queue_nav, f"{elsewhere} belongs in the Stage row"
+        assert elsewhere in body, elsewhere
+    for dropped in ("Waiting for my receipt", "Awaiting anyone", "In my office",
+                    "Sent by my office", "Created by me"):
+        assert dropped not in queue_nav, dropped
+
+
+@pytest.mark.django_db
+def test_a_dropped_queue_still_works_as_a_url(client, med_to_sup, users):
+    """They are not offered as pills; they are still honoured. Dashboard tiles
+    and saved bookmarks link to the narrower cuts, and the invariant that keeps
+    them working is the one this page has anyway: the same querystring means the
+    same thing here as on the workspace."""
+    client.force_login(users["sup"])
+
+    workspace = client.get("/tracking/?scope=custody")
+    searched = client.get(f"{TRACK}&scope=custody")
+
+    assert searched.status_code == 200
+    assert {record.pk for record in searched.context["page_obj"].object_list} == {
+        record.pk for record in workspace.context["page_obj"].object_list
+    }
+
+
+@pytest.mark.django_db
+def test_overdue_qualifies_a_queue_instead_of_replacing_it(client, med_to_sup, users):
+    """As a `scope` pill, Overdue replaced whichever queue you were in — so
+    "incoming and overdue" could not be asked at all. The workspace moved it to
+    `?overdue=`; this page had kept the old shape."""
+    client.force_login(users["med"])
+    body = client.get(f"{TRACK}&q=electrical&scope=incoming").content.decode()
+    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+
+    # It has left the queue nav entirely — it is not a queue, and it now has a
+    # three-state row of its own beside Stage and Show.
+    assert "scope=overdue" not in queue_nav
+    assert "overdue=yes" not in queue_nav
+    assert "overdue=yes" in body, "the Deadline row"
+
+    # The queue and the deadline compose, which is the point of a modifier: the
+    # queue stays Incoming while Overdue qualifies it.
+    combined = client.get(f"{TRACK}&q=electrical&scope=incoming&overdue=yes")
+    assert combined.context["resolved"].scope == "incoming"
+    assert combined.context["resolved"].overdue == "yes"
+
+
+@pytest.mark.django_db
+def test_the_owner_filter_finally_has_a_control(client, med_to_sup, users):
+    """`_tracking()` has always run `owner` through `apply_scope`, so
+    `?owner=mine` narrowed the results — with nothing on the page to set it and
+    nothing to say it was set."""
+    client.force_login(users["med"])
+
+    body = client.get(f"{TRACK}&q=electrical&owner=mine").content.decode()
+
+    assert 'id="search-owner-label"' in body
+    assert "Files created by me only" in body
+    assert body.count("owner=custody") >= 1
+
+
+@pytest.mark.django_db
+def test_clearing_the_filters_keeps_the_search(client, med_to_sup, users):
+    """The words in the box are the search; the pills are what narrows it.
+    Clearing one is not clearing the other."""
+    client.force_login(users["med"])
+
+    body = client.get(f"{TRACK}&q=electrical&scope=incoming&owner=mine").content.decode()
+
+    assert ">Clear filters</a>" in body
+    assert f"/search/?mode={TRACKING}&amp;q=electrical" in body
+
+
+@pytest.mark.django_db
+def test_the_queue_and_the_show_row_do_not_offer_the_same_words(client, med_to_sup, users):
+    """`scope` and `owner` both had "All I can see" as their empty label. On the
+    workspace only one of them is drawn, so it never showed; here both rows are
+    pills, one above the other."""
+    client.force_login(users["med"])
+    body = client.get(f"{TRACK}&q=electrical").content.decode()
+
+    assert body.count(">All I can see</a>") == 1
+
+
+@pytest.mark.django_db
+def test_the_results_head_states_the_count_once(client, med_to_sup, users):
+    """"3 active records matched" sat directly above "1–3 of 3" — one fact, two
+    vocabularies, two rows."""
+    client.force_login(users["med"])
+    body = client.get(f"{TRACK}&q=electrical").content.decode()
+
+    assert "active record" in body
+    assert "page-size-count" not in body, "one page has no position to report"
+    head = body[body.index("search-results-head"):body.index("</table>")]
+    assert "page-size-options" in head, "the control shares the count's line"
+
+
 # --- the shared form definition ----------------------------------------------
 def test_the_tracking_search_form_reuses_the_workspace_definition():
     """A subclass, so status/scope/offices/owner have one definition and the

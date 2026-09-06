@@ -19,6 +19,7 @@ import pytest
 from django.utils import timezone
 
 from apps.core import analytics
+from apps.core.views import DASHBOARD_ROWS
 from apps.documents.models import Document
 from apps.tracking.models import TrackingRecord
 from apps.tracking.services import (
@@ -372,7 +373,7 @@ def test_the_existing_panels_were_added_to_not_replaced(client, users, finished_
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
 
-    for key in ("incoming_count", "outgoing_count", "received_count", "overdue_count",
+    for key in ("incoming_count", "outgoing_count", "overdue_count",
                 "attention_records", "recent_records", "breakdown"):
         assert key in context, key
 
@@ -1174,11 +1175,17 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    # `received`, not `custody`: custody is every record whose current_office is
-    # this office, completed ones included, so the card read 1 over a page of 9.
-    for scope in ("incoming", "outgoing", "overdue", "received"):
+    for scope in ("incoming", "outgoing"):
         assert f"/tracking/?scope={scope}" in body, scope
+    # Overdue opens `?overdue=`, not `?scope=overdue`. It is a deadline
+    # condition lying across the stages rather than a stage of its own — the
+    # same reason the Tracking page moved it out of its queue nav and into the
+    # Deadline row, where it composes with a queue instead of replacing one.
+    assert "/tracking/?overdue=yes" in body
+    assert "/tracking/?scope=overdue" not in body
     assert "/reports/?status=OVERDUE" not in body
+    # `custody` is every record whose current_office is this office, completed
+    # ones included, so a card counting it read 1 over a page of 9.
     assert "?scope=custody" not in body
 
 
@@ -1256,6 +1263,62 @@ def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awai
 
     assert "attention_records" in context
     assert "recent_records" in context
+
+
+@pytest.mark.django_db
+def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, offices, memo_type):
+    """Recently moved carried eight rows against Needs action's five and the
+    Repository panel's five. The three sit in a two-column row, so the tall one
+    dragged the card beside it out with it and the row was always ragged."""
+    for index in range(9):
+        record = create_draft_record(
+            user=users["med"], subject=f"Long subject number {index} " + "x" * 90,
+            instructions="x", document_type=memo_type,
+        )
+        route_record(record, [offices["SUP"]], user=users["med"])
+
+    client.force_login(users["sup"])
+    context = client.get(DASHBOARD).context
+
+    assert len(context["attention_records"]) == DASHBOARD_ROWS
+    assert len(context["recent_records"]) == DASHBOARD_ROWS
+    assert len(context["recent_documents"]) <= DASHBOARD_ROWS
+
+
+@pytest.mark.django_db
+def test_a_long_subject_is_capped_rather_than_left_to_set_the_width(client, users, offices, memo_type):
+    """These panels list documents whose subject is written by whoever filed
+    them. Left to size itself, one long subject set the width of the column and
+    therefore of the card, and the panel beside it got what was left — so the
+    same dashboard was a different shape depending on what had been filed."""
+    record = create_draft_record(
+        user=users["med"],
+        subject="Quarterly consolidated procurement " + "and supplementary " * 6,
+        instructions="x", document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    record.refresh_from_db()
+
+    client.force_login(users["sup"])
+    body = client.get(DASHBOARD).content.decode()
+
+    assert "desk-cell-title" in body
+    # The cap is in CSS, so the full subject can stay on the title attribute —
+    # the reader who needs the rest hovers rather than opening the record.
+    assert f'title="{record.subject}"' in body
+
+
+@pytest.mark.django_db
+def test_the_panel_caps_are_css_not_just_truncation():
+    """A `truncatechars` alone cuts every subject at the same character count
+    whatever the column is worth. The width has to be carried by the stylesheet
+    or the two panels go back to disagreeing about it."""
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+    assert ".desk-cell {" in css and "max-width" in css
+    assert "-webkit-line-clamp" in css
+    # A row that is a fixed height whether its title is one line or two.
+    assert ".newest-row" in css
 
 
 @pytest.mark.django_db
@@ -1560,17 +1623,18 @@ def test_the_page_carries_its_two_column_labels(client, users, filed_record):
 
 
 @pytest.mark.django_db
-def test_held_by_your_office_kept_a_home_when_its_panel_went(client, users, filed_record):
-    """custody_count was a line inside Office Flow Today, which the wireframe
-    drops. Of the four figures that panel carried it is the one that says how
-    much work is sitting with you, so it took a stat card rather than going with
-    the others."""
+def test_the_card_row_is_three_queues_the_reader_acts_on(client, users, filed_record):
+    """"Held by your office" was a fourth card counting ?scope=received — a
+    stage of the same pile Incoming beside it already counts, one click away
+    from it, and a fifth count query on every load."""
     client.force_login(users["sup"])
     response = client.get(DASHBOARD)
     body = response.content.decode()
 
-    assert "Held by your office" in body
-    assert str(response.context["received_count"]) in body
+    assert "Held by your office" not in body
+    assert "received_count" not in response.context
+    for label in ("Incoming", "Outgoing", "Overdue"):
+        assert f'<div class="label">{label}</div>' in body, label
 
 
 @pytest.mark.django_db
@@ -1591,7 +1655,7 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
     context = client.get(DASHBOARD).context
 
     for key in ("overdue_offices", "overdue_summary", "live_by_status",
-                "received_count", "received_today"):
+                "received_today"):
         assert key in context, key
 
 
