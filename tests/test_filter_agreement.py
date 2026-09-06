@@ -1052,3 +1052,55 @@ def test_an_unknown_notification_kind_is_reported(client, users):
 
     assert response.status_code == 200
     assert "not recognised" in response.content.decode().lower()
+
+
+# --- the picker says what the page answers for -----------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["admin", "med_admin", "med"])
+def test_the_scope_label_matches_what_the_cards_count(client, users, traffic, who):
+    """The picker read "All offices" while the cards answered for the reader's
+    own desk — 45 records claimed against 2 shown. Whatever the heading says,
+    the page underneath has to be that."""
+    client.force_login(users[who])
+    context = client.get(DASHBOARD).context
+
+    assert context["incoming_count"] == len(page_records(client, f"{TRACKING}?scope=incoming"))
+
+
+@pytest.mark.django_db
+def test_a_system_administrator_defaults_to_every_office(client, users, traffic, offices):
+    """Their scope is the university; the office their account happens to sit in
+    is arbitrary. Nothing named means every office, and the picker says so."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    assert context["scope"]["all_offices"] is True
+    assert context["scope"]["label"] == "All offices"
+    assert page_records(client, f"{TRACKING}?scope=incoming") == page_records(
+        client, f"{TRACKING}?scope=incoming&office=all"
+    )
+
+
+@pytest.mark.django_db
+def test_an_office_administrator_defaults_to_their_own_office(client, users, traffic):
+    """Their scope is their office, so that is the default — and it is selected
+    in the picker by name rather than through a "Your office" entry duplicating
+    a row already in the list."""
+    client.force_login(users["med_admin"])
+    context = client.get(DASHBOARD).context
+    body = client.get(TRACKING).content.decode()
+
+    assert context["scope"]["all_offices"] is False
+    assert context["scope"]["label"] == users["med_admin"].office.name
+    assert f'value="{users["med_admin"].office.pk}"' in body
+
+
+@pytest.mark.django_db
+def test_neither_picker_offers_a_your_office_entry(client, users):
+    """It was a third entry that was neither of the other two: the reader's own
+    office is in the list under its own name, so it duplicated one of them while
+    reading like something else."""
+    for who in ("admin", "med_admin"):
+        client.force_login(users[who])
+        for path in (TRACKING, DASHBOARD):
+            assert "Your office</option>" not in client.get(path).content.decode(), (who, path)

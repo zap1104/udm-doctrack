@@ -144,12 +144,17 @@
         {% endcomment %}
         <select class="form-select form-select-sm" id="tracking-as-office" name="office"
                 aria-labelledby="filter-as-office-label" data-auto-submit>
-          <option value="">Your office</option>
           {% comment %}
-            System administrators only. An office administrator's rights stop at
-            their own office, so "every office" is not theirs to ask for — and
-            services.scope_office refuses the value for them, so the option is
-            hidden rather than offered and then ignored.
+            All offices, then the offices. "Your office" stood here as a third
+            entry and was neither: the reader's own office is in the list below
+            under its own name, so it duplicated one of them while reading like
+            something else — and with "All offices" beside it, two entries
+            claimed to be the default.
+
+            Offered to a system administrator, whose scope is the university.
+            An office administrator's default is their own office, selected
+            below by name, because that is what the page actually answers for
+            and a label promising more than it delivers is what this replaced.
           {% endcomment %}
           {% if user.is_system_admin %}
             <option value="all" {% if resolved.all_offices %}selected{% endif %}>All offices</option>

@@ -126,6 +126,7 @@ class DashboardMemoMixin:
                 "office": None,
                 "offices": [],
                 "can_pick": False,
+                "all_offices": False,
                 "label": "Your office",
                 "display": user.office_label,
             }
@@ -134,11 +135,19 @@ class DashboardMemoMixin:
         # use. It was a fourth reading of `office` with its own rules, which is
         # how the system ended up with four answers to one question.
         office = tracking_services.scope_office(self.request.user, self.request.GET.get("office"))
-        label = office.name if office else "All offices"
+        # Nothing named means every office for a system administrator, whose
+        # scope is the university, and the viewer's own office for an office
+        # administrator, whose scope is that. The label said "All offices" for
+        # both while the cards answered for one — 45 claimed against 2 shown.
+        every_office = office is None and user.is_system_admin
+        if office is None and not every_office:
+            office = user.office
+        label = "All offices" if every_office else (office.name if office else user.office_label)
         return {
-            "office": office,
+            "office": None if every_office else office,
             "offices": Office.active.all().order_by("name"),
             "can_pick": True,
+            "all_offices": every_office,
             "label": label,
             "display": label,
         }
@@ -390,8 +399,11 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # disagreeing with anything else on it — and with the printed memo.
         memo_context = self.get_memo_context()
         scope = memo_context["scope"]
-        # None means "the viewer's own office", which apply_scope resolves.
-        scope_office = scope["office"]
+        # The sentinel when the picker says every office, so the cards answer
+        # for what the heading above them claims.
+        scope_office = (
+            tracking_services.ALL_OFFICES if scope["all_offices"] else scope["office"]
+        )
 
         # The cards count what their own page lists, so both start from the
         # queryset the Tracking page starts from and go through `apply_scope`.

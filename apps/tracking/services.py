@@ -904,7 +904,11 @@ OFFICE_SCOPED = {
 #: them is how Overdue once went from 32 records to 3.
 #:
 #: System administrators only. An office administrator's rights stop at their
-#: own office, so "every office" is not theirs to ask for.
+#: own office, so "every office" is not theirs to ask for — and their picker
+#: does not offer it, so the gate and the control agree.
+#:
+#: A sentinel rather than None, because None already means "nobody picked, fall
+#: back to the viewer's own office" and the two have to stay tellable apart.
 ALL_OFFICES = "__all__"
 
 

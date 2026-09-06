@@ -140,8 +140,21 @@ def resolve(
     from apps.tracking.services import ALL_OFFICES, scope_office
 
     as_office = None
-    all_offices = False
     raw_office = (params.get("office") or "").strip()
+
+    # What an absent `?office=` means, per role, so the picker's first entry is
+    # true rather than merely first. It read "All offices" while the page
+    # answered for the reader's own desk — 45 records claimed, 2 shown — because
+    # nothing distinguished "no filter" from "my office".
+    #
+    # A system administrator's scope is the whole university, so nothing named
+    # means every office. An office administrator's is their own office, so
+    # nothing named means that, and their picker shows it selected by name
+    # instead of a synthetic "Your office" entry duplicating a row in the list.
+    picker = allow_office and gate_office and _may_pick(user)
+    all_offices = bool(picker and not raw_office and getattr(user, "is_system_admin", False))
+    if picker and not raw_office and not all_offices:
+        as_office = getattr(user, "office", None)
     if raw_office and allow_office and not gate_office:
         # Open to everybody: `visible_to` is the bound, not the picker.
         as_office = _office_by_pk_or_code(raw_office)
