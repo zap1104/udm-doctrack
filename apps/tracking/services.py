@@ -41,6 +41,7 @@ from .models import (
     Attachment,
     RecordAccessGrant,
     RecordActivity,
+    RoutingSLA,
     RoutingStep,
     Status,
     TrackingNumberSequence,
@@ -349,7 +350,15 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     sequence = record.routing_steps.aggregate(value=Max("sequence"))["value"] or 0
 
     if due_at is _UNSET:
-        due_days = settings.DEFAULT_ACTION_DUE_DAYS if due_days is None else due_days
+        # Recomputed on every hop — SEND, FORWARD and RETURN alike — so each
+        # office is measured against its own rule rather than inheriting the
+        # clock of whoever held the document before it.
+        #
+        # `due_at` passed explicitly still wins, including an explicit None:
+        # that is how "No deadline" reaches here from the forms, and a
+        # deliberate "no deadline" is not something an SLA may overrule.
+        if due_days is None:
+            due_days = sla_due_days_for(offices, record.document_type)
         due_at = timezone.now() + timedelta(days=int(due_days)) if due_days else None
 
     steps: list[RoutingStep] = []
@@ -902,6 +911,80 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
     if offices:
         records = records.filter(originating_office__in=offices)
     return records
+
+
+# ---------------------------------------------------------------------------
+# How long an office has to act
+# ---------------------------------------------------------------------------
+def resolve_sla_due_days(office, document_type) -> int:
+    """Days the receiving office has to act, from the SLA table.
+
+    The single place the table is read. Nothing else may query `RoutingSLA` —
+    a second reader is a second precedence order, and the two drift.
+
+    Four tiers, most specific first::
+
+        (office, document_type)   this office, this kind of document
+        (office, NULL)            this office's house rule for anything
+        (NULL, document_type)     a university-wide rule for one kind
+        no row                    settings.DEFAULT_ACTION_DUE_DAYS
+
+    Inactive rows are skipped rather than treated as "no deadline", so
+    unticking a rule falls through to the next tier — which is what an
+    administrator means by unticking it. Returning 0 there would silently
+    remove the deadline instead of removing the exception.
+
+    Ordered in the database rather than fetched-and-sorted: one query, and the
+    ordering *is* the precedence, so it cannot be restated differently by a
+    caller. `office_rank` and `type_rank` put an exact match first because
+    NULLS LAST on both columns is precisely "most specific wins".
+    """
+    from django.db.models import Case, IntegerField, Value, When
+
+    office_id = getattr(office, "pk", None)
+    type_id = getattr(document_type, "pk", None)
+
+    scopes = Q()
+    if office_id and type_id:
+        scopes |= Q(office_id=office_id, document_type_id=type_id)
+    if office_id:
+        scopes |= Q(office_id=office_id, document_type__isnull=True)
+    if type_id:
+        scopes |= Q(office__isnull=True, document_type_id=type_id)
+    if not scopes:
+        return settings.DEFAULT_ACTION_DUE_DAYS
+
+    match = (
+        RoutingSLA.objects.filter(scopes, is_active=True)
+        .annotate(
+            specificity=Case(
+                When(office__isnull=False, document_type__isnull=False, then=Value(0)),
+                When(office__isnull=False, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("specificity")
+        .values_list("due_days", flat=True)
+        .first()
+    )
+    return settings.DEFAULT_ACTION_DUE_DAYS if match is None else match
+
+
+def sla_due_days_for(offices, document_type) -> int:
+    """The strictest SLA across every office a batch is going to.
+
+    `route_record` writes one `due_at` for the whole batch — the same value on
+    every step and on the record — so when a batch goes to two offices with
+    different rules, one number has to win. The shortest does: the record is
+    late the moment the first office is late, and `record.due_at` is what the
+    overdue queue, the dashboard card and the accountability panel all read.
+
+    Taking the longest instead would let a slow office's rule hide a fast
+    office's breach, which is the opposite of what a deadline is for.
+    """
+    days = [resolve_sla_due_days(office, document_type) for office in offices]
+    return min(days) if days else settings.DEFAULT_ACTION_DUE_DAYS
 
 
 # ---------------------------------------------------------------------------
