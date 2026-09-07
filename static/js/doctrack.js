@@ -342,7 +342,15 @@
   ---------------------------------------------------------------------- */
   document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
     select.addEventListener("change", function () {
-      if (select.form) select.form.submit();
+      var form = select.form;
+      if (!form) return;
+      /* requestSubmit() over submit(): it runs validation and fires the submit
+         event, where form.submit() skips both. Nothing on these forms validates
+         today, which is precisely why the difference is worth taking now rather
+         than discovering the day one of them gains a required field. Guarded
+         because older WebKit lacks it. */
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
     });
   });
 
