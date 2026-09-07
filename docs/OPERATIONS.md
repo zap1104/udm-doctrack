@@ -162,3 +162,34 @@ immediately. Route it onward to set a fresh clock.
 Holidays and working hours are **not** modelled — these are calendar days.
 Turnaround figures on the reports page are a separate calculation and *are*
 office-hours aware; see `apps/core/business_time.py`.
+
+### Sorting and near-deadline warnings on the tracking list
+
+The **Sort** row above the table offers three orders:
+
+| Pill | Order |
+|---|---|
+| Recently updated | Most recently moved first — the page's default |
+| Deadline — soonest first | Earliest deadline at the top |
+| Deadline — latest first | Latest deadline at the top |
+
+Documents with **no deadline sort last in both directions**. A record that has
+not been scheduled belongs after every record that has, and NULL sorting high
+would otherwise put unscheduled work above the genuinely distant.
+
+Sorting is not filtering — it composes with the Queue, Stage, Deadline and Show
+rows rather than replacing any of them, and it survives paging.
+
+Each row shows its deadline under the status pills, with one of two tags:
+
+- **Overdue** (red) — the deadline has passed.
+- **Due soon** (gold) — the deadline is within `DEADLINE_WARNING_HOURS`
+  (environment variable, default 24) and has not passed.
+
+Completed work carries neither: a finished record owes nothing, whatever its
+deadline said. A deadline further out than the window shows the date with no
+tag — a warning on everything is a warning about nothing.
+
+Raise `DEADLINE_WARNING_HOURS` if offices only open the queue every other day;
+one window rather than a "due today / due tomorrow" ladder, because that
+distinction is already readable from the date printed beside the tag.
