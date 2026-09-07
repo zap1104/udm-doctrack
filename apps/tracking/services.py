@@ -13,7 +13,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F, Max, Q
+from django.db.models import Count, Exists, F, Max, OuterRef, Q
 from django.utils import timezone
 
 from apps.core.models import AuditLog, Notification
@@ -891,6 +891,122 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
     if offices:
         records = records.filter(originating_office__in=offices)
     return records
+
+
+# ---------------------------------------------------------------------------
+# Who owes the next move
+# ---------------------------------------------------------------------------
+def _current_batch_steps(**extra):
+    """RoutingStep subquery bound to the outer record's current batch."""
+    return RoutingStep.objects.filter(
+        record=OuterRef("pk"), batch=OuterRef("current_batch"), **extra
+    )
+
+
+def overdue_accountability(records):
+    """Overdue work grouped by the office that owes the next move.
+
+    Deliberately not `current_office`. `recalculate_status()` sets that to the
+    *sending* office while a batch is unreceived, because that is the last office
+    with confirmed custody — the right answer to "where is the paper", the wrong
+    answer to "who do we chase". An office that has already handed a document
+    over cannot confirm receipt of it; only the recipient can. Grouping the
+    chase-list by custody is what made a report accuse MED of sitting on a
+    document MED had already sent to SUP and PROC.
+
+    Two kinds of debt, reported separately because they need different actions:
+
+      awaiting — a step in the current batch nobody has received. Owed by each
+                 unreceived `to_office`. Chase them for a receipt.
+      holding  — the batch has at least one confirmed receipt, so somebody really
+                 does have it. Owed by `current_office`. Chase them for the
+                 action.
+
+    A record can appear in both when a batch went to several offices and only
+    some confirmed, and one awaiting record can raise rows against two offices.
+    The counts are therefore per office, not a partition of the overdue total —
+    the caller must label them that way.
+    """
+    overdue = _overdue_scope(records)
+
+    awaiting = {
+        (row["to_office__code"], row["to_office__name"]): row["total"]
+        for row in RoutingStep.objects.filter(
+            record__in=overdue,
+            received_at__isnull=True,
+            batch=F("record__current_batch"),
+        )
+        .values("to_office__code", "to_office__name")
+        .annotate(total=Count("record", distinct=True))
+    }
+
+    holding = {
+        (row["current_office__code"], row["current_office__name"]): row["total"]
+        for row in overdue.annotate(
+            _held=Exists(_current_batch_steps(received_at__isnull=False))
+        )
+        .filter(_held=True, current_office__isnull=False)
+        .values("current_office__code", "current_office__name")
+        .annotate(total=Count("id", distinct=True))
+    }
+
+    rows = []
+    for key in sorted(set(awaiting) | set(holding)):
+        code, name = key
+        rows.append(
+            {
+                "code": code,
+                "name": name or code,
+                "awaiting": awaiting.get(key, 0),
+                "holding": holding.get(key, 0),
+                "total": awaiting.get(key, 0) + holding.get(key, 0),
+            }
+        )
+    rows.sort(key=lambda row: row["total"], reverse=True)
+
+    ceiling = max([row["total"] for row in rows], default=0)
+    for row in rows:
+        row["awaiting_percent"] = _bar(row["awaiting"], ceiling)
+        row["holding_percent"] = _bar(row["holding"], ceiling)
+    return rows
+
+
+def overdue_unattributed(records):
+    """Overdue records with nobody to charge.
+
+    No unreceived step in the current batch and no confirmed holder either.
+    Should be zero. Reported rather than dropped, because a silent gap between
+    the headline total and the panel is exactly the kind of thing a defence
+    panel asks about — and a zero that is *shown* to be zero is evidence, where
+    a zero that is merely absent is an assumption.
+    """
+    return (
+        _overdue_scope(records)
+        .annotate(
+            _awaited=Exists(_current_batch_steps(received_at__isnull=True)),
+            _held=Exists(_current_batch_steps(received_at__isnull=False)),
+        )
+        .filter(_awaited=False)
+        .exclude(_held=True, current_office__isnull=False)
+        .distinct()
+        .count()
+    )
+
+
+def _overdue_scope(records):
+    """Past the deadline with work still owed, through the one definition.
+
+    `overdue_q()` rather than a second expression, so the panel and the headline
+    figure cannot drift — which is the whole reason that helper exists.
+    """
+    return records.filter(overdue_q()).distinct()
+
+
+def _bar(part: int, whole: int) -> int:
+    """Bar width as a percentage of the longest row, floored so a 1 is visible."""
+    if not whole:
+        return 0
+    return max(4, round(part * 100 / whole)) if part else 0
 
 
 #: Scopes that answer *for an office* rather than for a queryset. The picker
