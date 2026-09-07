@@ -3,7 +3,14 @@ this exists for data repair and inspection, not routine use."""
 
 from django.contrib import admin
 
-from .models import Attachment, RecordAccessGrant, RecordActivity, RoutingStep, TrackingRecord
+from .models import (
+    Attachment,
+    RecordAccessGrant,
+    RecordActivity,
+    RoutingSLA,
+    RoutingStep,
+    TrackingRecord,
+)
 
 
 class RoutingStepInline(admin.TabularInline):
@@ -60,3 +67,23 @@ class AttachmentAdmin(admin.ModelAdmin):
 class RecordAccessGrantAdmin(admin.ModelAdmin):
     list_display = ("record", "office", "user", "granted_by", "created_at")
     search_fields = ("record__tracking_number", "reason")
+
+
+@admin.register(RoutingSLA)
+class RoutingSLAAdmin(admin.ModelAdmin):
+    """The one screen that sets how long an office has to act.
+
+    Editable in the list, because the whole table is a handful of numbers and
+    opening a form per row to change a 3 to a 5 is the kind of friction that
+    stops anybody maintaining it.
+
+    A blank office or document type is the wildcard, so the list shows both
+    columns and filters on both — a reader has to be able to see at a glance
+    which rows are house rules and which are exceptions.
+    """
+
+    list_display = ("office", "document_type", "due_days", "is_active", "updated_at")
+    list_editable = ("due_days", "is_active")
+    list_filter = ("is_active", "office", "document_type")
+    search_fields = ("office__code", "office__name", "document_type__code", "document_type__name")
+    autocomplete_fields = ("office", "document_type")

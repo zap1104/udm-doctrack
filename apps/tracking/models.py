@@ -103,6 +103,83 @@ class TrackingNumberSequence(models.Model):
         return f"{self.office.code} {self.year}-{self.month:02d}: {self.last_number}"
 
 
+class RoutingSLA(TimeStampedModel):
+    """How many days an office has to act, per office and document type.
+
+    Replaces `settings.DEFAULT_ACTION_DUE_DAYS` as the *source* of the default
+    deadline. That setting is not retired — it stays as the terminal fallback,
+    the answer when no row matches, so a fresh installation with an empty table
+    behaves exactly as it does today.
+
+    Four tiers, most specific first::
+
+        (office, document_type)   this office, this kind of document
+        (office, NULL)            this office's house rule for anything
+        (NULL, document_type)     a university-wide rule for one kind
+        no row                    settings.DEFAULT_ACTION_DUE_DAYS
+
+    Both columns null is refused. That row would be a second global default
+    sitting beside the setting, and one rule in two places is how this system
+    ends up with two answers to one question — `resolve_sla_due_days` would then
+    have to decide which of them wins, which is a decision nobody made.
+
+    `due_days` of 0 means "no deadline", matching what `route_record` already
+    does with a falsy `due_days`: an office that genuinely works to no clock can
+    say so here rather than being given three days it never agreed to.
+    """
+
+    office = models.ForeignKey(
+        "accounts.Office",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="routing_slas",
+        help_text="Leave blank for a rule that applies to every office.",
+    )
+    document_type = models.ForeignKey(
+        DocumentType,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="routing_slas",
+        help_text="Leave blank for a rule that applies to every document type.",
+    )
+    due_days = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Calendar days the receiving office has to act. 0 means no deadline.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Unticked rules are ignored, and the next tier down applies.",
+    )
+
+    class Meta:
+        ordering = ["office__code", "document_type__code"]
+        verbose_name = "routing SLA"
+        verbose_name_plural = "routing SLAs"
+        constraints = [
+            # nulls_distinct=False, so "this office, any type" can exist only
+            # once. Postgres treats NULLs as distinct by default, which would
+            # let the same rule be written twice and leave the resolver picking
+            # between them by primary key.
+            models.UniqueConstraint(
+                fields=["office", "document_type"],
+                name="unique_routing_sla_scope",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                check=~Q(office__isnull=True, document_type__isnull=True),
+                name="routing_sla_needs_a_scope",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        office = self.office.code if self.office_id else "Any office"
+        kind = self.document_type.code if self.document_type_id else "any type"
+        days = "no deadline" if not self.due_days else f"{self.due_days} day{'' if self.due_days == 1 else 's'}"
+        return f"{office} · {kind}: {days}"
+
+
 class TrackingRecordQuerySet(models.QuerySet):
     def visible_to(self, user):
         """Records the user is allowed to see at all."""
