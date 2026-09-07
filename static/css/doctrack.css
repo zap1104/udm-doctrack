@@ -468,6 +468,12 @@ a:hover { text-decoration: underline; }
 /* "Is there a deadline?" first, the calendar only if the answer is yes.
    The date panel is visible by default so the field still works without JS;
    doctrack.js hides it when "No deadline" is selected. */
+/* Date and time on one line, the time narrower — it is optional and secondary,
+   and giving it equal width would suggest it has to be answered. Stacks on a
+   phone, where two controls side by side leave neither usable. */
+.deadline-when { display:flex; flex-wrap:wrap; gap:12px; }
+.deadline-when > div:first-child { flex:1 1 200px; min-width:0; }
+.deadline-when > div:last-child { flex:0 1 130px; min-width:0; }
 .deadline-field { min-width: 0; border: 1px solid var(--udm-line); border-radius: var(--radius); padding: 14px 16px; }
 .deadline-field > legend {
   float: none; width: auto; padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--udm-label-ink);

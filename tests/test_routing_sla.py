@@ -230,3 +230,73 @@ def test_the_same_scope_cannot_be_written_twice(db, offices):
 
     with pytest.raises(IntegrityError):
         RoutingSLA.objects.create(office=offices["MED"], document_type=None, due_days=4)
+
+
+# --- a deadline can carry a time of day --------------------------------------
+def _form(**overrides):
+    from apps.tracking.forms import DEADLINE_DATE, CreateRecordForm
+
+    data = {
+        "deadline_choice": DEADLINE_DATE,
+        "due_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
+        "due_time": "",
+    }
+    data.update(overrides)
+    form = CreateRecordForm(data=data)
+    form.is_valid()
+    return form
+
+
+def test_a_blank_time_still_means_end_of_day(db):
+    """The regression guard. Every deadline in the system meant 23:59:59 before
+    the time field existed, so an office that never touches it sees no change."""
+    resolved = _form().deadline_datetime()
+
+    assert (resolved.hour, resolved.minute, resolved.second) == (23, 59, 59)
+
+
+def test_an_explicit_time_is_kept(db):
+    """For the deadlines a date cannot express — "before the 10am committee",
+    "by the 3pm payroll cut-off". Rounding those up to 23:59 makes a record look
+    on time for most of the day it was already late."""
+    resolved = _form(due_time="10:00").deadline_datetime()
+
+    assert (resolved.hour, resolved.minute) == (10, 0)
+
+
+def test_no_deadline_still_resolves_to_nothing(db):
+    from apps.tracking.forms import DEADLINE_NONE
+
+    assert _form(deadline_choice=DEADLINE_NONE, due_time="10:00").deadline_datetime() is None
+
+
+def test_a_time_that_has_already_passed_today_is_refused(db):
+    """Checking the date alone let "today at 09:00" through at 4pm and wrote a
+    record that was overdue the instant it was created."""
+    form = _form(due_date=timezone.localdate().isoformat(), due_time="00:01")
+
+    assert "due_time" in form.errors
+
+
+def test_a_later_time_today_is_still_allowed(db):
+    """The past-check must not reject the whole of today."""
+    late = (timezone.localtime() + timedelta(hours=2)).strftime("%H:%M")
+    form = _form(due_date=timezone.localdate().isoformat(), due_time=late)
+
+    assert "due_time" not in form.errors
+    assert "due_date" not in form.errors
+
+
+def test_a_past_date_is_still_refused_whatever_the_time(db):
+    form = _form(due_date=(timezone.localdate() - timedelta(days=1)).isoformat(), due_time="10:00")
+
+    assert "due_date" in form.errors
+
+
+def test_the_year_cap_still_holds(db):
+    from apps.tracking.forms import MAX_DEADLINE_DAYS
+
+    beyond = timezone.localdate() + timedelta(days=MAX_DEADLINE_DAYS + 1)
+    form = _form(due_date=beyond.isoformat(), due_time="10:00")
+
+    assert "due_date" in form.errors

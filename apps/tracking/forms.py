@@ -80,6 +80,32 @@ def due_date_field():
     )
 
 
+def due_time_field():
+    """Fresh clock field for the deadline, optional.
+
+    Left blank it means end of day, which is what every deadline in the system
+    meant before this field existed — so an office that never touches it sees no
+    change at all. It is here for the deadlines a date cannot express: "before
+    the 10am committee", "by close of the payroll cut-off at 3pm". Rounding
+    those up to 23:59 makes the record look on time for most of the day it was
+    already late.
+    """
+    return forms.TimeField(
+        required=False,
+        label="Deadline time",
+        widget=forms.TimeInput(
+            attrs={"type": "time", "step": 60, "data-deadline-time": "true"},
+            format="%H:%M",
+        ),
+        help_text="Optional. Leave blank for end of day.",
+    )
+
+
+#: What a blank time means. End of the chosen day, not the moment the form was
+#: submitted: a deadline of "today" is close of business.
+END_OF_DAY = time(23, 59, 59)
+
+
 class DeadlineMixin:
     """Shared validation for the deadline pair used on both create steps.
 
@@ -106,6 +132,11 @@ class DeadlineMixin:
         today = timezone.localdate()
         if due_date < today:
             self.add_error("due_date", "The deadline cannot be in the past.")
+        elif due_date == today and self._deadline_time_has_passed(cleaned.get("due_time")):
+            # A time on today's date can be in the past while the date is not.
+            # Checking the date alone let "today at 09:00" through at 4pm and
+            # wrote a record that was overdue the instant it was created.
+            self.add_error("due_time", "That time has already passed today.")
         elif due_date > today + timedelta(days=MAX_DEADLINE_DAYS):
             self.add_error(
                 "due_date",
@@ -114,11 +145,17 @@ class DeadlineMixin:
             )
         return cleaned
 
+    @staticmethod
+    def _deadline_time_has_passed(due_time) -> bool:
+        return bool(due_time) and due_time <= timezone.localtime().time()
+
     def deadline_datetime(self):
         """The chosen deadline as an aware datetime, or None.
 
-        The date is taken as the *end* of that day: a deadline of "today" means
-        close of business, not the instant the form happened to be submitted.
+        A blank time is the end of that day: a deadline of "today" means close
+        of business, not the instant the form happened to be submitted. That is
+        what every deadline meant before the time field existed, so leaving it
+        blank changes nothing for anybody.
         """
         if not getattr(self, "cleaned_data", None):
             return None
@@ -128,7 +165,8 @@ class DeadlineMixin:
         if not due_date:
             return None
         return timezone.make_aware(
-            datetime.combine(due_date, time(23, 59, 59)), timezone.get_current_timezone()
+            datetime.combine(due_date, self.cleaned_data.get("due_time") or END_OF_DAY),
+            timezone.get_current_timezone(),
         )
 
 
@@ -145,6 +183,7 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
     )
     deadline_choice = deadline_choice_field()
     due_date = due_date_field()
+    due_time = due_time_field()
     attachments = MultipleFileField(
         required=False,
         label="Attachments",
@@ -225,6 +264,7 @@ class ReviewRouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
     )
     deadline_choice = deadline_choice_field()
     due_date = due_date_field()
+    due_time = due_time_field()
 
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
@@ -270,6 +310,7 @@ class RouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
     )
     deadline_choice = deadline_choice_field()
     due_date = due_date_field()
+    due_time = due_time_field()
     attachments = MultipleFileField(required=False, label="Attach a response or revision")
 
     def __init__(self, *args, record=None, user=None, **kwargs):

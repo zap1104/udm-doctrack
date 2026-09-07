@@ -17,15 +17,33 @@
   </div>
   {% for error in form.deadline_choice.errors %}<div class="field-errors" role="alert">{{ error }}</div>{% endfor %}
 
-  <div class="deadline-date {% if form.due_date.errors %}form-field--error{% endif %}" data-deadline-panel>
-    <label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
-    {{ form.due_date }}
+  {% comment %}
+    Date and time side by side, the time optional. Blank means end of day, which
+    is what every deadline meant before the time existed — so an office that
+    never touches it sees no change. It is here for the deadlines a date cannot
+    express: "before the 10am committee", "by the 3pm payroll cut-off". Rounding
+    those up to 23:59 makes a record look on time for most of the day it was
+    already late.
+  {% endcomment %}
+  <div class="deadline-date" data-deadline-panel>
+    <div class="deadline-when">
+      <div class="{% if form.due_date.errors %}form-field--error{% endif %}">
+        <label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
+        {{ form.due_date }}
+      </div>
+      <div class="{% if form.due_time.errors %}form-field--error{% endif %}">
+        <label class="form-label" for="{{ form.due_time.id_for_label }}">{{ form.due_time.label }}</label>
+        {{ form.due_time }}
+      </div>
+    </div>
     <div class="form-text">
       {{ form.due_date.help_text }} Today or later, and no more than a year ahead.
+      {{ form.due_time.help_text }}
     </div>
-    {% if form.due_date.errors %}
+    {% if form.due_date.errors or form.due_time.errors %}
       <div class="field-errors" role="alert">
         {% for error in form.due_date.errors %}<div>{{ error }}</div>{% endfor %}
+        {% for error in form.due_time.errors %}<div>{{ error }}</div>{% endfor %}
       </div>
     {% endif %}
   </div>
