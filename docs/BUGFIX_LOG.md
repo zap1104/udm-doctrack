@@ -520,3 +520,79 @@ page on paper. A rule that makes print show something the screen is hiding is
 almost always describing a disagreement rather than a layout choice — and
 `!important` inside `@media print` is worth a second look every time, because
 the rule it is beating is usually the one carrying the user's own selection.
+
+## 27. The overdue report accused the office that had already done its part
+
+**Symptom:** *Overdue documents by holding office* listed MED against a document
+MED had routed to SUP and HR days earlier. Neither recipient had confirmed
+receipt, so the document had not moved — but MED cannot confirm receipt of a
+document it has sent. Only the recipient can. The panel captioned "who to chase"
+was naming the one office with nothing left to do.
+
+**Files:** `apps/core/views.py` (`_overdue_offices`, `apply_report_filters`),
+`apps/tracking/services.py` (new), `templates/reports/reports.html`.
+
+**Why it happened:** `TrackingRecord.recalculate_status()` does this while a
+batch is unreceived:
+
+```python
+if not received:
+    self.current_office = steps[0].from_office
+```
+
+That is **correct and was not changed.** The last office with *confirmed
+custody* is the sender; showing `to_office` there would claim a handover nobody
+has acknowledged, which is the same rule the whole system enforces under "sent
+is not received".
+
+The bug was reading that field to answer a different question. Two questions
+were being served by one column:
+
+| Question | Field |
+|---|---|
+| Where is the paper right now? | `current_office` |
+| Who owes the next move? | the unreceived recipients, or the confirmed holder |
+
+The panel grouped by `current_office` and captioned itself with the second
+question.
+
+The same conflation scoped the report's office filter —
+`Q(originating_office=office) | Q(current_office=office)` — and that half was
+worse. For MED → SUP unreceived, *both* fields read MED, so an office filtering
+the report by its own name could not see the documents sitting unreceived in its
+own inbox. Measured on a fresh database: filtering by SUP returned **0** records
+for a document addressed to SUP. The whole page lied for that office, not one
+card.
+
+**Fix:** a separately-named function that computes accountability, and a filter
+that knows an office touches a record four ways rather than two.
+
+```python
+# apps/tracking/services.py
+def overdue_accountability(records):
+    """awaiting — an unreceived step in the current batch, owed by each
+                  unreceived to_office. Chase them for a receipt.
+       holding  — the batch has a confirmed receipt, owed by current_office.
+                  Chase them for the action."""
+```
+
+```python
+# apps/core/views.py
+records.filter(
+    Q(originating_office=office) | Q(current_office=office)
+    | Q(routing_steps__to_office=office) | Q(routing_steps__from_office=office)
+)
+```
+
+`analytics.overdue_offices` is untouched: the dashboard's overdue banner asks
+the custody question and is right to. A record waiting on two offices raises a
+row against both, so the panel can total more than the overdue count — the
+caption says so. `overdue_unattributed` reports what neither branch claims; it
+is zero, and it is shown being zero rather than assumed.
+
+**Lesson:** `current_office` answers "where is the paper". It does not answer
+"who do we chase". Any panel captioned with the second question needs its own
+function; reusing the custody field made a report accuse the one office that had
+already done its part. When a caption and a column name different things, the
+caption is usually right about what the reader wants and the column is usually
+what somebody had to hand.
