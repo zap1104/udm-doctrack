@@ -108,3 +108,57 @@ The archive contains personal data and is operated by a Philippine university. A
 Notifications are a user-interface convenience, not the audit trail. `AuditLog` remains append-only and is never removed by notification maintenance. When background tasks are enabled, run `python manage.py ensure_schedules` once after migrations to register the daily `notification-pruning` django-q2 schedule. The task resolves informational notifications older than `NOTIFICATION_INFO_RESOLVE_DAYS` (default 30 days) and deletes only notifications already resolved for longer than `NOTIFICATION_RETENTION_DAYS` (default 90 days). It never deletes routing records, documents, files, activities, receipts, or audit entries.
 
 If the scheduled worker is unavailable, notification rows remain available and the application continues to function. Start `python manage.py qcluster`, then inspect the django-q2 schedule and worker logs. Adjust the two retention settings only after the records owner and privacy officer agree that the shorter or longer UI-history window is appropriate.
+
+## Action deadlines: the SLA table
+
+How long an office has to act on a document is set in the Django admin, under
+**Tracking → Routing SLAs**. Each row is a number of calendar days for a scope:
+
+| Office | Document type | Means |
+|---|---|---|
+| MED | Purchase request | MED has this long for a PR |
+| MED | *(blank)* | MED's house rule for anything not named above |
+| *(blank)* | Purchase request | A university-wide rule for PRs |
+
+Most specific wins, and **office beats document type**: a department that has set
+its own pace has said something about itself, where a university-wide row has
+only said something about the paperwork. When no row matches, the fallback is
+`DEFAULT_ACTION_DUE_DAYS` (environment variable, default 3). That setting has not
+been retired — it is the last word, so an installation with an empty table
+behaves exactly as it did before the table existed.
+
+Both columns blank is refused by the database. That row would be a second global
+default sitting beside the setting, and nothing would decide which of them wins.
+
+**`due_days` of 0 means no deadline.** An office that genuinely works to no clock
+can say so, rather than being given three days it never agreed to.
+
+**Unticking `is_active` removes the exception, not the deadline.** The next tier
+down applies. If you want an office to have no deadline, set 0 rather than
+deactivating the row.
+
+### What the table does not override
+
+- A deadline typed on the routing form always wins.
+- So does **"No deadline"** chosen deliberately on that form. An SLA existing for
+  the office does not overrule somebody who said in as many words that this
+  document has no clock.
+
+### When the deadline is recalculated
+
+On every hop — send, forward and return. Each office is measured against its own
+rule rather than inheriting the clock of whoever held the document before it.
+
+A batch going to several offices at once gets **one** deadline, the strictest of
+them: the record is late the moment the first office is late, and it is the
+record's deadline that the overdue queue, the dashboard card and the reports
+accountability panel all read. Taking the longest would let a slow office's rule
+hide a fast office's breach.
+
+**Reopening a completed record does not reset its deadline.** It keeps the one
+the office agreed to, so a record reopened after that date has passed is overdue
+immediately. Route it onward to set a fresh clock.
+
+Holidays and working hours are **not** modelled — these are calendar days.
+Turnaround figures on the reports page are a separate calculation and *are*
+office-hours aware; see `apps/core/business_time.py`.
