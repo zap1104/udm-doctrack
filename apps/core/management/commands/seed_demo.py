@@ -24,6 +24,7 @@ Change DEMO_PASSWORD before running this anywhere real.
 from __future__ import annotations
 
 import random
+from collections import Counter
 from datetime import datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
@@ -95,28 +96,64 @@ METADATA_FIELDS = [
     ("confidential", "Contains personal data", "BOOLEAN", "", "Tick for anything covered by the Data Privacy Act.", False, True, 60),
 ]
 
-# Roles: SYSTEM_ADMIN reaches every office; ADMIN is the head of one office and
+# The four roles, seeded so the boundaries between them can actually be shown.
+#
+# Columns: username, first, last, office, role, position, django_superuser,
+#          is_active
+#
+# SYSTEM_ADMIN reaches every office; ADMIN is the head of one office and
 # administers only its accounts; USER does the day's work; VIEWER may read the
 # office's documents and print a slip, nothing more.
+#
+# Three office administrators rather than one, in MED, SUP and HR. One was
+# enough to prove the role exists and not enough to demonstrate the thing that
+# splitting ADMIN from SYSTEM_ADMIN was for: an office head administers *their*
+# office. With a single ADMIN there is nobody for them to fail to reach, so the
+# boundary is invisible — sign in as `med.head` and open Administration and
+# every account on screen is MED's, which looks the same as no scoping at all.
+# `sup.head` and `hr.head` are what make that observable.
+#
+# Two viewers, in different offices, for the same reason: the read-only role is
+# also office-scoped, and one account cannot show that.
+#
+# The role also decides what several pages *offer*, not just what they permit —
+# Reports gives the office picker to administrators only and sends everybody
+# else straight to their own office; Tracking's "Viewing as" control is the same
+# gate. Demonstrating that needs an administrator and a non-administrator in the
+# same office, which MED now has three ways over.
+#
+# django_superuser is the Django admin site, which is the system administrator's
+# alone. An office administrator is an administrator *of this application* and
+# gets no /admin/ access — the two are different powers and the column keeps
+# them apart.
+#
+# `lnd.former` is suspended, so the Administration screen has a real reactivate
+# case rather than a row nobody can act on. It is listed after `lnd.staff` on
+# purpose: `_records` takes the first user it sees per office as that office's
+# author, and a suspended account should not be seeded as the author of
+# anything.
 #
 # The records officer and the executive assistant are USERs, not ADMINs. Being
 # the office's records person is not the same as being its head — the head is
 # who hires, suspends and resets passwords — and the migration that retired the
-# SECRETARY role mapped it to USER for exactly that reason. `med.head` is here
-# so the office-administrator role has somebody to demonstrate it.
+# SECRETARY role mapped it to USER for exactly that reason.
 USERS = [
-    ("admin", "System", "Administrator", "REC", "SYSTEM_ADMIN", "Records Officer IV", True),
-    ("records", "Maricel", "Lorenzo", "REC", "USER", "Records Officer III", False),
-    ("ovpa.sec", "Angeline", "Reyes", "OVPA", "USER", "Executive Assistant", False),
-    ("med.head", "Rodrigo", "Bautista", "MED", "ADMIN", "Department Head", False),
-    ("med.viewer", "Ana", "Cruz", "MED", "VIEWER", "Administrative Aide", False),
-    ("med.staff", "Liza", "Fernandez", "MED", "USER", "Engineer II", False),
-    ("hr.staff", "Carmela", "Villanueva", "HR", "USER", "HR Management Officer II", False),
-    ("supply.staff", "Grace", "Ramos", "SUP", "USER", "Supply Officer II", False),
-    ("proc.staff", "Teresa", "Aquino", "PROC", "USER", "Procurement Officer", False),
-    ("sec.staff", "Alberto", "Dela Cruz", "SEC", "USER", "Security Head", False),
-    ("pay.staff", "Jomar", "Santos", "PAY", "USER", "Payroll Clerk", False),
-    ("lnd.staff", "Paolo", "Mercado", "LND", "USER", "Training Specialist", False),
+    ("admin", "System", "Administrator", "REC", "SYSTEM_ADMIN", "Records Officer IV", True, True),
+    ("records", "Maricel", "Lorenzo", "REC", "USER", "Records Officer III", False, True),
+    ("ovpa.sec", "Angeline", "Reyes", "OVPA", "USER", "Executive Assistant", False, True),
+    ("ovpa.viewer", "Bernadette", "Lim", "OVPA", "VIEWER", "Administrative Aide II", False, True),
+    ("med.head", "Rodrigo", "Bautista", "MED", "ADMIN", "Department Head", False, True),
+    ("med.viewer", "Ana", "Cruz", "MED", "VIEWER", "Administrative Aide", False, True),
+    ("med.staff", "Liza", "Fernandez", "MED", "USER", "Engineer II", False, True),
+    ("hr.head", "Corazon", "Diaz", "HR", "ADMIN", "HR Department Head", False, True),
+    ("hr.staff", "Carmela", "Villanueva", "HR", "USER", "HR Management Officer II", False, True),
+    ("sup.head", "Ernesto", "Navarro", "SUP", "ADMIN", "Supply Department Head", False, True),
+    ("supply.staff", "Grace", "Ramos", "SUP", "USER", "Supply Officer II", False, True),
+    ("proc.staff", "Teresa", "Aquino", "PROC", "USER", "Procurement Officer", False, True),
+    ("sec.staff", "Alberto", "Dela Cruz", "SEC", "USER", "Security Head", False, True),
+    ("pay.staff", "Jomar", "Santos", "PAY", "USER", "Payroll Clerk", False, True),
+    ("lnd.staff", "Paolo", "Mercado", "LND", "USER", "Training Specialist", False, True),
+    ("lnd.former", "Rosalie", "Aguilar", "LND", "USER", "Training Assistant", False, False),
 ]
 
 # The last column is a TrackingRecord.Priority code. There are only two —
@@ -243,6 +280,26 @@ ARCHIVE_DOCUMENTS = [
 ]
 
 
+def _authors_by_office(users):
+    """One account per office to raise that office's sample documents.
+
+    Viewers and suspended accounts are skipped. Neither could have created a
+    record in the running system — a viewer has no create button and a suspended
+    account cannot sign in — so seeding one as an author would put a row in the
+    demo that the demo itself says is impossible.
+
+    It was two loops with two different rules: this one took the first user it
+    found, the archive one excluded viewers. Whether a viewer ever became an
+    author came down to the order of USERS, which is not something the next
+    person adding an account should have to know.
+    """
+    by_office = {}
+    for user in users.values():
+        if user.office_id and user.is_active and not user.is_viewer:
+            by_office.setdefault(user.office.code, user)
+    return by_office
+
+
 class Command(BaseCommand):
     help = "Create demo offices, users, master data and sample records."
 
@@ -317,16 +374,29 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
         self.stdout.write("")
-        self.stdout.write("  Sign in at /accounts/login/")
-        self.stdout.write(f"  Administrator : admin / {password}")
-        self.stdout.write(f"  Records officer: records / {password}")
-        self.stdout.write(f"  Regular user   : med.staff / {password}")
+        # One account per role, named. The block listed three and none of them
+        # was an office administrator or a viewer, so the two roles whose whole
+        # point is what they *cannot* do had no way into the demo.
+        self.stdout.write("  Sign in at /accounts/login/  — password for every account below:")
+        self.stdout.write(f"  {password}")
+        self.stdout.write("")
+        self.stdout.write("  System administrator : admin        every office, and /admin/")
+        self.stdout.write("  Office administrator : med.head     MED only — hires, suspends, approves")
+        self.stdout.write("  Office user          : med.staff    does the day's work")
+        self.stdout.write("  Viewer               : med.viewer   reads and prints, nothing else")
+        self.stdout.write("  Records officer      : records      REC, the filing desk")
         self.stdout.write("")
         self.stdout.write("  Try this for the walkthrough:")
         self.stdout.write("   1. Sign in as med.staff — one document is waiting for receipt.")
         self.stdout.write("   2. Confirm receipt, add a remark, then forward it to SUP.")
-        self.stdout.write("   3. Sign in as admin and search for 'electrical supplies'.")
-        self.stdout.write("   4. Open the dashboard as admin — a year of traffic sits behind the charts.")
+        self.stdout.write("   3. Sign in as med.viewer — same document, and no button on it.")
+        self.stdout.write("   4. Sign in as med.head, open Administration: MED's accounts only.")
+        self.stdout.write("      Then as admin, the same screen carries every office.")
+        self.stdout.write("      lnd.former is suspended, and reactivating is one click.")
+        self.stdout.write("   5. Open Reports as med.head — the office picker is an")
+        self.stdout.write("      administrator's control; med.staff goes straight to MED.")
+        self.stdout.write("   6. Sign in as admin and search for 'electrical supplies'.")
+        self.stdout.write("   7. Open the dashboard as admin — a year of traffic behind the charts.")
 
     # -- master data -------------------------------------------------------
     def _offices(self):
@@ -411,7 +481,8 @@ class Command(BaseCommand):
     # -- people ------------------------------------------------------------
     def _users(self, offices, password):
         users = {}
-        for username, first, last, office_code, role, position, is_admin in USERS:
+        by_role = Counter()
+        for username, first, last, office_code, role, position, superuser, active in USERS:
             user, _ = User.objects.update_or_create(
                 username=username,
                 defaults={
@@ -421,24 +492,33 @@ class Command(BaseCommand):
                     "office": offices.get(office_code),
                     "role": role,
                     "position": position,
-                    "is_staff": is_admin,
-                    "is_superuser": is_admin,
-                    "is_active": True,
+                    # The Django admin site, which is the system administrator's
+                    # alone. An office administrator administers *this*
+                    # application and gets no /admin/ access.
+                    "is_staff": superuser,
+                    "is_superuser": superuser,
+                    "is_active": active,
                     "must_change_password": False,
                 },
             )
             user.set_password(password)
             user.save()
             users[username] = user
-        self.stdout.write(f"Users: {len(users)}")
+            by_role[role] += 1
+        # Broken down by role, because the point of these accounts is to show
+        # what each role may do — a bare total says nothing about whether the
+        # demo can still reach every screen.
+        summary = ", ".join(f"{count} {role}" for role, count in sorted(by_role.items()))
+        suspended = sum(1 for row in USERS if not row[7])
+        self.stdout.write(
+            f"Users: {len(users)} ({summary})"
+            + (f" — {suspended} suspended" if suspended else "")
+        )
         return users
 
     # -- sample workload ---------------------------------------------------
     def _records(self, offices, types, users):
-        by_office = {}
-        for user in users.values():
-            if user.office_id:
-                by_office.setdefault(user.office.code, user)
+        by_office = _authors_by_office(users)
 
         now = timezone.now()
         created = 0
@@ -559,10 +639,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Generated workload: skipped, {existing} records already present")
             return
 
-        by_office = {}
-        for user in users.values():
-            if user.office_id and not user.is_viewer:
-                by_office.setdefault(user.office.code, user)
+        by_office = _authors_by_office(users)
         codes = [code for code in by_office if code in offices]
 
         now = timezone.now()
