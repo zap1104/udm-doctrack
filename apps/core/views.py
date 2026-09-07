@@ -1482,12 +1482,28 @@ def _csv_cell(value) -> str:
     return "'" + text if text.startswith(_CSV_FORMULA_LEADS) else text
 
 
+#: The Direction column's vocabulary. A record the scope office has already
+#: passed on reads "Passed on" rather than being folded into either side —
+#: calling it outgoing would put it back on their pile.
+_DIRECTION_WORDS = {
+    tracking_services.DIRECTION_INCOMING: "Incoming",
+    tracking_services.DIRECTION_OUTGOING: "Outgoing",
+    tracking_services.DIRECTION_UNSET: "Passed on",
+}
+
+
 class ReportExportView(AppLoginRequiredMixin, View):
     """CSV of the active tracking queue — useful evidence for the defence."""
 
     def get(self, request):
         filters = report_filters_from_request(request)
         records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().distinct().order_by("-created_at")
+        # The same point of view the page uses, so the Direction column means
+        # what the screen it was exported from meant.
+        scope_office = report_scope_office(request, filters)
+        direction = tracking_services.direction_annotation(scope_office)
+        if direction is not None:
+            records = records.annotate(_direction=direction)
         total = records.count()
         cap = 5000
         response = HttpResponse(content_type="text/csv")
@@ -1504,6 +1520,12 @@ class ReportExportView(AppLoginRequiredMixin, View):
         writer.writerow(
             ["Office", filters["office"].name if filters["office"] else "All offices visible to the exporter"]
         )
+        # Named on its own row, because Direction below is measured from it and a
+        # column of Incoming/Outgoing with no stated reference office is a column
+        # of guesses. "—" in every cell when there is none.
+        writer.writerow(
+            ["Direction measured from", scope_office.name if scope_office else "no office — Direction not available"]
+        )
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
@@ -1513,7 +1535,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
             # re-run the query. This is the one place the old behaviour
             # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
-             "Status", "Overdue", "Created", "Last movement", "Completed"]
+             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed"]
         )
         for record in records[:cap]:
             writer.writerow(
@@ -1526,6 +1548,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     record.current_office.code if record.current_office_id else "",
                     record.get_status_display(),
                     "Yes" if record.is_overdue else "No",
+                    _DIRECTION_WORDS.get(getattr(record, "_direction", ""), "—"),
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",
