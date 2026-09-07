@@ -275,6 +275,19 @@ a:hover { text-decoration: underline; }
 .pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
+/* Approaching, not yet late. Gold rather than red, because red is the claim
+   that something has already gone wrong and this one is still actionable — and
+   the dark ink, not the plain: gold-ink on gold-soft is 4.34:1 and a pill runs
+   at 11.5px, where AA wants 4.5. The dark variant clears 7:1 in both themes.
+   Outlined as well as filled, so it reads as a different kind of thing from the
+   solid red Overdue tag it will eventually become. */
+.pill-warn {
+  background: var(--udm-gold-soft); color: var(--udm-gold-ink-dark);
+  box-shadow: inset 0 0 0 1px var(--udm-gold-border);
+}
+/* The date under the pills. Muted and small: it is the evidence for the tag
+   above it, not a column in its own right. */
+.deadline-when-cell { margin-top:4px; color:var(--udm-muted); font-size:12px; white-space:nowrap; }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
 /* Overdue is not a stage — it is a condition sitting on top of one, and it is

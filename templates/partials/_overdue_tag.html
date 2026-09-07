@@ -12,6 +12,22 @@
   Derived from due_at, never stored. A completed record is never overdue: a
   deadline that passed before the work finished is not a debt anybody still owes.
 
-  Usage: {% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+  "Due soon" is the same idea one step earlier — approaching, and still
+  actionable. Once a record is overdue the warning has arrived too late to be a
+  warning, so the two are one control with two states rather than two tags: they
+  are mutually exclusive by construction, and a row can never wear both.
+
+  Two ways in, because seven callers pass the boolean and only the tracking list
+  needs the near band yet:
+
+    {% include "partials/_overdue_tag.html" with state=record.deadline_state %}
+    {% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+
+  Both read the same model property in the end — `deadline_state` delegates to
+  `is_overdue` — so the two entrances cannot disagree about what late means.
 {% endcomment %}
-{% if overdue %}<span class="pill pill-alert">Overdue</span>{% endif %}
+{% if state == "overdue" or overdue %}
+  <span class="pill pill-alert">Overdue</span>
+{% elif state == "due_soon" %}
+  <span class="pill pill-warn">Due soon</span>
+{% endif %}

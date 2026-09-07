@@ -260,6 +260,29 @@
     </div>
   </div>
 
+  {% comment %}
+    Sort, as a row of pills like everything else in this bar. It is not a filter
+    — it narrows nothing — but it is set the same way and read the same way, and
+    a lone dropdown among four pill rows would look like a control that behaves
+    differently because it does something different. It does not.
+
+    "Recently updated" is the empty value, so it is both the default and the way
+    back: `filter_url` clears a parameter when its current value is clicked, and
+    the default pill carries "". No separate reset needed.
+  {% endcomment %}
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="filter-sort-label">Sort</span>
+    <div class="pill-row">
+      <div class="pill-row-list" role="group" aria-labelledby="filter-sort-label">
+        {% for value, label in sort_choices %}
+          <a class="pill-toggle{% if selected_sort == value %} is-active{% endif %}"
+             href="{% filter_url 'sort' value %}"
+             {% if selected_sort == value %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
   <div class="tracking-filter-row">
     <span class="tracking-filter-label" id="filter-owner-label">Show</span>
     <div class="pill-row">
@@ -333,7 +356,20 @@
               {% endcomment %}
               <div class="pill-stack">
                 {% include "partials/_status_pill.html" with status=record.status %}
-                {% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+                {% include "partials/_overdue_tag.html" with state=record.deadline_state %}
+                {% comment %}
+                  The date itself, under the pills that depend on it. Inline
+                  rather than a ninth column: this table is already seven wide
+                  (eight with the receipt checkbox) and carries a 720px
+                  min-width, so it scrolls sideways on a laptop before anything
+                  is added to it. Under the pills rather than under the subject
+                  because "Overdue" and "Due soon" are claims about this date,
+                  and a reader who doubts one should not have to look across the
+                  row to check it.
+                {% endcomment %}
+                {% if record.due_at %}
+                  <div class="deadline-when-cell">Due {{ record.due_at|date:"d M Y, g:i A" }}</div>
+                {% endif %}
               </div>
             </td>
             <td class="text-end">
