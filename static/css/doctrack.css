@@ -736,6 +736,11 @@ a:hover { text-decoration: underline; }
   .routing-slip-summary-value { padding-top:3px; }
   .routing-slip-action-grid { grid-template-columns:1fr; }
 }
+/* One @page for the whole stylesheet. There were three — this, plus a
+   `margin:12mm` inside the reports print block and another inside the
+   dashboard's, each silently re-margining whichever printed last. These are
+   the deliberate ones: 12mm head, 10mm sides so a six-column table is not
+   squeezed, 14mm foot to clear the printed footer line. */
 @page { size:A4 portrait; margin:12mm 10mm 14mm; }
 @media print {
   html,body { background:var(--udm-surface) !important; }
@@ -890,6 +895,15 @@ a:hover { text-decoration: underline; }
 .status-row:last-child { border-bottom:0; }
 .status-row-label { min-width:0; overflow:hidden; }
 .status-row strong { text-align:right; color:var(--udm-navy-text); font-size:14px; }
+/* The incoming/outgoing split, under the bar it belongs to rather than beside
+   it: the row is already pill + bar + count + share, and four columns plus two
+   more would wrap on any screen narrower than a desktop. */
+.status-direction {
+  display:flex; flex-wrap:wrap; gap:4px 18px;
+  margin:-4px 0 10px; padding-left:2px;
+  color:var(--udm-muted); font-size:12px;
+}
+.status-direction .num { color:var(--udm-navy-text); }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
 /* -------------------------------------------------------------- metrics */
@@ -923,7 +937,6 @@ a:hover { text-decoration: underline; }
   .column-label { font-size:10px; }
 }
 @media print {
-  @page { size:A4 portrait; margin:12mm; }
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }
   .report-print-header,.report-print-footer { display:flex; justify-content:space-between; gap:18px; color:var(--udm-slate-text); font-size:9pt; }
   .report-print-header { margin-bottom:8mm; padding-bottom:3mm; border-bottom:1px solid #8793a3; }
@@ -940,7 +953,26 @@ a:hover { text-decoration: underline; }
   .report-panel { display:none; }
   .report-panel.active { display:block; page-break-after:auto; }
   .report-section-head { margin-top:0; }
-  .stat-card,.card-udm { break-inside:avoid; box-shadow:none; }
+  /* `.card-udm { overflow:hidden }` is declared later in this file, so it wins
+     the cascade in print too and clips any card taller than the space left on
+     the page — Records by status stopped after two rows, Overdue after one.
+     !important rather than reordering, because the hidden overflow is
+     load-bearing on screen: it is what clips the card head's border to the
+     rounded corners. */
+  .card-udm { overflow:visible !important; break-inside:auto; box-shadow:none; }
+  /* A heading must not be the last thing on a page. */
+  .card-udm .card-udm-head { break-inside:avoid; break-after:avoid; }
+  .stat-card { break-inside:avoid; box-shadow:none; }
+
+  /* Break between rows, never through one. */
+  .status-row,.status-direction,.report-series-item,.report-office-row,
+  .report-metric,.report-quality-row,.column-group,
+  .column-chart,.meter { break-inside:avoid; }
+
+  /* Bootstrap's h-100 equalises card heights inside a flex row; on paper that
+     is a fixed height with nowhere to flow. */
+  .h-100 { height:auto !important; }
+  .row > [class*="col-"] { width:100% !important; max-width:100% !important; }
   /* Bars and columns are background paint; without this they print blank. */
   .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill {
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
@@ -1676,7 +1708,6 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    .report-print-header, the shared base class, stays — Reports and the memo
    print page both use it. */
 @media print {
-  @page { size:A4 portrait; margin:12mm; }
   /* Segment fills and swatches are background paint; without this they print blank. */
   .breakdown-seg,.breakdown-swatch,.breakdown-bar,.desk-block-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .breakdown-item { break-inside:avoid; }
