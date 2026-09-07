@@ -188,6 +188,54 @@ def test_an_admin_with_no_office_is_asked_for_one_rather_than_shown_zeroes(
 
 
 @pytest.mark.django_db
+def test_an_admin_who_can_pick_and_has_not_is_asked_rather_than_assumed(
+    client, med_to_sup_and_hr, users
+):
+    """The fallback is for accounts that cannot pick, whose report *is* their
+    office. A system administrator based in Records, viewing every office,
+    measured direction from Records and read "Passed on 30" of 40 — records that
+    had never been near Records, under a label claiming Records handed them on.
+    """
+    admin = users["admin"]
+    assert admin.office is not None, "the point of the test: they do have one"
+    client.force_login(admin)
+
+    response = client.get(REPORTS)
+
+    assert response.context["scope_office"] is None
+    assert "Pick an office above to split these by incoming and outgoing" in (
+        response.content.decode()
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["med", "viewer"])
+def test_an_account_without_the_picker_keeps_its_own_point_of_view(
+    client, med_to_sup_and_hr, users, offices, who
+):
+    """Their report is their office, so that is what direction is measured
+    from — there is nothing for them to pick."""
+    client.force_login(users[who])
+
+    response = client.get(REPORTS)
+
+    assert response.context["scope_office"] == offices["MED"]
+
+
+def test_the_longest_status_label_is_not_clipped():
+    """`.pill` is uppercase at 0.06em tracking with `white-space:nowrap`, so
+    "Completed - pending upload" ran about 210px into a 152px column that also
+    clipped its overflow: the row read "COMPLETED - PENDIN". It wraps now rather
+    than the column widening, which would take that width off the bar."""
+    import pathlib
+
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+    assert ".status-row-label .pill { white-space:normal" in css
+    assert ".status-row-label { min-width:0; }" in css, "no overflow:hidden"
+
+
+@pytest.mark.django_db
 def test_picking_an_office_gives_the_page_a_point_of_view(
     client, med_to_sup_and_hr, users, offices
 ):

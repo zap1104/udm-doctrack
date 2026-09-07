@@ -935,7 +935,17 @@ a:hover { text-decoration: underline; }
   align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--chart-grid);
 }
 .status-row:last-child { border-bottom:0; }
-.status-row-label { min-width:0; overflow:hidden; }
+.status-row-label { min-width:0; }
+/* "Completed - pending upload" is 26 characters, and .pill sets them uppercase
+   at 0.06em tracking with `white-space:nowrap` — about 210px against a 152px
+   column that also clipped its overflow, so the row read "COMPLETED - PENDIN".
+
+   The pill wraps here rather than the column widening to fit it: 210px spent on
+   a label every other status uses half of would take that width off the bar,
+   which is the thing carrying the comparison. Two lines for the one long status
+   costs a few pixels of row height and nothing else. `overflow:hidden` goes
+   with it — once the text can wrap, clipping can only hide something. */
+.status-row-label .pill { white-space:normal; text-align:center; }
 .status-row strong { text-align:right; color:var(--udm-navy-text); font-size:14px; }
 /* The incoming/outgoing split, under the bar it belongs to rather than beside
    it: the row is already pill + bar + count + share, and four columns plus two

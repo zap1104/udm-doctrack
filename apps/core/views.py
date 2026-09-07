@@ -862,8 +862,17 @@ def report_scope_office(request, filters):
     name answering different questions is the shape of bug this codebase has
     already paid for. This one is downstream of that one — `filters["office"]`
     has been through it.
+
+    The fallback only applies to an account that cannot pick. For one that can
+    and has not, the report covers every office it can see, and measuring
+    direction from the reader's own office describes a different page from the
+    one on screen: a system administrator based in Records saw "Passed on 30" of
+    40 — records that had never been near Records at all, under a label claiming
+    Records had handed them on.
     """
-    return filters["office"] or request.user.office
+    if filters["office"]:
+        return filters["office"]
+    return None if filters["can_pick"] else request.user.office
 
 
 class ReportsView(AppLoginRequiredMixin, TemplateView):
