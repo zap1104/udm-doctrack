@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -774,30 +774,6 @@ def _filter_year(raw: str) -> int | None:
     return value if MIN_FILTER_YEAR <= value <= MAX_FILTER_YEAR else None
 
 
-def _office_from_name(raw: str):
-    """Resolve an office typed by name or code.
-
-    Offered alongside the dropdown because a dropdown of every office in the
-    university is a scrolling exercise once this reaches past OVPA, and because
-    somebody who knows the office already knows its name.
-
-    Exact code first, then exact name, then a unique prefix. A prefix that
-    matches two offices resolves to neither: quietly picking the first would
-    hand somebody another office's report while showing them the name they
-    typed. Generating a report notifies nobody by design — this is an
-    anti-tampering control, an office must not learn it is being reviewed — so
-    an ambiguous match is a mistake nobody else is in a position to catch.
-    """
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    exact = Office.objects.filter(Q(code__iexact=raw) | Q(name__iexact=raw)).first()
-    if exact:
-        return exact
-    matches = list(Office.objects.filter(name__istartswith=raw)[:2])
-    return matches[0] if len(matches) == 1 else None
-
-
 def report_filters_from_request(request):
     """Which office the report answers for. That is the whole filter now.
 
@@ -809,12 +785,14 @@ def report_filters_from_request(request):
     by status and by type, so setting one filtered a chart into agreeing with
     itself.
 
-    Both office controls are gated together on `is_office_admin`. They were not:
-    the dropdown went through `scope_office` and the name box did not, so an
-    ordinary account was shown a list whose picks were silently dropped and
-    could still filter to another office by typing its name into the box beside
-    it. Naming *another* office is an administrator's control; everybody else
-    gets their own office, which is the only one their report could describe.
+    Gated on `is_office_admin`. Naming *another* office is an administrator's
+    control; everybody else gets their own office, which is the only one their
+    report could describe.
+
+    The "…or by name" text box that stood beside the dropdown is gone. It
+    resolved a typed name or code, and it is the
+    dropdown that now re-scopes the page on change — two controls on one
+    parameter, one of which submitted itself and one of which did not.
 
     Nothing here grants anything. The office is applied on top of
     `visible_to(user)`, never instead of it, so it can only narrow what the
@@ -829,15 +807,8 @@ def report_filters_from_request(request):
     # have, on a hand-typed `?office=all`, with `Q(originating_office="__all__")`.
     all_offices = picked == tracking_services.ALL_OFFICES
     office = None if all_offices else picked
-    # The dropdown wins when both are set, so a stale name in the box cannot
-    # silently override the office somebody just picked from the list.
-    office_name = params.get("office_name", "").strip() if can_pick else ""
-    if office is None and not all_offices and office_name:
-        office = _office_from_name(office_name)
     return {
         "office": office,
-        "office_name": office_name,
-        "office_name_unmatched": bool(office_name) and office is None,
         "all_offices": all_offices,
         "can_pick": can_pick,
     }
@@ -947,9 +918,22 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             documents = documents.filter(office=filters["office"])
         documents = documents.distinct()
 
+        # The one office every direction and accountability figure is measured
+        # from. None for a system administrator who has picked nothing — those
+        # panels then say so rather than inventing a split.
+        scope_office = report_scope_office(self.request, filters)
+
         total_records = records.count()
         total_documents = documents.count()
-        overdue = records.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES).count()
+        overdue_all = records.filter(tracking_services.overdue_q()).distinct().count()
+        # GATE A, option (a): the headline counts what *this* office owes, and
+        # the hint names what it is waiting on somebody else to receive.
+        # Grouping the chase-list by custody is the bug this branch exists for,
+        # and a stat card that keeps the old total while the panel below it
+        # corrects itself would put the two in contradiction on one screen.
+        overdue_split = self._overdue_for_scope(records, scope_office)
+        overdue = overdue_split["ours"] if scope_office else overdue_all
+        awaiting_split = self._awaiting_for_scope(records, scope_office)
         awaiting = (
             records.filter(routing_steps__received_at__isnull=True)
             .exclude(status__in=COMPLETED_STATUSES)
@@ -976,12 +960,18 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "awaiting_receipt": awaiting,
                 "completed_records": completed,
                 "completion_rate": _percent(completed, total_records),
-                "by_status": self._by_status(records, total_records),
+                "scope_office": scope_office,
+                "scope_office_label": scope_office.name if scope_office else "",
+                "direction_other_label": tracking_services.DIRECTION_OTHER_LABEL,
+                "overdue_all": overdue_all,
+                "overdue_elsewhere": overdue_split["elsewhere"],
+                "awaiting_split": awaiting_split,
+                "by_status": self._by_status(records, total_records, scope_office),
                 "office_flow": self._office_flow(records),
                 "monthly": self._monthly(records),
                 "office_volume": self._office_volume(records),
                 "turnaround": self._turnaround(records),
-                "overdue_offices": self._overdue_offices(records),
+                "overdue_accountability": self._overdue_accountability(records),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
                 "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
@@ -996,8 +986,28 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     # The aggregations below live in apps/core/analytics.py because the
     # dashboard shows the same figures. Kept as thin methods rather than
     # inlined at the call site so a subclass can still override one panel.
-    def _by_status(self, records, total):
-        return analytics.by_status(records, total)
+    def _by_status(self, records, total, scope_office=None):
+        """One row per live status, with direction columns when there is a
+        point of view to measure them from.
+
+        Same shape either way — without an office the direction figures are zero
+        and `total` still carries the row — so the template renders one table
+        rather than branching, and a system administrator who has picked nothing
+        sees honest totals beside a prompt instead of a fabricated split.
+        """
+        rows = analytics.by_status(records, total)
+        split = {
+            row["status"]: row
+            for row in tracking_services.by_status_direction(records, scope_office)
+        }
+        for row in rows:
+            row.update(
+                split.get(
+                    row["status"],
+                    {"incoming": 0, "outgoing": 0, "other": 0},
+                )
+            )
+        return rows
 
     def _office_flow(self, records):
         """Transferred vs received per office — both series from routing steps.
@@ -1131,8 +1141,74 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     def _turnaround(self, records):
         return analytics.turnaround(records)
 
-    def _overdue_offices(self, records):
-        return analytics.overdue_offices(records)
+    def _overdue_for_scope(self, records, office):
+        """Overdue work this office owes, and overdue work it is waiting on.
+
+        `ours` is what the scope office can actually clear: a batch it has
+        confirmed, or a step addressed to it that it has not. `elsewhere` is
+        what it has sent and somebody else has not signed for — real, still
+        late, and not this office's to fix. Counting both in one figure is the
+        MED/SUP confusion in stat-card form.
+        """
+        empty = {"ours": 0, "elsewhere": 0}
+        if office is None:
+            return empty
+        overdue = records.filter(tracking_services.overdue_q()).distinct()
+        ours = overdue.filter(
+            Q(routing_steps__to_office=office, routing_steps__received_at__isnull=True,
+              routing_steps__batch=F("current_batch"))
+            | Q(current_office=office, routing_steps__received_at__isnull=False,
+                routing_steps__batch=F("current_batch"))
+        ).distinct().count()
+        elsewhere = overdue.filter(
+            routing_steps__from_office=office,
+            routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        ).exclude(
+            routing_steps__to_office=office,
+            routing_steps__received_at__isnull=True,
+            routing_steps__batch=F("current_batch"),
+        ).distinct().count()
+        return {"ours": ours, "elsewhere": elsewhere}
+
+    def _awaiting_for_scope(self, records, office):
+        """Pending receipt, split by who owes the receipt.
+
+        The single most useful thing on this page once fixed: "waiting for us"
+        is a to-do list, "waiting for another office" is a chase list, and one
+        number covering both is neither.
+        """
+        empty = {"ours": 0, "theirs": 0}
+        if office is None:
+            return empty
+        live = records.exclude(status__in=COMPLETED_STATUSES)
+        current = {
+            "routing_steps__received_at__isnull": True,
+            "routing_steps__batch": F("current_batch"),
+        }
+        return {
+            "ours": live.filter(routing_steps__to_office=office, **current).distinct().count(),
+            "theirs": live.filter(routing_steps__from_office=office, **current)
+            .exclude(routing_steps__to_office=office, **current)
+            .distinct()
+            .count(),
+        }
+
+    def _overdue_accountability(self, records):
+        """Who owes the next move, and how many nobody can be charged for.
+
+        Renamed from `_overdue_offices`, which delegated to
+        `analytics.overdue_offices` — a grouping by `current_office`. That is
+        custody, and this panel is captioned "who to chase": while a batch is
+        unreceived `current_office` is the *sender*, so the panel accused the one
+        office that had already done its part. `analytics.overdue_offices` stays
+        exactly as it is, because the dashboard's overdue banner asks the custody
+        question and is right to.
+        """
+        return {
+            "rows": tracking_services.overdue_accountability(records),
+            "unattributed": tracking_services.overdue_unattributed(records),
+        }
 
     # -- document panels ---------------------------------------------------
     def _document_types(self, documents):

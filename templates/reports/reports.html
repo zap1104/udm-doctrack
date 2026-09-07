@@ -53,15 +53,26 @@
         <h2 id="report-filters-title">Report scope</h2>
         <div class="report-caption">Applied to every figure and chart on this page.</div>
       </div>
-      {% if filters.office or filters.office_name %}
+      {% if filters.office %}
         <a class="small" href="{% url 'core:reports' %}">Clear</a>
       {% endif %}
     </div>
     <div class="card-udm-body">
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-sm-6 col-lg-4">
+        {% comment %}
+          The report's point of view, not merely a filter: every direction and
+          accountability figure below is measured from whatever is chosen here.
+
+          data-auto-submit re-scopes the page on change — the listener is in
+          doctrack.js beside the print trigger, where the dashboard and Tracking
+          pickers already read it, because django-csp allows no inline handler.
+          The Apply button stays: it is the no-JS path, and Firefox fires
+          `change` while arrow-keying through a <select>, so a keyboard user
+          needs a way to finish choosing before the page moves.
+        {% endcomment %}
+        <div class="col-sm-6 col-lg-6">
           <label class="form-label" for="report-office">Office</label>
-          <select class="form-select" id="report-office" name="office">
+          <select class="form-select" id="report-office" name="office" data-auto-submit>
             <option value="">All offices you can see</option>
             {% for office in filter_offices %}
               <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
@@ -70,32 +81,7 @@
             {% endfor %}
           </select>
         </div>
-        {% comment %}
-          By name as well as by dropdown — requirement 3.11. A list of every
-          office in the university is a scrolling exercise once this reaches
-          past OVPA, and somebody who knows the office already knows its name.
-          The dropdown wins when both are set, so a name left in the box cannot
-          override a fresh pick from the list.
-        {% endcomment %}
-        <div class="col-sm-6 col-lg-4">
-          <label class="form-label" for="report-office-name">…or by name</label>
-          <input class="form-control" id="report-office-name" name="office_name" type="text"
-                 list="report-office-names" value="{{ filters.office_name }}"
-                 placeholder="e.g. MED or Supply"
-                 {% if filters.office_name_unmatched %}aria-describedby="report-office-name-error"{% endif %}>
-          <datalist id="report-office-names">
-            {% for office in filter_offices %}
-              <option value="{{ office.name }}">{{ office.code }}</option>
-            {% endfor %}
-          </datalist>
-          {% if filters.office_name_unmatched %}
-            <div class="form-text text-danger" id="report-office-name-error">
-              No single office matches “{{ filters.office_name }}” — showing all offices.
-              Use the full name or the code.
-            </div>
-          {% endif %}
-        </div>
-        <div class="col-sm-6 col-lg-2 d-grid">
+        <div class="col-sm-6 col-lg-3 d-grid">
           <button class="btn btn-udm-outline" type="submit">Apply</button>
         </div>
       </form>
@@ -106,7 +92,8 @@
 <div class="report-print-header">
   <div>
     <strong>{{ SITE_NAME }} · Reports and Analytics</strong>
-    <span>Generated for {{ scope_label }} by {{ user.display_name|default:user.username }}</span>
+    {# The scope office, not the reader's: a system admin printing an MED report was getting REC in the header. #}
+    <span>Generated for {{ scope_office_label|default:scope_label }} by {{ user.display_name|default:user.username }}</span>
   </div>
   <span>{{ report_generated_at|date:"d M Y, g:i A" }}</span>
 </div>
@@ -133,18 +120,40 @@
         <div class="hint">Active and completed records you can see</div>
       </a>
     </div>
+    {% comment %}
+      Both cards split by who owes the next move once the page has a point of
+      view. "Sent but not yet acknowledged" and "past deadline" each covered two
+      populations that need opposite actions: one is a to-do list for this
+      office, the other a chase list for somebody else. A single number is
+      neither, and it is the same conflation that had the overdue panel accusing
+      the office that had already done its part.
+    {% endcomment %}
     <div class="col-6 col-lg-3">
-      <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=pending-receipt">
+      <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
         <div class="label">Pending receipt</div>
-        <div class="value">{{ awaiting_receipt }}</div>
-        <div class="hint">Sent but not yet acknowledged</div>
+        <div class="value">{% if scope_office %}{{ awaiting_split.ours }}{% else %}{{ awaiting_receipt }}{% endif %}</div>
+        {% if scope_office %}
+          <div class="hint">
+            Waiting for {{ scope_office.code }} to receive{% if awaiting_split.theirs %} ·
+            {{ awaiting_split.theirs }} waiting on another office{% endif %}
+          </div>
+        {% else %}
+          <div class="hint">Sent but not yet acknowledged</div>
+        {% endif %}
       </a>
     </div>
     <div class="col-6 col-lg-3">
-      <a class="stat-card red" href="{% url 'tracking:list' %}?scope=overdue">
+      <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
         <div class="label">Overdue</div>
         <div class="value">{{ overdue }}</div>
-        <div class="hint">Past deadline and not completed</div>
+        {% if scope_office %}
+          <div class="hint">
+            {{ scope_office.code }} owes the next move{% if overdue_elsewhere %} ·
+            +{{ overdue_elsewhere }} waiting on another office to receive{% endif %}
+          </div>
+        {% else %}
+          <div class="hint">Past deadline and not completed</div>
+        {% endif %}
       </a>
     </div>
     <div class="col-6 col-lg-3">
@@ -254,6 +263,10 @@
             <div class="report-caption">
               Where the {{ total_records }} record{{ total_records|pluralize }} stand right now.
               Overdue is a deadline condition on top of these, counted separately above.
+              {% if scope_office %}
+                Incoming and outgoing are measured from
+                <strong>{{ scope_office.code }} — {{ scope_office.name }}</strong>.
+              {% endif %}
             </div>
           </div>
         </div>
@@ -267,6 +280,17 @@
             own row makes the pill the identity channel and leaves colour as
             reinforcement.
           {% endcomment %}
+          {% comment %}
+            Direction is relative — a document is incoming *to* somebody — so
+            without an office there is nobody to measure it from. The prompt
+            says so rather than the columns showing a fabricated split or a
+            silent zero, which would read as "nothing is moving".
+          {% endcomment %}
+          {% if not scope_office %}
+            <p class="report-caption mb-3">
+              Pick an office above to split these by incoming and outgoing.
+            </p>
+          {% endif %}
           {% for row in by_status %}
             <div class="status-row">
               <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
@@ -274,6 +298,15 @@
               <strong class="num">{{ row.total }}</strong>
               <span class="status-share num">{{ row.percent }}%</span>
             </div>
+            {% if scope_office %}
+              <div class="status-direction">
+                <span>Incoming <strong class="num">{{ row.incoming }}</strong></span>
+                <span>Outgoing <strong class="num">{{ row.outgoing }}</strong></span>
+                {% if row.other %}
+                  <span title="{{ direction_other_label }}">Passed on <strong class="num">{{ row.other }}</strong></span>
+                {% endif %}
+              </div>
+            {% endif %}
           {% empty %}
             <div class="report-empty">No records match these filters.</div>
           {% endfor %}
@@ -343,33 +376,68 @@
       </div>
     </div>
 
-    <!-- overdue by office -->
+    <!-- overdue accountability -->
     <div class="col-xl-7">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Overdue documents by holding office</h2>
-            <div class="report-caption">Who to chase — the office that currently holds each overdue document.</div>
+            <h2>Overdue documents by accountable office</h2>
+            <div class="report-caption">
+              Who owes the next move. An office waiting to <em>receive</em> a document is
+              listed here, not the office that already sent it. A document waiting on two
+              offices appears under both, so these can total more than the
+              {{ overdue_all }} overdue above.
+            </div>
+          </div>
+          <div class="chart-legend">
+            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Awaiting receipt</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>In their hands</span>
           </div>
         </div>
         <div class="card-udm-body">
           {% comment %}
-            Code, count and share. The share is this office's portion of every
-            overdue document, which the bar cannot say: the bar is scaled
-            against the *longest* queue so the widest one fills its track, so
-            two offices holding 6 and 5 draw almost the same bar whether that is
-            half the backlog each or a tenth.
+            Two series, in the shape `_office_flow` already uses, because the
+            two debts need different actions: an office that has not signed for
+            a document is chased for a receipt, an office holding one is chased
+            for the work. Grouping this panel by `current_office` — which is
+            what it did — reported the *sender* for every unreceived batch,
+            because that is the last office with confirmed custody. Right answer
+            to "where is the paper", wrong answer to "who do we chase".
           {% endcomment %}
-          {% for row in overdue_offices %}
-            <div class="report-series-item report-series-item--wide">
-              <span>{{ row.code }} — {{ row.name|truncatechars:44 }}</span>
-              <div class="report-bar"><i class="bar-alert" style="width:{{ row.percent }}%"></i></div>
-              <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.share }}%</span>
+          {% for row in overdue_accountability.rows %}
+            <div class="report-office-row">
+              <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
+              <div class="report-series">
+                <div class="report-series-item">
+                  <span>Awaiting receipt</span>
+                  <div class="report-bar"><i class="bar-one" style="width:{{ row.awaiting_percent }}%"></i></div>
+                  <strong class="num">{{ row.awaiting }}</strong>
+                </div>
+                <div class="report-series-item">
+                  <span>In their hands</span>
+                  <div class="report-bar"><i class="bar-two" style="width:{{ row.holding_percent }}%"></i></div>
+                  <strong class="num">{{ row.holding }}</strong>
+                </div>
+              </div>
             </div>
           {% empty %}
             <div class="report-empty">Nothing is overdue. Every document is inside its deadline.</div>
           {% endfor %}
+          {% comment %}
+            Should always be zero. Shown rather than dropped: a silent gap
+            between the headline total and this panel is exactly what a defence
+            panel asks about, and a zero that is displayed is evidence where a
+            zero that is merely absent is an assumption.
+          {% endcomment %}
+          {% if overdue_accountability.unattributed %}
+            <p class="form-text mt-3 mb-0 text-danger">
+              {{ overdue_accountability.unattributed }} overdue record{{ overdue_accountability.unattributed|pluralize }}
+              {{ overdue_accountability.unattributed|pluralize:"has,have" }} no unreceived step and no
+              confirmed holder, so nobody can be charged with the next move. Report this.
+            </p>
+          {% else %}
+            <p class="form-text mt-3 mb-0">Every overdue document has an office accountable for it.</p>
+          {% endif %}
         </div>
       </div>
     </div>

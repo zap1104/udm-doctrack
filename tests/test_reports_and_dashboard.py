@@ -77,7 +77,7 @@ TRACKING_PANELS = (
     "Cumulative tracking volume",
     "Records by status",
     "Turnaround",
-    "Overdue documents by holding office",
+    "Overdue documents by accountable office",
     "Documents handled by office",
     "Transferred vs received by office",
 )
@@ -140,16 +140,15 @@ def test_the_dropped_panels_are_gone_from_the_page_and_the_context(
 def test_overdue_offices_report_a_share_of_the_whole_backlog(
     client, finished_record, users
 ):
-    """Code, count and share. The bar cannot say the share: it is scaled against
-    the *longest* queue so the widest one fills its track, so two offices
-    holding 6 and 5 draw almost the same bar whether that is half the backlog
-    each or a tenth of it."""
+    """Two series per office, and a stated count of what nobody can be charged
+    with. The panel groups by who owes the next move, not by who holds the
+    paper — see tests/test_overdue_accountability.py for why those differ."""
     client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["overdue_offices"]
+    panel = client.get(REPORTS).context["overdue_accountability"]
 
-    for row in rows:
-        assert row["share"] <= 100
-    assert sum(row["share"] for row in rows) <= 100
+    for row in panel["rows"]:
+        assert row["total"] == row["awaiting"] + row["holding"]
+    assert panel["unattributed"] == 0, "every overdue record has an accountable office"
 
 
 # --- 3.3 cumulative three-series -------------------------------------------
@@ -238,7 +237,10 @@ def test_an_administrator_gets_the_office_filter(client, users, who):
     body = client.get(REPORTS).content.decode()
 
     assert 'id="report-office"' in body
-    assert 'id="report-office-name"' in body
+    # One control on one parameter: the "…or by name" box that stood beside it
+    # is gone, and the dropdown re-scopes the page on change.
+    assert 'id="report-office-name"' not in body
+    assert "data-auto-submit" in body
 
 
 @pytest.mark.django_db
@@ -252,7 +254,6 @@ def test_an_ordinary_account_goes_straight_to_its_own_office(client, users, who)
     body = response.content.decode()
 
     assert 'id="report-office"' not in body
-    assert 'id="report-office-name"' not in body
     assert response.context["filters"]["can_pick"] is False
     assert users[who].office.name in body, "the heading names the office it describes"
 
@@ -262,16 +263,18 @@ def test_an_ordinary_account_goes_straight_to_its_own_office(client, users, who)
 def test_an_ordinary_account_cannot_name_another_office_by_hand(
     client, users, offices, who
 ):
-    """The two office controls disagreed about who may use them: the dropdown
-    was gated and the name box was not, so `?office_name=Supply` filtered this
-    page to another office for an account with no picker at all."""
-    client.force_login(users[who])
-    filters = client.get(
-        f"{REPORTS}?office={offices['SUP'].pk}&office_name=Supply and Property Management"
-    ).context["filters"]
+    """`?office=` is an administrator's control. An account without the picker
+    that hand-types one is shown its own desk, not another office's report.
 
-    assert filters["office"] is None
-    assert filters["office_name"] == ""
+    There were two controls here and they disagreed about who may use them —
+    the dropdown was gated and the "…or by name" box was not, so
+    `?office_name=Supply` re-scoped this page for an account with no picker at
+    all. The box is gone; the gate is the same one either way."""
+    client.force_login(users[who])
+    response = client.get(f"{REPORTS}?office={offices['SUP'].pk}")
+
+    assert response.context["filters"]["office"] is None
+    assert "office_name" not in response.context["filters"]
 
 
 @pytest.mark.django_db
@@ -323,58 +326,7 @@ def test_the_export_names_the_office_it_covers(client, finished_record, users, o
     assert offices["SUP"].name in body.splitlines()[0]
 
 
-# --- 3.11 selection by name ------------------------------------------------
-@pytest.mark.django_db
-def test_an_office_report_can_be_pulled_by_name(client, finished_record, users, offices):
-    client.force_login(users["admin"])
-    filters = client.get(f"{REPORTS}?office_name=Supply and Property Management").context["filters"]
-
-    assert filters["office"] == offices["SUP"]
-
-
-@pytest.mark.django_db
-def test_an_office_report_can_be_pulled_by_code(client, users, offices):
-    client.force_login(users["admin"])
-    filters = client.get(f"{REPORTS}?office_name=SUP").context["filters"]
-
-    assert filters["office"] == offices["SUP"]
-
-
-@pytest.mark.django_db
-def test_a_unique_prefix_resolves(client, users, offices):
-    client.force_login(users["admin"])
-    filters = client.get(f"{REPORTS}?office_name=Human").context["filters"]
-
-    assert filters["office"] == offices["HR"]
-
-
-@pytest.mark.django_db
-def test_an_ambiguous_name_resolves_to_nothing_and_says_so(client, users, offices):
-    """Quietly picking the first match would hand somebody another office's
-    report under the name they typed — and generating one notifies nobody, so
-    there is no second pair of eyes to catch it."""
-    from apps.accounts.models import Office
-
-    Office.objects.create(code="SUP2", name="Supply Annex", cluster="OVPA")
-
-    client.force_login(users["admin"])
-    response = client.get(f"{REPORTS}?office_name=Supply")
-
-    assert response.context["filters"]["office"] is None
-    assert response.context["filters"]["office_name_unmatched"] is True
-    assert "No single office matches" in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_the_dropdown_wins_over_a_stale_name(client, users, offices):
-    client.force_login(users["admin"])
-    filters = client.get(
-        f"{REPORTS}?office={offices['HR'].pk}&office_name=SUP"
-    ).context["filters"]
-
-    assert filters["office"] == offices["HR"]
-
-
+# --- generating a report is silent -----------------------------------------
 @pytest.mark.django_db
 def test_generating_a_report_notifies_nobody(client, finished_record, users, offices):
     """An anti-tampering requirement: an office must not learn it is being
@@ -383,7 +335,7 @@ def test_generating_a_report_notifies_nobody(client, finished_record, users, off
 
     before = Notification.objects.count()
     client.force_login(users["admin"])
-    client.get(f"{REPORTS}?office_name=SUP")
+    client.get(f"{REPORTS}?office={offices['SUP'].pk}")
 
     assert Notification.objects.count() == before
 
@@ -502,8 +454,17 @@ def test_the_breakdown_respects_visibility(client, finished_record, users):
 
 # --- 3.9 print isolation ---------------------------------------------------
 def _print_block(css: str) -> str:
-    """The @media print block that governs the report panels."""
-    start = css.index(".report-panel { display:none; }", css.index("@media print {\n  @page { size:A4 portrait"))
+    """The @media print block that governs the report panels.
+
+    Anchored on the block's own first rule. It used to anchor on a nested
+    `@page` that this file no longer has: there were three @page rules, each
+    silently re-margining whichever sheet printed last, and they are one now at
+    the top level.
+    """
+    start = css.index(
+        ".report-panel { display:none; }",
+        css.index(".reports-page-head .no-print"),
+    )
     return css[start : start + 400]
 
 
