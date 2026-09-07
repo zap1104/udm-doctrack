@@ -655,6 +655,18 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
     `completion_note` is deliberately left alone. The note explains a
     completion that genuinely happened, and this timeline does not rewrite
     itself; the reopening is recorded as its own entry beneath it.
+
+    `due_at` is deliberately absent from `update_fields` below, and that is the
+    whole of "reopen inherits the original deadline". No batch is routed here,
+    so nothing recomputes it: the record keeps the deadline it was carrying when
+    it was completed, which is the one the office agreed to.
+
+    The consequence is intended and worth stating. A record reopened after its
+    deadline has passed is overdue immediately — including one that was
+    completed on time and reopened a month later. That is the honest reading:
+    the work is owed again and the date it was owed by has gone. An office that
+    wants a fresh clock routes the record onward, which is the act that sets a
+    new one.
     """
     refuse_viewers(user, "return documents to tracking")
     if record.status == Status.COMPLETED or record.is_archived or getattr(record, "archived_document", None):

@@ -300,3 +300,79 @@ def test_the_year_cap_still_holds(db):
     form = _form(due_date=beyond.isoformat(), due_time="10:00")
 
     assert "due_date" in form.errors
+
+
+# --- reopening keeps the deadline the office agreed to -----------------------
+def test_reopening_leaves_the_deadline_alone(db, users, offices, memo_type):
+    """"Reopen inherits the original due date" is an invariant, not a feature:
+    `reopen_record` routes no batch, so nothing recomputes `due_at`, and it is
+    absent from `update_fields`. This locks that down — the next person adding a
+    field to that save() has a test telling them which one not to add."""
+    from apps.tracking.services import complete_record, confirm_receipt, reopen_record
+
+    RoutingSLA.objects.create(office=offices["SUP"], document_type=None, due_days=10)
+    record = create_draft_record(
+        user=users["med"], subject="Supplies", instructions="x", document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    complete_record(record, user=users["sup"])
+    record.refresh_from_db()
+    agreed = record.due_at
+    assert agreed is not None, "the fixture set one"
+
+    reopen_record(record, user=users["sup"], reason="Wrong attachment")
+    record.refresh_from_db()
+
+    assert record.due_at == agreed
+    assert record.status == Status.RECEIVED
+
+
+def test_a_record_reopened_after_its_deadline_is_overdue_at_once(
+    db, users, offices, memo_type
+):
+    """Intended, and worth a test because it looks like a bug from the outside:
+    the work is owed again and the date it was owed by has gone. An office that
+    wants a fresh clock routes the record onward, which is the act that sets
+    one."""
+    from apps.tracking.models import TrackingRecord
+    from apps.tracking.services import complete_record, confirm_receipt, reopen_record
+
+    record = create_draft_record(
+        user=users["med"], subject="Supplies", instructions="x", document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    complete_record(record, user=users["sup"])
+    TrackingRecord.objects.filter(pk=record.pk).update(
+        due_at=timezone.now() - timedelta(days=1)
+    )
+    record.refresh_from_db()
+
+    reopen_record(record, user=users["sup"], reason="Wrong attachment")
+    record.refresh_from_db()
+
+    assert record.is_overdue
+
+
+def test_routing_a_reopened_record_onward_sets_a_fresh_clock(
+    db, users, offices, memo_type
+):
+    """The escape hatch from the test above."""
+    from apps.tracking.services import complete_record, confirm_receipt, reopen_record
+
+    RoutingSLA.objects.create(office=offices["HR"], document_type=None, due_days=6)
+    record = create_draft_record(
+        user=users["med"], subject="Supplies", instructions="x", document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    complete_record(record, user=users["sup"])
+    reopen_record(record, user=users["sup"], reason="Wrong attachment")
+    record.refresh_from_db()
+
+    route_record(record, [offices["HR"]], user=users["sup"], action="FORWARD")
+    record.refresh_from_db()
+
+    assert _days_out(record) == 6
+    assert not record.is_overdue
