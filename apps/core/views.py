@@ -846,8 +846,47 @@ def report_filters_from_request(request):
 def apply_report_filters(records, filters):
     office = filters["office"]
     if office:
-        records = records.filter(Q(originating_office=office) | Q(current_office=office))
+        # Four ways an office touches a record, not two.
+        #
+        # It matched `originating_office | current_office`, and
+        # `recalculate_status()` sets `current_office` to the *sending* office
+        # while a batch is unreceived — correctly, because that is the last
+        # office with confirmed custody. So for MED → SUP with SUP yet to
+        # confirm, both fields read MED: an office filtering the report by its
+        # own name could not see the documents sitting unreceived in its own
+        # inbox. The whole page lied for that office, not just one panel.
+        #
+        # Unscoped by batch on purpose. A report's job is "everything this
+        # office touched in this period", including hops it has since passed on.
+        # Direction stays current-batch (see services.direction_annotation), so
+        # those older rows land in the `other` bucket under an honest label
+        # rather than being counted as this office's current work. Do not
+        # "correct" this to match `apply_scope`, which answers a different
+        # question — what is on this office's desk *now*.
+        records = records.filter(
+            Q(originating_office=office)
+            | Q(current_office=office)
+            | Q(routing_steps__to_office=office)
+            | Q(routing_steps__from_office=office)
+        )
     return records
+
+
+def report_scope_office(request, filters):
+    """The one office every direction and accountability figure is measured from.
+
+    Direction is relative — a document is incoming *to* someone. The filter
+    dropdown supplies that someone; a user with an office falls back to their
+    own. A system administrator who has picked nothing has no point of view, and
+    the panels that need one say so rather than inventing a number.
+
+    Not named `scope_office`: `tracking.services.scope_office` already answers
+    "which office may this account view a queue as", and two functions with one
+    name answering different questions is the shape of bug this codebase has
+    already paid for. This one is downstream of that one — `filters["office"]`
+    has been through it.
+    """
+    return filters["office"] or request.user.office
 
 
 class ReportsView(AppLoginRequiredMixin, TemplateView):
