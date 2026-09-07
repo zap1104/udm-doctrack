@@ -69,6 +69,18 @@
      to stay separable under protanopia and deuteranopia — where teal and gold
      already separate on lightness, and this sits between them on neither. */
   --chart-three: #2f7d4f;
+  /* The alert pair, for a panel whose whole subject is lateness. Deliberately
+     not a third and fourth categorical slot: --chart-one/two/three are chosen
+     to be *equal* — no series louder than another — and the overdue panel needs
+     the opposite. Both are red because both rows are late; they separate on
+     lightness rather than hue, so they stay tellable apart under protanopia and
+     deuteranopia where two reds would otherwise collapse.
+
+     6.06:1 and 3.57:1 on the card, so each clears the 3:1 that WCAG 1.4.11 asks
+     of a graphic carrying meaning. Colour is reinforcement here either way —
+     every row in that panel is labelled in words. */
+  --chart-alert: #b4342b;
+  --chart-alert-soft: #cf6a5e;
   --chart-track: #e8edf3;
   --chart-grid: #eef1f6;
   --sidebar-width: 236px;
@@ -251,6 +263,33 @@ a:hover { text-decoration: underline; }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
+/* Overdue is not a stage — it is a condition sitting on top of one, and it is
+   rendered *beside* the status pill rather than instead of it. Soft-fill like
+   its neighbour, it read as a second status and disappeared into the row; a
+   filled red is the one thing on the line that is not a stage, which is exactly
+   what it is. 6.06:1 in light, 3.27:1 in dark.
+
+   Its own class rather than loudening .pill-overdue, which also carries
+   "Suspended" on the users screen and "Urgent" on a record — neither of which
+   was asked to change. */
+.pill-alert {
+  background: var(--udm-red); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+/* On paper it is ink on white, not white on a fill.
+   Only the reports and memo sheets ask for `print-color-adjust:exact`; the
+   routing slip — the page that physically travels with the document — does
+   not, so its pills print with no background. A soft-filled pill survives that
+   because its text is dark. This one's text is white, so the Overdue marker
+   would have vanished from the one printout that follows the record around.
+   Red ink and a red border read as loudly on paper and depend on nothing the
+   print dialog can switch off. */
+@media print {
+  .pill-alert {
+    background: transparent !important; color: var(--udm-red-ink) !important;
+    box-shadow: inset 0 0 0 1.5px var(--udm-red) !important;
+  }
+}
 /* Direction, not status — which way the document is moving relative to the
    office reading the page. Deliberately outside the status hues: gold, teal,
    green and red all mean a stage, and a direction wearing one of them would
@@ -854,7 +893,10 @@ a:hover { text-decoration: underline; }
 .bar-one { background:var(--chart-one); }
 .bar-two { background:var(--chart-two); }
 .bar-three { background:var(--chart-three); }
-.bar-alert { background:var(--udm-red); }
+.bar-alert { background:var(--chart-alert); }
+.bar-alert-soft { background:var(--chart-alert-soft); }
+.chart-swatch--alert { background:var(--chart-alert); }
+.chart-swatch--alert-soft { background:var(--chart-alert-soft); }
 
 /* -------------------------------------------------------- column charts */
 .column-chart { position:relative; padding-top:6px; }
@@ -2022,6 +2064,11 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --udm-green: #56b287;
   --udm-red: #e2695f;
   --udm-red-600: #cf5348;
+  /* Re-picked, not reused: on the dark card the light-theme pair would sit at
+     2.4:1 and 1.6:1. 7.11:1 and 3.60:1 here, separating by the same lightness
+     step the light pair uses. */
+  --chart-alert: #ff8a7a;
+  --chart-alert-soft: #c0554b;
 
   /* Tints become low-lightness washes of the same hue, not pale panels. */
   --udm-gold-soft: #3a2f14;

@@ -390,8 +390,8 @@
             </div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Awaiting receipt</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>In their hands</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--alert" aria-hidden="true"></i>Awaiting receipt</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--alert-soft" aria-hidden="true"></i>In their hands</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -410,12 +410,12 @@
               <div class="report-series">
                 <div class="report-series-item">
                   <span>Awaiting receipt</span>
-                  <div class="report-bar"><i class="bar-one" style="width:{{ row.awaiting_percent }}%"></i></div>
+                  <div class="report-bar"><i class="bar-alert" style="width:{{ row.awaiting_percent }}%"></i></div>
                   <strong class="num">{{ row.awaiting }}</strong>
                 </div>
                 <div class="report-series-item">
                   <span>In their hands</span>
-                  <div class="report-bar"><i class="bar-two" style="width:{{ row.holding_percent }}%"></i></div>
+                  <div class="report-bar"><i class="bar-alert-soft" style="width:{{ row.holding_percent }}%"></i></div>
                   <strong class="num">{{ row.holding }}</strong>
                 </div>
               </div>
