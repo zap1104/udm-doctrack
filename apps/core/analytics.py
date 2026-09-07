@@ -26,7 +26,7 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
 from apps.accounts.models import Office
-from apps.documents.models import Source
+from apps.documents.models import COMPLETED_SOURCE
 from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status
 
 from .business_time import (
@@ -551,7 +551,10 @@ def combined_totals(records, documents) -> dict:
         return live.filter(status=status).distinct().count()
 
     repository_total = documents.distinct().count()
-    historical = documents.filter(source=Source.UPLOAD).distinct().count()
+    # Everything that did not come out of tracking. It tested `source == UPLOAD`,
+    # which left a scanned document counted Completed here while the repository
+    # tile beside it read Historical — see documents.models.COMPLETED_SOURCE.
+    historical = documents.exclude(source=COMPLETED_SOURCE).distinct().count()
 
     return {
         "pending_receipt": by_status(Status.PENDING_RECEIPT),

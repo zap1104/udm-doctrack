@@ -571,20 +571,43 @@
         <div class="card-udm-head">
           <div>
             <h2>Monthly repository volume</h2>
-            <div class="report-caption">Documents added to the repository, last 12 months.</div>
+            <div class="report-caption">
+              Documents added to the repository, last 12 months. <strong>Completed</strong>
+              came out of tracking — work the offices finished and an administrator
+              approved. <strong>Historical</strong> is a file or a scan of something from
+              before, or outside, the system.
+            </div>
+          </div>
+          {% comment %}
+            The two series named in a legend as well as in the bars, because a
+            month of 90 uploads and 2 completions and a month of the reverse
+            draw the same single bar and mean opposite things about how the
+            office is doing.
+          {% endcomment %}
+          <div class="chart-legend">
+            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Completed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Historical</span>
           </div>
         </div>
         <div class="card-udm-body">
           {% if total_documents %}
             <div class="column-chart" role="img"
-                 aria-label="Column chart of documents added per month. The table below lists every value.">
+                 aria-label="Grouped column chart of documents added per month, split into completed records filed from tracking and historical uploads. The table below lists every value.">
               <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
               <div class="column-chart-plot">
                 {% for row in document_months %}
-                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.total }} document{{ row.total|pluralize }}">
+                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.completed }} completed, {{ row.historical }} historical">
                     <div class="column-pair">
-                      {% if row.total %}
-                        <span class="column column--one" style="height:{{ row.percent }}%"></span>
+                      {% comment %}
+                        A zero draws nothing: a minimum-height stub would paint a
+                        value that is not there, and on this chart it would read
+                        as "a few were filed" in a month when none were.
+                      {% endcomment %}
+                      {% if row.completed %}
+                        <span class="column column--one" style="height:{{ row.completed_percent }}%"></span>
+                      {% endif %}
+                      {% if row.historical %}
+                        <span class="column column--three" style="height:{{ row.historical_percent }}%"></span>
                       {% endif %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
@@ -595,10 +618,20 @@
             <details class="chart-table">
               <summary>View as table</summary>
               <div class="table-responsive"><table class="table-udm">
-                <thead><tr><th>Month</th><th class="text-end">Documents added</th></tr></thead>
+                <thead><tr>
+                  <th>Month</th>
+                  <th class="text-end">Completed</th>
+                  <th class="text-end">Historical</th>
+                  <th class="text-end">Total added</th>
+                </tr></thead>
                 <tbody>
                   {% for row in document_months %}
-                    <tr><td>{{ row.month|date:"F Y" }}</td><td class="text-end num">{{ row.total }}</td></tr>
+                    <tr>
+                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td class="text-end num">{{ row.completed }}</td>
+                      <td class="text-end num">{{ row.historical }}</td>
+                      <td class="text-end num">{{ row.total }}</td>
+                    </tr>
                   {% endfor %}
                 </tbody>
               </table></div>

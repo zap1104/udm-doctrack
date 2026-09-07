@@ -135,6 +135,88 @@ def test_the_dropped_panels_are_gone_from_the_page_and_the_context(
     assert "turnaround_by_office" not in response.context
 
 
+# --- completed vs historical ------------------------------------------------
+@pytest.fixture
+def filed_and_historical(users, offices, memo_type):
+    """Three documents out of tracking, two uploads and one scan."""
+    from apps.documents.models import Document, Source
+
+    made = []
+    for index in range(3):
+        made.append(Document.objects.create(
+            title=f"Filed {index}", office=offices["REC"], document_type=memo_type,
+            source=Source.DTS, uploaded_by=users["admin"],
+        ))
+    for index in range(2):
+        made.append(Document.objects.create(
+            title=f"Old {index}", office=offices["REC"], document_type=memo_type,
+            source=Source.UPLOAD, uploaded_by=users["admin"],
+        ))
+    made.append(Document.objects.create(
+        title="Scanned", office=offices["REC"], document_type=memo_type,
+        source=Source.SCAN, uploaded_by=users["admin"],
+    ))
+    return made
+
+
+@pytest.mark.django_db
+def test_monthly_repository_volume_says_which_kind_of_work_it_was(
+    client, filed_and_historical, users
+):
+    """A bare monthly total answered "how much is in the repository" and left
+    the reader to guess what kind of work it was. Completed is this year's
+    tracking finishing and being filed; historical is the backlog being
+    digitised. A month of 90 uploads and 2 completions draws the same single bar
+    as the reverse and means the opposite thing about how the office is doing."""
+    client.force_login(users["admin"])
+    response = client.get(REPORTS)
+    rows = [row for row in response.context["document_months"] if row["total"]]
+    body = response.content.decode()
+
+    assert rows, "the fixture filed six documents this month"
+    for row in rows:
+        assert row["total"] == row["completed"] + row["historical"]
+    assert sum(row["completed"] for row in rows) == 3
+    assert sum(row["historical"] for row in rows) == 3
+
+    panel = body[body.index("Monthly repository volume"):body.index("Documents by type")]
+    assert ">Completed</span>" in panel and ">Historical</span>" in panel, "legend"
+    assert ">Completed</th>" in panel and ">Historical</th>" in panel, "table view"
+
+
+@pytest.mark.django_db
+def test_a_scan_is_historical_everywhere_it_is_counted(
+    client, filed_and_historical, users
+):
+    """It was historical on the repository tile and completed on the dashboard
+    ring: the ring tested `source == UPLOAD`, the tile tested `source == DTS`
+    with an `{% else %}`. Same document, two answers, because the rule existed
+    twice. `documents.models.COMPLETED_SOURCE` is the one rule now."""
+    from apps.core import analytics
+    from apps.documents.models import Document
+    from apps.tracking.models import TrackingRecord
+
+    totals = analytics.combined_totals(
+        TrackingRecord.objects.none(), Document.objects.all()
+    )
+
+    assert totals["completed"] == 3, "only what came out of tracking"
+    assert totals["historical"] == 3, "two uploads and the scan"
+
+    client.force_login(users["admin"])
+    rows = client.get(REPORTS).context["document_months"]
+    assert sum(row["historical"] for row in rows) == totals["historical"]
+    assert sum(row["completed"] for row in rows) == totals["completed"]
+
+
+def test_the_completed_rule_is_named_once():
+    """Derived by exclusion, so a fourth source added later is historical
+    without anybody remembering to list it."""
+    from apps.documents.models import COMPLETED_SOURCE, Source
+
+    assert COMPLETED_SOURCE == Source.DTS
+
+
 # --- 3.2 overdue by holding office -----------------------------------------
 @pytest.mark.django_db
 def test_overdue_offices_report_a_share_of_the_whole_backlog(

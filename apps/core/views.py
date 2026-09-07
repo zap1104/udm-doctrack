@@ -16,7 +16,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import TemplateView, View
 
 from apps.accounts.models import Office
-from apps.documents.models import Document, SearchQueryLog, SearchResultClick, Source
+from apps.documents.models import (
+    COMPLETED_SOURCE,
+    Document,
+    SearchQueryLog,
+    SearchResultClick,
+    Source,
+)
 from apps.tracking import services as tracking_services
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
 
@@ -1224,17 +1230,52 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _document_months(self, documents):
+        """Documents added per month, split by where they came from.
+
+        A bare monthly total answered "how much is in the repository" and left
+        the reader to guess what kind of work it was. Those are two different
+        stories: completed documents are this year's tracking finishing and
+        being filed, historical ones are the backlog being digitised. A month
+        that is 90 uploads and 2 completions looks identical to the reverse on a
+        single bar, and they mean opposite things about how the office is doing.
+
+        The rule is `documents.models.COMPLETED_SOURCE`, so this panel, the
+        repository tile and the dashboard ring cannot disagree about what a
+        scanned document is.
+        """
         months, since = _month_window()
-        series = _month_series(documents, "created_at", since)
-        ceiling = max(series.values(), default=0)
-        return [
-            {
-                "month": month,
-                "total": series.get(month, 0),
-                "percent": _bar(series.get(month, 0), ceiling),
-            }
-            for month in months
-        ]
+        completed_series = _month_series(
+            documents.filter(source=COMPLETED_SOURCE), "created_at", since
+        )
+        historical_series = _month_series(
+            documents.exclude(source=COMPLETED_SOURCE), "created_at", since
+        )
+        # Scaled against the tallest *month*, not the tallest bar, so the two
+        # series stay comparable to each other within a month and across them.
+        ceiling = max(
+            [
+                completed_series.get(month, 0) + historical_series.get(month, 0)
+                for month in months
+            ],
+            default=0,
+        )
+        rows = []
+        for month in months:
+            completed = completed_series.get(month, 0)
+            historical = historical_series.get(month, 0)
+            rows.append(
+                {
+                    "month": month,
+                    "completed": completed,
+                    "historical": historical,
+                    "total": completed + historical,
+                    "completed_percent": _bar(completed, ceiling),
+                    "historical_percent": _bar(historical, ceiling),
+                    # Kept: the empty-state check and the table both read it.
+                    "percent": _bar(completed + historical, ceiling),
+                }
+            )
+        return rows
 
     def _top_searches(self):
         rows = list(
