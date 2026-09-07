@@ -281,3 +281,27 @@ def test_the_text_token_never_took_over_navys_background_job():
     # And navy itself must still be doing that background job somewhere.
     assert re.search(r"background(?:-color)?:\s*var\(--udm-navy\)", css)
     assert re.search(r"border(?:-\w+)?-color:\s*var\(--udm-navy\)", css)
+
+
+# --- the browser's own chrome follows the app's theme, not the desktop's -----
+def test_both_themes_pin_color_scheme():
+    """`<meta name="color-scheme" content="light dark">` in base.html tells the
+    browser the page supports both, so it paints native control internals from
+    the *OS* preference unless CSS says otherwise.
+
+    With only the dark block declaring it, a machine set to dark running the app
+    in light mode rendered the date input's text, the time input's "--:-- --"
+    and both picker glyphs near-white on our white field. Invisible — and only
+    for that combination, which is why it survived: on a light OS it looked
+    correct. It covers every native control, not just the deadline pair where it
+    was spotted.
+    """
+    css = CSS.read_text(encoding="utf-8")
+    body = _decomment(css)
+
+    light = body[body.index(":root {"):body.index("}", body.index(":root {"))]
+    assert "color-scheme: light" in light, "the light theme must pin it too"
+
+    dark_start = body.index(':root[data-theme="dark"] {')
+    dark = body[dark_start:body.index("}", dark_start)]
+    assert "color-scheme: dark" in dark

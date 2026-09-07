@@ -86,6 +86,20 @@
   --sidebar-width: 236px;
   --radius: 10px;
   --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
+
+  /* Pin the browser's own chrome to this theme.
+     base.html declares <meta name="color-scheme" content="light dark">, which
+     says the page supports both — so with nothing declared here the browser
+     paints native control internals from the *OS* preference. On a machine set
+     to dark with the app in light mode, that meant the date input's text, the
+     time input's "--:-- --" and both picker glyphs were rendered near-white on
+     our white field. Invisible, and only for that combination, which is why it
+     survived: on a light OS everything looked correct.
+     [data-theme="dark"] already declares `dark`; this is its missing partner,
+     so the controls follow the app's theme rather than the desktop's. It covers
+     every native control at once — date, time, select popups, scrollbars,
+     spinners — not only the deadline pair where it was spotted. */
+  color-scheme: light;
 }
 
 * {
