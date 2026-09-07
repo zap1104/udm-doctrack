@@ -23,6 +23,9 @@ from . import services
 from .forms import (
     DEADLINE_DATE,
     DEADLINE_NONE,
+    SORT_CHOICES,
+    SORT_DEADLINE_ASC,
+    SORT_DEADLINE_DESC,
     BulkConfirmReceiptForm,
     CompleteForm,
     ConfirmReceiptForm,
@@ -148,7 +151,24 @@ class RecordListView(AppLoginRequiredMixin, View):
                 + ". The value was not recognised, or your account may not filter by office.",
             )
 
-        records = records.distinct().order_by("-last_movement_at")
+        # Sort. `data` holds only what the form validated, so an unrecognised
+        # `?sort=` is already gone by here and falls to the default — the same
+        # lenient handling every other filter on this page gets.
+        #
+        # `-last_movement_at` is the tie-break on both deadline orders, not just
+        # the default: two records due the same day should fall in the order the
+        # rest of the page uses rather than in whatever the database returns.
+        #
+        # nulls_last in *both* directions. A record with no deadline has not
+        # been scheduled at all, so it belongs after everything that has been —
+        # on "latest first" as much as on "soonest first", where NULL sorting
+        # high would put unscheduled work above the genuinely distant.
+        sort = data.get("sort") or ""
+        ordering = {
+            SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
+            SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
+        }.get(sort, ("-last_movement_at",))
+        records = records.distinct().order_by(*ordering)
         # Page size comes from the reader (`?per_page=`), defaulting to the
         # workspace's own. See apps/core/pagination.py.
         page_context = paginate(request, records, services.PAGE_SIZE)
@@ -186,6 +206,8 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "form": form,
                 **page_context,
                 "records": page_records,
+                "sort_choices": SORT_CHOICES,
+                "selected_sort": sort,
                 # The four stages offered as pills, and which are lit. A set of
                 # strings because that is what a template `in` test compares
                 # against — the resolver validated them already.

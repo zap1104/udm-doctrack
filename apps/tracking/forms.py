@@ -487,6 +487,23 @@ def queue_pills(form) -> list[tuple[str, str]]:
     return [(value, labels[value]) for value in PILL_SCOPES if value in labels]
 
 
+#: How the tracking list is ordered. The empty value is the page's own default —
+#: most recently moved first — so "no sort chosen" and "sort by recency" are the
+#: same answer rather than two, and the pill row needs no separate reset.
+#:
+#: Deadline only. "Sort by status" or "by office" would each be a second way to
+#: express something the filter rows above already do better, and a sort that
+#: duplicates a filter is a control with no answer of its own.
+SORT_RECENT = ""
+SORT_DEADLINE_ASC = "deadline"
+SORT_DEADLINE_DESC = "deadline-desc"
+SORT_CHOICES = [
+    (SORT_RECENT, "Recently updated"),
+    (SORT_DEADLINE_ASC, "Deadline — soonest first"),
+    (SORT_DEADLINE_DESC, "Deadline — latest first"),
+]
+
+
 class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     """Filters for the Document Tracking list.
 
@@ -546,6 +563,10 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
             ("mine", "Files created by me only"),
         ],
     )
+    #: Validated here like every other parameter, though the pills set it by
+    #: link. Without the field `?sort=bogus` would sail past the form and reach
+    #: the view unchecked — the same reason `status` and `scope` stayed.
+    sort = forms.ChoiceField(required=False, label="", choices=SORT_CHOICES)
     scope = forms.ChoiceField(
         required=False,
         label="",
