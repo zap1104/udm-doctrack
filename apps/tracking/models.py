@@ -12,6 +12,8 @@ Design rules that the rest of the code depends on:
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
@@ -363,6 +365,39 @@ class TrackingRecord(TimeStampedModel):
         return bool(
             self.due_at and self.due_at < timezone.now() and self.status not in COMPLETED_STATUSES
         )
+
+    #: What the row should say about this record's deadline.
+    #:
+    #: Derived here rather than in the template so the list, the detail page and
+    #: anything added later read one definition. A template working it out from
+    #: `due_at` and `timezone.now()` would be a second rule, and the two would
+    #: part company the first time the window changed.
+    DEADLINE_OVERDUE = "overdue"
+    DEADLINE_DUE_SOON = "due_soon"
+    DEADLINE_SCHEDULED = "scheduled"
+    DEADLINE_NONE = ""
+
+    @property
+    def deadline_state(self) -> str:
+        """"overdue", "due_soon", "scheduled", or "" when there is no deadline.
+
+        Completed work is never any of them: a record that is finished owes
+        nothing, whatever its deadline said. That is the same exclusion
+        `is_overdue` makes, and it is made here by delegating to it rather than
+        by repeating the status test.
+
+        A record still awaiting receipt can be due soon. That is the row a
+        warning is most useful on — the receipt is the act that is owed, and
+        nobody has performed it.
+        """
+        if not self.due_at or self.status in COMPLETED_STATUSES:
+            return self.DEADLINE_NONE
+        if self.is_overdue:
+            return self.DEADLINE_OVERDUE
+        window = timedelta(hours=settings.DEADLINE_WARNING_HOURS)
+        if self.due_at <= timezone.now() + window:
+            return self.DEADLINE_DUE_SOON
+        return self.DEADLINE_SCHEDULED
 
     @property
     def awaiting_receipt(self) -> bool:

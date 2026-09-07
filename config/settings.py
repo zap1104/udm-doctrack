@@ -354,6 +354,18 @@ SESSION_WARNING_SECONDS = env_int("SESSION_WARNING_SECONDS", 120)
 #: PRINT is deliberately never deduplicated — see tracking.services.log_print.
 VIEW_LOG_DEDUP_MINUTES = env_int("VIEW_LOG_DEDUP_MINUTES", 30)
 
+#: How long before a deadline a record starts warning that it is due.
+#:
+#: One window, not a ladder of them. "Due today" and "due tomorrow" are two
+#: badges, two colours to clear contrast in both themes, and two things to
+#: explain — for a distinction an office reads off the date itself, which is
+#: printed beside the badge.
+#:
+#: Twenty-four hours is one working day's notice. Configurable because an office
+#: that only opens its queue every other day wants more, and that is a local
+#: decision rather than something this code should have an opinion about.
+DEADLINE_WARNING_HOURS = env_int("DEADLINE_WARNING_HOURS", 24)
+
 SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
     "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_HTTPONLY = True
