@@ -13,7 +13,18 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Exists, F, Max, OuterRef, Q
+from django.db.models import (
+    Case,
+    CharField,
+    Count,
+    Exists,
+    F,
+    Max,
+    OuterRef,
+    Q,
+    Value,
+    When,
+)
 from django.utils import timezone
 
 from apps.core.models import AuditLog, Notification
@@ -1007,6 +1018,115 @@ def _bar(part: int, whole: int) -> int:
     if not whole:
         return 0
     return max(4, round(part * 100 / whole)) if part else 0
+
+
+# ---------------------------------------------------------------------------
+# Which way a document is moving, and for whom
+# ---------------------------------------------------------------------------
+#: Direction is a property of a document *and* an office — the batch that is
+#: outgoing for Supply is incoming for HR at the same instant — so it is derived
+#: against a named office rather than stored on the record.
+DIRECTION_INCOMING = "INCOMING"
+DIRECTION_OUTGOING = "OUTGOING"
+DIRECTION_UNSET = ""
+
+#: What the third bucket is called on screen. Named here so the service and the
+#: template cannot describe the same rows differently.
+DIRECTION_OTHER_LABEL = "Passed on — not in this office's hands this hop"
+
+
+def direction_annotation(office):
+    """`Case` expression tagging each record Incoming/Outgoing against `office`.
+
+    Current batch only, so the tag answers "which way is this moving now", not
+    "did this office ever touch it". A record whose only involvement with
+    `office` was an earlier hop gets DIRECTION_UNSET — reported as its own
+    bucket, never folded into either side, because calling a document the office
+    has already passed on "outgoing" would put it back on their pile.
+
+    Incoming and outgoing cannot both be true: `route_record()` refuses a step
+    whose from_office equals its to_office. Incoming is checked first anyway, so
+    a future bug there produces a wrong tag rather than a crash.
+
+    None when there is no office, so a caller branches on it once rather than
+    inventing a split it has no point of view to compute.
+    """
+    if office is None:
+        return None
+    return Case(
+        When(
+            Exists(_current_batch_steps(to_office=office)),
+            then=Value(DIRECTION_INCOMING),
+        ),
+        When(
+            Exists(_current_batch_steps(from_office=office)),
+            then=Value(DIRECTION_OUTGOING),
+        ),
+        default=Value(DIRECTION_UNSET),
+        output_field=CharField(),
+    )
+
+
+def direction_totals(records, office) -> dict:
+    """How many records are moving each way, measured from `office`."""
+    counts = {"incoming": 0, "outgoing": 0, "other": 0}
+    annotation = direction_annotation(office)
+    if annotation is None:
+        return counts
+    rows = (
+        records.annotate(_direction=annotation)
+        .values("_direction")
+        .annotate(total=Count("id", distinct=True))
+    )
+    for row in rows:
+        key = {
+            DIRECTION_INCOMING: "incoming",
+            DIRECTION_OUTGOING: "outgoing",
+        }.get(row["_direction"], "other")
+        counts[key] += row["total"]
+    return counts
+
+
+def by_status_direction(records, office) -> list[dict]:
+    """One row per live status, split by direction against `office`.
+
+    Returns the same shape whether or not there is an office: without one the
+    direction columns are zero and `total` still carries the row, so the caller
+    renders one table rather than two and the template has no branch of its own.
+    """
+    annotation = direction_annotation(office)
+    live = records.filter(status__in=ACTIVE_STATUSES).exclude(status=Status.DRAFT)
+
+    tally: dict[str, dict] = {}
+    if annotation is None:
+        rows = live.values("status").annotate(total=Count("id", distinct=True))
+        for row in rows:
+            tally[row["status"]] = {
+                "incoming": 0, "outgoing": 0, "other": 0, "total": row["total"],
+            }
+    else:
+        rows = (
+            live.annotate(_direction=annotation)
+            .values("status", "_direction")
+            .annotate(total=Count("id", distinct=True))
+        )
+        for row in rows:
+            bucket = tally.setdefault(
+                row["status"], {"incoming": 0, "outgoing": 0, "other": 0, "total": 0}
+            )
+            key = {
+                DIRECTION_INCOMING: "incoming",
+                DIRECTION_OUTGOING: "outgoing",
+            }.get(row["_direction"], "other")
+            bucket[key] += row["total"]
+            bucket["total"] += row["total"]
+
+    labels = dict(Status.choices)
+    return [
+        {"status": status, "label": labels.get(status, status), **tally[status]}
+        for status in (value for value, _ in Status.choices)
+        if status in tally
+    ]
 
 
 #: Scopes that answer *for an office* rather than for a queryset. The picker
