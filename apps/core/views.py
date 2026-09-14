@@ -823,29 +823,14 @@ def report_filters_from_request(request):
 def apply_report_filters(records, filters):
     office = filters["office"]
     if office:
-        # Four ways an office touches a record, not two.
+        # Four ways an office touches a record, not two — see
+        # core_filters.office_touches_record_q, which carries the reasoning and
+        # is what the dashboard reads too, so "MED" cannot mean two things.
         #
-        # It matched `originating_office | current_office`, and
-        # `recalculate_status()` sets `current_office` to the *sending* office
-        # while a batch is unreceived — correctly, because that is the last
-        # office with confirmed custody. So for MED → SUP with SUP yet to
-        # confirm, both fields read MED: an office filtering the report by its
-        # own name could not see the documents sitting unreceived in its own
-        # inbox. The whole page lied for that office, not just one panel.
-        #
-        # Unscoped by batch on purpose. A report's job is "everything this
-        # office touched in this period", including hops it has since passed on.
         # Direction stays current-batch (see services.direction_annotation), so
-        # those older rows land in the `other` bucket under an honest label
-        # rather than being counted as this office's current work. Do not
-        # "correct" this to match `apply_scope`, which answers a different
-        # question — what is on this office's desk *now*.
-        records = records.filter(
-            Q(originating_office=office)
-            | Q(current_office=office)
-            | Q(routing_steps__to_office=office)
-            | Q(routing_steps__from_office=office)
-        )
+        # hops this office has already passed on land in the `other` bucket
+        # under an honest label rather than being counted as its current work.
+        records = records.filter(core_filters.office_touches_record_q(office))
     return records
 
 
