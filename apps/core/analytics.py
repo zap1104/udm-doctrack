@@ -494,9 +494,16 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
     # by name within a descending sort, hence the two-pass ordering.
     rows.sort(key=lambda row: row["name"])
     rows.sort(key=lambda row: row["total"], reverse=True)
+
+    # Before the slice, like `overdue_offices` forty lines up, and for the
+    # reason its docstring gives: summing the rows that survive a top-N divides
+    # by a truncated total, so the offices shown add to 100% and the ones cut
+    # off have vanished from the denominator. Here it was worse than a wrong
+    # percentage — `grand_total` is returned as `total`, so the panel's own
+    # headline was truncated too and contradicted `total_documents`.
+    grand_total = sum(row["total"] for row in rows)
     rows = rows[:limit]
 
-    grand_total = sum(row["total"] for row in rows)
     ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         row["bar_percent"] = bar(row["total"], ceiling)
