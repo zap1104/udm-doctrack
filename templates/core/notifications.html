@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load doctrack %}
 {% block title %}Notifications · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head notification-page-head">
@@ -18,11 +19,13 @@
 <div class="notification-toolbar card-udm mb-4">
   <div class="card-udm-body d-flex flex-wrap align-items-center gap-2">
     <nav class="notification-filters" aria-label="Notification filters">
-      <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}">All</a>
-      <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}">Unread</a>
+      <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}">All</a>
+      <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}">Unread</a>
     </nav>
     <form class="notification-kind-filter ms-auto" method="get">
       <input type="hidden" name="filter" value="{{ active_filter }}">
+      {# Carried, or changing the type filter would reset the page length. #}
+      <input type="hidden" name="per_page" value="{{ page_size }}">
       <label class="visually-hidden" for="notification-kind">Filter by type</label>
       <select id="notification-kind" name="kind" class="form-select form-select-sm" onchange="this.form.submit()">
         <option value="">All types</option>
@@ -37,6 +40,12 @@
     <h2 id="notification-list-heading" class="section-title mb-0">{{ notification_count }} update{{ notification_count|pluralize }}</h2>
     <span class="text-muted small">Unread updates appear first</span>
   </div>
+  {% comment %}
+  Above the list. The page length and where in the results this page sits are
+  both wanted before working down the rows, and under a full page they are a
+  scroll away.
+{% endcomment %}
+  {% pager section="size" %}
   <div class="notification-list">
     {% for notification in notifications %}
       {% if notification.show_day_header %}<h2 class="notification-day-heading">{{ notification.day_group }}</h2>{% endif %}
@@ -47,5 +56,5 @@
   </div>
 </section>
 
-{% include "partials/_pagination.html" %}
+{% pager section="steps" %}
 {% endblock %}

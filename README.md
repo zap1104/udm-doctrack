@@ -51,6 +51,10 @@ The deployment-readiness branch adds background extraction through django-q2 wit
 **Tracking**
 - Automatic tracking numbers: `UDM-OVPA-MED-2026-08-0001` — unique, readable, never reused.
 - Routing to one or many offices, with instructions and a deadline.
+- **Deadlines come from an editable table.** Administrators set how many days an
+  office has to act, per office and document type, in Django admin under
+  *Routing SLAs*. A deadline may carry a time of day; left blank it means end of
+  day, as every deadline did before.
 - **Explicit receipt.** Sent is not received. Custody changes only when someone at the receiving office confirms the selected record or explicit bulk selection, and the server writes one timestamped history event per record.
 - Append-only history. Forwarding never overwrites an earlier step; nothing disappears.
 - Printable routing slip carrying the full movement history.

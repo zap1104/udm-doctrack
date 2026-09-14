@@ -11,6 +11,7 @@ urlpatterns = [
     path("notifications/read-all/", views.NotificationMarkAllReadView.as_view(), name="notification_mark_all_read"),
     path("notifications/<int:pk>/read/", views.NotificationReadView.as_view(), name="notification_read"),
     path("", views.DashboardView.as_view(), name="dashboard"),
+    path("memo/print/", views.DashboardMemoPrintView.as_view(), name="dashboard_memo_print"),
     path("reports/", views.ReportsView.as_view(), name="reports"),
     path("reports/export/", views.ReportExportView.as_view(), name="report_export"),
     path("print-log/", views.PrintLogView.as_view(), name="log_print"),

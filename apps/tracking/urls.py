@@ -14,7 +14,10 @@ urlpatterns = [
     path("<int:pk>/remark/", views.AddRemarkView.as_view(), name="add_remark"),
     path("<int:pk>/route/", views.RouteRecordView.as_view(), name="route"),
     path("<int:pk>/complete/", views.CompleteRecordView.as_view(), name="complete"),
-    path("<int:pk>/archive/", views.ArchiveRecordView.as_view(), name="archive"),
+    # Kept at /archive/ under the name "archive": the templates, the repository
+    # page and any bookmark all point here, and the act is the same one — it is
+    # only who may perform it, and what it does to the status, that changed.
+    path("<int:pk>/archive/", views.ApproveUploadView.as_view(), name="archive"),
     path("<int:pk>/reopen/", views.ReopenRecordView.as_view(), name="reopen"),
     path("<int:pk>/share/", views.GrantAccessView.as_view(), name="grant_access"),
     path("<int:pk>/slip/", views.RoutingSlipView.as_view(), name="routing_slip"),

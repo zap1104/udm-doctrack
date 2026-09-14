@@ -5,6 +5,11 @@
 
 :root {
   --udm-navy: #0b315a;
+  /* Navy doing its *text* job, split from navy doing its background job. The
+     two want opposite things once the page goes dark: the background darkens
+     with it, the text has to lift off it. Identical to --udm-navy in this
+     theme, so nothing here changes; the dark block is where they diverge. */
+  --udm-navy-text: var(--udm-navy);
   --udm-navy-700: #0e3c6d;
   --udm-navy-600: #14477e;
   --udm-gold: #c49a2e;
@@ -14,8 +19,18 @@
   --udm-green: #2e7d5b;
   --udm-green-soft: #e4f2ea;
   --udm-red: #b4342b;
+  /* The hovered fill, the counterpart of --udm-navy-600. Darker than --udm-red
+     in both themes, so white keeps its contrast going *up* on hover rather than
+     down. Not --udm-red-ink: that is the text colour for --udm-red-soft, and it
+     inverts between themes — used as a ground it is #f3ada6 in dark mode, which
+     is white-on-pink at 1.85:1. The contrast test caught exactly that. */
+  --udm-red-600: #93291f;
   --udm-red-soft: #fbe7e5;
   --udm-canvas: #f5f7fa;
+  /* The raised surface: cards, tables, the topbar. Was #fff literal in 30-odd
+     places, which is what made a dark theme impossible to add without editing
+     every component. One token means the theme block below re-points them all. */
+  --udm-surface: #ffffff;
   --udm-line: #dfe5ec;
   --udm-line-strong: #b9c9da;
   --udm-line-soft: #cfd8e6;
@@ -48,11 +63,43 @@
      labelled list, and the column charts a table view. */
   --chart-one: #0a6e9a;
   --chart-two: #b58c24;
+  /* Third categorical slot, added for the cumulative created / transferred /
+     completed chart. Moss green: it clears the same lightness band and 3:1
+     contrast on white as the other two, and sits far enough from both in hue
+     to stay separable under protanopia and deuteranopia — where teal and gold
+     already separate on lightness, and this sits between them on neither. */
+  --chart-three: #2f7d4f;
+  /* The alert pair, for a panel whose whole subject is lateness. Deliberately
+     not a third and fourth categorical slot: --chart-one/two/three are chosen
+     to be *equal* — no series louder than another — and the overdue panel needs
+     the opposite. Both are red because both rows are late; they separate on
+     lightness rather than hue, so they stay tellable apart under protanopia and
+     deuteranopia where two reds would otherwise collapse.
+
+     6.06:1 and 3.57:1 on the card, so each clears the 3:1 that WCAG 1.4.11 asks
+     of a graphic carrying meaning. Colour is reinforcement here either way —
+     every row in that panel is labelled in words. */
+  --chart-alert: #b4342b;
+  --chart-alert-soft: #cf6a5e;
   --chart-track: #e8edf3;
   --chart-grid: #eef1f6;
   --sidebar-width: 236px;
   --radius: 10px;
   --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
+
+  /* Pin the browser's own chrome to this theme.
+     base.html declares <meta name="color-scheme" content="light dark">, which
+     says the page supports both — so with nothing declared here the browser
+     paints native control internals from the *OS* preference. On a machine set
+     to dark with the app in light mode, that meant the date input's text, the
+     time input's "--:-- --" and both picker glyphs were rendered near-white on
+     our white field. Invisible, and only for that combination, which is why it
+     survived: on a light OS everything looked correct.
+     [data-theme="dark"] already declares `dark`; this is its missing partner,
+     so the controls follow the app's theme rather than the desktop's. It covers
+     every native control at once — date, time, select popups, scrollbars,
+     spinners — not only the deadline pair where it was spotted. */
+  color-scheme: light;
 }
 
 * {
@@ -72,7 +119,7 @@ body {
 
 h1, h2, h3, h4, h5, .display-face {
   font-family: "Aptos Display", "Aptos", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  color: var(--udm-navy);
+  color: var(--udm-navy-text);
   letter-spacing: -0.01em;
 }
 
@@ -99,7 +146,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 .wordmark .udm { color: var(--udm-gold); }
-.wordmark .doctrack { color: var(--udm-navy); }
+.wordmark .doctrack { color: var(--udm-navy-text); }
 .wordmark--light .doctrack { color: #ffffff; }
 
 /* ------------------------------------------------------------------ shell */
@@ -136,6 +183,7 @@ a:hover { text-decoration: underline; }
   flex: 0 0 9px;
 }
 .nav-item.active { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
+.nav-item.active:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
 .nav-item.active .dot { background: var(--udm-gold); }
 .nav-section {
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -145,7 +193,7 @@ a:hover { text-decoration: underline; }
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
 
 .app-topbar {
-  background: #fff;
+  background:var(--udm-surface);
   border-bottom: 1px solid var(--udm-line);
   padding: 12px 26px;
   display: flex;
@@ -182,7 +230,7 @@ a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------------ cards */
 .card-udm {
-  background: #fff;
+  background:var(--udm-surface);
   border: 1px solid var(--udm-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
@@ -196,7 +244,7 @@ a:hover { text-decoration: underline; }
 .card-udm .card-udm-body { padding: 18px 20px; }
 
 .stat-card {
-  background: #fff;
+  background:var(--udm-surface);
   border: 1px solid var(--udm-line);
   border-left: 4px solid var(--udm-teal);
   border-radius: var(--radius);
@@ -209,7 +257,7 @@ a:hover { text-decoration: underline; }
 .stat-card .label { color: var(--udm-muted); font-size: 13px; }
 .stat-card .value {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-size: 34px; font-weight: 700; color: var(--udm-navy); line-height: 1.1;
+  font-size: 34px; font-weight: 700; color: var(--udm-navy-text); line-height: 1.1;
 }
 .stat-card .hint { font-size: 12.5px; color: var(--udm-muted); }
 .stat-card.gold { border-left-color: var(--udm-gold); }
@@ -227,11 +275,74 @@ a:hover { text-decoration: underline; }
 .pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 .pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-forwarded { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
-.pill-returned  { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
+/* Approaching, not yet late. Gold rather than red, because red is the claim
+   that something has already gone wrong and this one is still actionable — and
+   the dark ink, not the plain: gold-ink on gold-soft is 4.34:1 and a pill runs
+   at 11.5px, where AA wants 4.5. The dark variant clears 7:1 in both themes.
+   Outlined as well as filled, so it reads as a different kind of thing from the
+   solid red Overdue tag it will eventually become. */
+.pill-warn {
+  background: var(--udm-gold-soft); color: var(--udm-gold-ink-dark);
+  box-shadow: inset 0 0 0 1px var(--udm-gold-border);
+}
+/* The date under the pills. Muted and small: it is the evidence for the tag
+   above it, not a column in its own right. */
+.deadline-when-cell { margin-top:4px; color:var(--udm-muted); font-size:12px; white-space:nowrap; }
 .pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
 .pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
-.pill-draft     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
+/* Overdue is not a stage — it is a condition sitting on top of one, and it is
+   rendered *beside* the status pill rather than instead of it. Soft-fill like
+   its neighbour, it read as a second status and disappeared into the row; a
+   filled red is the one thing on the line that is not a stage, which is exactly
+   what it is. 6.06:1 in light, 3.27:1 in dark.
+
+   Its own class rather than loudening .pill-overdue, which also carries
+   "Suspended" on the users screen and "Urgent" on a record — neither of which
+   was asked to change. */
+.pill-alert {
+  background: var(--udm-red); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+/* On paper it is ink on white, not white on a fill.
+   Only the reports and memo sheets ask for `print-color-adjust:exact`; the
+   routing slip — the page that physically travels with the document — does
+   not, so its pills print with no background. A soft-filled pill survives that
+   because its text is dark. This one's text is white, so the Overdue marker
+   would have vanished from the one printout that follows the record around.
+   Red ink and a red border read as loudly on paper and depend on nothing the
+   print dialog can switch off. */
+@media print {
+  .pill-alert {
+    background: transparent !important; color: var(--udm-red-ink) !important;
+    box-shadow: inset 0 0 0 1.5px var(--udm-red) !important;
+  }
+}
+/* Direction, not status — which way the document is moving relative to the
+   office reading the page. Deliberately outside the status hues: gold, teal,
+   green and red all mean a stage, and a direction wearing one of them would
+   read as a stage the document is at.
+
+   Filled for what is here to act on, outline for what has left — the same
+   contrast the draft pill below draws between "in the workflow" and "not yet". */
+/* A stage and a deadline condition are two answers, so a cell can hold two
+   pills. Wrapping rather than overflowing: the Status column is already narrow
+   and the routing slip is print CSS with no room to grow. */
+.pill-stack { display:flex; flex-wrap:wrap; gap:4px; }
+/* Why a column is empty, beside the control that fills it. */
+.tracking-filter-note { margin:6px 0 0; color:var(--udm-muted); font-size:12.5px; }
+/* The same note doing the opposite job: a caption for the row *below* it rather
+   than an aside about the row above, so it carries no top margin of its own and
+   lets the .tracking-filters gap do the spacing on both sides. */
+.tracking-filter-note--lead { margin:0; }
+.pill-incoming  { background: var(--udm-slate-soft); color: var(--udm-navy-text); }
+.pill-outgoing  { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
+/* Draft is the one status that is not in the workflow yet: nobody has been
+   sent it, nobody owes anything on it, and it is visible only to the office
+   writing it. So it is drawn as an outline rather than a fill — the difference
+   between "a stage this document is at" and "a document that has not started".
+   It also stops Draft reading as another solid chip alongside Pending receipt,
+   which is the one it was being confused with. */
+.pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 
 /* ----------------------------------------------------------------- tables */
@@ -245,12 +356,12 @@ a:hover { text-decoration: underline; }
 .table-udm tbody tr:hover { background: #fafbfd; }
 .table-udm .mono {
   font-family: "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px; color: var(--udm-navy); font-weight: 600; white-space: nowrap;
+  font-size: 12.5px; color: var(--udm-navy-text); font-weight: 600; white-space: nowrap;
 }
 /* Office codes in the records-staff columns: short, scannable, and never the
    thing that forces a row to wrap. */
 .table-udm .office-cell {
-  font-size: 12.5px; font-weight: 600; color: var(--udm-navy);
+  font-size: 12.5px; font-weight: 600; color: var(--udm-navy-text);
   white-space: nowrap; letter-spacing: 0.02em;
 }
 
@@ -264,12 +375,12 @@ a:hover { text-decoration: underline; }
 .timeline li::before {
   content: ""; position: absolute; left: -25px; top: 4px;
   width: 14px; height: 14px; border-radius: 50%;
-  background: #fff; border: 3px solid var(--udm-teal);
+  background:var(--udm-surface); border: 3px solid var(--udm-teal);
 }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
 .timeline li.is-done::before { border-color: var(--udm-green); }
 .timeline li.is-muted::before { border-color: var(--udm-line); }
-.timeline .t-title { font-weight: 600; color: var(--udm-navy); }
+.timeline .t-title { font-weight: 600; color: var(--udm-navy-text); }
 .timeline .t-meta { color: var(--udm-muted); font-size: 13px; }
 .timeline .t-detail {
   margin-top: 6px; background: var(--udm-canvas); border: 1px solid var(--udm-line);
@@ -282,7 +393,7 @@ a:hover { text-decoration: underline; }
 }
 .relevance .score {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
-  font-weight: 700; font-size: 19px; color: var(--udm-navy);
+  font-weight: 700; font-size: 19px; color: var(--udm-navy-text);
 }
 .relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: #e7ecf3; overflow: hidden; }
 .relevance-bar span { display: block; height: 100%; background: var(--udm-teal); border-radius: 999px; }
@@ -311,7 +422,7 @@ a:hover { text-decoration: underline; }
 
 .file-chip {
   display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background: #fff;
+  border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 12px; background:var(--udm-surface);
 }
 .file-chip .ext {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
@@ -324,10 +435,11 @@ a:hover { text-decoration: underline; }
 }
 .smart-folder:hover { background: var(--udm-canvas); text-decoration: none; }
 .smart-folder.active { background: var(--udm-teal-soft); color: var(--udm-teal-ink); font-weight: 600; }
+.smart-folder.active:hover { background: var(--udm-teal-soft); color: var(--udm-teal-ink); }
 .smart-folder .count { color: var(--udm-muted); font-size: 12.5px; }
 
 .doc-tile {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: var(--radius);
+  background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: var(--radius);
   padding: 16px; height: 100%; display: flex; flex-direction: column; gap: 8px;
   box-shadow: var(--shadow-card);
 }
@@ -337,7 +449,7 @@ a:hover { text-decoration: underline; }
 .doc-tile .meta { color: var(--udm-muted); font-size: 12.5px; }
 
 .empty-state { text-align: center; padding: 46px 20px; color: var(--udm-muted); }
-.empty-state h3 { color: var(--udm-navy); margin-bottom: 6px; }
+.empty-state h3 { color: var(--udm-navy-text); margin-bottom: 6px; }
 
 .step-indicator { display: flex; gap: 10px; align-items: center; color: var(--udm-muted); font-size: 13px; }
 .step-indicator .step { display: inline-flex; align-items: center; gap: 7px; }
@@ -346,10 +458,10 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
 }
 .step-indicator .step.active .num { background: var(--udm-navy); color: #fff; }
-.step-indicator .step.active { color: var(--udm-navy); font-weight: 600; }
+.step-indicator .step.active { color: var(--udm-navy-text); font-weight: 600; }
 
 .text-preview {
-  background: #fff; border: 1px solid var(--udm-line); border-radius: 8px;
+  background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: 8px;
   padding: 16px; max-height: 430px; overflow: auto;
   font-size: 13.5px; white-space: pre-wrap; color: #384456;
 }
@@ -361,8 +473,8 @@ a:hover { text-decoration: underline; }
 .btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
 .btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
 .btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
-.btn-udm-outline { background: #fff; border: 1px solid var(--udm-line); color: var(--udm-navy); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { background: #fff; border-color: var(--udm-navy); color: var(--udm-navy); }
+.btn-udm-outline { background:var(--udm-surface); border: 1px solid var(--udm-line); color: var(--udm-navy-text); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
+.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-navy); color: var(--udm-navy-text); }
 .btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
 .btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
 .btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
@@ -383,6 +495,12 @@ a:hover { text-decoration: underline; }
 /* "Is there a deadline?" first, the calendar only if the answer is yes.
    The date panel is visible by default so the field still works without JS;
    doctrack.js hides it when "No deadline" is selected. */
+/* Date and time on one line, the time narrower — it is optional and secondary,
+   and giving it equal width would suggest it has to be answered. Stacks on a
+   phone, where two controls side by side leave neither usable. */
+.deadline-when { display:flex; flex-wrap:wrap; gap:12px; }
+.deadline-when > div:first-child { flex:1 1 200px; min-width:0; }
+.deadline-when > div:last-child { flex:0 1 130px; min-width:0; }
 .deadline-field { min-width: 0; border: 1px solid var(--udm-line); border-radius: var(--radius); padding: 14px 16px; }
 .deadline-field > legend {
   float: none; width: auto; padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--udm-label-ink);
@@ -391,7 +509,7 @@ a:hover { text-decoration: underline; }
 .deadline-option {
   display: inline-flex; align-items: center; gap: 9px; flex: 1 1 220px;
   border: 1px solid var(--udm-line); border-radius: 8px; padding: 9px 13px;
-  background: #fff; font-size: 14px; cursor: pointer;
+  background:var(--udm-surface); font-size: 14px; cursor: pointer;
 }
 .deadline-option:hover { border-color: var(--udm-teal); }
 .deadline-option input { margin: 0; flex: 0 0 auto; }
@@ -416,7 +534,7 @@ a:hover { text-decoration: underline; }
 .phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
 .phase2-checklist li { margin-bottom: 10px; }
 .phase2-checklist li:last-child { margin-bottom: 0; }
-.phase2-checklist strong { color: var(--udm-navy); }
+.phase2-checklist strong { color: var(--udm-navy-text); }
 .phase2-review-table th {
   width: 190px; color: var(--udm-muted); font-size: 13px; font-weight: 600; vertical-align: top;
 }
@@ -448,7 +566,7 @@ a:hover { text-decoration: underline; }
   background-size: 56px 56px;
   mask-image: radial-gradient(circle at 78% 22%, #000 0%, transparent 62%);
 }
-.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background: #fff; }
+.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; background:var(--udm-surface); }
 .login-form .inner { width: 100%; max-width: 372px; }
 
 .lockout-timer {
@@ -476,7 +594,11 @@ a:hover { text-decoration: underline; }
 
 @media print {
   .app-sidebar, .app-topbar, .no-print { display: none !important; }
-  body { background: #fff; }
+  /* A dialog is a control surface, not content. Printing one lays it over the
+     page behind it and prints both; no page wants that, so the rule is shared
+     rather than repeated per page. */
+  .modal, .modal-backdrop { display: none !important; }
+  body { background:var(--udm-surface); }
   .app-content { padding: 0; }
   .card-udm { box-shadow: none; border: 1px solid #cfd6e0; }
 }
@@ -494,7 +616,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-brand-icon { display:block !important; width:36px !important; height:36px !important; min-width:36px !important; max-width:36px !important; min-height:36px !important; max-height:36px !important; flex:0 0 36px !important; border-radius:9px; object-fit:contain; }
 .app-topbar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:13px; white-space:nowrap; }
 .app-topbar .topbar-search { flex:1 1 auto; min-width:180px; max-width:460px; }
-.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:#fff; outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
+.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:var(--udm-surface); outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
 .app-topbar .topbar-account-button { display:inline-flex; align-items:center; gap:9px; width:auto; min-width:0; max-width:280px; padding:4px 6px; border:0 !important; border-radius:8px; background:transparent !important; color:var(--udm-ink); text-align:left; box-shadow:none !important; }
 .app-topbar .topbar-account-button:hover,.app-topbar .topbar-account-button:focus { background:var(--udm-canvas) !important; color:var(--udm-ink); }
 .app-topbar .topbar-account-copy { flex-direction:column; align-items:flex-start; width:auto; min-width:0; max-width:190px; }
@@ -502,7 +624,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-account-name { color:var(--udm-ink); font-size:13.5px; font-weight:600; }
 .app-topbar .topbar-account-office { color:var(--udm-muted); font-size:11.5px; }
 .app-topbar .topbar-account-arrow { flex:0 0 auto; color:var(--udm-muted); font-size:12px; }
-	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy); text-decoration:none; }
+	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy-text); text-decoration:none; }
 	.topbar-notifications:hover { background:var(--udm-canvas); color:var(--udm-teal-ink); }
 	.topbar-notifications:focus-visible { outline:3px solid rgba(22,105,122,.35); outline-offset:2px; }
 	.notification-bell { width:21px; height:21px; }
@@ -510,19 +632,22 @@ a:hover { text-decoration: underline; }
 	.notification-page-head { align-items:flex-start; }
 	.notification-toolbar { border-radius:var(--radius); }
 	.notification-filters { display:flex; flex-wrap:wrap; gap:6px; }
-	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy); font-size:13px; font-weight:600; text-decoration:none; }
+	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy-text); font-size:13px; font-weight:600; text-decoration:none; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-filter:focus-visible { outline:3px solid rgba(22,105,122,.2); outline-offset:2px; }
 	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+	.notification-filter.is-active:hover,.notification-filter.is-active:focus-visible {
+	  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+	}
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); }
+	.notification-row { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:start; gap:12px; padding:15px 16px; border:1px solid var(--udm-line); border-left:4px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); }
 	.notification-row.is-actionable { border-left-color:var(--udm-red); }
 	.notification-row.is-received { border-left-color:var(--udm-teal); }
 	.notification-row.is-completed { border-left-color:var(--udm-navy); }
 	.notification-row.is-shared { border-left-color:#96743a; }
 	.notification-row.is-read { background:var(--udm-canvas); box-shadow:none; }
-	.notification-kind-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--udm-navy-soft); color:var(--udm-navy); font-size:15px; font-weight:700; }
+	.notification-kind-icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--udm-navy-soft); color:var(--udm-navy-text); font-size:15px; font-weight:700; }
 	.notification-row.is-actionable .notification-kind-icon { background:var(--udm-red-soft); color:var(--udm-red); }
 	.notification-row.is-received .notification-kind-icon { background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
 	.notification-row-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--udm-muted); font-size:11px; }
@@ -544,41 +669,82 @@ a:hover { text-decoration: underline; }
 .sidebar-office { padding:0 12px; color:#cdd9e8; font-size:13px; }
 .sidebar-office-name { color:#fff; font-weight:600; }
 .sidebar-office-role { margin-top:2px; color:rgba(205,217,232,.72); font-size:12.5px; }
-.tracking-subnav { margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-.tracking-subnav-link { display:block; margin:1px 0; padding:6px 10px; border-radius:7px; color:rgba(205,217,232,.76); font-size:12.5px; line-height:1.25; text-decoration:none; }
-.tracking-subnav-link:hover,.tracking-subnav-link:focus { background:rgba(255,255,255,.08); color:#fff; text-decoration:none; }
-.tracking-subnav-link--alert { color:#ffd2cd; }
 /* Which queue you are looking at. Both navs previously gave no indication at
    all, so every queue looked identical once the page had loaded. */
-.tracking-subnav-link.is-active { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
+/* ------------------------------------------------------------ pill toggles
+   One pill design for the whole page. The queue nav and the filter rows below
+   it are the same control doing the same job — narrow the list by clicking a
+   thing — so they are the same class rather than two rulesets that drift.
+   `.tracking-queue-*` was that ruleset; it is now just the row that holds them. */
+.pill-toggle {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:36px; padding:7px 14px;
+  border:1px solid var(--udm-line); border-radius:999px;
+  background:var(--udm-surface); color:var(--udm-navy-text);
+  font-size:13px; font-weight:600; line-height:1;
+  white-space:nowrap; text-decoration:none;
+}
+.pill-toggle:hover,.pill-toggle:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
+.pill-toggle.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+/* Selected *and* hovered, said out loud rather than left to the cascade.
+   Written down, the pair cannot come apart: whatever later rule sets the
+   background here also sets the text, so there is no arrangement of these rules
+   that paints navy on navy. It also gives the state some feedback — without it
+   a selected pill was the one control on the page that did not respond to the
+   pointer at all. Same lightening .btn-udm uses on hover, so the whole app
+   answers a hover the same way. */
+.pill-toggle.is-active:hover,.pill-toggle.is-active:focus {
+  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+}
+/* A queue that cannot be asked from where the reader is standing. Dimmed and
+   inert rather than removed: a row that loses two pills when the office picker
+   changes reads as the page breaking, and the pill's title says why it is off.
+   Not a <button disabled>, because it never was a button — it is a link that
+   has nowhere to go, so it becomes a <span>. */
+.pill-toggle.is-disabled {
+  border-style:dashed; background:var(--udm-surface); color:var(--udm-muted);
+  cursor:not-allowed; opacity:.7;
+}
+.pill-toggle--alert { color:var(--udm-red-ink); }
+.pill-toggle--alert:hover,.pill-toggle--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
+.pill-toggle--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
+.pill-toggle--alert.is-active:hover,.pill-toggle--alert.is-active:focus {
+  border-color:var(--udm-red-600); background:var(--udm-red-600); color:#fff;
+}
+
+/* A row of pills: scrolls sideways rather than stacking into a tall column,
+   which is what a wrapped checkbox list did on a phone. */
+.pill-row { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+.pill-row-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
+
 .tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
-.tracking-queue-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid var(--udm-line); border-radius:999px; background:#fff; color:var(--udm-navy); font-size:13px; font-weight:600; line-height:1; white-space:nowrap; text-decoration:none; }
-.tracking-queue-link:hover,.tracking-queue-link:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
-.tracking-queue-link.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
-.tracking-queue-link.is-active:hover,.tracking-queue-link.is-active:focus { border-color:var(--udm-navy); background:var(--udm-navy-600); color:#fff; }
-.tracking-queue-link--alert { border-color:#efc6c2; color:var(--udm-red); }
-.tracking-queue-link--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
-.tracking-queue-link--alert.is-active:hover,.tracking-queue-link--alert.is-active:focus { background:#9c2d25; color:#fff; }
-.tracking-queue-link--alert:hover,.tracking-queue-link--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
-@media (max-width:1100px) { .app-topbar .topbar-account-copy { max-width:140px; } .app-topbar .topbar-search { max-width:360px; } }
-@media (max-width:900px) { .sidebar-brand-content { min-width:max-content; } .sidebar-brand-icon { width:32px; height:32px; min-width:32px; max-width:32px; min-height:32px; max-height:32px; flex-basis:32px; } .app-sidebar .brand { flex:0 0 auto; padding:2px 12px 2px 4px; } .app-sidebar nav { display:flex; align-items:center; gap:4px; } .tracking-subnav { display:flex; flex:0 0 auto; gap:4px; margin:0; padding:0; border-left:0; } .tracking-subnav-link { flex:0 0 auto; padding:8px 10px; white-space:nowrap; } }
-@media (max-width:767.98px) { .app-topbar { min-height:58px; gap:10px; padding:9px 14px; } .app-topbar .topbar-search { max-width:none; } .page-head { flex-direction:column; align-items:stretch; } .page-head > .btn,.page-head > a.btn { align-self:flex-start; } }
-@media (max-width:575.98px) { .app-topbar { padding:9px 12px; } .app-topbar .topbar-search input { padding:7px 12px; font-size:13px; } .avatar { width:32px; height:32px; } .tracking-queue-link { min-height:34px; padding:7px 12px; font-size:12.5px; } }
-@media print { .tracking-queue-nav { display:none !important; } }
+
+/* ------------------------------------------------- tracking filter rows */
+/* No card, no border, no Apply button — the filters read as the same surface
+   as the queue pills above them, because they are the same control. */
+.tracking-filters { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.tracking-filter-row { display:flex; align-items:center; gap:10px; min-width:0; }
+.tracking-filter-label { flex:0 0 auto; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--udm-muted); }
+@media (max-width:767.98px) {
+  /* The label sits above its pills once the row runs out of width, rather than
+     squeezing the scrolling strip into what is left beside it. */
+  .tracking-filter-row { flex-direction:column; align-items:stretch; gap:5px; }
+}
+@media print { .tracking-queue-nav,.tracking-filters { display:none !important; } }
 
 /* ================================================================
    PHASE 3: routing slip and print presentation
    ================================================================ */
 .routing-slip-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); color:var(--udm-ink); }
+.routing-slip { width:100%; max-width:1120px; margin:0 auto; padding:24px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); color:var(--udm-ink); }
 .routing-slip-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:2px solid var(--udm-navy); }
 .routing-slip-heading { min-width:0; }
 .routing-slip-school { color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
 .routing-slip-heading h1 { margin:3px 0 2px; font-size:25px; }
 .routing-slip-office { color:var(--udm-muted); font-size:13px; }
 .routing-slip-identity { display:flex; flex:0 0 auto; align-items:flex-start; gap:12px; }
-.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:#fff; text-align:center; }
+.routing-slip-qr { width:112px; min-height:112px; padding:8px; border:1px solid var(--udm-ink); background:var(--udm-surface); text-align:center; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
    nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
@@ -590,7 +756,7 @@ a:hover { text-decoration: underline; }
 }
 /* Holds the generated QR svg. No border or padding: the code carries its own
    quiet zone (QR_BORDER), and framing it again would eat scannable area. */
-.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:#fff; }
+.routing-slip-qr-pattern { width:78px; height:78px; margin:0 auto; background:var(--udm-surface); }
 .routing-slip-qr-pattern svg { display:block; width:100%; height:100%; }
 .routing-slip-control { min-width:160px; padding:8px 10px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-control span { display:block; color:var(--udm-muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -622,7 +788,7 @@ a:hover { text-decoration: underline; }
 .routing-slip-signature-line { display:block; height:24px; margin-top:7px; border-bottom:1px solid var(--udm-ink); }
 .routing-slip-receipt-note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--udm-line); }
 .routing-slip-empty { padding:24px !important; color:var(--udm-muted); text-align:center; }
-.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:#fff; font-size:11px; }
+.routing-slip-action-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 16px; padding:12px 14px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); font-size:11px; }
 .routing-slip-action-grid strong { display:inline-flex; align-items:center; justify-content:center; width:24px; height:22px; margin-right:6px; border:1px solid var(--udm-line); border-radius:4px; color:var(--udm-navy); }
 .routing-slip-action-pending { margin:7px 0 0; color:var(--udm-muted); font-size:10px; }
 .routing-slip-attachments { margin-top:20px; padding-top:2px; }
@@ -642,9 +808,14 @@ a:hover { text-decoration: underline; }
   .routing-slip-summary-value { padding-top:3px; }
   .routing-slip-action-grid { grid-template-columns:1fr; }
 }
+/* One @page for the whole stylesheet. There were three — this, plus a
+   `margin:12mm` inside the reports print block and another inside the
+   dashboard's, each silently re-margining whichever printed last. These are
+   the deliberate ones: 12mm head, 10mm sides so a six-column table is not
+   squeezed, 14mm foot to clear the printed footer line. */
 @page { size:A4 portrait; margin:12mm 10mm 14mm; }
 @media print {
-  html,body { background:#fff !important; }
+  html,body { background:var(--udm-surface) !important; }
   .app-content { padding:0 !important; }
   .routing-slip { max-width:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; }
   .routing-slip-header { break-inside:avoid; }
@@ -669,17 +840,39 @@ a:hover { text-decoration: underline; }
    Clickable text visibility
    ================================================================ */
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip),
-.app-sidebar a:not(.nav-item):not(.brand):not(.tracking-subnav-link) {
+/* Prose links — the ones running through a sentence — are underlined and bold
+   so they can be found without hovering for them.
+
+   Wrapped in :where(), which contributes no specificity, so the whole thing
+   weighs `a` and `a:hover` and nothing more. That is the entire fix to a bug
+   this rule caused everywhere at once: written as
+   `.app-content a:not(.btn):not(.nav-link)…:hover`, each :not() counted as a
+   class, so the hover rule weighed eight classes and beat every component's own
+   colour. A selected pill kept its navy *background* from .is-active and took
+   its *text* colour from here — navy on navy, so the label vanished the moment
+   the pointer touched it. The same went for the notification filters and the
+   rows-per-page control, and every pill in the app was underlined at rest by
+   the declaration above.
+
+   The :not() list still reads as documentation of what is not prose, but it no
+   longer has to be complete: at zero specificity a component's own rule wins by
+   being a class, so a control added tomorrow needs no entry here. That is the
+   property worth having — the old list could only ever be one component behind.
+
+   `text-decoration: underline` rather than leaving it to the browser default:
+   Bootstrap's reboot removes it, and the two stylesheets tie on specificity, so
+   this file has to put it back explicitly. */
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)),
+:where(.app-sidebar) a:not(:where(.nav-item, .brand)) {
   font-weight: 700;
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
 }
 
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):hover,
-.app-content a:not(.btn):not(.nav-link):not(.doc-tile):not(.stat-card):not(.smart-folder):not(.tag-chip):focus {
-  color: var(--udm-navy);
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)):hover,
+:where(.app-content) a:not(:where(.btn, .nav-link, .doc-tile, .stat-card, .smart-folder, .tag-chip)):focus {
+  color: var(--udm-navy-text);
   text-decoration-thickness: 2px;
 }
 
@@ -692,10 +885,11 @@ a:hover { text-decoration: underline; }
 .report-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .card-udm-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .report-print-header,.report-print-footer { display:none; }
-.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:#fff; box-shadow:var(--shadow-card); }
+.reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
-.reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy); }
+.reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }
 .reports-tab.active { background:var(--udm-navy); color:#fff; }
+.reports-tab.active:hover,.reports-tab.active:focus { background:var(--udm-navy-600); color:#fff; }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
@@ -713,24 +907,29 @@ a:hover { text-decoration: underline; }
 .chart-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
 .chart-swatch--one { background:var(--chart-one); }
 .chart-swatch--two { background:var(--chart-two); }
+.chart-swatch--three { background:var(--chart-three); }
 
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
-.report-office-label { margin-bottom:7px; color:var(--udm-navy); font-size:13px; font-weight:700; }
+.report-office-label { margin-bottom:7px; color:var(--udm-navy-text); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
 .report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.report-series-item strong { text-align:right; color:var(--udm-navy); }
+.report-series-item strong { text-align:right; color:var(--udm-navy-text); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
 .report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
 .bar-one { background:var(--chart-one); }
 .bar-two { background:var(--chart-two); }
-.bar-alert { background:var(--udm-red); }
+.bar-three { background:var(--chart-three); }
+.bar-alert { background:var(--chart-alert); }
+.bar-alert-soft { background:var(--chart-alert-soft); }
+.chart-swatch--alert { background:var(--chart-alert); }
+.chart-swatch--alert-soft { background:var(--chart-alert-soft); }
 
 /* -------------------------------------------------------- column charts */
 .column-chart { position:relative; padding-top:6px; }
@@ -746,6 +945,7 @@ a:hover { text-decoration: underline; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
 .column--one { background:var(--chart-one); }
 .column--two { background:var(--chart-two); }
+.column--three { background:var(--chart-three); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
 .chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
 .chart-table { margin-top:12px; }
@@ -768,18 +968,42 @@ a:hover { text-decoration: underline; }
   align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--chart-grid);
 }
 .status-row:last-child { border-bottom:0; }
-.status-row-label { min-width:0; overflow:hidden; }
-.status-row strong { text-align:right; color:var(--udm-navy); font-size:14px; }
+.status-row-label { min-width:0; }
+/* "Completed - pending upload" is 26 characters, and .pill sets them uppercase
+   at 0.06em tracking with `white-space:nowrap` — about 210px against a 152px
+   column that also clipped its overflow, so the row read "COMPLETED - PENDIN".
+
+   The pill wraps here rather than the column widening to fit it: 210px spent on
+   a label every other status uses half of would take that width off the bar,
+   which is the thing carrying the comparison. Two lines for the one long status
+   costs a few pixels of row height and nothing else. `overflow:hidden` goes
+   with it — once the text can wrap, clipping can only hide something. */
+.status-row-label .pill { white-space:normal; text-align:center; }
+.status-row strong { text-align:right; color:var(--udm-navy-text); font-size:14px; }
+/* The incoming/outgoing split, under the bar it belongs to rather than beside
+   it: the row is already pill + bar + count + share, and four columns plus two
+   more would wrap on any screen narrower than a desktop. */
+.status-direction {
+  display:flex; flex-wrap:wrap; gap:4px 18px;
+  margin:-4px 0 10px; padding-left:2px;
+  color:var(--udm-muted); font-size:12px;
+}
+.status-direction .num { color:var(--udm-navy-text); }
 .status-share { color:var(--udm-muted); font-size:12px; text-align:right; }
 
 /* -------------------------------------------------------------- metrics */
 .report-metric,.report-quality-row,.report-search-row { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:9px 0; border-bottom:1px solid var(--chart-grid); font-size:13.5px; }
 .report-metric:last-child,.report-quality-row:last-child,.report-search-row:last-child { border-bottom:0; }
-.report-metric strong { color:var(--udm-navy); font-size:14px; text-align:right; white-space:nowrap; }
-.report-metric small { display:block; font-size:11.5px; }
+.report-metric strong { color:var(--udm-navy-text); font-size:14px; text-align:right; white-space:nowrap; }
+/* The figure itself must not split — "2 days 5 hrs" broken across lines reads
+   as two numbers — but nowrap inherits, and the caption below it is a whole
+   phrase: "4 days 9 hrs on the calendar". That made the caption the widest
+   unbreakable thing in the column, so it pushed out of its grid cell and over
+   the next figure. Only the figure needs holding together. */
+.report-metric small { display:block; font-size:11.5px; white-space:normal; }
 
 .meter-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:13px; }
-.meter-head strong { color:var(--udm-navy); font-size:17px; }
+.meter-head strong { color:var(--udm-navy-text); font-size:17px; }
 /* Unfilled track is a lighter step of the fill's own ramp, so state reads
    across the whole bar. */
 .meter-track { height:10px; border-radius:2px; background:var(--udm-green-soft); }
@@ -798,16 +1022,42 @@ a:hover { text-decoration: underline; }
   .column-label { font-size:10px; }
 }
 @media print {
-  @page { size:A4 portrait; margin:12mm; }
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }
   .report-print-header,.report-print-footer { display:flex; justify-content:space-between; gap:18px; color:var(--udm-slate-text); font-size:9pt; }
   .report-print-header { margin-bottom:8mm; padding-bottom:3mm; border-bottom:1px solid #8793a3; }
   .report-print-header strong,.report-print-header span { display:block; }
   .report-print-footer { margin-top:8mm; padding-top:3mm; border-top:1px solid #8793a3; }
-  .report-panel { display:block !important; page-break-after:always; }
-  .report-panel:last-of-type { page-break-after:auto; }
+  /* Print what is on screen, which means the active panel only.
+     This used to be `.report-panel { display:block !important }`, which forced
+     *both* panels into every print job: asking for the tracking report handed
+     you the repository report stapled behind it, and there was no way to print
+     either one alone. The !important also beat the `.report-panel { display:none }`
+     rule that does the tab switching, so the screen and the paper disagreed
+     about what the reader had selected. Now only the active panel prints, and
+     it is the last one on the page, so it needs no page break after it. */
+  .report-panel { display:none; }
+  .report-panel.active { display:block; page-break-after:auto; }
   .report-section-head { margin-top:0; }
-  .stat-card,.card-udm { break-inside:avoid; box-shadow:none; }
+  /* `.card-udm { overflow:hidden }` is declared later in this file, so it wins
+     the cascade in print too and clips any card taller than the space left on
+     the page — Records by status stopped after two rows, Overdue after one.
+     !important rather than reordering, because the hidden overflow is
+     load-bearing on screen: it is what clips the card head's border to the
+     rounded corners. */
+  .card-udm { overflow:visible !important; break-inside:auto; box-shadow:none; }
+  /* A heading must not be the last thing on a page. */
+  .card-udm .card-udm-head { break-inside:avoid; break-after:avoid; }
+  .stat-card { break-inside:avoid; box-shadow:none; }
+
+  /* Break between rows, never through one. */
+  .status-row,.status-direction,.report-series-item,.report-office-row,
+  .report-metric,.report-quality-row,.column-group,
+  .column-chart,.meter { break-inside:avoid; }
+
+  /* Bootstrap's h-100 equalises card heights inside a flex row; on paper that
+     is a fixed height with nowhere to flow. */
+  .h-100 { height:auto !important; }
+  .row > [class*="col-"] { width:100% !important; max-width:100% !important; }
   /* Bars and columns are background paint; without this they print blank. */
   .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill {
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
@@ -816,13 +1066,54 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   The dashboard memo, printed
+   Its own page — templates/core/dashboard_memo_print.html — rather than the
+   dashboard with a print stylesheet over it. Fixed units throughout: pt for
+   type, mm for the page. The dashboard's rem/%/flex grid lays out against the
+   viewport, so printing it gave a different result depending on how wide the
+   window happened to be when somebody pressed the button. A memo is a document
+   and has to come out the same every time.
+
+   None of the screen's classes are reused here. .memo-sheet and .card-udm
+   carry borders, radii and shadows that belong to a panel sitting on a canvas,
+   and there is no canvas on paper.
+   ================================================================ */
+/* A sheet of paper that happens to be shown on a screen first, so it stays
+   white and dark-inked in both themes. Written in tokens and pinned below
+   rather than hardcoded, which is how .login-wrap holds the sign-in screen
+   light — a hardcoded surface cannot re-point, and the rule against it is
+   what keeps the dark theme a matter of re-aiming tokens.
+
+   Following the dark palette here would give a readable tab and a blank
+   printout; inheriting the dark canvas without a ground of its own would put
+   document ink on a dark page, which tests/test_theme_contrast.py caught. */
+.memo-print { max-width: 180mm; margin: 0 auto; padding: 14mm 12mm; background: var(--udm-surface); color: var(--udm-ink); font-size: 10.5pt; line-height: 1.5; }
+.memo-print-head { display: flex; justify-content: space-between; gap: 10mm; padding-bottom: 3mm; border-bottom: 1px solid #8793a3; font-size: 9pt; color: var(--udm-slate-text); }
+.memo-print-title { margin: 6mm 0 2mm; font-size: 17pt; font-weight: 700; letter-spacing: -0.01em; }
+.memo-print-meta { display: flex; flex-wrap: wrap; gap: 2mm 8mm; padding-bottom: 4mm; border-bottom: 1px solid #cfd6e0; font-size: 9pt; color: var(--udm-slate-text); }
+.memo-print-section { margin-top: 6mm; break-inside: avoid; }
+.memo-print-heading { margin: 0 0 2mm; font-size: 9pt; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--udm-slate-ink); }
+/* Label and figure as two columns. The label column takes its width from the
+   longest label — office names here — and the figures line up against it. */
+.memo-print-lines { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 1.5mm 8mm; margin: 0; }
+.memo-print-lines dt { color: var(--udm-slate-text); }
+.memo-print-lines dd { margin: 0; font-weight: 600; }
+.memo-print-statement { grid-column: 1 / -1; font-weight: 400 !important; }
+.memo-print-foot { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid #8793a3; font-size: 8.5pt; color: var(--udm-slate-ink); }
+
+@media print {
+  /* The page owns the margin, so the wrapper stops adding a second one. */
+  .memo-print { max-width: none; margin: 0; padding: 0; }
+}
+
+/* ================================================================
    PHASE 6: final polish, accessibility, and responsive navigation
    ================================================================ */
 html { scroll-behavior:smooth; }
 body.sidebar-open { overflow:hidden; }
-.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:#fff; color:var(--udm-navy); font-weight:700; }
+.skip-link { position:fixed; top:-100px; left:16px; z-index:2000; padding:9px 13px; border:2px solid var(--udm-gold); border-radius:8px; background:var(--udm-surface); color:var(--udm-navy-text); font-weight:700; }
 .skip-link:focus { top:14px; }
-.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:#fff; color:var(--udm-muted); font-size:12.5px; }
+.app-footer { display:flex; flex-wrap:wrap; gap:6px; padding:18px 26px; border-top:1px solid var(--udm-line); background:var(--udm-surface); color:var(--udm-muted); font-size:12.5px; }
 .sidebar-toggle,.sidebar-close,.sidebar-backdrop { display:none; }
 .sidebar-mobile-head { display:block; }
 .app-content:focus { outline:none; }
@@ -837,8 +1128,63 @@ body.sidebar-open { overflow:hidden; }
 .message-stack { display:grid; gap:9px; margin-bottom:16px; }
 .app-alert { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; margin:0; border-radius:10px; }
 .app-alert-icon { width:9px; height:9px; margin-top:7px; border-radius:50%; background:currentColor; opacity:.75; }
-.app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy); font-weight:700; text-decoration:none; }
+.app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy-text); font-weight:700; text-decoration:none; }
 .app-pagination .page-item:not(.disabled) .page-link:hover { border-color:var(--udm-teal); background:var(--udm-teal-soft); }
+
+/* ------------------------------------------------- rows-per-page control */
+/* Two halves of one control, in the two places they are wanted. The size row
+   sits above the list — "1–25 of 312 · Per page 10 25 50 100 All" is read
+   before the rows, since it is what says whether the answer is on this screen
+   at all — and the step buttons sit under the rows, which is where the reader
+   is standing when they want the next page.
+
+   The size options are links rather than a <select> for the same reason the
+   filter pills are — no form to submit, so no JavaScript, which django-csp
+   would not let us attach inline anyway.
+
+   No justify-content on the base rule: neither half wants the same one, and a
+   default here would only be a value both of them override. */
+.page-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+/* The size row is ranged right, with the picker last in it, so the control
+   lands on the same edge as the "Export CSV" and "Advanced relevance search"
+   links these lists already carry — the right-hand column is where this app
+   puts the things you do to a list, as against the headings that say what it
+   is. The count sits to its left rather than at the far edge: it is a fact to
+   read, not a control to reach for.
+
+   Margin below rather than above, because it sits over the list it describes;
+   the step buttons take the mirror of that. */
+.page-controls--size { margin:0 0 10px; justify-content:flex-end; }
+.page-controls--steps { margin-top:16px; justify-content:center; }
+.page-size { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.page-size-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; }
+/* A single bordered strip rather than five separate buttons: these are one
+   choice with five values, and five outlines read as five unrelated actions. */
+.page-size-options {
+  display:inline-flex; overflow:hidden;
+  border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface);
+}
+.page-size-option {
+  padding:4px 11px; border-left:1px solid var(--udm-line);
+  color:var(--udm-navy-text); font-size:12.5px; font-weight:700;
+  text-decoration:none; line-height:1.6;
+}
+.page-size-option:first-child { border-left:0; }
+.page-size-option:hover,.page-size-option:focus-visible { background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
+/* The same navy-on-white the filter pills and the notification filters use for
+   "this is the state you are in", rather than a colour of its own: navy is dark
+   in both themes, so white stays legible on it without a second rule below. */
+.page-size-option.is-active { background:var(--udm-navy); color:#fff; cursor:default; }
+/* It renders as a <span>, so it takes no pointer — stated anyway, because the
+   day it becomes a link again is the day it would otherwise go dark-on-dark. */
+.page-size-option.is-active:hover { background:var(--udm-navy); color:#fff; }
+.page-size-count { color:var(--udm-muted); font-size:12.5px; }
+
+@media (max-width: 575.98px) {
+  /* Wrapped onto two lines on a phone, a right-ragged block reads worse than a
+     left-aligned one — there is no facing column left to align to. */
+  .page-controls--size { justify-content:flex-start; }
+}
 .account-facts th { width:130px; color:var(--udm-muted); font-weight:500; }
 .account-sticky-note { position:sticky; top:86px; }
 .login-brand { position:relative; z-index:1; display:inline-flex; align-items:center; gap:11px; color:#fff; text-decoration:none; }
@@ -851,7 +1197,7 @@ body.sidebar-open { overflow:hidden; }
 .login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
 .login-account-note { margin:16px 0 0; color:var(--udm-muted); font-size:12.5px; }
 .lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
-.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow-card); text-align:center; }
+.error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); text-align:center; }
 .error-code { color:var(--udm-gold); font-family:"Aptos Display","Segoe UI",sans-serif; font-size:54px; font-weight:800; line-height:1; }
 .error-page h1 { margin:10px 0 6px; font-size:26px; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
@@ -859,11 +1205,23 @@ body.sidebar-open { overflow:hidden; }
 .table-responsive > .table-udm { min-width: 720px; }
 .search-filters-card .card-udm-body { min-width: 0; }
 .search-query-card .form-control { min-width: 0; }
-.search-results-head { gap: 12px; }
+/* What matched and how it is ordered on the left; the page-length control on
+   the right. One line, because these were three stacked rows answering one
+   question — and two of them answered it with the same number. */
+.search-results-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px 16px; margin-bottom: 10px;
+}
+.search-results-summary { font-size: 13.5px; }
+/* The row owns the spacing now, so the control inside it brings none of its own. */
+.search-results-head .page-controls--size { margin: 0; }
 
 @media (max-width: 767.98px) {
   .table-responsive > .table-udm { min-width: 660px; }
-  .search-results-head { align-items: flex-start !important; flex-direction: column; }
+  /* Stacked on a phone, and the control ranges left with the summary above it
+     rather than hanging off the right edge of a column it no longer faces. */
+  .search-results-head { align-items: flex-start; flex-direction: column; }
+  .search-results-head .page-controls--size { justify-content: flex-start; }
   .search-filters-card .card-udm-body { padding-top: 14px; }
 }
 
@@ -880,12 +1238,10 @@ body.sidebar-open { overflow:hidden; }
   .sidebar-close { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:25px; line-height:1; }
   .sidebar-backdrop { position:fixed; inset:0; z-index:1040; display:block; border:0; background:rgba(6,20,36,.5); opacity:0; pointer-events:none; transition:opacity 180ms ease; }
   body.sidebar-open .sidebar-backdrop { opacity:1; pointer-events:auto; }
-  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:#fff; }
+  .sidebar-toggle { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:38px; height:38px; flex:0 0 38px; padding:0; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
   .sidebar-toggle span { display:block; width:17px; height:2px; border-radius:2px; background:var(--udm-navy); }
   .app-sidebar nav { display:block; }
   .app-sidebar .brand { padding:2px 5px 20px; }
-  .tracking-subnav { display:block; margin:2px 0 10px 20px; padding:3px 0 3px 10px; border-left:1px solid rgba(255,255,255,.16); }
-  .tracking-subnav-link { display:block; padding:7px 10px; }
   .nav-section { display:block; }
   .app-topbar { position:sticky; top:0; }
   .app-footer { padding:16px; }
@@ -1010,8 +1366,8 @@ body.sidebar-open { overflow:hidden; }
   padding: 6px 11px;
   border: 1px solid var(--udm-line-strong);
   border-radius: 8px;
-  background: #ffffff;
-  color: var(--udm-navy);
+  background:var(--udm-surface);
+  color: var(--udm-navy-text);
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1;
@@ -1082,7 +1438,7 @@ body.sidebar-open { overflow:hidden; }
 .multiselect {
   border: 1px solid var(--udm-line);
   border-radius: 8px;
-  background: #ffffff;
+  background:var(--udm-surface);
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(11, 49, 90, 0.05);
   transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -1109,7 +1465,7 @@ body.sidebar-open { overflow:hidden; }
 }
 
 .multiselect-search::placeholder { color: var(--udm-muted); }
-.multiselect-search:focus { outline: none; background: #ffffff; }
+.multiselect-search:focus { outline: none; background:var(--udm-surface); }
 
 .multiselect-list {
   max-height: 232px;
@@ -1226,7 +1582,7 @@ body.sidebar-open { overflow:hidden; }
      to its text on a narrow phone, and the two buttons then wrap awkwardly. */
   width: min(420px, calc(100vw - 32px));
   max-width: 420px; padding: 26px 28px; border: 1px solid var(--udm-line);
-  border-radius: 12px; background: #fff; color: var(--udm-ink);
+  border-radius: 12px; background:var(--udm-surface); color: var(--udm-ink);
   box-shadow: 0 18px 44px rgba(11, 49, 90, 0.22);
 }
 @media (max-width: 400px) {
@@ -1235,11 +1591,11 @@ body.sidebar-open { overflow:hidden; }
   .session-dialog__actions { flex-direction: column; }
 }
 .session-dialog::backdrop { background: rgba(11, 32, 56, 0.55); }
-.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; color: var(--udm-navy); }
+.session-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; color: var(--udm-navy-text); }
 .session-dialog p { margin: 0; font-size: 14px; color: var(--udm-slate-text); }
 .session-dialog__clock {
   margin: 16px 0 20px; font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums; color: var(--udm-navy); text-align: center;
+  font-variant-numeric: tabular-nums; color: var(--udm-navy-text); text-align: center;
 }
 .session-dialog__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .session-dialog__actions .btn { flex: 1 1 auto; }
@@ -1323,8 +1679,8 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .fold { margin: 0 0 14px; }
 .fold > summary {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
-  border: 1px solid var(--udm-line); border-radius: 999px; background: #fff;
-  color: var(--udm-navy); cursor: pointer; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--udm-line); border-radius: 999px; background:var(--udm-surface);
+  color: var(--udm-navy-text); cursor: pointer; font-size: 12.5px; font-weight: 600;
   list-style: none;
 }
 .fold > summary::-webkit-details-marker { display: none; }
@@ -1382,3 +1738,561 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .table-stacked th { color: var(--udm-muted); font-size: 12px; font-weight: 400; }
   .table-stacked td { font-size: 14px; }
 }
+
+/* ================================================================
+   Dashboard: combined breakdown, write-up, and printing
+   ================================================================ */
+.dashboard-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.dashboard-head-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* One bar, one segment per slice. Segment widths are the same percentages the
+   list prints beside each label, so the picture and the numbers cannot drift. */
+.breakdown-bar { display:flex; height:16px; margin-bottom:16px; border-radius:8px; overflow:hidden; background:var(--chart-track); }
+.breakdown-seg { display:block; height:100%; }
+.breakdown-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
+
+/* Colour is never the only carrier: every slice is named in the list, and the
+   status palette is reserved, so these reuse it rather than inventing a second
+   vocabulary for the same states. */
+/* Keyed to the slice names in views.BREAKDOWN_COLOURS. There is no --overdue
+   segment any more: overdue lies across the live stages instead of beside them,
+   so it is a stat card rather than a slice. */
+.breakdown-seg--pending_receipt { background:var(--udm-gold); }
+.breakdown-seg--received { background:var(--udm-green); }
+.breakdown-seg--in_process { background:var(--udm-teal); }
+.breakdown-seg--pending_upload { background:var(--chart-one); }
+.breakdown-seg--historical { background:var(--udm-muted); }
+.breakdown-seg--completed { background:var(--chart-three); }
+
+.breakdown-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:2px 18px; }
+.breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy-text); font-size:13px; text-decoration:none; }
+.breakdown-item:hover,.breakdown-item:focus { background:var(--udm-canvas); }
+.breakdown-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.breakdown-percent { min-width:44px; color:var(--udm-muted); text-align:right; font-size:12px; }
+
+.dashboard-writeup { margin-top:18px; padding-top:14px; border-top:1px solid var(--udm-line); }
+.dashboard-writeup h3 { margin:0 0 6px; font-size:14px; color:var(--udm-navy-text); }
+.dashboard-writeup p { margin:0 0 6px; color:var(--udm-slate-text); font-size:13px; line-height:1.55; }
+.dashboard-writeup p:last-child { margin-bottom:0; }
+/* The write-up used to close the "All documents" card, where the rule above it
+   separated it from the chart. It is now a card of its own beneath the two
+   rings, so the border and the offset would draw a line under nothing. */
+.dashboard-writeup--standalone { margin-top:0; padding-top:0; border-top:0; }
+
+/* No .dashboard-print-header any more. It gave Ctrl+P a letterheaded,
+   timestamped sheet that looked official and was never recorded, since the
+   audit marker belongs to a document and this page is not one. What is left is
+   the page size and the rings' fills — a plain printout that prints what is on
+   screen rather than a document pretending to be one.
+
+   The .dashboard-writeup print rule went too: the panel was removed with the
+   wireframe rebuild and its figures in 3cc3226, so there is nothing left to
+   keep off a page break. FIXME: its screen rules above (.dashboard-writeup and
+   --standalone) are dead for the same reason and outlive this comment.
+
+   .report-print-header, the shared base class, stays — Reports and the memo
+   print page both use it. */
+@media print {
+  /* Segment fills and swatches are background paint; without this they print blank. */
+  .breakdown-seg,.breakdown-swatch,.breakdown-bar,.desk-block-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .breakdown-item { break-inside:avoid; }
+}
+
+/* ================================================================
+   Dashboard analytics panels
+   Two chart types the reports toolkit did not already have — the ring and
+   the trend line — plus the overdue banner and the memo sheet. Everything
+   else on the dashboard reuses .report-bar / .column-chart / .status-row /
+   .report-metric as they stand.
+
+   Every colour here is a --udm-* or --chart-* token. No panel introduces a
+   palette of its own.
+   ================================================================ */
+
+/* ------------------------------------------------------------ Action Centre */
+/* Two blocks in one card, and they were reading as one list with a line through
+   it: same grey, same weight, same size, so the half that needs doing looked
+   like the half that already happened.
+
+   The separation is carried by the titles rather than by a heavier rule. A
+   stronger line would divide the card more loudly without saying which side to
+   read first, which is the only thing the reader actually needs to know here. */
+.desk-block--secondary { margin-top:10px; }
+/* Sits at the same weight as the card heading it lives under rather than at
+   browser-default h3 size, which next to a 16px h2 would read as the larger of
+   the two. Uppercase and tracked so it reads as a divider, not a second title
+   competing with the h2 above it. */
+.desk-block-title {
+  margin:0; padding:9px 20px;
+  font-size:11.5px; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase;
+}
+/* A colour each, as a band rather than as coloured lettering: a band is picked
+   up before anything is read, which is the point — these two tables look
+   identical from a distance and only one of them is work.
+
+   Both use the soft-background / ink-text pairing the status pills already use
+   (.pill-pending, .pill-process), so the card introduces no colour the page has
+   not already taught. The darker ink of each pair, not the plain one: gold-ink
+   on gold-soft is 4.34:1, which misses AA for text this size, and these run at
+   11.5px. The dark variants clear 7:1 in both themes.
+
+   Gold for what needs doing and teal for what has already happened — the same
+   two hues those states wear on the pills in these very rows. Not red: red is
+   overdue, which is a property of individual rows here and not of the block,
+   and some of the rows waiting for action are not late at all. */
+.desk-block--primary .desk-block-title {
+  background:var(--udm-gold-soft); color:var(--udm-gold-ink-dark);
+}
+.desk-block--secondary .desk-block-title {
+  background:var(--udm-teal-soft); color:var(--udm-teal-ink-dark);
+}
+/* The tables carry their own top padding through .card-udm-body.p-0, so the
+   title would otherwise sit hard against the first row. */
+.desk-block-title + .card-udm-body { padding-top:10px; }
+
+/* ------------------------------------------ fixed-width panel cells */
+/* The two Action Centre tables and the Repository list beside them sit in a
+   two-column row, and every one of them is a list of documents whose subject or
+   title is written by whoever filed it. Left to size themselves, one long
+   subject set the width of a column and therefore of the card, and the card
+   beside it got whatever was left — so the same dashboard looked different
+   every day depending on what had been filed.
+
+   The cap has to reach the block inside the cell, not only the cell: a
+   `max-width` on a `<td>` in an auto-layout table is advisory and the browser
+   overrides it whenever the content wants more, which is exactly the case this
+   is here to handle. It is a custom property so the two cannot drift apart —
+   the `<td>` takes it as the hint browsers may honour, the block as the rule
+   they must.
+
+   Two lines rather than one. One line ellipsised at this width cuts most real
+   subjects at about four words, which is not enough to tell two memos apart;
+   two is enough to recognise a document you are looking for, and the full text
+   is on the title attribute for the case where it is not. */
+.desk-cell { --desk-cell-cap: 300px; max-width: var(--desk-cell-cap); }
+.desk-cell--wide { --desk-cell-cap: 420px; }
+.desk-cell-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  max-width: var(--desk-cell-cap, 100%);
+  overflow: hidden; overflow-wrap: anywhere;
+}
+/* Fallback for engines without the line clamp: one ellipsised line beats a
+   subject that runs to six. */
+@supports not (-webkit-line-clamp: 2) {
+  .desk-cell-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
+
+/* Newest in the Document Repository. A list rather than a table, so the cap is
+   the row's own width; the fixed minimum height is what keeps five rows the
+   same height whether the titles are short or long, which is what stops this
+   card and the Action Centre disagreeing about how tall their shared row is. */
+.newest-row { min-height: 62px; }
+.newest-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere;
+  max-width: 100%; font-weight: 600;
+}
+@supports not (-webkit-line-clamp: 2) {
+  .newest-title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
+.newest-meta { font-size: 12.5px; }
+
+@media (max-width: 1199.98px) {
+  /* Below xl the two panels stack, so each has the full width and a 300px cap
+     is no longer earning anything — it would only cut subjects there is room
+     for. One property to raise, and the cell and its block move together. */
+  .desk-cell { --desk-cell-cap: 480px; }
+  .desk-cell--wide { --desk-cell-cap: 620px; }
+}
+
+/* --------------------------------------------------------- scope picker */
+.dashboard-scope { display:flex; align-items:center; gap:8px; }
+.dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
+.dashboard-scope .form-select { min-width:210px; border-color:var(--udm-line); color:var(--udm-navy-text); font-size:13px; font-weight:600; }
+.dashboard-scope .form-select:focus { border-color:var(--udm-teal); box-shadow:0 0 0 .18rem rgba(22,105,122,.18); }
+
+/* -------------------------------------------------------- overdue banner */
+/* The left rule is the same device .stat-card.red uses, at the width a full
+   card needs. Red is reserved for this on the dashboard: it is the one panel
+   describing something that has gone wrong. */
+.dashboard-alert { border-left:5px solid var(--udm-red); }
+.dashboard-alert .card-udm-head h2 { color:var(--udm-red-ink); }
+.alert-figures { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 30px; padding-bottom:14px; margin-bottom:4px; border-bottom:1px solid var(--chart-grid); }
+.alert-figure-value { color:var(--udm-navy-text); font-size:23px; font-weight:800; line-height:1.1; letter-spacing:-.02em; }
+.alert-figure-label { margin-top:2px; color:var(--udm-muted); font-size:12px; }
+/* The lead figure is the count itself — the one number somebody acts on. */
+.alert-figure--lead .alert-figure-value { color:var(--udm-red); font-size:38px; }
+.alert-figure--lead .alert-figure-label { color:var(--udm-red-ink); font-weight:700; }
+.overdue-office-list { margin-top:4px; }
+.overdue-oldest { color:var(--udm-muted); font-size:12px; text-align:right; white-space:nowrap; }
+/* Four columns rather than the three .report-series-item--wide gives, because
+   these rows carry the age of the oldest item as well as the count. */
+.overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) 44px 116px; }
+
+/* ------------------------------------------------------------------ ring */
+.donut-layout { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+/* One conic-gradient, stops computed server-side so the ring always closes at
+   100%. The hole is a disc rather than a mask so it prints: a mask would leave
+   a filled circle on paper. */
+.donut { position:relative; flex:0 0 190px; width:190px; height:190px; border-radius:50%; }
+.donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
+.donut-hole-value { color:var(--udm-navy-text); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
+
+/* ------------------------------------------------------------ trend line */
+/* Chart and summary side by side. They stacked while this panel sat in a
+   half-width column, where two columns inside one gave neither enough room; the
+   panel spans the page again. The wrap is kept so a narrow viewport still
+   stacks them rather than crushing both. */
+.trend-layout { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+/* Grows faster than the summary so the extra width goes to the plot, which is
+   the part that gets harder to read as the series crowd together. */
+.trend-chart { flex:3 1 420px; min-width:0; }
+.trend-legend { margin-bottom:12px; }
+/* Fixed viewBox, fluid box. Height comes from the viewBox's own ratio rather
+   than a fixed pixel height, so the plot scales uniformly and the data points
+   stay circular — stretching it to fill a set height would flatten them into
+   ovals. vector-effect="non-scaling-stroke" then holds the line weight steady
+   across the range of widths this column takes.
+
+   Keep this in step with TREND_WIDTH/TREND_HEIGHT in views.py — a mismatch
+   letterboxes the plot inside its own card without erroring anywhere, which is
+   why a test asserts the two agree. */
+.trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/170; }
+.trend-grid { stroke:var(--chart-grid); stroke-width:1; }
+.trend-axis { stroke:var(--udm-line); stroke-width:1; }
+/* The month labels sit outside the SVG so they are real text at a real size —
+   inside the scaled viewBox an 11px label would render at about seven. No left
+   inset: the plot has no gutter, having previously reserved one for y-axis
+   labels that were never drawn. */
+.trend-axis-labels { display:flex; }
+.trend-axis-labels span { flex:1 1 0; min-width:0; color:var(--udm-muted); font-size:11px; text-align:center; }
+.trend-summary { flex:1 1 250px; min-width:0; padding:12px 14px; border:1px solid var(--udm-line); border-radius:10px; }
+.trend-summary-head { margin-bottom:6px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
+/* auto-fit, so the figures sit in one column beside the chart and spread into
+   two when the layout wraps and the summary has the full width to itself.
+   min(190px,100%) rather than a bare 190px, because a bare minimum is a floor
+   the track will not go below: once the panel is narrower than it — a magnified
+   screen being the usual way to get there — the column stayed 190px wide and
+   its contents hung over the figure beside them. Capping the minimum at the
+   container's own width lets the track shrink with it instead. */
+.trend-summary-figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr)); gap:0 18px; }
+/* The border between rows belongs to a single column of figures; across a grid
+   it draws a rule through the middle of the group. flex-wrap is the last
+   resort, past the point where label and figure fit on one line: the figure
+   drops below its label rather than the two printing over each other. */
+.trend-summary-figures .report-metric { border-bottom:0; padding:6px 0; min-width:0; flex-wrap:wrap; gap:0 12px; }
+/* A flex item will not shrink below its own content unless it is told it may. */
+.trend-summary-figures .report-metric > span,
+.trend-summary-figures .report-metric > strong { min-width:0; }
+.trend-summary .meter-head { margin-top:10px; padding-top:10px; border-top:1px solid var(--chart-grid); }
+
+/* ------------------------------------------------------------- uploads */
+.uploads-leader { display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:10px 13px; margin-bottom:12px; border:1px solid var(--udm-gold-tint-strong); border-radius:10px; background:var(--udm-gold-tint); color:var(--udm-gold-ink-dark); font-size:13px; }
+.uploads-leader-tag { padding:2px 9px; border-radius:999px; background:var(--udm-gold); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+
+/* ---------------------------------------------------------------- memo */
+.memo-sheet { padding:22px 24px; border:1px solid var(--udm-line); border-radius:8px; }
+.memo-meta { display:flex; flex-wrap:wrap; gap:8px 26px; padding-bottom:13px; margin-bottom:15px; border-bottom:1px solid var(--chart-grid); color:var(--udm-muted); font-size:12.5px; }
+.memo-meta strong { color:var(--udm-navy-text); }
+.memo-sheet p { margin:0 0 11px; color:var(--udm-ink); font-size:14px; line-height:1.65; }
+.memo-sheet p:last-child { margin-bottom:0; }
+.memo-footnote { flex:1 1 auto; color:var(--udm-muted); font-size:11.5px; text-align:left; }
+/* The memo on screen. Label left, figure right, the same shape the print page
+   sets in fixed units — see .memo-print-* near the report print rules. */
+.memo-section + .memo-section { margin-top:17px; padding-top:15px; border-top:1px solid var(--chart-grid); }
+.memo-section h3 { margin:0 0 9px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
+.memo-lines { display:grid; grid-template-columns:minmax(0,auto) minmax(0,1fr); gap:5px 18px; margin:0; font-size:13.5px; }
+.memo-lines dt { color:var(--udm-slate-text); font-weight:500; }
+.memo-lines dd { margin:0; color:var(--udm-ink); font-weight:600; }
+/* A statement has no label, so it spans both columns rather than sitting in
+   the value column with an empty space where a label would be. */
+.memo-line-statement { grid-column:1 / -1; font-weight:500 !important; }
+
+@media (max-width:991.98px) {
+  .donut { flex-basis:150px; width:150px; height:150px; }
+  .donut-hole { inset:36px; }
+  .donut-hole-value { font-size:21px; }
+  .alert-figure--lead .alert-figure-value { font-size:31px; }
+  .overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px 92px; }
+  .dashboard-scope .form-select { min-width:150px; }
+}
+
+/* The dashboard's print rules lived here and are gone with the button that
+   needed them. They existed to make the *screen* printable — keeping the donut
+   and trend panels from splitting across a page break — and the dashboard is
+   no longer something the app offers to print. The memo is, and it prints from
+   templates/core/dashboard_memo_print.html with rules of its own.
+
+   The paragraph they also carried, `.modal,.modal-backdrop{display:none}`, has
+   moved up to the shared print block: hiding a dialog when printing is right
+   on every page, not just this one, and it is the rule that used to make Print
+   inside the memo print the dashboard behind it. */
+
+/* ---------------------------------------------------- repository folders */
+/* Equal columns across the full width. The count comes from
+   REPOSITORY_FOLDER_COLUMNS via a custom property on the element, so changing
+   it is a settings change rather than a template edit. auto-fill with a minimum
+   keeps it from producing unreadably narrow drawers on a small screen: the
+   configured count is a ceiling, not a promise. */
+.folder-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(max(160px,calc(100%/var(--folder-columns,4) - 12px)),1fr));
+  gap:12px;
+}
+.folder-tile {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  min-height:58px; padding:13px 15px;
+  border:1px solid var(--udm-line); border-radius:10px;
+  background:var(--udm-surface); color:var(--udm-navy-text); font-size:13.5px; text-decoration:none;
+}
+.folder-tile:hover,.folder-tile:focus { border-color:var(--udm-teal); text-decoration:none; }
+.folder-tile.active { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); font-weight:600; }
+.folder-tile.active:hover,.folder-tile.active:focus {
+  background:var(--udm-teal-soft); color:var(--udm-teal-ink);
+}
+/* Two lines before it clips, so an office name is legible rather than cut to a
+   prefix that reads the same as its neighbour's. */
+.folder-tile-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.folder-tile-count { flex:0 0 auto; color:var(--udm-muted); font-size:12.5px; }
+.folder-tile.active .folder-tile-count { color:inherit; }
+
+/* ================================================================
+   Dark theme
+   ================================================================
+   Applied inside the app only. The sign-in and lockout pages replace the body
+   block wholesale and carry their own full-bleed navy artwork; they are also
+   the one screen somebody sees before the system knows who they are, so there
+   is no stored preference to read. `.login-wrap` pins its tokens back below.
+
+   Implemented by re-pointing the existing tokens rather than as a second
+   stylesheet. Every rule above already draws from them, so a component added
+   later is themed without anybody remembering to theme it — which is how a
+   parallel dark stylesheet always eventually fails. Introducing --udm-surface
+   is what made this possible: the raised surface was #fff literal in thirty-one
+   places, so there was nothing to re-point.
+
+   One selector, [data-theme="dark"], and no prefers-color-scheme block:
+   doctrack.js resolves the operating-system preference and writes the
+   attribute. The alternative is duplicating a forty-line palette into a media
+   query, and two copies drift. The cost is that dark mode needs JavaScript,
+   which is the right trade — it is a preference, not content, and the light
+   theme is fully usable without it.
+
+   Values are re-tuned, never reused. The light palette was validated for 3:1
+   contrast against white, and the same hexes fail against a dark ground: the
+   soft tints go near-black, and the gold and green inks disappear into them. A
+   status pill nobody can read is worse than no colour at all. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces: canvas is the page, surface is the card raised off it. */
+  --udm-canvas: #0f1720;
+  --udm-surface: #17212c;
+
+  /* Navy is structural here (sidebar, buttons) rather than decorative, so it
+     darkens with the page instead of glowing against it. */
+  --udm-navy: #16222f;
+  /* ...which leaves navy-as-text at 1.01:1 on the card surface — invisible —
+     so here it parts company with the background and becomes the body ink. */
+  --udm-navy-text: var(--udm-ink);
+  --udm-navy-700: #1d2e3f;
+  --udm-navy-600: #24384c;
+
+  /* Brand hues lightened to clear contrast on the dark ground. */
+  --udm-gold: #e0b757;
+  --udm-teal: #4aa9bd;
+  --udm-green: #56b287;
+  --udm-red: #e2695f;
+  --udm-red-600: #cf5348;
+  /* Re-picked, not reused: on the dark card the light-theme pair would sit at
+     2.4:1 and 1.6:1. 7.11:1 and 3.60:1 here, separating by the same lightness
+     step the light pair uses. */
+  --chart-alert: #ff8a7a;
+  --chart-alert-soft: #c0554b;
+
+  /* Tints become low-lightness washes of the same hue, not pale panels. */
+  --udm-gold-soft: #3a2f14;
+  --udm-teal-soft: #12333a;
+  --udm-green-soft: #14332a;
+  --udm-red-soft: #3a1e1b;
+  --udm-slate-soft: #212c39;
+
+  /* Ink on those washes, re-tuned to stay legible against them. */
+  --udm-gold-ink: #f0d391;
+  --udm-gold-ink-dark: #f6e2b4;
+  --udm-gold-ink-hover: #fbeed0;
+  --udm-gold-border: #8a6a12;
+  --udm-gold-tint: #241d0d;
+  --udm-gold-tint-strong: #4a3c19;
+  --udm-teal-ink: #8fd4e2;
+  --udm-teal-ink-dark: #b0e2ec;
+  --udm-green-ink: #92dcb6;
+  --udm-red-ink: #f3ada6;
+  --udm-slate-ink: #a8b6c8;
+
+  /* Text and rules. */
+  --udm-ink: #e6edf5;
+  --udm-label-ink: #cbd6e4;
+  --udm-slate-text: #b9c6d6;
+  --udm-muted: #91a1b5;
+  --udm-line: #27333f;
+  --udm-line-strong: #3a4a5c;
+  --udm-line-soft: #2f3d4c;
+
+  /* Charts: same three categorical slots, lifted to clear the dark ground
+     while keeping the hue separation that makes them distinguishable under
+     protanopia and deuteranopia. */
+  --chart-one: #4aa9d4;
+  --chart-two: #d8ae4e;
+  --chart-three: #5cb37e;
+  --chart-track: #212d3a;
+  --chart-grid: #202b36;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.5);
+}
+
+/* Bootstrap paints its own form controls and tables from its variables, which
+   are not ours. Re-pointed here rather than restyled, so the controls keep
+   Bootstrap's behaviour and only change colour. */
+:root[data-theme="dark"] body {
+  --bs-body-bg: var(--udm-canvas);
+  --bs-body-color: var(--udm-ink);
+  --bs-border-color: var(--udm-line);
+  --bs-secondary-color: var(--udm-muted);
+  --bs-emphasis-color: var(--udm-ink);
+  background: var(--udm-canvas);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .form-control,
+:root[data-theme="dark"] .form-select,
+:root[data-theme="dark"] textarea {
+  background: var(--udm-canvas);
+  border-color: var(--udm-line);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .form-control::placeholder { color: var(--udm-muted); }
+:root[data-theme="dark"] .form-control:focus,
+:root[data-theme="dark"] .form-select:focus {
+  background: var(--udm-canvas);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .dropdown-menu {
+  background: var(--udm-surface);
+  border-color: var(--udm-line);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .dropdown-item { color: var(--udm-ink); }
+:root[data-theme="dark"] .dropdown-item:hover,
+:root[data-theme="dark"] .dropdown-item:focus { background: var(--udm-canvas); color: var(--udm-ink); }
+:root[data-theme="dark"] .table-udm th { color: var(--udm-muted); }
+:root[data-theme="dark"] .table-udm tbody tr:hover { background: var(--udm-canvas); }
+/* .help-note is a warm off-white rather than the plain surface, so it does not
+   follow --udm-surface and needs a value of its own. */
+:root[data-theme="dark"] .help-note { background: #241f12; color: var(--udm-ink); }
+
+/* The sign-in and lockout screens stay light in both themes: they are their own
+   full-bleed composition on fixed navy, and they are shown before there is a
+   person to have a preference. Pinning the tokens back is enough — every rule
+   inside reads them. */
+/* The printed memo is a document, and a document is white. Same treatment as
+   the sign-in screen: pin the tokens back and every rule inside reads them. */
+:root[data-theme="dark"] .memo-print {
+  --udm-surface: #ffffff;
+  --udm-ink: #16202c;
+  --udm-slate-text: #41506a;
+  --udm-slate-ink: #55637a;
+  --udm-muted: #63718a;
+  --udm-line: #dfe5ec;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] .login-wrap {
+  --udm-canvas: #f5f7fa;
+  --udm-surface: #ffffff;
+  --udm-ink: #16202c;
+  --udm-muted: #63718a;
+  --udm-label-ink: #33415a;
+  --udm-slate-text: #41506a;
+  --udm-line: #dfe5ec;
+  --udm-line-strong: #b9c9da;
+  --udm-navy: #0b315a;
+  --udm-navy-text: var(--udm-navy);
+  --udm-gold: #c49a2e;
+  --udm-teal: #16697a;
+  color-scheme: light;
+}
+
+/* ---------------------------------------------- dark theme: contrast repairs
+   What --udm-navy-text cannot reach: a hard-coded colour, and white-on-brand
+   pairings that stopped working when the brand hues were lightened to clear the
+   dark ground. Every rule here is behind the dark selector, so light is untouched. */
+
+/* A slate that reads as body text on white and as background on the dark card. */
+:root[data-theme="dark"] .text-preview { color: var(--udm-slate-text); }
+
+/* White fell to 1.9:1 on gold, 2.6 on green, 2.7 on teal. The hues have to stay
+   light to clear the dark ground, so the label goes dark instead — 6.6:1 and up,
+   and each button still reads as its own colour. */
+:root[data-theme="dark"] .btn-udm-green,
+:root[data-theme="dark"] .btn-udm-green:hover,
+:root[data-theme="dark"] .btn-udm-teal,
+:root[data-theme="dark"] .btn-udm-teal:hover,
+:root[data-theme="dark"] .btn-receipt-icon,
+:root[data-theme="dark"] .uploads-leader-tag { color: var(--udm-canvas); }
+
+/* The step number sat on a hard-coded pale disc, which stayed pale when nothing
+   else did. The active disc is restored on the second line: it is navy with
+   white on it, already legible, and would otherwise lose to the first. */
+:root[data-theme="dark"] .step-indicator .num { background: var(--udm-slate-soft); }
+:root[data-theme="dark"] .step-indicator .step.active .num { background: var(--udm-navy); }
+
+/* Paper is white whatever the screen is. Printing a dark theme wastes toner and
+   comes out unreadable on the panels that rely on tinted fills, so print always
+   uses the light palette — the tokens are simply reset for the print context. */
+@media print {
+  :root[data-theme="dark"] {
+    --udm-canvas: #ffffff;
+    --udm-surface: #ffffff;
+    --udm-ink: #16202c;
+    --udm-label-ink: #33415a;
+    --udm-slate-text: #41506a;
+    --udm-muted: #63718a;
+    --udm-line: #dfe5ec;
+    --udm-line-strong: #b9c9da;
+    --udm-line-soft: #cfd8e6;
+    --udm-gold-soft: #f6edd8;
+    --udm-teal-soft: #e3f0f2;
+    --udm-green-soft: #e4f2ea;
+    --udm-red-soft: #fbe7e5;
+    --udm-slate-soft: #eceff4;
+    --udm-gold-ink: #8a6a12;
+    --udm-teal-ink: #10505d;
+    --udm-green-ink: #1f5a42;
+    --udm-red-ink: #8f2a22;
+    --udm-slate-ink: #55637a;
+    --chart-one: #0a6e9a;
+    --chart-two: #b58c24;
+    --chart-three: #2f7d4f;
+    --chart-track: #e8edf3;
+    --chart-grid: #eef1f6;
+  }
+}
+
+/* ------------------------------------------------------------ the control */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex: 0 0 38px; padding: 0;
+  border: 1px solid var(--udm-line); border-radius: 8px;
+  background: var(--udm-surface); color: var(--udm-navy-text);
+  font-size: 15px; line-height: 1;
+}
+.theme-toggle:hover, .theme-toggle:focus { border-color: var(--udm-teal); color: var(--udm-teal); }
+:root[data-theme="dark"] .theme-toggle { color: var(--udm-gold); }
+/* One button, two glyphs: the icon shows what pressing it will switch *to*,
+   which is what the label announces too. */
+.theme-toggle .theme-icon-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .theme-icon-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .theme-icon-dark { display: inline; }

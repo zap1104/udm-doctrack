@@ -40,6 +40,23 @@ class Source(models.TextChoices):
     SCAN = "SCAN", "Scanned document"
 
 
+#: The one rule for "completed" versus "historical" in the repository.
+#:
+#: Completed means the document came out of tracking — a record the offices
+#: worked and an administrator approved into the repository. Everything else is
+#: historical: a file or a scan of something that happened before, or outside,
+#: the system.
+#:
+#: Named as the DTS side only, and the other side derived by exclusion, so a
+#: fourth source added later is historical without anybody remembering to list
+#: it. That is what the repository tile already does with its `{% else %}` — and
+#: what the dashboard breakdown did not: it tested `source == UPLOAD` for
+#: historical, so a scanned document was counted Completed on the ring while the
+#: tile beside it read Historical. Same document, two answers, because the rule
+#: existed twice.
+COMPLETED_SOURCE = Source.DTS
+
+
 class OcrStatus(models.TextChoices):
     PENDING = "PENDING", "Waiting for text extraction"
     RUNNING = "RUNNING", "Extracting"

@@ -12,6 +12,8 @@ Design rules that the rest of the code depends on:
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
@@ -28,15 +30,27 @@ def attachment_upload_path(instance, filename: str) -> str:
 
 class Status(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
-    #: Sent for the first time and nobody has confirmed it yet. Named for what
-    #: the reader needs to do about it — somebody owes a receipt — rather than
-    #: for where the paper is, which "In transit" described and which no office
-    #: can act on. FORWARDED and RETURNED are the same wait after a later hop.
+    #: Sent and nobody has confirmed it yet. Named for what the reader needs to
+    #: do about it — somebody owes a receipt — rather than for where the paper
+    #: is, which "In transit" described and which no office can act on.
+    #:
+    #: This is the *only* awaiting-receipt status. FORWARDED and RETURNED used
+    #: to exist alongside it and meant precisely the same thing: a document sent
+    #: on, with a receipt outstanding. Three names for one state split every
+    #: queue and every filter three ways, so a document waiting on the same act
+    #: appeared under a different label depending on which hop it was on. The
+    #: distinction that does matter — how it got here — is kept where it belongs
+    #: and cannot be lost: RoutingStep.Action and RecordActivity.Event both still
+    #: carry FORWARD/FORWARDED and RETURN/RETURNED.
     PENDING_RECEIPT = "PENDING_RECEIPT", "Pending receipt"
     RECEIVED = "RECEIVED", "Received"
     IN_PROCESS = "IN_PROCESS", "In process"
-    FORWARDED = "FORWARDED", "Forwarded"
-    RETURNED = "RETURNED", "Returned"
+    #: The office has finished its work, but an administrator has not yet
+    #: approved the record into the Document Repository. The record stays in
+    #: Tracking for this stage — see ACTIVE_STATUSES.
+    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - pending upload"
+    #: Approved into the repository. A record only reaches this once a Document
+    #: exists for it, so COMPLETED now means "filed", not merely "finished".
     COMPLETED = "COMPLETED", "Completed"
 
 
@@ -54,15 +68,24 @@ MAX_NOTE_CHARS = 2000
 MAX_INSTRUCTIONS_CHARS = 5000
 
 #: Statuses where a receiving office still has to press "Confirm receipt".
-AWAITING_RECEIPT_STATUSES = {Status.PENDING_RECEIPT, Status.FORWARDED, Status.RETURNED}
-#: Statuses that belong in the Tracking module (Completed records move to Documents).
+AWAITING_RECEIPT_STATUSES = {Status.PENDING_RECEIPT}
+
+#: The work is finished: the record no longer moves between offices, cannot be
+#: routed, and nobody owes a receipt on it. Both halves of the completion are
+#: here, because almost every rule that used to ask "is this COMPLETED?" meant
+#: "is the work over?" rather than "is it in the repository?". The few places
+#: that mean the narrower thing test Status.COMPLETED directly.
+COMPLETED_STATUSES = {Status.COMPLETED_PENDING_UPLOAD, Status.COMPLETED}
+
+#: Statuses that belong in the Document Tracking module. COMPLETED_PENDING_UPLOAD
+#: is here on purpose: a finished record stays visible in Tracking until an
+#: administrator approves it into the repository, which is the act that files it.
 ACTIVE_STATUSES = {
     Status.DRAFT,
     Status.PENDING_RECEIPT,
     Status.RECEIVED,
     Status.IN_PROCESS,
-    Status.FORWARDED,
-    Status.RETURNED,
+    Status.COMPLETED_PENDING_UPLOAD,
 }
 
 
@@ -80,6 +103,83 @@ class TrackingNumberSequence(models.Model):
 
     def __str__(self) -> str:
         return f"{self.office.code} {self.year}-{self.month:02d}: {self.last_number}"
+
+
+class RoutingSLA(TimeStampedModel):
+    """How many days an office has to act, per office and document type.
+
+    Replaces `settings.DEFAULT_ACTION_DUE_DAYS` as the *source* of the default
+    deadline. That setting is not retired — it stays as the terminal fallback,
+    the answer when no row matches, so a fresh installation with an empty table
+    behaves exactly as it does today.
+
+    Four tiers, most specific first::
+
+        (office, document_type)   this office, this kind of document
+        (office, NULL)            this office's house rule for anything
+        (NULL, document_type)     a university-wide rule for one kind
+        no row                    settings.DEFAULT_ACTION_DUE_DAYS
+
+    Both columns null is refused. That row would be a second global default
+    sitting beside the setting, and one rule in two places is how this system
+    ends up with two answers to one question — `resolve_sla_due_days` would then
+    have to decide which of them wins, which is a decision nobody made.
+
+    `due_days` of 0 means "no deadline", matching what `route_record` already
+    does with a falsy `due_days`: an office that genuinely works to no clock can
+    say so here rather than being given three days it never agreed to.
+    """
+
+    office = models.ForeignKey(
+        "accounts.Office",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="routing_slas",
+        help_text="Leave blank for a rule that applies to every office.",
+    )
+    document_type = models.ForeignKey(
+        DocumentType,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="routing_slas",
+        help_text="Leave blank for a rule that applies to every document type.",
+    )
+    due_days = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Calendar days the receiving office has to act. 0 means no deadline.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Unticked rules are ignored, and the next tier down applies.",
+    )
+
+    class Meta:
+        ordering = ["office__code", "document_type__code"]
+        verbose_name = "routing SLA"
+        verbose_name_plural = "routing SLAs"
+        constraints = [
+            # nulls_distinct=False, so "this office, any type" can exist only
+            # once. Postgres treats NULLs as distinct by default, which would
+            # let the same rule be written twice and leave the resolver picking
+            # between them by primary key.
+            models.UniqueConstraint(
+                fields=["office", "document_type"],
+                name="unique_routing_sla_scope",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                check=~Q(office__isnull=True, document_type__isnull=True),
+                name="routing_sla_needs_a_scope",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        office = self.office.code if self.office_id else "Any office"
+        kind = self.document_type.code if self.document_type_id else "any type"
+        days = "no deadline" if not self.due_days else f"{self.due_days} day{'' if self.due_days == 1 else 's'}"
+        return f"{office} · {kind}: {days}"
 
 
 class TrackingRecordQuerySet(models.QuerySet):
@@ -116,22 +216,27 @@ class TrackingRecordQuerySet(models.QuerySet):
         ).distinct()
 
     def pending_filing(self):
-        """Completed, but not yet filed into Document Management.
+        """Finished, and waiting for an administrator to approve it into the
+        repository.
 
-        These fall between the two modules: Tracking lists active records only,
-        and Documents lists what has actually been filed, so a record completed
-        with the "file it now" box unticked appeared in neither. The only way
-        to reach one was a direct link to a page nothing linked to. The queue on
-        the repository page is built from this.
+        This queue lives on the **Tracking** page. It used to live on the
+        Repository page, for a reason that no longer holds: completing a record
+        set it straight to COMPLETED, which dropped it out of Tracking, so a
+        record completed with the "file it now" box unticked was in neither
+        module and the repository page was the only place left to surface it
+        from. Approval is now an explicit stage of the tracking lifecycle
+        (COMPLETED_PENDING_UPLOAD is in ACTIVE_STATUSES), so the record never
+        leaves Tracking until the act that files it has actually happened, and
+        the queue belongs beside the records it is about.
 
-        Asks the relation rather than the `is_archived` flag, because the
-        question is literally "is there a document for it?" — the two are
-        written together, but the relation is the one that cannot go stale.
+        Asks the relation as well as the status, because the question is
+        literally "is there a document for it?" — the two are written together,
+        but the relation is the one that cannot go stale.
         """
-        return self.filter(status=Status.COMPLETED, archived_document__isnull=True)
+        return self.filter(status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True)
 
     def overdue(self):
-        return self.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
+        return self.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
 
     def with_related(self):
         return self.select_related(
@@ -204,7 +309,9 @@ class TrackingRecord(TimeStampedModel):
     instructions = models.TextField(help_text="Action required by the receiving office.")
     remarks = models.TextField(blank=True)
 
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    # 32, not 16: "COMPLETED_PENDING_UPLOAD" is 24 characters and would be
+    # truncated on the way into a 16-column, storing a status no filter matches.
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.DRAFT, db_index=True)
     current_office = models.ForeignKey(
         "accounts.Office", null=True, blank=True, on_delete=models.SET_NULL, related_name="custody_records"
     )
@@ -222,6 +329,16 @@ class TrackingRecord(TimeStampedModel):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="completed_records"
     )
     completion_note = models.TextField(blank=True)
+
+    #: Who approved this record into the repository, and when. Stored rather
+    #: than inferred from the timeline, because this is the pair that answers
+    #: "did anybody other than the finisher look at this before it became
+    #: permanent?" — and a report cannot ask that of a text message.
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="approved_records",
+    )
 
     is_archived = models.BooleanField(default=False, db_index=True)
     archived_at = models.DateTimeField(null=True, blank=True)
@@ -245,28 +362,90 @@ class TrackingRecord(TimeStampedModel):
     # -- derived state ----------------------------------------------------
     @property
     def is_overdue(self) -> bool:
-        return bool(self.due_at and self.due_at < timezone.now() and self.status != Status.COMPLETED)
+        return bool(
+            self.due_at and self.due_at < timezone.now() and self.status not in COMPLETED_STATUSES
+        )
+
+    #: What the row should say about this record's deadline.
+    #:
+    #: Derived here rather than in the template so the list, the detail page and
+    #: anything added later read one definition. A template working it out from
+    #: `due_at` and `timezone.now()` would be a second rule, and the two would
+    #: part company the first time the window changed.
+    DEADLINE_OVERDUE = "overdue"
+    DEADLINE_DUE_SOON = "due_soon"
+    DEADLINE_SCHEDULED = "scheduled"
+    DEADLINE_NONE = ""
+
+    @property
+    def deadline_state(self) -> str:
+        """"overdue", "due_soon", "scheduled", or "" when there is no deadline.
+
+        Completed work is never any of them: a record that is finished owes
+        nothing, whatever its deadline said. That is the same exclusion
+        `is_overdue` makes, and it is made here by delegating to it rather than
+        by repeating the status test.
+
+        A record still awaiting receipt can be due soon. That is the row a
+        warning is most useful on — the receipt is the act that is owed, and
+        nobody has performed it.
+        """
+        if not self.due_at or self.status in COMPLETED_STATUSES:
+            return self.DEADLINE_NONE
+        if self.is_overdue:
+            return self.DEADLINE_OVERDUE
+        window = timedelta(hours=settings.DEADLINE_WARNING_HOURS)
+        if self.due_at <= timezone.now() + window:
+            return self.DEADLINE_DUE_SOON
+        return self.DEADLINE_SCHEDULED
 
     @property
     def awaiting_receipt(self) -> bool:
         return self.status in AWAITING_RECEIPT_STATUSES
 
-    @property
-    def display_status(self) -> str:
-        """Status shown in lists — overdue wins over everything except completed."""
-        if self.status != Status.COMPLETED and self.is_overdue:
-            return "OVERDUE"
-        return self.status
+    # `display_status` and `display_status_label` stood here and returned
+    # "Overdue" in place of the stage whenever the deadline had passed. Three of
+    # six records then showed a stage the reader could not see: "overdue" says
+    # the deadline went by, not whether anybody has signed for the document,
+    # which is the part somebody has to act on. Overdue is a tag beside the
+    # status now — see templates/partials/_overdue_tag.html — so read `status`
+    # and `get_status_display()` directly and render the tag alongside.
 
     @property
-    def display_status_label(self) -> str:
-        if self.display_status == "OVERDUE":
-            return "Overdue"
-        return self.get_status_display()
+    def has_tracking_number(self) -> bool:
+        """False while the record is a draft carrying a placeholder.
+
+        Tested on the status rather than by matching the placeholder's shape, so
+        a change to how placeholders are spelled cannot leak one onto a screen.
+        """
+        return self.status != Status.DRAFT
+
+    @property
+    def display_tracking_number(self) -> str:
+        """What to print wherever a tracking number appears.
+
+        A draft has no number to show — it is issued on send, so that an
+        abandoned draft leaves no gap in the office's series. Showing the
+        placeholder would be worse than showing nothing: it looks like a
+        reference somebody could quote, and it would be quoted.
+        """
+        return self.tracking_number if self.has_tracking_number else "Not yet assigned"
 
     @property
     def is_editable(self) -> bool:
         return self.status == Status.DRAFT
+
+    @property
+    def receiving_offices(self):
+        """Where the document is going in its current batch.
+
+        Distinct from `current_office`, which is where it *is*. Three offices
+        matter to a reader — who raised it, who holds it, and who owes the next
+        act — and showing only the first two leaves the most useful of the three
+        off the page: "which office are we waiting on" is the question the
+        record is usually opened to answer.
+        """
+        return [step.to_office for step in self.current_step_queryset.select_related("to_office")]
 
     @property
     def current_step_queryset(self):
@@ -292,9 +471,32 @@ class TrackingRecord(TimeStampedModel):
             return False
         return self.current_step_queryset.filter(to_office=office, received_at__isnull=False).exists()
 
+    def is_incoming_for(self, office) -> bool:
+        """Addressed to this office in the current batch — confirmed or not.
+
+        Derived, never stored. "Incoming" and "Outgoing" are the two directions
+        a document can face, and a document faces different directions for
+        different offices at the same moment: the batch that is outgoing for
+        Supply is incoming for HR. A stored status could only ever record one of
+        those, so the answer is computed per office instead.
+        """
+        if office is None:
+            return False
+        office_id = getattr(office, "pk", office)
+        return self.current_step_queryset.filter(to_office_id=office_id).exists()
+
+    def is_outgoing_for(self, office) -> bool:
+        """Sent onward by this office in the current batch."""
+        if office is None:
+            return False
+        office_id = getattr(office, "pk", office)
+        return self.current_step_queryset.filter(from_office_id=office_id).exists()
+
     def can_user_act(self, user) -> bool:
         """Can this user add remarks / forward / complete right now?"""
-        if not user.is_authenticated or self.status == Status.COMPLETED:
+        if not user.is_authenticated or self.status in COMPLETED_STATUSES:
+            return False
+        if user.is_viewer:
             return False
         if user.is_system_admin:
             return True
@@ -305,30 +507,46 @@ class TrackingRecord(TimeStampedModel):
         return bool(user.office_id) and self.has_custody(user.office)
 
     def can_user_confirm_receipt(self, user) -> bool:
-        if not user.is_authenticated or not user.office_id:
+        if not user.is_authenticated or not user.office_id or user.is_viewer:
             return False
         return self.pending_step_for_office(user.office) is not None
 
-    def can_user_archive(self, user) -> bool:
-        """Who may file a completed record into Document Management.
+    def can_user_approve_upload(self, user) -> bool:
+        """Who may approve a finished record into the Document Repository.
 
-        `can_user_act` cannot answer this: it is deliberately False for a
-        COMPLETED record, and archiving only ever happens after completion.
-        Without a rule of its own the archive endpoint had no permission check
-        at all, so anyone who could *read* the record — an office it merely
-        passed through, or somebody holding a read-only access grant — could
-        push it into the repository, copying every attachment and writing an
-        ARCHIVED entry into the append-only history under their name.
+        `can_user_act` cannot answer this: it is deliberately False once the
+        work is over, and approval only ever happens after completion. Without a
+        rule of its own the endpoint had no permission check at all, so anyone
+        who could *read* the record — an office it merely passed through, or
+        somebody holding a read-only access grant — could push it into the
+        repository, copying every attachment and writing an ARCHIVED entry into
+        the append-only history under their name.
 
-        Filing is records work: records personnel do it as their job, and the
-        offices that raised or finished the document may file their own.
+        Approval is an administrator's act, not the finishing office's: the
+        point of the COMPLETED_PENDING_UPLOAD stage is that somebody looks at
+        the work before it becomes a permanent repository record. A system
+        administrator may approve anywhere; an office administrator only for
+        their own office's documents.
+
+        Was `can_user_archive`, which let any handling office file its own work
+        and so had nobody reviewing anything.
+
+        Self-approval is deliberately *not* blocked. In a one- or two-person
+        office the administrator is often the person who finished the work, and
+        refusing them would deadlock the queue with nobody to escalate to — a
+        control that cannot be satisfied gets worked around or turns the queue
+        into a graveyard. It is recorded instead: `approved_by` is stored on the
+        record and the audit entry names a self-approval as such, so the cases
+        where nobody independent looked are visible rather than prevented.
         """
-        if not user.is_authenticated:
+        if not user.is_authenticated or user.is_viewer:
             return False
-        if user.is_records_staff:
+        if self.status != Status.COMPLETED_PENDING_UPLOAD:
+            return False
+        if user.is_system_admin:
             return True
-        if self.completed_by_id == user.pk or self.created_by_id == user.pk:
-            return True
+        if not user.is_office_admin:
+            return False
         return bool(user.office_id) and user.office_id in {
             self.originating_office_id,
             self.current_office_id,
@@ -350,16 +568,23 @@ class TrackingRecord(TimeStampedModel):
 
         The originating office is *not* included: it should not be able to pull
         a document back into play after another office finished the work. The
-        office that completed it can correct its own mistake, and records
-        personnel can correct anyone's.
+        office that completed it can correct its own mistake, and an
+        administrator can correct anyone's.
         """
-        if not user.is_authenticated:
+        if not user.is_authenticated or user.is_viewer:
             return False
-        if self.status != Status.COMPLETED or self.is_archived:
+        # Only from the pending-upload stage. Once approved the record is part
+        # of the repository, and withdrawing it from there is a different act.
+        if self.status != Status.COMPLETED_PENDING_UPLOAD or self.is_archived:
             return False
-        if user.is_records_staff:
+        if user.is_system_admin:
             return True
         if self.completed_by_id == user.pk:
+            return True
+        if user.is_office_admin and user.office_id in {
+            self.originating_office_id,
+            self.current_office_id,
+        }:
             return True
         return bool(user.office_id) and user.office_id == self.current_office_id
 
@@ -369,7 +594,7 @@ class TrackingRecord(TimeStampedModel):
     # -- status bookkeeping ------------------------------------------------
     def recalculate_status(self, *, save: bool = True) -> str:
         """Single source of truth for `status`, `current_office` and `current_holder`."""
-        if self.status in {Status.DRAFT, Status.COMPLETED}:
+        if self.status == Status.DRAFT or self.status in COMPLETED_STATUSES:
             return self.status
 
         steps = list(self.current_step_queryset.select_related("to_office", "received_by"))
@@ -378,11 +603,10 @@ class TrackingRecord(TimeStampedModel):
         else:
             received = [step for step in steps if step.received_at]
             if not received:
-                action = steps[0].action
-                self.status = {
-                    RoutingStep.Action.FORWARD: Status.FORWARDED,
-                    RoutingStep.Action.RETURN: Status.RETURNED,
-                }.get(action, Status.PENDING_RECEIPT)
+                # One status for one state. A forward and a return are both a
+                # document sent on with a receipt outstanding, and the step's
+                # own `action` already records which of the two it was.
+                self.status = Status.PENDING_RECEIPT
                 # Nothing has been received in this batch yet, so the document
                 # has not actually left where it last had confirmed custody —
                 # `from_office` (the originating office on a first send, or the
@@ -487,6 +711,11 @@ class RecordActivity(models.Model):
         COMPLETED = "COMPLETED", "Marked completed"
         ARCHIVED = "ARCHIVED", "Archived"
         ACCESS = "ACCESS", "Access granted"
+        #: Read and print are acts on the document too. A view-only account
+        #: leaves no other trace, so without these two the people who can only
+        #: look at a record are the people the history says nothing about.
+        VIEWED = "VIEWED", "Opened"
+        PRINTED = "PRINTED", "Routing slip printed"
 
     record = models.ForeignKey(TrackingRecord, on_delete=models.CASCADE, related_name="activities")
     event = models.CharField(max_length=16, choices=Event.choices)
@@ -508,6 +737,14 @@ class RecordActivity(models.Model):
 
     def __str__(self) -> str:
         return f"{self.record_id} {self.event} {self.created_at:%Y-%m-%d %H:%M}"
+
+
+#: Logged, but kept out of the timeline the record page renders. VIEWED is
+#: written every time somebody opens a record, so showing it would bury the
+#: movement history under a list of who looked — and, since the timeline is on
+#: the page being opened, each read would lengthen the thing being read. The
+#: rows are still there, still append-only, and still visible in the audit log.
+QUIET_EVENTS = {RecordActivity.Event.VIEWED}
 
 
 class Attachment(TimeStampedModel):

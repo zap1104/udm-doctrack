@@ -2,31 +2,121 @@
 {% load doctrack %}
 {% block title %}Dashboard · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head">
+<div class="page-head dashboard-page-head">
   <div>
     <div class="eyebrow">Dashboard</div>
     <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
     <p class="sub">{{ user.office_label }}</p>
   </div>
+  {% comment %}
+    Reports was reachable only from the sidebar, which on a narrow screen is
+    behind a menu button — so the page that explains these numbers had no route
+    from the page showing them.
+  {% endcomment %}
+  <div class="dashboard-head-actions no-print">
+    {% comment %}
+      Records staff watch traffic between offices, so they may narrow the page
+      to one of them. Everybody else has no picker: the scope is their own
+      office and always was. The filter is applied on top of the visibility
+      rules rather than instead of them, so this can only ever narrow what
+      somebody is already entitled to see.
+    {% endcomment %}
+    {% comment %}
+      data-auto-submit rather than an inline onchange handler, which django-csp
+      blocks in production — it either failed there or held 'unsafe-inline' open
+      for the whole site. The listener is in static/js/doctrack.js beside the
+      print trigger, and the Tracking page's picker uses the same one.
+
+      FIXME: templates/core/notifications.html still has the inline version.
+    {% endcomment %}
+    {% if scope.can_pick %}
+      <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
+        <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
+        <select class="form-select form-select-sm" id="dashboard-scope" name="office"
+                data-auto-submit>
+          <option value="">All offices</option>
+          {% for office in scope.offices %}
+            <option value="{{ office.pk }}" {% if scope.office.pk == office.pk %}selected{% endif %}>
+              {{ office.code }} · {{ office.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
+      </form>
+    {% endif %}
+    {% comment %}
+      "New Tracking Slip" and "Upload to Repository" were here and were removed
+      on request. Starting a document is now reached from the page that owns the
+      act — the tracking list and the repository — and not from the dashboard.
+
+      `can_start_work` is still computed here and rendered by nothing on this
+      page. It is not dead: it moved onto the user model in f822252 and now
+      gates the same two buttons on the tracking list and the repository, which
+      is where they are offered from. It stays in this context so the dashboard
+      can offer them again without re-deriving the rule.
+    {% endcomment %}
+    <a class="btn btn-udm-outline" href="{% url 'core:reports' %}">Open Reports</a>
+    {% comment %}
+      "Print dashboard" was here and is gone. The dashboard is a screen for
+      reading, not a document: printing it produced a chopped-up screenshot
+      whose panels meant nothing off the page. The memo is the thing worth
+      putting on paper, and it now has a page of its own to do it from.
+
+      Ctrl+P still opens the browser's own dialog — no button can prevent that
+      — and what it produces is deliberately plain: no letterhead, no scope
+      line, no timestamp, and no entry in the audit log. A page that printed a
+      letterheaded, timestamped sheet without recording it would look official
+      and be untraceable, which is the worse half of both options. The memo is
+      the document, and it is the thing that prints and gets logged.
+    {% endcomment %}
+    <button class="btn btn-udm-outline" type="button"
+            data-bs-toggle="modal" data-bs-target="#dashboard-memo">Generate memo</button>
+  </div>
 </div>
 
+{% comment %}
+  Each card carries the picked office into the page it opens. The cards count
+  one office's queues — the viewer's, or the one an administrator picked above —
+  and without the office on the link the page would answer for the viewer's while
+  the number answered for the picked one.
+{% endcomment %}
+{% comment %}
+  Three cards, not four. "Held by your office" was the fourth and it counted
+  ?scope=received, which is a queue you reach in one click from Incoming — the
+  card was reporting a stage of the same pile the card beside it already
+  counted, and it cost a fifth count query on every dashboard load.
+{% endcomment %}
 <div class="row g-3 mb-4">
-  <div class="col-12 col-md-4">
-    <a class="stat-card" href="{% url 'tracking:list' %}?scope=inbox">
+  <div class="col-6 col-md-4">
+    <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
-      <div class="value">{{ inbox_count }}</div>
-      <div class="hint">{{ inbox_new_today }} arrived today · pending your receipt</div>
+      <div class="value">{{ incoming_count }}</div>
+      {% comment %}
+        The hint used to read "pending your receipt", which described a narrower
+        queue than the card counts: Incoming spans pending receipt, received and
+        in process together. Saying otherwise sent the reader looking for a
+        number the card was not showing.
+      {% endcomment %}
+      <div class="hint">{{ incoming_new_today }} moved today · addressed to your office</div>
     </a>
   </div>
   <div class="col-6 col-md-4">
-    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=sent">
+    <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
   <div class="col-6 col-md-4">
-    <a class="stat-card red" href="{% url 'tracking:list' %}?status=OVERDUE">
+    {% comment %}
+      Overdue opens the tracking list, like the three cards beside it. It used
+      to open Reports on the argument that "why are these late and whose are
+      they" is a report rather than a list — true of the question, but not of
+      the click: a card counting documents is opened to see the documents, and
+      landing somewhere else makes this one card behave unlike its neighbours.
+      The per-office breakdown is still a click away in Reports.
+    {% endcomment %}
+    <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
@@ -34,151 +124,629 @@
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-8">
-    <div class="card-udm">
+{% comment %}
+  Two labels for the whole page, not for one row. Every row below reads
+  tracking on the left and the repository on the right, and saying so once here
+  is what makes the other rows legible without repeating a heading on each.
+{% endcomment %}
+<div class="row g-4 mb-1" aria-hidden="true">
+  <div class="col-xl-6"><div class="eyebrow">tracking</div></div>
+  <div class="col-xl-6"><div class="eyebrow">repository</div></div>
+</div>
+
+<div class="row g-4 mb-3">
+  <div class="col-xl-6">
+    <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Pending Receipt</h2>
+          <h2>Tracking</h2>
+          <div class="card-udm-caption">
+            Documents still moving between offices &mdash;
+            {{ tracking_donut.total }} in total.
+          </div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        {% if tracking_donut.total %}
+          {% include "core/_donut.html" with donut=tracking_donut %}
+        {% else %}
+          <div class="report-empty">Nothing is in tracking.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-6">
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Repository</h2>
+          <div class="card-udm-caption">
+            Documents filed and kept &mdash; {{ repository_donut.total }} in total.
+          </div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        {% if repository_donut.total %}
+          {% include "core/_donut.html" with donut=repository_donut %}
+        {% else %}
+          <div class="report-empty">Nothing has been filed yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-xl-6">
+    {% comment %}
+          Action Centre. Two questions that were two panels: what needs doing, and what
+          moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
+          sitting in different rows and answering versions of the same question, so the
+          reader had to look in two places to know whether the desk was clear.
+
+          Full width because the merged tables carry up to five columns each under the
+          records-staff view, and because "what do I do next" is the one thing on this
+          page somebody acts on rather than reads.
+
+          Needs action comes first, always. A list of what already happened above a list
+          of what has not is a filing cabinet, not a desk.
+        {% endcomment %}
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Action Centre</h2>
           {% if show_office_columns %}
             <div class="card-udm-caption">
               Showing which office sent each document and which has still to confirm it.
             </div>
           {% endif %}
         </div>
-        <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}?scope=inbox">
+        <a class="btn btn-dashboard-action btn-sm"
+           href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
           <span>Open Tracking</span>
-          <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
+          <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
         </a>
       </div>
-      <div class="card-udm-body p-0">
-        {% if attention_records %}
-          <div class="table-responsive"><table class="table-udm">
+
+      {% comment %}
+        The form wraps the Needs-action block only. Recently moved is read-only, and
+        a form spanning both would put rows nobody can act on inside the thing that
+        submits.
+
+        Bulk receipt keeps its custody attestation here rather than trading it for a
+        one-click button: `BulkConfirmReceiptForm.confirm_custody` is required, and
+        it is required because somebody is asserting the documents are physically in
+        their office. That assertion lands in an append-only audit trail, so the
+        dashboard asks for it in the same words the tracking list does.
+      {% endcomment %}
+      {% comment %}
+        FIXME: submitting this lands the user on /tracking/?scope=inbox, not back
+        here. BulkConfirmReceiptView redirects there on success *and* on failure
+        (apps/tracking/views.py), which is right for the tracking list that owns it
+        and wrong for a panel on the dashboard — a validation error is reported on
+        a page the user did not submit from. Give the view a `next` parameter, or
+        have it redirect to the referrer when it is a known internal page.
+      {% endcomment %}
+      {% if can_bulk_receive %}
+        <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
+          {# Back here, on success and on failure — not to a page nobody submitted from. #}
+          <input type="hidden" name="next" value="dashboard">
+      {% endif %}
+
+      <div class="desk-block desk-block--primary">
+        <h3 class="desk-block-title">Needs action</h3>
+        <div class="card-udm-body p-0">
+          {% if attention_records %}
+            <div class="table-responsive"><table class="table-udm">
+              {% if show_office_columns %}
+                <thead>
+                  <tr>
+                    {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
+                    <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                  </tr>
+                </thead>
+              {% endif %}
+              <tbody>
+              {% for record in attention_records %}
+                <tr>
+                  {% if can_bulk_receive %}
+                    <td>
+                      {% if record.can_confirm_now %}
+                        <input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}"
+                               aria-label="Select {{ record.display_tracking_number }} for receipt">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                  {% if show_office_columns %}
+                    <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+                    <td class="desk-cell">
+                      {% comment %}
+                        The subject decides the width of this whole panel if it
+                        is allowed to. .desk-cell-title caps it and wraps to a
+                        second line, so a long subject makes a row slightly
+                        taller instead of pushing the card sideways and leaving
+                        the panel beside it half as wide. The full text is on
+                        the title attribute and on the record page.
+                      {% endcomment %}
+                      <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
+                      <div class="text-muted" style="font-size:12.5px;">
+                        updated {{ record.last_movement_at|timesince }} ago
+                      </div>
+                    </td>
+                    <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                    <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
+                  {% else %}
+                    <td class="desk-cell desk-cell--wide">
+                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
+                      {# Same cap as the records-staff view above, one column wider. #}
+                      <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
+                      <div class="text-muted" style="font-size:12.5px;">
+                        From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                      </div>
+                    </td>
+                  {% endif %}
+                  <td class="text-end">
+                    {% if record.can_confirm_now %}
+                      <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                        <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                        <span>Confirm Receipt</span>
+                      </a>
+                    {% else %}
+                      {% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table></div>
+          {% else %}
+            {% comment %}
+              This linked to `?scope=inbox` while the panel head linked to
+              `?scope=incoming`, under a comment claiming both resolved to the
+              same queue. They do not: `inbox` is unconfirmed steps only, and
+              on the demo data one office saw 9 against incoming's 5. Two links
+              in one panel, labelled the same, opening different queues.
+            {% endcomment %}
+            <div class="empty-state">
+              <h3>No incoming documents are waiting</h3>
+              <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">Open Pending receipt</a>
+            </div>
+          {% endif %}
+        </div>
+
+        {% comment %}
+          Same three controls as the tracking list, in the same order and the same
+          words: an optional shared note, the custody attestation, then the submit.
+          Receipt is one act with one wording wherever it is offered.
+        {% endcomment %}
+        {% if can_bulk_receive %}
+          <div class="card-udm-body border-top">
+            <label class="form-label" for="desk-receipt-note">Receipt note for all selected records (optional)</label>
+            <textarea class="form-control" id="desk-receipt-note" name="note" maxlength="2000" rows="2"
+                      placeholder="Add the same custody note to each selected record"></textarea>
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" name="confirm_custody" id="desk-confirm-custody" required>
+              <label class="form-check-label" for="desk-confirm-custody">I confirm the selected physical or digital documents are present in my office's custody.</label>
+            </div>
+            <button class="btn btn-receipt mt-3" type="submit">Confirm Receipt for Selected</button>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if can_bulk_receive %}</form>{% endif %}
+
+      <div class="desk-block desk-block--secondary">
+        <h3 class="desk-block-title">Recently moved</h3>
+        <div class="card-udm-body p-0 table-responsive">
+          <table class="table-udm">
             {% if show_office_columns %}
               <thead>
                 <tr>
-                  <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                  <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
                 </tr>
               </thead>
             {% endif %}
             <tbody>
-            {% for record in attention_records %}
+            {% for record in recent_records %}
               <tr>
-                {% if show_office_columns %}
-                  <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
-                  <td>
-                    {{ record.subject|truncatechars:46 }}
-                    <div class="text-muted" style="font-size:12.5px;">
-                      updated {{ record.last_movement_at|timesince }} ago
-                    </div>
-                  </td>
-                  <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                  <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
-                {% else %}
-                  <td>
-                    <a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a>
-                    <div style="font-size:14px;">{{ record.subject }}</div>
-                    <div class="text-muted" style="font-size:12.5px;">
-                      From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
-                    </div>
-                  </td>
-                {% endif %}
-                <td class="text-end">
-                  {% if record.can_confirm_now %}
-                    <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
-                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
-                      <span>Confirm Receipt</span>
-                    </a>
-                  {% else %}
-                    {% include "partials/_status_pill.html" with status=record.display_status %}
-                  {% endif %}
+                <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+                <td class="desk-cell">
+                  <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                 </td>
+                {% if show_office_columns %}
+                  <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
+                  <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
+                {% endif %}
+                <td class="text-end">{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
               </tr>
+            {% empty %}
+              <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
+                No active records yet.
+              </td></tr>
             {% endfor %}
             </tbody>
-          </table></div>
-        {% else %}
-          <div class="empty-state">
-            <h3>No incoming documents are waiting</h3>
-            <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-            <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=inbox">Open Incoming</a>
-          </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card-udm mt-4">
-      <div class="card-udm-head">
-        <div>
-          <h2>Recent Tracking Activity</h2>
-          {% if show_office_columns %}
-            <div class="card-udm-caption">Showing office-to-office movement — records personnel view.</div>
-          {% endif %}
+          </table>
         </div>
-      </div>
-      <div class="card-udm-body p-0 table-responsive">
-        <table class="table-udm">
-          {% if show_office_columns %}
-            <thead>
-              <tr>
-                <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
-              </tr>
-            </thead>
-          {% endif %}
-          <tbody>
-          {% for record in recent_records %}
-            <tr>
-              <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.tracking_number }}</a></td>
-              <td>{{ record.subject|truncatechars:52 }}</td>
-              {% if show_office_columns %}
-                <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
-              {% endif %}
-              <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}</td>
-            </tr>
-          {% empty %}
-            <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
-              No active records yet.
-            </td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
       </div>
     </div>
   </div>
+  <div class="col-xl-6">
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <h2>Newest in the Document Repository</h2>
+            <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}">
+      <span>Open repository</span>
+              <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+          <div class="card-udm-body">
+            {% comment %}
+              Five rows, each one a fixed two lines of title over one line of
+              detail. A repository title runs to a sentence often enough that
+              letting it set its own height made this card a different height on
+              every load, and it shares a row with the Action Centre.
+            {% endcomment %}
+            {% for document in recent_documents %}
+              <div class="newest-row py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                <a class="newest-title" href="{{ document.get_absolute_url }}" title="{{ document.title }}">{{ document.title|truncatechars:120 }}</a>
+                <div class="newest-meta text-muted">
+                  {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+                </div>
+              </div>
+            {% empty %}
+              <p class="text-muted mb-0">No completed or archived records are available yet.</p>
+            {% endfor %}
+          </div>
+            </div>
+  </div>
+</div>
 
-  <div class="col-lg-4">
-    <div class="card-udm">
-      <div class="card-udm-head"><h2>Office Flow Today</h2></div>
-      <div class="card-udm-body">
-        <div class="d-flex justify-content-between py-1"><span>Received</span><strong>{{ received_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Forwarded</span><strong>{{ forwarded_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1"><span>Completed</span><strong>{{ completed_today }}</strong></div>
-        <div class="d-flex justify-content-between py-1 border-top mt-2 pt-2">
-          <span>Held by your office</span><strong>{{ custody_count }}</strong>
+<div class="row g-4 mb-4">
+  <div class="col-xl-6">
+    {% comment %}
+            Monthly volume. The same cumulative three-series chart Reports draws, from
+            the same function — running totals rather than monthly resets, because the
+            gap between Created and Completed is the work still in the building and a
+            monthly reset hides it completely.
+          {% endcomment %}
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Monthly volume</h2>
+          <div class="card-udm-caption">
+            Running totals since records began. The gap between created and
+            completed is what is still open.
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
         </div>
       </div>
-    </div>
-
-    <div class="card-udm mt-4">
-      <div class="card-udm-head">
-        <h2>Newest in Document Management</h2>
-        <a class="btn btn-dashboard-action btn-sm" href="{% url 'search:index' %}">
-          <span>Search</span>
-          <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
-        </a>
-      </div>
       <div class="card-udm-body">
-        {% for document in recent_documents %}
-          <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
-            <a href="{{ document.get_absolute_url }}" style="font-weight:600;">{{ document.title|truncatechars:44 }}</a>
-            <div class="text-muted" style="font-size:12.5px;">
-              {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
+        {% if monthly.total %}
+          <div class="column-chart" role="img"
+               aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
+            <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="column-chart-plot">
+              {% for row in monthly.rows %}
+                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">
+                  <div class="column-pair">
+                    {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
+                    {% if row.transferred %}<span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>{% endif %}
+                    {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}
+                  </div>
+                  <div class="column-label">{{ row.month|date:"M" }}</div>
+                </div>
+              {% endfor %}
             </div>
           </div>
-        {% empty %}
-          <p class="text-muted mb-0">No completed or archived records are available yet.</p>
-        {% endfor %}
+          <div class="chart-scale">
+            Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
+            {{ monthly.outstanding }} still open
+          </div>
+          <details class="chart-table">
+            <summary>View as table</summary>
+            <div class="table-responsive"><table class="table-udm">
+              <thead><tr>
+                <th>Month</th><th class="text-end">Created</th>
+                <th class="text-end">Transferred</th><th class="text-end">Completed</th>
+              </tr></thead>
+              <tbody>
+                {% for row in monthly.rows %}
+                  <tr>
+                    <td>{{ row.month|date:"F Y" }}</td>
+                    <td class="text-end num">{{ row.created }}</td>
+                    <td class="text-end num">{{ row.transferred }}</td>
+                    <td class="text-end num">{{ row.completed }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table></div>
+          </details>
+        {% else %}
+          <div class="report-empty">No tracking activity recorded yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6">
+    {% comment %}
+            Uploads by office. One combined figure per office — a document uploaded
+            directly and a tracked record completed and filed are both an office adding
+            to the repository, and splitting them would make an office doing one of each
+            look half as productive as one doing two of the same.
+          {% endcomment %}
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
+          <div class="card-udm-caption">
+            Uploaded directly plus completed and filed, counted together.
+          </div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        {% if uploads_by_office.rows %}
+          {% comment %}
+            Named only when one office is genuinely ahead. On a tie the server
+            sends no leader, because calling a tie "the top office" hands out a
+            distinction the numbers did not award.
+          {% endcomment %}
+          {% if uploads_by_office.leader %}
+            <div class="uploads-leader">
+              <span class="uploads-leader-tag">Most this month</span>
+              <span>
+                <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
+                {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
+                ({{ uploads_by_office.leader.percent }}%)
+              </span>
+            </div>
+          {% endif %}
+          {% for row in uploads_by_office.rows %}
+            <div class="report-series-item report-series-item--wide"
+                 title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
+              <span>{{ row.name }}</span>
+              <div class="report-bar">
+                <i class="{% if row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
+                   style="width:{{ row.bar_percent }}%"></i>
+              </div>
+              <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{{ row.percent }}%</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="report-empty">Nothing has been added to the repository this month.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    {% comment %}
+          Turnaround by month. Counted in office hours, the same basis the Reports
+          figures use — a document routed Friday 4PM and received Monday 9AM waited
+          about an hour of anybody's attention, and charging the office for the weekend
+          would be the wrong reading. Months with nothing completed are left unplotted
+          rather than drawn at zero: nothing finished is not the same as finished
+          instantly.
+        {% endcomment %}
+    <div class="card-udm">
+      <div class="card-udm-head">
+        <div>
+          <h2>Turnaround by month</h2>
+            <div class="card-udm-caption">
+              Average working days per stage, counted in <strong>office hours</strong>.
+              {{ turnaround_trend.office_hours_caveat }}
+            </div>
+          </div>
+        </div>
+        <div class="card-udm-body">
+          {% if turnaround_trend.has_data %}
+            {% comment %}
+              The legend sits in the body rather than beside the heading. In the
+              head it shared one line with the title and the office-hours caveat,
+              which at this column width left three keys fighting a sentence for
+              the same few centimetres.
+            {% endcomment %}
+            <div class="chart-legend trend-legend">
+              {% for series in turnaround_trend_points %}
+                <span class="chart-key">
+                  <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
+                </span>
+              {% endfor %}
+            </div>
+            <div class="trend-layout">
+              <div class="trend-chart">
+                {% comment %}
+                  No preserveAspectRatio="none": it stretches the plot to the column
+                  width, which turns every data point from a circle into an oval.
+                  The default uniform scaling keeps the dots round, and the CSS sizes
+                  the box by the viewBox's own ratio so nothing is letterboxed.
+                {% endcomment %}
+                <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
+                     aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
+                  {% comment %}
+                    Rules and baseline from the same constants that place the
+                    data. They were literals here while the plot geometry lived in
+                    Python, so the two agreed only by hand and changing the box
+                    moved the lines off the data without saying so.
+                  {% endcomment %}
+                  <g aria-hidden="true">
+                    {% for line in turnaround_trend_geometry.grid %}
+                      <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
+                            y1="{{ line.y }}" y2="{{ line.y }}"
+                            class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
+                    {% endfor %}
+                  </g>
+                  {% for series in turnaround_trend_points %}
+                    <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
+                              stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+                              vector-effect="non-scaling-stroke"></polyline>
+                    {% for dot in series.dots %}
+                      <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" fill="#fff"
+                              stroke="{{ series.colour }}" stroke-width="2"
+                              vector-effect="non-scaling-stroke"></circle>
+                    {% endfor %}
+                  {% endfor %}
+                </svg>
+                <div class="trend-axis-labels" aria-hidden="true">
+                  {% for row in turnaround_trend.rows %}
+                    <span>{{ row.month|date:"M" }}</span>
+                  {% endfor %}
+                </div>
+                <div class="chart-scale">
+                  Top of the chart = {{ turnaround_trend.ceiling }} working day{{ turnaround_trend.ceiling|pluralize }}
+                  &middot; one day is eight office hours
+                </div>
+              </div>
+              <div class="trend-summary">
+                <div class="trend-summary-head">
+                  {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
+                </div>
+                <div class="trend-summary-figures">
+                  <div class="report-metric">
+                    <span>Receipt</span>
+                    <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
+                  </div>
+                  <div class="report-metric">
+                    <span>In process</span>
+                    <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
+                  </div>
+                  <div class="report-metric">
+                    <span>Total lifetime</span>
+                    <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+                  </div>
+                </div>
+                {% comment %}
+                  Only shown when something actually had a deadline that month. A 0%
+                  printed for a month in which nothing was due would read as
+                  "everything was late", which is the opposite of the truth.
+                {% endcomment %}
+                {% if turnaround_trend.latest.has_on_time %}
+                  <div class="meter-head">
+                    <span>Completed on time</span>
+                    <strong class="num">{{ turnaround_trend.latest.on_time_percent }}%</strong>
+                  </div>
+                  <div class="meter-track">
+                    <i class="meter-fill" style="width:{{ turnaround_trend.latest.on_time_percent }}%"></i>
+                  </div>
+                  <div class="meter-foot">
+                    {{ turnaround_trend.latest.on_time }} of {{ turnaround_trend.latest.closed }}
+                    document{{ turnaround_trend.latest.closed|pluralize }} with a deadline
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+            <details class="chart-table">
+              <summary>View as table</summary>
+              <div class="table-responsive"><table class="table-udm">
+                <thead><tr>
+                  <th>Month</th><th class="text-end">To received</th><th class="text-end">Processing</th>
+                  <th class="text-end">Lifetime</th><th class="text-end">On time</th>
+                </tr></thead>
+                <tbody>
+                  {% for row in turnaround_trend.rows %}
+                    <tr>
+                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td class="text-end num">{{ row.receipt|default_if_none:"—" }}</td>
+                      <td class="text-end num">{{ row.processing|default_if_none:"—" }}</td>
+                      <td class="text-end num">{{ row.lifetime|default_if_none:"—" }}</td>
+                      <td class="text-end num">
+                        {% if row.has_on_time %}{{ row.on_time_percent }}%{% else %}&mdash;{% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table></div>
+            </details>
+          {% else %}
+            <div class="report-empty">
+              Nothing has been received or completed yet, so there is no turnaround to measure.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+  </div>
+</div>
+
+{% comment %}
+  Generate memo. The paragraphs are composed server-side in DashboardView._memo
+  from the figures this page is already showing, for the same reason the write-up
+  above is: prose assembled beside the numbers cannot drift from them, and this
+  codebase keeps sentence-building out of templates.
+
+  Descriptive, never comparative — it says what is there, not whether that is
+  better or worse than last month. A printed memo carrying a verdict on an
+  office outlives the context that produced it.
+{% endcomment %}
+<div class="modal fade" id="dashboard-memo" tabindex="-1" aria-labelledby="dashboard-memo-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title h5" id="dashboard-memo-title">Dashboard memo</h2>
+          <div class="card-udm-caption">
+            Written from the figures on this page. Print it or copy it into a document.
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="memo-sheet">
+          <div class="memo-meta">
+            <span><strong>Scope</strong> · {{ scope.display }}</span>
+            <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
+            <span><strong>By</strong> · {{ user.display_name }}</span>
+          </div>
+          {% comment %}
+            Sections, not one block of prose. The memo carries a per-office
+            breakdown now, and a list of offices set as running sentences is
+            unreadable — the heading is what tells you which question each
+            group of figures answers.
+          {% endcomment %}
+          {% for section in memo %}
+            <section class="memo-section">
+              <h3>{{ section.heading }}</h3>
+              <dl class="memo-lines">
+                {% for line in section.lines %}
+                  {% if line.label %}
+                    <dt>{{ line.label }}</dt>
+                    <dd>{{ line.value }}</dd>
+                  {% else %}
+                    <dd class="memo-line-statement">{{ line.value }}</dd>
+                  {% endif %}
+                {% endfor %}
+              </dl>
+            </section>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="memo-footnote">
+          Durations are counted in office hours. {{ turnaround.office_hours_caveat }}
+        </span>
+        <button class="btn btn-udm-outline" type="button" data-bs-dismiss="modal">Close</button>
+        {% comment %}
+          A link to the memo's own page, not window.print() on this one. The
+          print stylesheet hides dialogs — correctly, a dialog is a control
+          surface — so printing from in here printed the dashboard behind it:
+          everything except the memo somebody had just asked for.
+
+          The scope travels with it, or the printed memo would cover a
+          different set of offices than the one on screen. `?office=` is
+          re-checked by the view against the same _scope() the dashboard uses,
+          so carrying it here grants nothing.
+        {% endcomment %}
+        <a class="btn btn-udm" target="_blank" rel="noopener"
+           href="{% url 'core:dashboard_memo_print' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+          Print
+        </a>
       </div>
     </div>
   </div>

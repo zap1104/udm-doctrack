@@ -70,6 +70,24 @@ def env_list(name: str, default: str | list[str] | tuple[str, ...] = "") -> list
     return [item.strip() for item in str(env(name, default) or "").split(",") if item.strip()]
 
 
+def _time_setting(name: str, default: str):
+    """A "HH:MM" environment value as a `datetime.time`.
+
+    Falls back to the default rather than raising on a malformed value: a typo
+    in an office's opening time should not stop the site booting, and the
+    turnaround figures degrade to the documented window instead.
+    """
+    from datetime import time as _time
+
+    raw = str(env(name, default) or default).strip()
+    try:
+        hour, _, minute = raw.partition(":")
+        return _time(int(hour), int(minute or 0))
+    except (TypeError, ValueError):
+        hour, _, minute = default.partition(":")
+        return _time(int(hour), int(minute or 0))
+
+
 def has_package(name: str) -> bool:
     try:
         return importlib.util.find_spec(name) is not None
@@ -152,6 +170,8 @@ MIDDLEWARE += [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
+    # After auth: reads request.user to pick the role's idle window.
+    "apps.core.middleware.RoleIdleTimeoutMiddleware",
     # After auth and messages: it reads request.user and adds a message.
     "apps.core.middleware.ForcePasswordChangeMiddleware",
 ]
@@ -307,12 +327,44 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 # get worked around, which is worse than a longer one that is respected.
 # ---------------------------------------------------------------------------
 SESSION_IDLE_MINUTES = env_int("SESSION_IDLE_MINUTES", 30)
+#: Administrators idle out sooner. An administrator session can create accounts,
+#: reset other people's passwords and change access control, so an unattended
+#: one is worth more to whoever sits down at it than an ordinary clerk's is —
+#: and there are far fewer administrators, so the cost of the shorter window
+#: falls on the people best placed to absorb it.
+SESSION_IDLE_MINUTES_ADMIN = env_int("SESSION_IDLE_MINUTES_ADMIN", 15)
 #: Explicit SESSION_COOKIE_AGE still wins, for a deployment that already set it.
+#: This stays the ordinary-user figure and the project-wide default; the shorter
+#: administrator window is applied per request by RoleIdleTimeoutMiddleware.
 SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", SESSION_IDLE_MINUTES * 60)
+SESSION_COOKIE_AGE_ADMIN = env_int("SESSION_COOKIE_AGE_ADMIN", SESSION_IDLE_MINUTES_ADMIN * 60)
 SESSION_SAVE_EVERY_REQUEST = True
 #: How long the "you are about to be signed out" warning is on screen. Two
 #: minutes is enough to read it and save a half-typed remark.
 SESSION_WARNING_SECONDS = env_int("SESSION_WARNING_SECONDS", 120)
+
+#: How long one person's VIEWED entry stands for their reading of one record.
+#: A second open inside this window adds no row.
+#:
+#: The consequence is worth stating plainly, because the number looks like a
+#: statistic and is not one: a count of VIEWED rows is a count of *reading
+#: sessions*, not of page loads, and it undercounts by design. Anything that
+#: needs true page-view volume must not be built on it.
+#:
+#: PRINT is deliberately never deduplicated — see tracking.services.log_print.
+VIEW_LOG_DEDUP_MINUTES = env_int("VIEW_LOG_DEDUP_MINUTES", 30)
+
+#: How long before a deadline a record starts warning that it is due.
+#:
+#: One window, not a ladder of them. "Due today" and "due tomorrow" are two
+#: badges, two colours to clear contrast in both themes, and two things to
+#: explain — for a distinction an office reads off the date itself, which is
+#: printed beside the badge.
+#:
+#: Twenty-four hours is one working day's notice. Configurable because an office
+#: that only opens its queue every other day wants more, and that is a local
+#: decision rather than something this code should have an opinion about.
+DEADLINE_WARNING_HOURS = env_int("DEADLINE_WARNING_HOURS", 24)
 
 SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
     "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
@@ -463,6 +515,12 @@ SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
 # ---------------------------------------------------------------------------
 # Background jobs (django-q2, ORM broker: no Redis required)
 # ---------------------------------------------------------------------------
+#: How long a document may sit unconfirmed before the office that sent it is
+#: nudged. Two working days: long enough that a receiving office which is simply
+#: busy is not chased on the same afternoon, short enough that a document lost
+#: between desks surfaces in the same week it went missing.
+UNRECEIVED_NUDGE_DAYS = env_int("UNRECEIVED_NUDGE_DAYS", 2)
+
 NOTIFICATION_INFO_RESOLVE_DAYS = env_int("NOTIFICATION_INFO_RESOLVE_DAYS", 30)
 NOTIFICATION_RETENTION_DAYS = env_int("NOTIFICATION_RETENTION_DAYS", 90)
 
@@ -520,6 +578,36 @@ SITE_BASE_URL = env("SITE_BASE_URL", "").rstrip("/")
 TRACKING_NUMBER_PREFIX = env("TRACKING_NUMBER_PREFIX", "UDM-OVPA")
 TRACKING_NUMBER_SEQUENCE_WIDTH = env_int("TRACKING_NUMBER_SEQUENCE_WIDTH", 4)
 DEFAULT_ACTION_DUE_DAYS = env_int("DEFAULT_ACTION_DUE_DAYS", 3)
+
+# ---------------------------------------------------------------------------
+# Office hours, for turnaround figures
+#
+# Turnaround measured on the calendar reports a document routed Friday 4PM and
+# received Monday 9AM as "2 days 17 hrs", which reads as the receiving office
+# being slow and is really a weekend. apps.core.business_time counts only the
+# time inside this window; the calendar figure is kept beside it, never replaced,
+# because it is what a requester actually waited.
+#
+# The window is 8AM-5PM but a day only counts OFFICE_HOURS_PER_DAY of it —
+# nobody is at the desk for the lunch break and the ends of the day, and offices
+# here take lunch at different times, so the day is capped rather than modelled.
+#
+# There is no holiday calendar. An interval spanning one is over-counted by a
+# working day, which is why these figures are always labelled as office hours
+# rather than presented as exact.
+# ---------------------------------------------------------------------------
+OFFICE_DAY_START = _time_setting("OFFICE_DAY_START", "08:00")
+OFFICE_DAY_END = _time_setting("OFFICE_DAY_END", "17:00")
+OFFICE_HOURS_PER_DAY = float(env("OFFICE_HOURS_PER_DAY", "7"))
+#: Days 0..N-1 of the week are working days: 5 means Monday to Friday.
+OFFICE_WEEK_DAYS = env_int("OFFICE_WEEK_DAYS", 5)
+
+#: Columns in the repository's folder grid. Four fits the office names at the
+#: width the grid gets on a laptop without truncating them, and divides evenly
+#: into the twelve-odd offices under OVPA. The team has not settled on a final
+#: number, so it is a setting rather than a class in a template: changing it is
+#: one line here, and the grid reflows on its own.
+REPOSITORY_FOLDER_COLUMNS = env_int("REPOSITORY_FOLDER_COLUMNS", 4)
 
 # Search tuning — every number here is documented in docs/SEARCH_DESIGN.md
 SEARCH_MIN_RELEVANCE_DEFAULT = env_int("SEARCH_MIN_RELEVANCE_DEFAULT", 75)

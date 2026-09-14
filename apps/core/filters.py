@@ -1,0 +1,346 @@
+"""One place that turns a query string into filters, for every page that has them.
+
+There were four implementations of "filter by office", two of them called
+`office`, taking the same-looking value and meaning different things:
+
+    /tracking/?office=25    ->  6 records
+    /tracking/?offices=25   ->  4 records
+
+Same office, same page, parameter names differing by one letter. A third read a
+*code* rather than a primary key and fell through to no filter when it did not
+match one, and a fourth applied the filter to anybody while the others reserved
+it for administrators. That is why fixing one pairing kept leaving the others:
+each page was deciding for itself what a filter meant.
+
+The two questions are both legitimate, and this module names them so they cannot
+be confused again:
+
+    as_office   "show me this page as that office" — the queue answers for it,
+                and a queue that has no office to answer for narrows by the
+                originating-or-current pairing instead. Always a primary key,
+                always gated on `is_office_admin`.
+    raised_by   "documents that office started" — originating office only, a
+                list, open to everybody. This is the checkbox row on Tracking.
+
+The URL parameters keep their existing names — `office` and `offices` — because
+bookmarks, the dashboard's links and the smart folders all carry them, and
+renaming would leave four names in play rather than two. The names above are
+what the code calls them, which is where the confusion actually lived.
+
+Nothing here silently drops a filter. A value that is supplied and refused is
+recorded in `invalid`, so the page can say so: a filter that fails open is worse
+than one that errors, because the reader believes they are looking at one office
+and are looking at the whole university.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from django.http import QueryDict
+
+from apps.accounts.models import Office
+from apps.tracking.models import ACTIVE_STATUSES, Status
+
+#: Statuses a page listing live records may be filtered by. OVERDUE is not among
+#: them: it is a deadline condition that lies across the stages, and it had the
+#: status parameter to itself — so a record could be filtered as overdue or as
+#: pending receipt but never as both. It has its own parameter now.
+ACTIVE_STATUS_VALUES = {status.value for status in Status if status in ACTIVE_STATUSES}
+TRACKING_STATUS_VALUES = set(ACTIVE_STATUS_VALUES)
+
+#: Reports covers finished work too, so it accepts the whole enum. Stated here
+#: beside the narrower list rather than in two forms, because the difference is
+#: deliberate and was previously only discoverable by trying a link: a link from
+#: Reports to Tracking carrying `status=COMPLETED` widened instead of narrowing.
+REPORT_STATUS_VALUES = {value for value, _ in Status.choices}
+
+#: Queues that describe a document's movement *relative to one office*. The
+#: batch that is outgoing for Supply is incoming for HR at the same instant, so
+#: across every office at once neither is a question with an answer — and
+#: `apply_scope` proves it: with no office the two predicates become the empty Q
+#: and both queues return every active record, identically.
+DIRECTION_SCOPES = {"incoming", "outgoing"}
+
+#: What `?overdue=` accepts, normalised to the three states the resolver keeps.
+#: Three and not two: "what is still on time" is a question the offices ask, and
+#: an absent parameter has to go on meaning "do not filter".
+OVERDUE_VALUES = {
+    "yes": "yes", "1": "yes", "true": "yes", "on": "yes",
+    "no": "no", "0": "no", "false": "no", "off": "no",
+}
+
+
+@dataclass(frozen=True)
+class ResolvedFilters:
+    """What the query string actually asked for, after validation."""
+
+    as_office: Office | None = None
+    #: A system administrator asked for every office at once. Kept beside
+    #: `as_office` rather than inside it: "every office" is not an Office, and
+    #: the caller has to tell it from both "this one" and "nobody picked".
+    all_offices: bool = False
+    raised_by: list[Office] = field(default_factory=list)
+    #: Stages, plural. `?status=` was single-valued, so narrowing to "pending
+    #: receipt and received" — the two halves of what an office has not finished
+    #: with — could not be asked at all; you picked one and re-read the page for
+    #: the other. Repeated values, like `?offices=`.
+    statuses: list[str] = field(default_factory=list)
+    scope: str = ""
+    owner: str = ""
+    query: str = ""
+    #: "", "yes" or "no" — see OVERDUE_VALUES.
+    overdue: str = ""
+    #: A direction queue was asked for across every office, where it cannot
+    #: mean anything, and was dropped. Incoming and Outgoing are properties of a
+    #: document *and* an office; with no single office the predicates collapse
+    #: to the empty Q and both queues silently return every active record. The
+    #: page says so rather than heading that list "Incoming".
+    direction_dropped: bool = False
+    #: Parameter names that were supplied and refused. Never silently dropped.
+    invalid: list[str] = field(default_factory=list)
+    #: Parameter names carrying a legacy spelling this resolver understood and
+    #: rewrote. The forms still validate against the current vocabulary, so
+    #: without this a bookmark reading `?status=OVERDUE` would be honoured and
+    #: warned about in the same breath.
+    translated: list[str] = field(default_factory=list)
+
+    @property
+    def raised_by_ids(self) -> list[str]:
+        """As strings, which is what a template compares a pill against."""
+        return [str(office.pk) for office in self.raised_by]
+
+    @property
+    def status(self) -> str:
+        """The single selected stage, or "".
+
+        Kept so callers that only ever meant one — the impossible-pair table,
+        and anything reading a link that carries one — go on working. Empty when
+        several are selected, which is the honest answer to a question phrased
+        in the singular.
+        """
+        return self.statuses[0] if len(self.statuses) == 1 else ""
+
+
+def _office_by_pk_or_code(raw: str) -> Office | None:
+    """A primary key, or a code for the links that have always emitted one.
+
+    The Repository's smart folders have been emitting codes since they were
+    written and people have bookmarked them, so a code still resolves. It reads
+    `Office.active` rather than `Office.objects`, which the Repository did not:
+    an archived office went on filtering as though nothing had changed.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        return Office.active.filter(pk=raw).first()
+    return Office.active.filter(code__iexact=raw).first()
+
+
+def resolve(
+    request, *, statuses=TRACKING_STATUS_VALUES, allow_office=True, gate_office=True
+) -> ResolvedFilters:
+    """Read every filter this request carries, once.
+
+    `allow_office` is for a page with no office control at all. `statuses` is
+    the vocabulary that page speaks — see the two sets above.
+
+    `gate_office` is what separates the two things `?office=` is asked to do.
+    On a page of *queues* it is "view this page as that office", which is an
+    administrator's control, because a queue answers for an office and reading
+    another office's desk is not an ordinary user's business. On the Repository
+    it is a content filter — "documents owned by that office" — over records
+    `visible_to` has already cleared the reader to see, and it is that page's
+    primary navigation: the smart folders are office links.
+
+    Gating it there broke them. Every folder still rendered and none of them
+    filtered, for every user who was not an administrator, which is most of
+    them.
+    """
+    params = request.GET
+    user = request.user
+    invalid: list[str] = []
+
+    # The gate lives in tracking.services, next to the queues it governs, and is
+    # imported here rather than reimplemented — two answers to "may this person
+    # name another office" is exactly the shape of bug this module exists to end.
+    from apps.tracking.services import ALL_OFFICES, scope_office
+
+    as_office = None
+    raw_office = (params.get("office") or "").strip()
+
+    # What an absent `?office=` means, per role, so the picker's first entry is
+    # true rather than merely first. It read "All offices" while the page
+    # answered for the reader's own desk — 45 records claimed, 2 shown — because
+    # nothing distinguished "no filter" from "my office".
+    #
+    # A system administrator's scope is the whole university, so nothing named
+    # means every office. An office administrator's is their own office, so
+    # nothing named means that, and their picker shows it selected by name
+    # instead of a synthetic "Your office" entry duplicating a row in the list.
+    picker = allow_office and gate_office and _may_pick(user)
+    all_offices = bool(picker and not raw_office and getattr(user, "is_system_admin", False))
+    if picker and not raw_office and not all_offices:
+        as_office = getattr(user, "office", None)
+    if raw_office and allow_office and not gate_office:
+        # Open to everybody: `visible_to` is the bound, not the picker.
+        as_office = _office_by_pk_or_code(raw_office)
+        if as_office is None:
+            invalid.append("office")
+    elif raw_office and allow_office:
+        picked = scope_office(user, raw_office)
+        if picked is ALL_OFFICES:
+            all_offices = True
+            picked = None
+        as_office = picked
+        if as_office is None and not all_offices:
+            # Either the value names nothing, or this account may not pick. Both
+            # are worth saying; the page decides how loudly.
+            as_office = _office_by_pk_or_code(raw_office) if _may_pick(user) else None
+            if as_office is None:
+                invalid.append("office")
+    elif raw_office and not allow_office:
+        invalid.append("office")
+
+    raised_by = []
+    for raw in params.getlist("offices"):
+        office = _office_by_pk_or_code(raw)
+        if office is None:
+            invalid.append("offices")
+        else:
+            raised_by.append(office)
+
+    raw_statuses = [value.strip() for value in params.getlist("status") if value.strip()]
+    scope = (params.get("scope") or "").strip()
+
+    overdue = ""
+    raw_overdue = (params.get("overdue") or "").strip().lower()
+    if raw_overdue:
+        overdue = OVERDUE_VALUES.get(raw_overdue, "")
+        if not overdue:
+            invalid.append("overdue")
+
+    # `?status=OVERDUE` and `?scope=overdue` predate the overdue parameter and
+    # are what every saved bookmark, the dashboard's card and the queue pill
+    # emit. Both mean "overdue, any stage", so they translate into exactly that
+    # here rather than surviving as a second code path — keeping one was what
+    # made overdue a status in the first place.
+    translated = []
+    if "OVERDUE" in raw_statuses:
+        raw_statuses = [value for value in raw_statuses if value != "OVERDUE"]
+        overdue = "yes"
+        translated.append("status")
+    if scope == "overdue":
+        scope, overdue = "", "yes"
+        translated.append("scope")
+
+    # Order preserved and duplicates dropped, so `?status=A&status=A` is one
+    # pill lit rather than two and the same selection always renders the same.
+    chosen: list[str] = []
+    for value in raw_statuses:
+        if value not in statuses:
+            invalid.append("status")
+        elif value not in chosen:
+            chosen.append(value)
+
+    # Asked for across every office, where it has no answer. Dropped rather than
+    # honoured: `apply_scope` would return every active record under a heading
+    # reading "Incoming", which is the fail-open this module exists to prevent.
+    direction_dropped = False
+    if all_offices and scope in DIRECTION_SCOPES:
+        scope = ""
+        direction_dropped = True
+
+    return ResolvedFilters(
+        overdue=overdue,
+        as_office=as_office,
+        all_offices=all_offices,
+        raised_by=raised_by,
+        statuses=chosen,
+        direction_dropped=direction_dropped,
+        scope=scope,
+        owner=(params.get("owner") or "").strip(),
+        query=(params.get("q") or "").strip(),
+        invalid=sorted(set(invalid)),
+        translated=translated,
+    )
+
+
+def _may_pick(user) -> bool:
+    return bool(getattr(user, "is_office_admin", False))
+
+
+def link(base: str, request=None, **overrides) -> str:
+    """A link that changes some filters and keeps the rest.
+
+    The Python-side twin of the `filter_url` template tag, for links built in a
+    view — the dashboard's ring slices and stat cards. Without it a slice link
+    carries `?status=` alone and drops the office the number was counted for,
+    which is D1: the count says one office and the page it opens says all of
+    them.
+
+    `page` is always dropped: page four of the old filter is not page four of
+    the new one. A value of None removes that parameter.
+    """
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    params.pop("page", None)
+    for key, value in overrides.items():
+        if value is None or value == "":
+            params.pop(key, None)
+        else:
+            params.setlist(key, [str(value)])
+    query = params.urlencode()
+    return f"{base}?{query}" if query else base
+
+
+#: Filter pairs that cannot both hold, with the reason in the reader's terms.
+#:
+#: These are empty by construction rather than empty today. `route_record`
+#: refuses to send an office its own document, so "addressed to my office" and
+#: "created by me" cannot both be true; a draft has never been routed, so it has
+#: no direction at all. The page says so instead of showing an empty table and
+#: letting the reader conclude the filter is broken.
+IMPOSSIBLE_PAIRS = [
+    (
+        {"overdue": {"yes"}, "statuses": {Status.COMPLETED_PENDING_UPLOAD.value,
+                                          Status.COMPLETED.value}},
+        "A document that has been completed is not late, whatever its deadline "
+        "said — nothing is owed on it any more.",
+    ),
+    (
+        {"scope": {"incoming", "received", "pending-receipt", "inbox"}, "owner": {"mine"}},
+        "Documents addressed to your office were created by another office, so "
+        "that queue and “Files created by me only” cannot both apply.",
+    ),
+    (
+        {"scope": {"incoming", "outgoing", "received", "pending-receipt", "inbox", "sent"},
+         "statuses": {Status.DRAFT.value}},
+        "A draft has not been sent yet, so it has no sending or receiving "
+        "office and cannot appear in a routing queue.",
+    ),
+]
+
+
+def _holds(selected, values: set) -> bool:
+    """Whether one resolved filter sits entirely inside an impossible set.
+
+    A list satisfies it only when it is non-empty and *every* value is in the
+    set. Selecting Draft and Received together inside a routing queue is not
+    impossible — the Received half still has rows — so "any" would report a
+    contradiction over a page that is about to show results.
+    """
+    if isinstance(selected, list):
+        return bool(selected) and all(value in values for value in selected)
+    return selected in values
+
+
+def impossible_reason(resolved: ResolvedFilters) -> str:
+    """Why this combination can never match, or "" if it can."""
+    for conditions, reason in IMPOSSIBLE_PAIRS:
+        if all(
+            _holds(getattr(resolved, key, ""), values)
+            for key, values in conditions.items()
+        ):
+            return reason
+    return ""

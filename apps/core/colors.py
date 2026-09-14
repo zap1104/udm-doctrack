@@ -25,10 +25,12 @@ PALETTE = {
 STATUS_COLOUR_KEYS = {
     "DRAFT": "muted",
     "PENDING_RECEIPT": "gold",
-    "FORWARDED": "gold",
-    "RETURNED": "gold",
     "RECEIVED": "green",
     "IN_PROCESS": "teal",
+    # Finished, but not yet in the repository. Teal rather than green: green is
+    # the colour of "done" here, and this stage is precisely the one that looks
+    # done and is not.
+    "COMPLETED_PENDING_UPLOAD": "teal",
     "COMPLETED": "green",
     "OVERDUE": "red",
 }

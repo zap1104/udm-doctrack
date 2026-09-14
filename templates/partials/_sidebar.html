@@ -6,31 +6,24 @@
     </a>
     <button class="sidebar-close" type="button" data-sidebar-close aria-label="Close navigation">×</button>
   </div>
+  {% comment %}
+    Order: Dashboard, Search, Document Tracking, Document Repository, Reports.
+    Search sits second and is its own top-level tab — it is the thing people
+    open the system to do, and it was previously buried below both modules.
+
+    Neither module has sub-tabs. The tracking queues used to be repeated here as
+    a sub-nav *and* as a tab strip on the page itself, so the same six links
+    appeared twice on screen with two different active states to keep in step;
+    they now live on the page only.
+  {% endcomment %}
   <nav aria-label="Main navigation">
     <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}><span class="dot"></span> Dashboard</a>
-    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="dot"></span> Tracking</a>
-    {% if nav_active == "tracking" %}
-      {% with scope=request.GET.scope status=request.GET.status %}
-      <div class="tracking-subnav" aria-label="Tracking queues">
-        <a class="tracking-subnav-link{% if scope == 'inbox' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=inbox">Incoming</a>
-        <a class="tracking-subnav-link{% if scope == 'sent' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=sent">Outgoing</a>
-        <a class="tracking-subnav-link{% if scope == 'awaiting' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?scope=awaiting">Pending Receipt</a>
-        <a class="tracking-subnav-link{% if status == 'RECEIVED' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=RECEIVED">Received</a>
-        <a class="tracking-subnav-link{% if status == 'IN_PROCESS' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=IN_PROCESS">In Process</a>
-        <a class="tracking-subnav-link tracking-subnav-link--alert{% if status == 'OVERDUE' %} is-active{% endif %}"
-           href="{% url 'tracking:list' %}?status=OVERDUE">Overdue</a>
-      </div>
-      {% endwith %}
-    {% endif %}
-    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="dot"></span> Document Management</a>
     <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}><span class="dot"></span> Search</a>
+    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="dot"></span> Document Tracking</a>
+    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="dot"></span> Document Repository</a>
     <a class="nav-item {% if nav_active == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}" {% if nav_active == 'reports' %}aria-current="page"{% endif %}><span class="dot"></span> Reports</a>
-    {% if user.is_system_admin %}<a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="dot"></span> Administration</a>{% endif %}
+    {# Office administrators reach the administration area too, scoped to their own office. #}
+    {% if user.is_office_admin %}<a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="dot"></span> Administration</a>{% endif %}
   </nav>
   <div class="nav-section">Your Office</div>
   <div class="sidebar-office"><div class="sidebar-office-name">{{ user.office.name|default:"No office assigned" }}</div><div class="sidebar-office-role">{{ user.get_role_display }}</div></div>

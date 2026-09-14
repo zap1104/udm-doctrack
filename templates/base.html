@@ -4,7 +4,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
+  {% comment %}
+    Both, now that the app has a dark theme. Pinned to "light" this told the
+    browser to keep painting its own chrome light under the dark palette.
+  {% endcomment %}
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="{{ PALETTE.navy }}">
   <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
   <meta name="description" content="{{ SITE_LONG_NAME }}">

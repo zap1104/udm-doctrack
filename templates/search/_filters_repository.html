@@ -1,0 +1,38 @@
+{% comment %}
+  The repository's own filters. Lifted out of search.html unchanged when the
+  page gained a second mode — tracking has a different corpus and therefore a
+  different set of questions, and one template holding both behind a branch is
+  how the two drift into each other.
+{% endcomment %}
+<div class="card-udm search-filters-card">
+  <div class="card-udm-head"><h2>Filters</h2></div>
+  <div class="card-udm-body">
+    {% include "partials/_field.html" with field=form.year %}
+    {% include "partials/_field.html" with field=form.office %}
+    {% include "partials/_field.html" with field=form.document_type %}
+    {% include "partials/_field.html" with field=form.tag %}
+    {% include "partials/_field.html" with field=form.source %}
+    <div class="row g-2 search-date-range">
+      <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_from %}</div>
+      <div class="col-12 col-sm-6">{% include "partials/_field.html" with field=form.date_to %}</div>
+    </div>
+
+    <label class="form-label" for="{{ form.min_relevance.id_for_label }}">
+      Minimum relevance: <span id="relevance-value" data-relevance-value>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>%
+    </label>
+    {{ form.min_relevance }}
+    <div class="form-check mt-2">
+      {{ form.show_all }}
+      <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
+    </div>
+
+    <button class="btn btn-udm-outline w-100 mt-3" type="submit">Apply filters</button>
+    <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}">Clear</a>
+  </div>
+</div>
+
+<div class="help-note mt-3">
+  <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% is a <strong>display filter</strong>, not a universal truth. The percentage means
+  “how well this record matches your words”, not “how accurate the system is”.
+</div>
+

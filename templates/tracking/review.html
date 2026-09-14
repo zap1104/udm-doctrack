@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Review {{ record.tracking_number }} · {{ SITE_NAME }}{% endblock %}
+{% block title %}Review {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -19,7 +19,7 @@
       <div class="card-udm-head">
         <div>
           <h2>{{ record.subject }}</h2>
-          <div class="phase2-card-caption mono">{{ record.tracking_number }}</div>
+          <div class="phase2-card-caption mono">{{ record.display_tracking_number }}</div>
         </div>
         <span class="pill pill-draft">Draft</span>
       </div>

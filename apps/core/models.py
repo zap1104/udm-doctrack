@@ -253,6 +253,15 @@ class Notification(models.Model):
         RECEIVED = "RECEIVED", "Receipt confirmed"
         COMPLETED = "COMPLETED", "Completed"
         SHARED = "SHARED", "Shared with your office"
+        #: To the office that *sent* it: still nobody has confirmed receipt.
+        #: The routed notice goes to the recipient and tells the sender
+        #: nothing, so a document that quietly went unreceived was invisible to
+        #: the one office with a reason to chase it.
+        UNRECEIVED = "UNRECEIVED", "Still not received"
+        #: To whoever is holding it: the deadline has passed. Raised by the
+        #: deadline itself, so setting one is what arms the notice — a deadline
+        #: nothing acts on is a note in a field.
+        OVERDUE = "OVERDUE", "Past its deadline"
 
     office = models.ForeignKey("accounts.Office", on_delete=models.CASCADE, related_name="notifications")
     tracking_record = models.ForeignKey(

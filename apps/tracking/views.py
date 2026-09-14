@@ -5,23 +5,27 @@ from datetime import date
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
+from apps.accounts.models import Office
+from apps.core import filters as core_filters
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
+from apps.core.pagination import paginate
 from apps.core.utils import log_action, qr_svg
-from apps.documents.services import archive_tracking_record
 
 from . import services
 from .forms import (
     DEADLINE_DATE,
     DEADLINE_NONE,
+    SORT_CHOICES,
+    SORT_DEADLINE_ASC,
+    SORT_DEADLINE_DESC,
     BulkConfirmReceiptForm,
     CompleteForm,
     ConfirmReceiptForm,
@@ -32,10 +36,18 @@ from .forms import (
     ReviewRouteForm,
     RouteForm,
     TrackingFilterForm,
+    status_pills,
 )
-from .models import Attachment, RoutingStep, Status, TrackingRecord
+from .models import (
+    QUIET_EVENTS,
+    Attachment,
+    RoutingStep,
+    Status,
+    TrackingRecord,
+)
 
-PAGE_SIZE = 20
+#: Rows of the pending-upload queue shown before it collapses to a link.
+PENDING_UPLOAD_SHOWN = 5
 
 #: Session key holding the deadline chosen on step 1, as an ISO date or "" for
 #: none. Deliberately not the old `draft_due_<pk>` name — that key held a day
@@ -68,47 +80,159 @@ class RecordListView(AppLoginRequiredMixin, View):
         # the wrong answer presented as the right one.
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
-        query = data.get("q")
-        status = data.get("status")
-        office = data.get("office")
-        scope = data.get("scope")
+        # Status, scope and overdue come from the resolver, not the form: it is
+        # what translates the two legacy spellings — `?status=OVERDUE` and
+        # `?scope=overdue` — into the overdue condition, so nothing downstream
+        # has to know they exist. Offices and owner the form still validates.
+        resolved = core_filters.resolve(request)
+        statuses = resolved.statuses
+        scope = resolved.scope
+        offices = data.get("offices")
+        owner = data.get("owner")
 
-        if query:
+        # Shared with the unified search page's tracking mode, so "how a
+        # tracking record gets filtered" has one implementation. This page
+        # passes no `query` — it has queue pills instead of a search box.
+        records = services.filter_records(
+            records, status=statuses, offices=offices, overdue=resolved.overdue
+        )
+        # "View this page as office X", the same thing the dashboard's picker
+        # means, and gated the same way — services.scope_office decides, so the
+        # two pages cannot answer "whose queue is this" differently.
+        #
+        # For a queue that answers *for* an office the chosen one replaces the
+        # viewer's. For one that does not — Overdue, Pending upload — there is
+        # no such office to replace, so the picker narrows by the same
+        # originating-or-current pairing the dashboard scopes its panels with.
+        # The sentinel, not an Office, when a system administrator asked for
+        # every office — apply_scope drops the office term rather than
+        # falling back to the viewer's own.
+        # Two variables because they are two jobs, and one name doing both is
+        # what broke: `queue_office` may be the ALL_OFFICES sentinel, which only
+        # apply_scope understands, while `narrow_office` is always a real Office
+        # or None. The sentinel is truthy and is not an office, so a single
+        # variable sent "__all__" into an `originating_office=` lookup and the
+        # page died with "Field 'id' expected a number".
+        narrow_office = resolved.as_office
+        queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
+
+        # "Every office" narrows nothing: it is the absence of an office filter,
+        # not a filter naming one.
+        if narrow_office and scope not in services.OFFICE_SCOPED:
             records = records.filter(
-                Q(tracking_number__icontains=query)
-                | Q(subject__icontains=query)
-                | Q(originating_office__name__icontains=query)
-                | Q(originating_office__code__icontains=query)
-                | Q(current_office__name__icontains=query)
+                Q(originating_office=narrow_office) | Q(current_office=narrow_office)
             )
-        if status == "OVERDUE":
-            records = records.filter(due_at__lt=timezone.now()).exclude(status=Status.COMPLETED)
-        elif status:
-            records = records.filter(status=status)
-        if office:
-            records = records.filter(Q(originating_office=office) | Q(current_office=office))
-        records = services.apply_scope(records, scope, request.user)
+        records = services.apply_scope(records, scope, request.user, office=queue_office)
+        # A second, independent scope so the filter panel narrows *within* the
+        # queue the pill selected rather than replacing it: "Office files" while
+        # on Overdue means overdue records in your office, not one or the other.
+        # apply_scope no-ops on an empty value, so calling it twice is safe, and
+        # the .distinct() below absorbs any duplication from the stacked joins.
+        if owner:
+            records = services.apply_scope(records, owner, request.user)
 
-        if form.errors:
+        # Minus anything the resolver understood. The forms validate against the
+        # current vocabulary, so a bookmark reading `?status=OVERDUE` was
+        # honoured and warned about in the same breath.
+        unrecognised = sorted(set(form.errors) - set(resolved.translated))
+        if unrecognised:
             messages.warning(
                 request,
                 "Ignored a filter that was not recognised: "
-                + ", ".join(sorted(form.errors)) + ". Showing the rest.",
+                + ", ".join(unrecognised) + ". Showing the rest.",
+            )
+        # A filter that fails open is worse than one that errors: the reader
+        # believes the page is narrowed to one office and it is the whole
+        # university. `resolve` records what it refused rather than dropping it.
+        if resolved.invalid:
+            messages.warning(
+                request,
+                "Could not apply: " + ", ".join(resolved.invalid)
+                + ". The value was not recognised, or your account may not filter by office.",
             )
 
-        records = records.distinct().order_by("-last_movement_at")
-        page = Paginator(records, PAGE_SIZE).get_page(request.GET.get("page"))
+        # Sort. `data` holds only what the form validated, so an unrecognised
+        # `?sort=` is already gone by here and falls to the default — the same
+        # lenient handling every other filter on this page gets.
+        #
+        # `-last_movement_at` is the tie-break on both deadline orders, not just
+        # the default: two records due the same day should fall in the order the
+        # rest of the page uses rather than in whatever the database returns.
+        #
+        # nulls_last in *both* directions. A record with no deadline has not
+        # been scheduled at all, so it belongs after everything that has been —
+        # on "latest first" as much as on "soonest first", where NULL sorting
+        # high would put unscheduled work above the genuinely distant.
+        sort = data.get("sort") or ""
+        ordering = {
+            SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
+            SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
+        }.get(sort, ("-last_movement_at",))
+        records = records.distinct().order_by(*ordering)
+        # Page size comes from the reader (`?per_page=`), defaulting to the
+        # workspace's own. See apps/core/pagination.py.
+        page_context = paginate(request, records, services.PAGE_SIZE)
+        page = page_context["page_obj"]
         # Materialised once so the annotation below lands on the very objects
         # the template iterates, not on a throwaway copy of the queryset.
         page_records = list(page.object_list)
         services.annotate_can_confirm(page_records, request.user)
+        services.annotate_receiving_offices(page_records)
+        # The same office the queue was built for. Tagged from the viewer's
+        # instead, every row of another office's Incoming read "Outgoing".
+        services.annotate_direction(page_records, request.user, office=queue_office)
+
+        # The completed-but-unapproved queue. It sits on this page rather than
+        # on the repository page because these records have not reached the
+        # repository — approving them is the act that puts them there — and
+        # because approval is now a stage of the tracking lifecycle.
+        pending_upload = list(
+            services.pending_upload_for(request.user)
+            # nulls_last because Postgres sorts NULLs first on DESC, which would
+            # float a record with no completion time to the top of the queue.
+            .order_by(F("completed_at").desc(nulls_last=True))[: PENDING_UPLOAD_SHOWN + 1]
+        )
+        pending_upload_more = max(0, len(pending_upload) - PENDING_UPLOAD_SHOWN)
+        pending_upload = pending_upload[:PENDING_UPLOAD_SHOWN]
+        for record in pending_upload:
+            # Approval is one click from here; returning a record to tracking
+            # needs a written reason, so that action stays on the record page.
+            record.can_approve = record.can_user_approve_upload(request.user)
+
         return render(
             request,
             self.template_name,
             {
                 "form": form,
-                "page_obj": page,
+                **page_context,
                 "records": page_records,
+                "sort_choices": SORT_CHOICES,
+                "selected_sort": sort,
+                # The four stages offered as pills, and which are lit. A set of
+                # strings because that is what a template `in` test compares
+                # against — the resolver validated them already.
+                "status_choices": status_pills(form),
+                "selected_statuses": set(resolved.statuses),
+                # Why an empty table is empty, when it can never be anything
+                # else. Without it the reader concludes the filter is broken.
+                "impossible_reason": core_filters.impossible_reason(resolved),
+                "resolved": resolved,
+                # The picker is offered to whoever `scope_office` would honour
+                # the parameter for, so the control and the gate cannot drift.
+                "can_pick_office": request.user.is_office_admin,
+                # Hides the create/upload button from the accounts the
+                # target view would turn away. The view still refuses
+                # them on its own; this only stops offering a dead end.
+                "can_start_work": request.user.can_start_work,
+                "pending_upload": pending_upload,
+                "pending_upload_more": pending_upload_more,
+                # The pills need to know which of them are on. Resolved here as
+                # a set of strings rather than in the template, because the
+                # template would have to compare a model pk against the raw
+                # query values and those are strings.
+                "filter_offices": Office.active.all(),
+                "selected_office_ids": {str(office.pk) for office in (offices or [])},
+                "selected_owner": owner or "",
                 "can_bulk_receive": any(record.can_confirm_now for record in page_records),
                 # The paginator has already counted this queryset; calling
                 # .count() again would run the same DISTINCT-over-joins query
@@ -268,6 +392,10 @@ class RecordDetailView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
+        services.log_view(record, user=request.user)
+        # Takes a list, so one record is the same call the listing pages make.
+        # It answers "is this ours to act on" without reading the routing table.
+        services.annotate_direction([record], request.user)
         # Split here rather than with |slice in the template. Django's slice
         # filter fails *silently* on a queryset — negative indexing is
         # unsupported, and the filter swallows the error and returns the whole
@@ -278,15 +406,13 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             ).order_by("sequence")
         )
         activities = list(
-            record.activities.select_related("actor", "actor_office").order_by("created_at", "id")
+            record.activities.select_related("actor", "actor_office")
+            .exclude(event__in=QUIET_EVENTS)
+            .order_by("created_at", "id")
         )
         attachments = list(record.attachments.select_related("uploaded_by"))
         archived_document = getattr(record, "archived_document", None)
-        can_archive_now = (
-            record.status == Status.COMPLETED
-            and archived_document is None
-            and record.can_user_archive(request.user)
-        )
+        can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
         can_reopen = record.can_user_reopen(request.user)
         return render(
             request,
@@ -324,6 +450,25 @@ class RecordDetailView(AppLoginRequiredMixin, View):
         )
 
 
+#: Where the bulk-receipt form may send somebody afterwards. A list, not a free
+#: `next`: an unchecked one is an open redirect, and this form is posted from a
+#: page that already knows every destination it has.
+BULK_RECEIPT_RETURNS = {"dashboard": "core:dashboard", "tracking": "tracking:list"}
+
+
+def _bulk_receipt_return(request):
+    """Back where the form was submitted from, defaulting to Tracking.
+
+    It always went to the Tracking list, on success *and* on failure, so a
+    validation error from the dashboard's panel was reported on a page the user
+    had never submitted from and could not see their mistake on.
+    """
+    target = BULK_RECEIPT_RETURNS.get(request.POST.get("next", ""), "tracking:list")
+    if target == "core:dashboard":
+        return reverse(target)
+    return f"{reverse(target)}?scope=incoming"
+
+
 class BulkConfirmReceiptView(OfficeAssignedMixin, View):
     def post(self, request):
         available = services.inbox_for(request.user).with_related().distinct()
@@ -331,7 +476,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
         if not form.is_valid():
             message = next(iter(form.errors.values()))[0] if form.errors else "Choose documents to receive."
             messages.error(request, message)
-            return redirect(f"{reverse('tracking:list')}?scope=inbox")
+            return redirect(_bulk_receipt_return(request))
         try:
             steps = services.bulk_confirm_receipts(
                 form.cleaned_data["record_ids"], user=request.user, note=form.cleaned_data.get("note", "")
@@ -343,7 +488,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
             request,
             f"Receipt recorded for {len(steps)} selected document{'s' if len(steps) != 1 else ''}.",
         )
-        return redirect(f"{reverse('tracking:list')}?scope=inbox")
+        return redirect(_bulk_receipt_return(request))
 
 
 class ConfirmReceiptView(OfficeAssignedMixin, View):
@@ -427,34 +572,56 @@ class CompleteRecordView(OfficeAssignedMixin, View):
         services.complete_record(record, user=request.user, note=form.cleaned_data.get("note", ""))
         message = f"{record.tracking_number} is complete."
 
-        if form.cleaned_data.get("archive_now"):
+        # "File it now" is only on offer to somebody who may also approve it.
+        # For everyone else completion ends here and the record waits in the
+        # pending-upload queue, which is the point of the stage: the person who
+        # declared the work done is not the person who files it.
+        if form.cleaned_data.get("archive_now") and record.can_user_approve_upload(request.user):
             try:
-                document = archive_tracking_record(record, user=request.user)
-                message += " It is now searchable in Document Management."
+                document = services.approve_upload(record, user=request.user)
+                message += " It is now searchable in the Document Repository."
                 messages.success(request, message)
                 return redirect(document.get_absolute_url())
-            except ValidationError as exc:
-                messages.warning(request, f"Completed, but archiving failed: {'; '.join(exc.messages)}")
+            except (ValidationError, PermissionDenied) as exc:
+                messages.warning(
+                    request,
+                    f"Completed, but approving it into the repository failed: "
+                    f"{'; '.join(getattr(exc, 'messages', [str(exc)]))}",
+                )
                 return redirect(record.get_absolute_url())
 
-        messages.success(request, message)
+        messages.success(
+            request, f"{message} It is waiting for an administrator to approve it into the repository."
+        )
         return redirect(record.get_absolute_url())
 
 
-class ArchiveRecordView(OfficeAssignedMixin, View):
+class ApproveUploadView(OfficeAssignedMixin, View):
+    """Approve a finished record into the Document Repository.
+
+    Reachable two ways, both landing here: from the record page after reviewing
+    it, and straight from the pending-upload queue on the tracking list. The
+    queue form posts `next` so a one-click approval returns to the queue rather
+    than dropping the administrator into the document they just filed.
+    """
+
     def post(self, request, pk):
         record = _get_record(request, pk)
-        if not record.can_user_archive(request.user):
+        if not record.can_user_approve_upload(request.user):
             raise PermissionDenied(
-                "Only records personnel or the offices that handled this document "
-                "can file it into Document Management."
+                "Only an administrator for this document's office can approve it "
+                "into the Document Repository."
             )
         try:
-            document = archive_tracking_record(record, user=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
+            document = services.approve_upload(record, user=request.user)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
             return redirect(record.get_absolute_url())
-        messages.success(request, "Record archived into Document Management.")
+        messages.success(
+            request, f"{record.tracking_number} was approved into the Document Repository."
+        )
+        if request.POST.get("next") == "queue":
+            return redirect(f"{reverse('tracking:list')}?scope={services.SCOPE_PENDING_UPLOAD}")
         return redirect(document.get_absolute_url())
 
 
@@ -512,8 +679,10 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
-        # A paper slip leaves the system entirely, so the audit trail records
-        # who generated one before the browser ever opens the print dialog.
+        # A paper slip leaves the system entirely, so both trails record who
+        # generated one before the browser ever opens the print dialog: the
+        # audit log for the administrator's view, and the record's own timeline
+        # so the print shows up beside the movements it documents.
         entry = log_action(
             AuditLog.Action.PRINT,
             f"Generated the routing slip for {record.tracking_number}",
@@ -521,6 +690,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
             target=record,
             request=request,
         )
+        services.log_print(record, user=request.user)
         return render(
             request,
             self.template_name,

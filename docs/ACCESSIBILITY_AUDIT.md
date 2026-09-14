@@ -23,6 +23,29 @@ This is not a substitute for a person using NVDA, JAWS, VoiceOver, or another as
 | Images and icons | Pass in static scan | No template image was found without an `alt` attribute. Decorative receipt marks are hidden from assistive technology. |
 | Role-based rendering | Pass | The page smoke test covered three roles and reported no template or permission-path exceptions. |
 
+## Auto-submitting the report scope — a trade-off, recorded
+
+The Reports office picker carries `data-auto-submit`, so changing it re-scopes
+the page immediately. That is a deliberate trade-off, not an oversight:
+
+**Cost.** Firefox fires `change` while a user arrow-keys through a closed
+`<select>`, so a keyboard user moving down the list is submitted on the first
+option they pass rather than the one they meant. Screen-reader users meet the
+same thing.
+
+**Mitigation.** The **Apply** button stays. It is the no-JS path and the
+keyboard escape hatch: a keyboard user can open the list with Alt+Down, move
+within the popup without firing `change`, commit with Enter, or ignore the
+auto-submit entirely and press Apply. The button is never hidden, and the
+listener uses `requestSubmit()` so the form's own validation and submit event
+still run.
+
+**What still needs a human.** Confirm on Windows/Firefox with NVDA that
+arrow-keying the picker does not strand the user mid-choice, and that focus
+lands somewhere sensible after the page reloads. If it does strand them, the
+fix is to drop `data-auto-submit` — the Apply button alone is already complete
+behaviour.
+
 ## Remaining manual handover checks
 
 On one Windows office workstation, complete the create → route → bulk receive → complete → archive → search flow using only Tab, Shift+Tab, Enter, Space, and arrow keys. Repeat the sign-in, password-reset request, upload privacy choice, retention filter, and report print actions with NVDA enabled. Confirm that focus never disappears behind the fixed top bar, validation errors are announced near their fields, and the browser print preview does not split a table heading from its rows.

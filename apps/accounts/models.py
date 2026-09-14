@@ -179,9 +179,39 @@ class User(AbstractUser):
     """Custom user. `role` decides what the dashboard and menus show."""
 
     class Role(models.TextChoices):
-        ADMIN = "ADMIN", "System administrator"
-        SECRETARY = "SECRETARY", "Secretary / records personnel"
+        """Four roles, on two axes: how much you may do, and where.
+
+        SYSTEM_ADMIN is the only role whose reach crosses office boundaries.
+        ADMIN used to be that role, which is why the migration promotes existing
+        ADMIN accounts to SYSTEM_ADMIN rather than leaving them holding a name
+        that has quietly shrunk underneath them.
+
+        SECRETARY is gone, and its accounts become USER. The name suggested more
+        than the role held: every user-administration screen was gated on ADMIN
+        alone, so a secretary could not administer anybody. What a secretary
+        could do — act on the office's documents, share them, edit the office's
+        repository entries — is what USER does now. See migration 0005.
+
+        What each role may do:
+
+        - USER    own office: create and update routing slips, upload, update
+                  status, print, forward, and initiate a document's move to the
+                  repository (which an administrator then approves).
+        - VIEWER  own office: read active documents and the repository, open a
+                  history by tracking number, print the routing slip. Print is
+                  the only button. No status changes, uploads, edits, forwards,
+                  or timeline entries.
+        - ADMIN   own office: everything USER may do, plus adding users, setting
+                  access control, editing staff accounts, resetting passwords,
+                  and suspending, reactivating or deleting accounts — and
+                  approving completed documents into the repository.
+        - SYSTEM_ADMIN  all of the above, across every office.
+        """
+
+        SYSTEM_ADMIN = "SYSTEM_ADMIN", "System administrator (all offices)"
+        ADMIN = "ADMIN", "Office administrator"
         USER = "USER", "Office user"
+        VIEWER = "VIEWER", "Viewer (read-only)"
 
     office = models.ForeignKey(
         Office, null=True, blank=True, on_delete=models.PROTECT, related_name="members"
@@ -222,11 +252,89 @@ class User(AbstractUser):
 
     @property
     def is_system_admin(self) -> bool:
-        return self.role == self.Role.ADMIN or self.is_superuser
+        """Reach across every office. The one role that is not office-scoped."""
+        return self.role == self.Role.SYSTEM_ADMIN or self.is_superuser
+
+    @property
+    def is_office_admin(self) -> bool:
+        """Administrator powers — over their own office unless also a system
+        administrator. True for SYSTEM_ADMIN too: everything an office
+        administrator may do, a system administrator may do everywhere.
+
+        This is only half a permission check. It says the user holds admin
+        rights; it does not say over whom. Every caller must still compare
+        offices unless `is_system_admin` is true.
+        """
+        return self.role == self.Role.ADMIN or self.is_system_admin
+
+    @property
+    def is_viewer(self) -> bool:
+        """Read-only. May open records and print a routing slip, nothing else."""
+        return self.role == self.Role.VIEWER and not self.is_superuser
 
     @property
     def is_records_staff(self) -> bool:
-        return self.role in {self.Role.ADMIN, self.Role.SECRETARY} or self.is_superuser
+        """May do records work on their own office's documents.
+
+        Everyone except a viewer. This is the old {ADMIN, SECRETARY} set with
+        USER added, which is not a widening so much as a renaming: the powers
+        this gates — acting on the office's drafts, sharing a record, editing
+        the office's repository entries, seeing the office columns — are the
+        ones the brief's USER row lists, and they are what a SECRETARY account
+        actually had. Migrated secretaries therefore keep every one of them.
+
+        Deliberately *not* office-scoped on its own. It answers "may this person
+        do records work at all", never "over whose documents" — every call site
+        still compares offices, and the ones that matter do so on the line
+        immediately after asking this.
+        """
+        return not self.is_viewer
+
+    @property
+    def can_start_work(self) -> bool:
+        """Whether to offer a button that starts new tracking or a new upload.
+
+        Mirrors the two gates the target views apply — `WriteAccessRequiredMixin`
+        turns a viewer away, `OfficeAssignedMixin` turns away an account with no
+        office — so no page offers a button that only answers with a redirect and
+        a warning.
+
+        This hides a control; it does not grant one. Both views still refuse the
+        request on their own, which is the check that matters: a hidden button is
+        not a permission, and the endpoints stay reachable to anyone who knows the
+        URL.
+
+        Lives here rather than in `apps.core.views` because three pages ask it —
+        the dashboard, the tracking list and the repository — and two of them
+        would otherwise be importing from another app's view module for a
+        question that needs nothing but the user.
+        """
+        if self.is_viewer:
+            return False
+        return self.office_id is not None or self.is_superuser
+
+    def can_administer(self, other) -> bool:
+        """May this user create or edit `other`'s account?
+
+        The office comparison is the whole point: before this existed, any
+        administrator could edit every account in the university, because the
+        only check was "is an admin at all".
+        """
+        if not self.is_office_admin:
+            return False
+        if self.is_system_admin:
+            return True
+        other_office_id = getattr(other, "office_id", None)
+        return bool(self.office_id) and self.office_id == other_office_id
+
+    def assignable_roles(self):
+        """Roles this user may hand out. Only a system administrator can mint
+        another one — otherwise an office administrator could promote itself out
+        of its own office scope.
+        """
+        if self.is_system_admin:
+            return list(self.Role.choices)
+        return [(value, label) for value, label in self.Role.choices if value != self.Role.SYSTEM_ADMIN]
 
     @property
     def office_label(self) -> str:

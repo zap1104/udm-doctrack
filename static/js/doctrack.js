@@ -221,7 +221,7 @@
     form.addEventListener("submit", function (event) {
       var ok = window.confirm(
         "Mark this document as completed?\n\n" +
-        "It leaves the active tracking queue and becomes available in Document Management."
+        "It stays in Document Tracking, marked Completed - pending upload, until an administrator approves it into the Document Repository."
       );
       if (!ok) event.preventDefault();
     });
@@ -327,6 +327,49 @@
   document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
     button.addEventListener("click", function () { window.print(); });
   });
+
+  /* ----------------------------------------------------------------------
+     Auto-submitting selects.
+
+     A filter that applies itself on change, without an inline onchange
+     handler: django-csp allows no inline script, so `onchange="this.form.submit()"`
+     either fails in production or forces 'unsafe-inline' into script-src for
+     the whole site. Declared as data, listened for here, like every other
+     behaviour on the page.
+
+     The markup keeps a <noscript> submit button, so the control still works
+     with scripting off.
+  ---------------------------------------------------------------------- */
+  document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
+    select.addEventListener("change", function () {
+      var form = select.form;
+      if (!form) return;
+      /* requestSubmit() over submit(): it runs validation and fires the submit
+         event, where form.submit() skips both. Nothing on these forms validates
+         today, which is precisely why the difference is worth taking now rather
+         than discovering the day one of them gains a required field. Guarded
+         because older WebKit lacks it. */
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+    });
+  });
+
+  /* ----------------------------------------------------------------------
+     Auto-print: a page that exists only to be printed opens the dialog on
+     arrival, so reaching it is one click rather than two.
+
+     Declared as a data attribute rather than an inline script because
+     django-csp allows no inline script content. On `load` rather than
+     immediately: printing before the stylesheet has applied lays the page out
+     with no styles at all, which is exactly what this page exists to avoid.
+
+     The tab is left open afterwards. `afterprint` fires when the dialog is
+     cancelled as well as when it prints, so closing on it would throw away the
+     memo of anybody who opened the dialog to look at the preview.
+  ---------------------------------------------------------------------- */
+  if (document.querySelector("[data-auto-print]")) {
+    window.addEventListener("load", function () { window.print(); });
+  }
 
   /* ----------------------------------------------------------------------
      Print auditing.
@@ -618,7 +661,12 @@
       if (signedOut) return;
       signedOut = true;
       var here = window.location.pathname + window.location.search;
-      window.location.href = loginUrl + "?timeout=1&next=" + encodeURIComponent(here);
+      /* The window this page counted down with, not a bare flag. Once the
+         session is gone the sign-in page has no way to tell whose it was, so
+         an administrator idled out at 15 minutes was told 30. The server
+         honours this only if it names a window it actually enforces. */
+      window.location.href =
+        loginUrl + "?timeout=" + idleSeconds + "&next=" + encodeURIComponent(here);
     }
 
     /* "Sign out now", on the other hand, has to actually sign out. Sending the
@@ -833,4 +881,88 @@
     tick();
     if (seconds > 0) timer = window.setInterval(tick, 1000);
   })();
+})();
+
+/* --------------------------------------------------------------------------
+   Theme (dark mode)
+
+   The stylesheet themes off one attribute, [data-theme], rather than off
+   prefers-color-scheme — so the operating-system preference is resolved here
+   and written to the same attribute a person's explicit choice writes to. That
+   keeps a single palette in the CSS instead of two copies that drift, and it
+   makes an explicit choice beat the OS, which is the behaviour people expect
+   from a toggle they can see.
+
+   Applied to the app only: the sign-in and lockout pages pin their tokens back
+   in CSS, so setting the attribute globally is harmless there.
+
+   The attribute is set as early as this script runs. It is loaded at the end of
+   <body>, so a dark-preferring user sees a brief light flash on first paint —
+   accepted rather than fixed with a blocking inline script in <head>, because
+   the site runs under a Content-Security-Policy that forbids inline script and
+   loosening it for a colour scheme is a bad trade.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "doctrack-theme";
+  var root = document.documentElement;
+
+  function stored() {
+    /* Private browsing and blocked site data both throw on access rather than
+       returning null, so every read and write is guarded. A viewer with
+       storage blocked simply gets the OS preference each visit. */
+    try {
+      var value = window.localStorage.getItem(STORAGE_KEY);
+      return value === "dark" || value === "light" ? value : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function remember(value) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, value);
+    } catch (error) {
+      /* Nothing to do: the choice still applies for this page view. */
+    }
+  }
+
+  function prefersDark() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function apply(theme) {
+    root.setAttribute("data-theme", theme);
+    var toggles = document.querySelectorAll("[data-theme-toggle]");
+    var next = theme === "dark" ? "light" : "dark";
+    var label = "Switch to " + next + " theme";
+    for (var i = 0; i < toggles.length; i++) {
+      toggles[i].setAttribute("aria-label", label);
+      toggles[i].setAttribute("title", label);
+      toggles[i].setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    }
+  }
+
+  var choice = stored();
+  apply(choice || (prefersDark() ? "dark" : "light"));
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest && event.target.closest("[data-theme-toggle]");
+    if (!button) return;
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    apply(next);
+    remember(next);
+  });
+
+  /* Follow the operating system while nobody has chosen. Once someone presses
+     the toggle their choice is stored, and this stops overriding it. */
+  if (window.matchMedia) {
+    var query = window.matchMedia("(prefers-color-scheme: dark)");
+    var onChange = function (event) {
+      if (!stored()) apply(event.matches ? "dark" : "light");
+    };
+    if (query.addEventListener) query.addEventListener("change", onChange);
+    else if (query.addListener) query.addListener(onChange);
+  }
 })();

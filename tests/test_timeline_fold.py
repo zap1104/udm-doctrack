@@ -11,11 +11,21 @@ import re
 
 import pytest
 
-from apps.tracking.models import RoutingStep
+from apps.tracking.models import QUIET_EVENTS, RoutingStep
 from apps.tracking.services import add_remark, confirm_receipt, create_draft_record, route_record
 from apps.tracking.views import TIMELINE_VISIBLE
 
 FOLD_RE = re.compile(r'<details class="fold" open>\s*<summary>([^<]+)</summary>')
+
+
+def shown_activities(record):
+    """The entries the page actually renders.
+
+    Opening a record writes a VIEWED entry of its own, and those are logged but
+    deliberately not displayed — see QUIET_EVENTS. Counting raw activities here
+    would mean every one of these tests measured its own page load.
+    """
+    return record.activities.exclude(event__in=QUIET_EVENTS)
 
 
 @pytest.fixture
@@ -64,7 +74,7 @@ def test_folding_never_drops_or_repeats_an_entry(client, users, long_record):
     client.force_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
-    expected = long_record.routing_steps.count() + long_record.activities.count()
+    expected = long_record.routing_steps.count() + shown_activities(long_record).count()
     assert body.count('class="t-title"') == expected
 
 
@@ -75,7 +85,7 @@ def test_the_newest_entries_stay_open(client, users, long_record):
     client.force_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
-    newest = long_record.activities.order_by("-created_at", "-id").first()
+    newest = shown_activities(long_record).order_by("-created_at", "-id").first()
     after_last_fold = body.rsplit("</details>", 1)[-1]
     assert newest.message in after_last_fold
 
@@ -103,5 +113,5 @@ def test_a_short_record_is_not_folded_at_all(client, users, offices):
 
     body = client.get(record.get_absolute_url()).content.decode()
 
-    assert record.activities.count() <= TIMELINE_VISIBLE
+    assert shown_activities(record).count() <= TIMELINE_VISIBLE
     assert 'class="fold"' not in body

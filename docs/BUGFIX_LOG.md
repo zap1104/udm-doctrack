@@ -445,3 +445,154 @@ The page hard-sliced 50 rows, ran a second read-ID query, provided no filters or
 **Fix:** added a single-query `Exists()` read annotation, unread-first pagination, All/Unread and kind filters, day grouping, mark-read HTMX rows with a non-JavaScript POST fallback, mark-all-read, an inline SVG bell, capped unread badge, kind-specific visual treatment, and visible keyboard focus styling.
 
 **Lesson:** notification UI must make urgency and ownership legible; otherwise staff learn to ignore a growing counter.
+
+---
+
+## 25. The administration area was scoped by role and by nothing else
+
+**Files:** `apps/accounts/views.py`, `apps/accounts/forms.py`, `apps/core/mixins.py`
+
+`UserListView` ran `User.objects.select_related("office")` with no office
+filter, and the edit, password-reset and suspend views each did
+`get_object_or_404(User, pk=pk)`. Any account that could reach the
+administration area could therefore list, rename, reset the password of, and
+suspend **every account in the university** — including the administrators.
+
+It was latent rather than exploitable while `ADMIN` was a single global role:
+everyone who could open those screens was global by definition, so the missing
+filter never showed. Splitting `ADMIN` (head of one office) from `SYSTEM_ADMIN`
+(all offices) is what turns it live, because it introduces administrators who
+are supposed to have a boundary.
+
+**Fix:** `OfficeScopedUserMixin.administrable_users()` narrows the base queryset
+to the requester's own office unless they are a system administrator, and every
+account screen resolves its object from that queryset. An administrator with no
+office of their own matches nobody, rather than matching every unassigned
+account the way `filter(office_id=None)` would. The forms were closed too: the
+`office` and `role` fields are narrowed *and* re-validated against the actor, so
+an office administrator cannot post another office's id or mint a
+`SYSTEM_ADMIN`.
+
+Scoping the queryset rather than adding a check per view is deliberate: a missed
+check is a silent hole, a missed queryset is a 404.
+
+**Lesson:** "who may open this page" and "what may they act on once inside" are
+two questions. A role mixin only answers the first, and a role that gains a
+boundary turns every unscoped queryset behind it into a privilege escalation.
+
+---
+
+## 26. Printing a report always emitted both panels
+
+**File:** `static/css/doctrack.css`
+
+The reports page has two panels — tracking and repository — and shows one at a
+time behind a pair of tabs, driven by `.report-panel { display:none }` and
+`.report-panel.active { display:block }`. The print block then said:
+
+```css
+.report-panel { display:block !important; page-break-after:always; }
+```
+
+So every print job contained **both** reports regardless of which tab was open.
+Asking for the tracking report handed you the repository report stapled behind
+it, and neither could be printed on its own — on a page whose whole purpose is
+producing something to hand to somebody.
+
+The `!important` is what made it more than a stray rule: it beat the
+`display:none` that does the tab switching, so the screen and the paper
+disagreed about what the reader had selected. A printed copy could not be
+trusted to be the thing that was on screen when the button was pressed.
+
+**Fix:** print the active panel and nothing else, which is simply what the
+screen already does.
+
+```css
+.report-panel { display:none; }
+.report-panel.active { display:block; page-break-after:auto; }
+```
+
+The page break goes too — with one panel printing, it is the last element on
+the page and has nothing to break away from.
+
+**Lesson:** a print stylesheet is not a second, unrelated design; it is the same
+page on paper. A rule that makes print show something the screen is hiding is
+almost always describing a disagreement rather than a layout choice — and
+`!important` inside `@media print` is worth a second look every time, because
+the rule it is beating is usually the one carrying the user's own selection.
+
+## 27. The overdue report accused the office that had already done its part
+
+**Symptom:** *Overdue documents by holding office* listed MED against a document
+MED had routed to SUP and HR days earlier. Neither recipient had confirmed
+receipt, so the document had not moved — but MED cannot confirm receipt of a
+document it has sent. Only the recipient can. The panel captioned "who to chase"
+was naming the one office with nothing left to do.
+
+**Files:** `apps/core/views.py` (`_overdue_offices`, `apply_report_filters`),
+`apps/tracking/services.py` (new), `templates/reports/reports.html`.
+
+**Why it happened:** `TrackingRecord.recalculate_status()` does this while a
+batch is unreceived:
+
+```python
+if not received:
+    self.current_office = steps[0].from_office
+```
+
+That is **correct and was not changed.** The last office with *confirmed
+custody* is the sender; showing `to_office` there would claim a handover nobody
+has acknowledged, which is the same rule the whole system enforces under "sent
+is not received".
+
+The bug was reading that field to answer a different question. Two questions
+were being served by one column:
+
+| Question | Field |
+|---|---|
+| Where is the paper right now? | `current_office` |
+| Who owes the next move? | the unreceived recipients, or the confirmed holder |
+
+The panel grouped by `current_office` and captioned itself with the second
+question.
+
+The same conflation scoped the report's office filter —
+`Q(originating_office=office) | Q(current_office=office)` — and that half was
+worse. For MED → SUP unreceived, *both* fields read MED, so an office filtering
+the report by its own name could not see the documents sitting unreceived in its
+own inbox. Measured on a fresh database: filtering by SUP returned **0** records
+for a document addressed to SUP. The whole page lied for that office, not one
+card.
+
+**Fix:** a separately-named function that computes accountability, and a filter
+that knows an office touches a record four ways rather than two.
+
+```python
+# apps/tracking/services.py
+def overdue_accountability(records):
+    """awaiting — an unreceived step in the current batch, owed by each
+                  unreceived to_office. Chase them for a receipt.
+       holding  — the batch has a confirmed receipt, owed by current_office.
+                  Chase them for the action."""
+```
+
+```python
+# apps/core/views.py
+records.filter(
+    Q(originating_office=office) | Q(current_office=office)
+    | Q(routing_steps__to_office=office) | Q(routing_steps__from_office=office)
+)
+```
+
+`analytics.overdue_offices` is untouched: the dashboard's overdue banner asks
+the custody question and is right to. A record waiting on two offices raises a
+row against both, so the panel can total more than the overdue count — the
+caption says so. `overdue_unattributed` reports what neither branch claims; it
+is zero, and it is shown being zero rather than assumed.
+
+**Lesson:** `current_office` answers "where is the paper". It does not answer
+"who do we chase". Any panel captioned with the second question needs its own
+function; reusing the custody field made a report accuse the one office that had
+already done its part. When a caption and a column name different things, the
+caption is usually right about what the reader wants and the column is usually
+what somebody had to hand.
