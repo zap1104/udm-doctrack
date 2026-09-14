@@ -5,7 +5,7 @@ from datetime import date
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import F, Q
+from django.db.models import F
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -118,10 +118,20 @@ class RecordListView(AppLoginRequiredMixin, View):
 
         # "Every office" narrows nothing: it is the absence of an office filter,
         # not a filter naming one.
+        #
+        # The third copy of this condition, now the same named function the
+        # dashboard and Reports call — see core_filters.office_touches_record_q.
+        # It matched originating-or-current, which is a narrower set than the
+        # dashboard ring counts, and the ring's slices link *here*: "Pending
+        # receipt 2" opened a page listing 1. Whichever way that gap is closed
+        # the two must be closed together, because a count that disagrees with
+        # the page behind it is the fault this whole branch exists to remove.
+        #
+        # `apply_scope` below is untouched and still answers its own question —
+        # what is on this office's desk right now. This only widens the picker's
+        # *narrowing* fallback, which applies to the views that are not a queue.
         if narrow_office and scope not in services.OFFICE_SCOPED:
-            records = records.filter(
-                Q(originating_office=narrow_office) | Q(current_office=narrow_office)
-            )
+            records = records.filter(core_filters.office_touches_record_q(narrow_office))
         records = services.apply_scope(records, scope, request.user, office=queue_office)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while

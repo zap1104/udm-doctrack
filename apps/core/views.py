@@ -162,9 +162,13 @@ class DashboardMemoMixin:
         records = TrackingRecord.objects.visible_to(user)
         documents = Document.objects.visible_to(user)
         if office:
-            # The same pairing Reports filters on, so "MED" means the same thing
-            # on both pages: raised by that office, or sitting there now.
-            records = records.filter(Q(originating_office=office) | Q(current_office=office))
+            # The same definition Reports uses, called rather than restated —
+            # see core_filters.office_touches_record_q. The two-condition copy
+            # that stood here claimed to be "the same pairing Reports filters
+            # on"; it was, until Reports grew two more conditions and this did
+            # not, at which point MED's dashboard and MED's report were counting
+            # different records under one office name.
+            records = records.filter(core_filters.office_touches_record_q(office))
             documents = documents.filter(office=office)
         return records.distinct(), documents.distinct()
 
