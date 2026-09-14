@@ -938,9 +938,28 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         overdue_split = self._overdue_for_scope(records, scope_office)
         overdue = overdue_split["ours"] if scope_office else overdue_all
         awaiting_split = self._awaiting_for_scope(records, scope_office)
-        awaiting = (
+        # Through the one definition, so this headline and the split printed
+        # under it are the same question asked once.
+        #
+        # It filtered `routing_steps__received_at__isnull=True` with no
+        # `batch=F("current_batch")`, which `services.awaiting_receipt`,
+        # `_awaiting_for_scope` and `apply_scope` all apply. Without it the
+        # count includes unconfirmed steps from *superseded* batches: a record
+        # forwarded twice, whose first hop nobody ever signed for, stayed in
+        # this figure forever even after the office it was really waiting on
+        # confirmed. The headline was therefore always ≥ ours + theirs, with the
+        # gap unexplained.
+        awaiting_qs = tracking_services.awaiting_receipt(records, user)
+        awaiting = awaiting_qs.distinct().count()
+        # The rows the batch scope removes: an unconfirmed step, but not in the
+        # batch the record is actually on. Not an error — a batch can be
+        # superseded before every recipient signs — but it is a receipt nobody
+        # will ever give, so it is worth naming rather than either counting as
+        # live work or dropping without a word. Shown only when non-zero.
+        stale_receipts = (
             records.filter(routing_steps__received_at__isnull=True)
             .exclude(status__in=COMPLETED_STATUSES)
+            .exclude(pk__in=awaiting_qs.values("pk"))
             .distinct()
             .count()
         )
@@ -970,6 +989,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "overdue_all": overdue_all,
                 "overdue_elsewhere": overdue_split["elsewhere"],
                 "awaiting_split": awaiting_split,
+                "stale_receipts": stale_receipts,
                 "by_status": self._by_status(records, total_records, scope_office),
                 "office_flow": self._office_flow(records),
                 "monthly": self._monthly(records),

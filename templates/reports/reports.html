@@ -140,6 +140,17 @@
         {% else %}
           <div class="hint">Sent but not yet acknowledged</div>
         {% endif %}
+        {% comment %}
+          Named rather than dropped. These are unconfirmed steps from batches the
+          record has already moved past — a receipt nobody will ever give. They
+          used to be inside the headline, which is why it never matched the split
+          beneath it; counting them as live work was wrong, and removing them
+          without a word would take a number a reader had been watching and give
+          no account of where it went.
+        {% endcomment %}
+        {% if stale_receipts %}
+          <div class="hint">{{ stale_receipts }} earlier hop{{ stale_receipts|pluralize }} never confirmed</div>
+        {% endif %}
       </a>
     </div>
     <div class="col-6 col-lg-3">
