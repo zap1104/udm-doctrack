@@ -1862,3 +1862,16 @@ def test_the_print_page_needs_a_login(client):
     response = client.get(MEMO_PRINT)
 
     assert response.status_code in (302, 403)
+
+
+@pytest.mark.django_db
+def test_the_dashboard_accepts_the_all_offices_parameter(client, users, finished_record):
+    """`/?office=all` was a 500: `_scope` called `.name` on the ALL_OFFICES
+    sentinel. Reports and Tracking accept it, and Tracking's picker sends it."""
+    client.force_login(users["admin"])
+
+    response = client.get(f"{DASHBOARD}?office=all")
+
+    assert response.status_code == 200
+    assert response.context["scope"]["all_offices"] is True
+    assert response.context["scope"]["office"] is None

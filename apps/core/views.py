@@ -140,6 +140,14 @@ class DashboardMemoMixin:
         # use. It was a fourth reading of `office` with its own rules, which is
         # how the system ended up with four answers to one question.
         office = tracking_services.scope_office(self.request.user, self.request.GET.get("office"))
+        # The sentinel is "every office", not an office. `scope_office` returns it
+        # for a system administrator's `?office=all`, and this method called
+        # `.name` on the string: `/?office=all` was a 500 on the dashboard while
+        # Reports and Tracking accepted the same parameter. This page's own picker
+        # sends "" for all offices, which is why nobody met it here — but the
+        # Tracking picker sends "all", so a shared or bookmarked link did.
+        if office == tracking_services.ALL_OFFICES:
+            office = None
         # Nothing named means every office for a system administrator, whose
         # scope is the university, and the viewer's own office for an office
         # administrator, whose scope is that. The label said "All offices" for
