@@ -845,6 +845,26 @@ def report_filters_from_request(request):
     }
 
 
+def _unreceived_current_steps(**step):
+    """Unreceived steps in the outer record's current batch, as a subquery.
+
+    For the awaiting and overdue splits, which need "no unreceived step to this
+    office" — and `.exclude(routing_steps__to_office=..., routing_steps__received_at
+    __isnull=True, routing_steps__batch=F("current_batch"))` does not say that.
+    Across a multi-valued relation `exclude()` does not bind its conditions to
+    one row, so an office's *received* step from an earlier batch matched the
+    office and the next office's unreceived step matched the rest: every document
+    an office had signed for and passed on was dropped from what it was waiting
+    on. `~Exists` asks about one step at a time.
+    """
+    return RoutingStep.objects.filter(
+        record=OuterRef("pk"),
+        batch=OuterRef("current_batch"),
+        received_at__isnull=True,
+        **step,
+    )
+
+
 def apply_report_filters(records, filters):
     office = filters["office"]
     if office:
@@ -1211,14 +1231,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 routing_steps__batch=F("current_batch"))
         ).distinct().count()
         elsewhere = overdue.filter(
-            routing_steps__from_office=office,
-            routing_steps__received_at__isnull=True,
-            routing_steps__batch=F("current_batch"),
-        ).exclude(
-            routing_steps__to_office=office,
-            routing_steps__received_at__isnull=True,
-            routing_steps__batch=F("current_batch"),
-        ).distinct().count()
+            Exists(_unreceived_current_steps(from_office=office)),
+            ~Exists(_unreceived_current_steps(to_office=office)),
+        ).count()
         return {"ours": ours, "elsewhere": elsewhere}
 
     def _awaiting_for_scope(self, records, office):
@@ -1232,16 +1247,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         if office is None:
             return empty
         live = records.exclude(status__in=COMPLETED_STATUSES)
-        current = {
-            "routing_steps__received_at__isnull": True,
-            "routing_steps__batch": F("current_batch"),
-        }
         return {
-            "ours": live.filter(routing_steps__to_office=office, **current).distinct().count(),
-            "theirs": live.filter(routing_steps__from_office=office, **current)
-            .exclude(routing_steps__to_office=office, **current)
-            .distinct()
-            .count(),
+            "ours": live.filter(Exists(_unreceived_current_steps(to_office=office))).count(),
+            "theirs": live.filter(
+                Exists(_unreceived_current_steps(from_office=office)),
+                ~Exists(_unreceived_current_steps(to_office=office)),
+            ).count(),
         }
 
     def _overdue_accountability(self, records):
