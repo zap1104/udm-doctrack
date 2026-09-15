@@ -453,31 +453,16 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # five rows and its button opened five, two of them different. Short
         # when it is short, which is what "Needs action" means.
         attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:DASHBOARD_ROWS])
+        # `today` is read by `incoming_new_today` below.
+        #
+        # `received_today`, `forwarded_today` and `completed_today` were computed
+        # here — three queries on every dashboard load — for the Office Flow
+        # Today panel, which the dashboard redesign removed. No template has read
+        # them since. They were also wrong if ever put back: the first two
+        # hardcoded `user.office_id` and ignored the office picker the rest of
+        # the page obeys, and `completed_today` had no office filter at all, so it
+        # would have shown a university-wide number inside an office panel.
         today = timezone.localdate()
-        office_today = TrackingRecord.objects.none()
-        if user.office_id:
-            office_today = TrackingRecord.objects.visible_to(user).filter(
-                routing_steps__to_office_id=user.office_id, routing_steps__received_at__date=today
-            )
-
-        forwarded_today = 0
-        if user.office_id:
-            forwarded_today = (
-                TrackingRecord.objects.visible_to(user)
-                .filter(routing_steps__sent_at__date=today, routing_steps__from_office_id=user.office_id)
-                .distinct()
-                .count()
-            )
-        completed_today = (
-            TrackingRecord.objects.visible_to(user)
-            # Both halves of completion: the work was finished today whether or
-            # not an administrator has approved it into the repository yet.
-            # Counting only COMPLETED would report zero for an office that
-            # finished ten documents this morning and is waiting on approval.
-            .filter(status__in=COMPLETED_STATUSES, completed_at__date=today)
-            .distinct()
-            .count()
-        )
 
         tracking_services.annotate_can_confirm(attention, user)
         # Same test the tracking list uses (apps/tracking/views.py): the bulk
@@ -512,9 +497,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,
                 "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:DASHBOARD_ROWS],
-                "received_today": office_today.distinct().count(),
-                "forwarded_today": forwarded_today,
-                "completed_today": completed_today,
                 "greeting": _greeting(),
                 "can_bulk_receive": can_bulk_receive,
                 "can_start_work": user.can_start_work,

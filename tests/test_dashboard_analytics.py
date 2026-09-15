@@ -1660,13 +1660,30 @@ def test_the_removed_panels_are_gone_from_the_page(client, users, filed_record):
 @pytest.mark.django_db
 def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, overdue_record):
     """Markup only. Reports reads several of the same helpers, and the memo
-    still reads the overdue figures."""
+    still reads the overdue figures.
+
+    `received_today` was in this list. It protected a helper that outlived its
+    panel, and nothing has read it since the redesign; it has now been deleted
+    with its two siblings, so the assertion moves to the other side — see
+    test_the_unrendered_today_counters_are_gone.
+    """
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
 
-    for key in ("overdue_offices", "overdue_summary", "live_by_status",
-                "received_today"):
+    for key in ("overdue_offices", "overdue_summary", "live_by_status"):
         assert key in context, key
+
+
+@pytest.mark.django_db
+def test_the_unrendered_today_counters_are_gone(client, users, overdue_record):
+    """Three queries per load for a panel that no longer exists — and each wrong
+    if ever reinstated: two ignored the office picker, the third had no office
+    filter at all."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    for key in ("received_today", "forwarded_today", "completed_today"):
+        assert key not in context, key
 
 
 @pytest.mark.django_db
