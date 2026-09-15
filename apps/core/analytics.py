@@ -132,7 +132,38 @@ def by_status(records, total: int) -> list[dict]:
     return rows
 
 
-def overdue_offices(records, limit: int = 8) -> list[dict]:
+#: Rows a ranked panel shows before the rest collapse into one "Other" line.
+#:
+#: Twelve, not eight. Eight truncated a nine-office university by exactly one,
+#: which is the worst size a cap can be: the reader loses a single row and the
+#: remainder line reads "Other (1 office)", which looks like a bug. Twelve shows
+#: every office today and still keeps the panel bounded if the university grows.
+TOP_N = 12
+
+
+def cap_with_remainder(rows, limit, noun):
+    """Split a ranked list into the rows shown and a label for the rest.
+
+    Returns `(kept, cut, label)`, where `label` is None when nothing was cut.
+
+    A capped list with no tail cannot add up: the bars a reader sums are a
+    subset of the headline they sit under, and nothing on screen says so. Every
+    ranked panel here had that shape, and `overdue_summary["total"]` is counted
+    over the whole queryset — correctly — which is exactly what made the gap
+    visible to anyone who added the rows.
+
+    The caller builds the remainder row itself, because each panel carries
+    different fields and a row missing the ones its template reads is a worse
+    bug than the one this fixes. What lives here is the part that must not
+    differ: where the cut falls and what the leftover is called.
+    """
+    if len(rows) <= limit:
+        return rows, [], None
+    kept, cut = rows[:limit], rows[limit:]
+    return kept, cut, f"Other ({len(cut)} {noun}{'' if len(cut) == 1 else 's'})"
+
+
+def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
     """Where overdue documents are sitting — a queue to chase, not a total.
 
     Each row carries how long the *oldest* item in that pile has been late, not
@@ -161,6 +192,7 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
     # Plain slicing, so `limit=0` still returns nothing — that is what the
     # dashboard's summary test leans on to prove the total survives the cap.
     rows = grouped[:limit]
+    cut = grouped[limit:]
 
     # The earliest deadline per office, in one pass over the same queryset,
     # rather than a query per row.
@@ -189,6 +221,36 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
         # Whole days late, floored: "3 days" must mean the deadline is three
         # full days behind, never "some part of a third day".
         row["oldest_days"] = max(0, (now - due_at).days) if due_at else 0
+
+    # The tail, as a row. Without it the office lines never sum to the headline
+    # they sit under, and `overdue_summary["total"]` is counted over the whole
+    # queryset, so the gap is visible to anybody who adds them up.
+    #
+    # Its bar is not drawn: `ceiling` is taken from the kept rows only, so a
+    # large tail cannot flatten the real ones into slivers.
+    if cut:
+        # Read from `earliest`, because the loop above enriches only the kept
+        # rows — a cut row has no `oldest_days` of its own to take a max over.
+        cut_dues = [
+            earliest[row["current_office__code"]]
+            for row in cut
+            if row["current_office__code"] in earliest
+        ]
+        cut_total = sum(row["total"] for row in cut)
+        rows.append(
+            {
+                "code": "",
+                "name": f"Other ({len(cut)} office{'' if len(cut) == 1 else 's'})",
+                "total": cut_total,
+                "percent": 0,
+                "bar_percent": 0,
+                "share": percent(cut_total, everywhere),
+                "oldest_days": max(
+                    (max(0, (now - due).days) for due in cut_dues), default=0
+                ),
+                "is_remainder": True,
+            }
+        )
     return rows
 
 
@@ -437,7 +499,7 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     }
 
 
-def uploads_by_office(documents, records, limit: int = 8) -> dict:
+def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
     """What each office put into the repository this month.
 
     One combined figure per office, because from the repository's side there is
@@ -502,18 +564,42 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
     # percentage — `grand_total` is returned as `total`, so the panel's own
     # headline was truncated too and contradicted `total_documents`.
     grand_total = sum(row["total"] for row in rows)
-    rows = rows[:limit]
+    rows, cut, remainder_label = cap_with_remainder(rows, limit, "office")
 
     ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         row["bar_percent"] = bar(row["total"], ceiling)
         row["percent"] = percent(row["total"], grand_total)
 
+    # The tail, so the rows add up to `total` rather than to a subset of it.
+    # No bar: `ceiling` came from the kept rows, so a large tail cannot flatten
+    # the real ones into slivers.
+    if cut:
+        cut_total = sum(row["total"] for row in cut)
+        rows.append(
+            {
+                "code": "",
+                "name": remainder_label,
+                "uploaded": sum(row["uploaded"] for row in cut),
+                "filed": sum(row["filed"] for row in cut),
+                "total": cut_total,
+                "bar_percent": 0,
+                "percent": percent(cut_total, grand_total),
+                "is_remainder": True,
+            }
+        )
+
     # Named only when one office is genuinely ahead. Calling a tie "the top
     # office" hands out a distinction the numbers did not award.
+    #
+    # Over the real offices only. "Other" is several offices added together, so
+    # comparing first place against it would decide the leadership on how many
+    # offices fell outside the cap, and with a cap of zero it would hand the
+    # distinction to the remainder row itself.
+    ranked = [row for row in rows if not row.get("is_remainder")]
     leader = None
-    if rows and (len(rows) == 1 or rows[0]["total"] > rows[1]["total"]):
-        leader = rows[0]
+    if ranked and (len(ranked) == 1 or ranked[0]["total"] > ranked[1]["total"]):
+        leader = ranked[0]
 
     return {
         "rows": rows,

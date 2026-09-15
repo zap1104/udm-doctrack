@@ -917,6 +917,13 @@ a:hover { text-decoration: underline; }
 .report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
+/* "Other (n offices)": what a top-N cap left out, as one row, so the rows add up
+   to the total above them. Secondary ink, because it is an aggregate and not a
+   peer of the ranked rows beside it. Its bar is drawn at zero width on purpose —
+   the ceiling came from the ranked rows, and a long bar for "everything else"
+   would out-shout the offices it exists to account for. */
+.report-series-item--remainder { color:var(--udm-muted); font-style:italic; }
+.report-series-item--remainder strong { color:var(--udm-muted); }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .report-series-item strong { text-align:right; color:var(--udm-navy-text); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }

@@ -1236,15 +1236,39 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
 
     # -- document panels ---------------------------------------------------
     def _document_types(self, documents):
+        """Every document counted once, under its type or under Other.
+
+        Capped like the office panels, and with the same remainder row, so the
+        rows a reader adds up equal `total_documents` instead of being a subset
+        of it with nothing on screen saying so.
+
+        `Unclassified` stays a row of its own rather than being folded into
+        Other: "we do not know what kind of document this is" is a finding an
+        administrator can act on, and hiding it inside a tail would lose it.
+        """
         rows = list(
             documents.values("document_type__name")
             .annotate(total=Count("id", distinct=True))
-            .order_by("-total")[:8]
+            .order_by("-total")
         )
-        ceiling = max([row["total"] for row in rows], default=0)
         for row in rows:
             row["label"] = row["document_type__name"] or "Unclassified"
+        rows, cut, remainder_label = analytics.cap_with_remainder(
+            rows, analytics.TOP_N, "type"
+        )
+        # From the kept rows, so a large tail cannot flatten the real ones.
+        ceiling = max([row["total"] for row in rows], default=0)
+        for row in rows:
             row["percent"] = _bar(row["total"], ceiling)
+        if cut:
+            rows.append(
+                {
+                    "label": remainder_label,
+                    "total": sum(row["total"] for row in cut),
+                    "percent": 0,
+                    "is_remainder": True,
+                }
+            )
         return rows
 
     def _document_months(self, documents):
@@ -1296,14 +1320,33 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         return rows
 
     def _top_searches(self):
+        """The most-run queries, with the rest as one row.
+
+        Same cap and same remainder as the other ranked panels: a list of the
+        top few, under a count of every query ever run, that does not add up to
+        it is the fault this branch exists to remove.
+        """
         rows = list(
             SearchQueryLog.objects.values("query")
             .annotate(total=Count("id", distinct=True), clicks=Count("result_clicks"))
-            .order_by("-total")[:8]
+            .order_by("-total")
+        )
+        rows, cut, remainder_label = analytics.cap_with_remainder(
+            rows, analytics.TOP_N, "query"
         )
         ceiling = max([row["total"] for row in rows], default=0)
         for row in rows:
             row["percent"] = _bar(row["total"], ceiling)
+        if cut:
+            rows.append(
+                {
+                    "query": remainder_label,
+                    "total": sum(row["total"] for row in cut),
+                    "clicks": sum(row["clicks"] for row in cut),
+                    "percent": 0,
+                    "is_remainder": True,
+                }
+            )
         return rows
 
     def _search_analytics(self):

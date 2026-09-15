@@ -658,8 +658,13 @@
       <div class="card-udm h-100">
         <div class="card-udm-head"><h2>Documents by type</h2></div>
         <div class="card-udm-body">
+          {% comment %}
+            The last row may be "Other (n types)", so the rows add up to every
+            document in the repository. "Unclassified" is a row of its own and
+            never folded into it — not knowing a document's type is a finding.
+          {% endcomment %}
           {% for row in document_types %}
-            <div class="report-series-item report-series-item--wide">
+            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.label|truncatechars:30 }}</span>
               <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
@@ -680,7 +685,7 @@
             <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
           </div>
           {% for row in top_searches %}
-            <div class="report-series-item report-series-item--wide">
+            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
               <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>

@@ -179,15 +179,25 @@ def test_a_completed_record_is_never_overdue(finished_record, users):
 def test_the_overdue_summary_counts_the_whole_queryset_not_the_listed_rows(
     overdue_record, users
 ):
-    """The per-office list is capped at the longest few queues. Summing it would
-    quietly under-report the total the banner exists to state."""
+    """The summary counts the whole queryset, never the rows it was handed.
+
+    It was asserted by capping the list to nothing and checking the total stood
+    anyway. The cap now leaves a remainder row behind, so "nothing" is no longer
+    reachable — and that is the point of the remainder: the rows a reader can
+    add up now equal the total the banner states, instead of being a subset of
+    it with nothing saying so.
+
+    Both halves are asserted here: the summary is still independent of the rows,
+    and the rows now sum to it.
+    """
     records = TrackingRecord.objects.visible_to(users["admin"])
     rows = analytics.overdue_offices(records, limit=0)
     summary = analytics.overdue_summary(records, rows, total_documents=10)
 
-    assert rows == [], "the cap is doing its job for this test"
-    assert summary["total"] == 1, "the total survives the cap"
+    assert summary["total"] == 1, "the total is counted over the queryset"
     assert summary["percent_of_all"] == 10
+    assert [row["name"] for row in rows] == ["Other (1 office)"]
+    assert sum(row["total"] for row in rows) == summary["total"]
 
 
 # --- monthly turnaround ----------------------------------------------------

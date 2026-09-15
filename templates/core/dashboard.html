@@ -506,12 +506,18 @@
               </span>
             </div>
           {% endif %}
+          {% comment %}
+            The last row may be "Other (n offices)", carrying what the cap left
+            out so the rows add up to the total above them. It is muted and has
+            no bar. `not row.is_remainder` on the leader test because the
+            remainder's code is blank, and so is the leader's when there is none.
+          {% endcomment %}
           {% for row in uploads_by_office.rows %}
-            <div class="report-series-item report-series-item--wide"
+            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}"
                  title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
               <span>{{ row.name }}</span>
               <div class="report-bar">
-                <i class="{% if row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
+                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
                    style="width:{{ row.bar_percent }}%"></i>
               </div>
               <strong class="num">{{ row.total }}</strong>
