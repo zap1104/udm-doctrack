@@ -474,7 +474,24 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # beside it. Eight made the card taller than the one it shares a row
         # with, and a dashboard panel is a glance with a link to the full list
         # underneath — the reader who wants row six wants the Tracking page.
-        recent = list(tracking_services.active_for(user)[:DASHBOARD_ROWS])
+        # Scoped by the same office, through the same named condition, as every
+        # other figure on this page — `get_memo_context` promises that "every
+        # figure on the dashboard comes from the same scoped querysets", and
+        # these two panels were the exception. An administrator viewing MED saw
+        # "Recently moved" and "Newest in the Document Repository" listing HR's
+        # and Supply's documents under a heading naming MED.
+        #
+        # `scope["office"]` is None when nothing narrows the page — an account
+        # without the picker, whose `visible_to` is already its bound, or a
+        # system administrator viewing every office — and then nothing is added.
+        recent_records_qs = tracking_services.active_for(user)
+        recent_documents_qs = Document.objects.visible_to(user)
+        if scope["office"]:
+            recent_records_qs = recent_records_qs.filter(
+                core_filters.office_touches_record_q(scope["office"])
+            ).distinct()
+            recent_documents_qs = recent_documents_qs.filter(office=scope["office"])
+        recent = list(recent_records_qs[:DASHBOARD_ROWS])
         show_office_columns = user.is_records_staff
         if show_office_columns:
             # Both panels in one pass — the helper groups by record, so a
@@ -496,7 +513,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "attention_records": attention,
                 "recent_records": recent,
                 "show_office_columns": show_office_columns,
-                "recent_documents": Document.objects.visible_to(user).with_related().order_by("-created_at")[:DASHBOARD_ROWS],
+                "recent_documents": recent_documents_qs.with_related().order_by("-created_at")[:DASHBOARD_ROWS],
                 "greeting": _greeting(),
                 "can_bulk_receive": can_bulk_receive,
                 "can_start_work": user.can_start_work,
