@@ -583,3 +583,21 @@ def test_both_panels_are_present_in_the_markup_with_one_active(client, users):
 
     assert body.count('class="report-panel active"') == 1
     assert body.count('class="report-panel"') == 1
+
+
+# --- completion rate over documents in circulation ----------------------------
+@pytest.mark.django_db
+def test_the_completion_rate_leaves_drafts_out_of_its_denominator(
+    client, finished_record, users, memo_type
+):
+    """A draft has never been sent and is visible only to its author, so a
+    denominator including it differs per viewer for the same data — the exact
+    objection `combined_totals` raises when it excludes drafts from the ring."""
+    create_draft_record(
+        user=users["admin"], subject="Unsent", instructions="x", document_type=memo_type,
+    )
+    client.force_login(users["admin"])
+    context = client.get(REPORTS).context
+
+    assert context["total_records"] == 2, "the card still counts the draft"
+    assert context["completion_rate"] == 100, "one finished of one in circulation"

@@ -981,7 +981,14 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "overdue": overdue,
                 "awaiting_receipt": awaiting,
                 "completed_records": completed,
-                "completion_rate": _percent(completed, total_records),
+                # Over documents in circulation, not every record. Drafts are
+                # excluded: a draft has never been sent and is visible only to its
+                # author, so a denominator that includes them differs per viewer
+                # for the same data — the objection `combined_totals` raises when
+                # it keeps drafts out of the ring. One page, one convention.
+                "completion_rate": _percent(
+                    completed, records.exclude(status=Status.DRAFT).count()
+                ),
                 "scope_office": scope_office,
                 "scope_office_label": scope_office.name if scope_office else "",
                 "direction_other_label": tracking_services.DIRECTION_OTHER_LABEL,
