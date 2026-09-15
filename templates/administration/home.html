@@ -43,4 +43,45 @@
     </div>
   </div>
 </div>
+
+{% comment %}
+  Search activity across the whole university. It lived on Reports, which answers
+  for one office, where every reader of their own office's report saw every other
+  office's search terms. It is not scoped instead because `SearchQueryLog.user` is
+  nullable — a deleted account's searches survive with no user, and an office
+  filter would drop them silently.
+
+  System administrators only. This page also admits office administrators, whose
+  view "is still office-scoped" per AdminRequiredMixin; the view does not compute
+  these for them at all.
+{% endcomment %}
+{% if user.is_system_admin %}
+  <div class="row g-4 mt-1">
+    <div class="col-12">
+      <div class="card-udm">
+        <div class="card-udm-head">
+          <div>
+            <h2>Most used searches</h2>
+            <div class="report-caption">Every office, since records began. Visible to system administrators only.</div>
+          </div>
+        </div>
+        <div class="card-udm-body">
+          <div class="row g-2 mb-3">
+            <div class="col-6"><div class="report-quality-row"><span>Queries</span><strong class="num">{{ search_analytics.queries }}</strong></div></div>
+            <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
+          </div>
+          {% for row in top_searches %}
+            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
+              <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
+              <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
+              <strong class="num">{{ row.total }}</strong>
+            </div>
+          {% empty %}
+            <div class="report-empty">No searches have been recorded.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}

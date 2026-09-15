@@ -1006,8 +1006,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "document_months": self._document_months(documents),
                 "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
                 "extraction": self._extraction_state(documents),
-                "top_searches": self._top_searches(),
-                "search_analytics": self._search_analytics(),
             }
         )
         return context
@@ -1361,49 +1359,67 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             )
         return rows
 
-    def _top_searches(self):
-        """The most-run queries, with the rest as one row.
+# ---------------------------------------------------------------------------
+# Search activity — university-wide, so system administrators only
+# ---------------------------------------------------------------------------
+#: These read `SearchQueryLog` and `SearchResultClick` with no office scope, and
+#: there is no honest one to give them. They lived on Reports, a page whose whole
+#: design is "this report answers for one office", where every signed-in user
+#: reading their own office's report saw every other office's search terms.
+#:
+#: They are not scoped instead because the join would lose rows. `user` is
+#: `null=True, on_delete=SET_NULL` on both models, so the searches of a deleted
+#: account survive with no user, and an office filter would drop them without a
+#: word — under-reporting the one figure these exist to state.
+#:
+#: They are shown on Administration to system administrators only. That page
+#: also admits office administrators, and `AdminRequiredMixin` says plainly that
+#: what they see "is still office-scoped"; a university-wide list of search terms
+#: would be the same leak on a smaller audience.
+def top_searches():
+    """The most-run queries, with the rest as one row.
 
-        Same cap and same remainder as the other ranked panels: a list of the
-        top few, under a count of every query ever run, that does not add up to
-        it is the fault this branch exists to remove.
-        """
-        rows = list(
-            SearchQueryLog.objects.values("query")
-            .annotate(total=Count("id", distinct=True), clicks=Count("result_clicks"))
-            .order_by("-total")
+    Same cap and same remainder as the other ranked panels: a list of the
+    top few, under a count of every query ever run, that does not add up to
+    it is the fault this branch exists to remove.
+    """
+    rows = list(
+        SearchQueryLog.objects.values("query")
+        .annotate(total=Count("id", distinct=True), clicks=Count("result_clicks"))
+        .order_by("-total")
+    )
+    rows, cut, remainder_label = analytics.cap_with_remainder(
+        rows, analytics.TOP_N, "query"
+    )
+    ceiling = max([row["total"] for row in rows], default=0)
+    for row in rows:
+        row["percent"] = _bar(row["total"], ceiling)
+    if cut:
+        rows.append(
+            {
+                "query": remainder_label,
+                "total": sum(row["total"] for row in cut),
+                "clicks": sum(row["clicks"] for row in cut),
+                "percent": 0,
+                "is_remainder": True,
+            }
         )
-        rows, cut, remainder_label = analytics.cap_with_remainder(
-            rows, analytics.TOP_N, "query"
-        )
-        ceiling = max([row["total"] for row in rows], default=0)
-        for row in rows:
-            row["percent"] = _bar(row["total"], ceiling)
-        if cut:
-            rows.append(
-                {
-                    "query": remainder_label,
-                    "total": sum(row["total"] for row in cut),
-                    "clicks": sum(row["clicks"] for row in cut),
-                    "percent": 0,
-                    "is_remainder": True,
-                }
-            )
-        return rows
+    return rows
 
-    def _search_analytics(self):
-        """The two counters the Most used searches panel states.
 
-        "Queries with a click" and "Average clicked rank" were computed here and
-        shown beside these; they are click-through diagnostics for tuning the
-        ranking rather than records figures, and the report does not claim them
-        any more. Their two extra queries — a DISTINCT join and an Avg over
-        every click ever logged — went with them.
-        """
-        return {
-            "queries": SearchQueryLog.objects.count(),
-            "clicks": SearchResultClick.objects.count(),
-        }
+def search_analytics():
+    """The two counters the Most used searches panel states.
+
+    "Queries with a click" and "Average clicked rank" were computed here and
+    shown beside these; they are click-through diagnostics for tuning the
+    ranking rather than records figures, and the report does not claim them
+    any more. Their two extra queries — a DISTINCT join and an Avg over
+    every click ever logged — went with them.
+    """
+    return {
+        "queries": SearchQueryLog.objects.count(),
+        "clicks": SearchResultClick.objects.count(),
+    }
 
 
 class HealthzView(View):
@@ -1824,6 +1840,12 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
                 "master_data": master_data_for(self.request.user),
             }
         )
+        # Not computed at all for an office administrator, rather than computed
+        # and hidden: a figure that is not theirs to see should not be sitting
+        # in their context either.
+        if self.request.user.is_system_admin:
+            context["top_searches"] = top_searches()
+            context["search_analytics"] = search_analytics()
         return context
 
 

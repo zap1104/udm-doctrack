@@ -83,10 +83,13 @@ TRACKING_PANELS = (
 )
 
 #: Document Repository Report, in order.
+#:
+#: "Most used searches" was the third. It moved to Administration, system
+#: administrators only: it reads every office's search terms with no scope, on a
+#: page whose design is that it answers for one office.
 REPOSITORY_PANELS = (
     "Monthly repository volume",
     "Documents by type",
-    "Most used searches",
 )
 
 
@@ -631,3 +634,60 @@ def test_extraction_is_reported_by_state_and_sums_to_the_repository(
         extraction["needs_attention"] + extraction["in_progress"]
         + extraction["skipped"] + extraction["done"]
     ) == extraction["total"]
+
+
+
+# --- search activity lives on Administration, for system administrators -------
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["med", "viewer", "med_admin", "admin"])
+def test_no_report_carries_another_offices_search_terms(client, users, who):
+    """Reports answers for one office. The search panel read every office's
+    terms with no scope, so every reader of their own report saw everyone's."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="confidential hr matter")
+    client.force_login(users[who])
+    response = client.get(REPORTS)
+
+    assert "top_searches" not in response.context
+    assert "search_analytics" not in response.context
+    assert "confidential hr matter" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_system_administrator_sees_search_activity_on_administration(client, users):
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
+    client.force_login(users["admin"])
+    response = client.get("/administration/")
+
+    assert "retention schedule" in response.content.decode()
+    assert response.context["search_analytics"]["queries"] == 1
+
+
+@pytest.mark.django_db
+def test_an_office_administrator_is_not_shown_university_wide_search_terms(client, users):
+    """Administration admits office administrators, whose view is still
+    office-scoped. Not computed for them at all, rather than hidden."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
+    client.force_login(users["med_admin"])
+    response = client.get("/administration/")
+
+    assert response.status_code == 200
+    assert "top_searches" not in response.context
+    assert "retention schedule" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_deleted_accounts_searches_still_count(client, users):
+    """Why this is not office-scoped: `user` is SET_NULL, so a removed account's
+    searches survive with no user, and an office filter would drop them."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=None, query="orphaned search")
+    client.force_login(users["admin"])
+
+    assert client.get("/administration/").context["search_analytics"]["queries"] == 1
