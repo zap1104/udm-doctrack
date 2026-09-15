@@ -561,10 +561,20 @@
       </div>
     </div>
     <div class="col-6 col-lg-3">
+      {% comment %}
+        Failed and empty only — the documents with no text and none coming
+        unless somebody acts. It counted every blank `ocr_text`, so a document
+        queued for extraction seconds ago read the same as one whose extraction
+        failed. In-progress and skipped are named underneath, not folded in.
+      {% endcomment %}
       <div class="stat-card navy">
         <div class="label">Without extracted text</div>
-        <div class="value">{{ documents_without_text }}</div>
-        <div class="hint">Searchable by metadata only</div>
+        <div class="value">{{ extraction.needs_attention }}</div>
+        <div class="hint">
+          {{ extraction.failed }} failed · {{ extraction.empty }} found no text
+          {% if extraction.in_progress %}<br>{{ extraction.in_progress }} still extracting{% endif %}
+          {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped, searchable by metadata only{% endif %}
+        </div>
       </div>
     </div>
     <div class="col-6 col-lg-3">

@@ -601,3 +601,33 @@ def test_the_completion_rate_leaves_drafts_out_of_its_denominator(
 
     assert context["total_records"] == 2, "the card still counts the draft"
     assert context["completion_rate"] == 100, "one finished of one in circulation"
+
+
+# --- extraction state, not empty text ----------------------------------------
+@pytest.mark.django_db
+def test_extraction_is_reported_by_state_and_sums_to_the_repository(
+    client, users, offices, memo_type
+):
+    """`ocr_text=""` put six states in one number: a document queued seconds ago
+    read the same as one whose extraction failed. It also missed the other way —
+    SKIPPED with a title in `ocr_text` counted as having text."""
+    from apps.documents.models import Document, OcrStatus
+
+    for status in OcrStatus:
+        Document.objects.create(
+            title=f"doc {status.value}", office=offices["REC"], document_type=memo_type,
+            source="UPLOAD", uploaded_by=users["admin"], ocr_status=status.value,
+            ocr_text="title only" if status == OcrStatus.SKIPPED else "",
+        )
+    client.force_login(users["admin"])
+    context = client.get(REPORTS).context
+    extraction = context["extraction"]
+
+    assert sum(extraction["by_status"].values()) == context["total_documents"]
+    assert extraction["needs_attention"] == 2, "FAILED and EMPTY"
+    assert extraction["in_progress"] == 2, "PENDING and RUNNING, reported apart"
+    assert extraction["skipped"] == 1, "counted though its ocr_text is not blank"
+    assert (
+        extraction["needs_attention"] + extraction["in_progress"]
+        + extraction["skipped"] + extraction["done"]
+    ) == extraction["total"]

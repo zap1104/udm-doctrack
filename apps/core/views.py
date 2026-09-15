@@ -1005,7 +1005,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
                 "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
-                "documents_without_text": documents.filter(ocr_text="").distinct().count(),
+                "extraction": self._extraction_state(documents),
                 "top_searches": self._top_searches(),
                 "search_analytics": self._search_analytics(),
             }
@@ -1241,6 +1241,42 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         }
 
     # -- document panels ---------------------------------------------------
+    def _extraction_state(self, documents):
+        """Where every document's text extraction stands, grouped by what to do.
+
+        It was `documents.filter(ocr_text="")`, which put six states in one
+        number. A document queued ten seconds ago and a document whose
+        extraction failed read identically, though the first needs nothing and
+        the second needs a retry. It also missed the other way: the seeded
+        archive is SKIPPED with its title written into `ocr_text`, so a document
+        nobody ever extracted was counted as having text.
+
+        Read from `ocr_status`, which is what the pipeline actually sets. The
+        groups partition the repository — `by_status` sums to the document
+        count, and the three headline groups plus DONE sum to it too — so the
+        card can never report a figure that is not a part of the whole.
+
+        One query: a grouped count, zero-filled for the states with no rows.
+        """
+        from apps.documents.models import OcrStatus
+
+        counts = {status.value: 0 for status in OcrStatus}
+        for row in documents.values("ocr_status").annotate(total=Count("id", distinct=True)):
+            counts[row["ocr_status"]] = counts.get(row["ocr_status"], 0) + row["total"]
+        return {
+            "by_status": counts,
+            # No text, and none coming without somebody acting.
+            "failed": counts[OcrStatus.FAILED],
+            "empty": counts[OcrStatus.EMPTY],
+            "needs_attention": counts[OcrStatus.FAILED] + counts[OcrStatus.EMPTY],
+            # Will have text shortly; nothing to do.
+            "in_progress": counts[OcrStatus.PENDING] + counts[OcrStatus.RUNNING],
+            # Deliberately not extracted — searchable by metadata only.
+            "skipped": counts[OcrStatus.SKIPPED],
+            "done": counts[OcrStatus.DONE],
+            "total": sum(counts.values()),
+        }
+
     def _document_types(self, documents):
         """Every document counted once, under its type or under Other.
 
