@@ -393,11 +393,21 @@
         <div class="card-udm-head">
           <div>
             <h2>Overdue documents by accountable office</h2>
+            {% comment %}
+              Says which question it answers, on screen. The dashboard memo groups
+              the same overdue documents by custody — where each one sits — and
+              the two give different per-office figures. Both are right; a reader
+              flipping between them had nothing telling them why they differ.
+            {% endcomment %}
             <div class="report-caption">
-              Who owes the next move. An office waiting to <em>receive</em> a document is
-              listed here, not the office that already sent it. A document waiting on two
-              offices appears under both, so these can total more than the
-              {{ overdue_all }} overdue above.
+              Who owes the next move on overdue documents. An office waiting to
+              <em>receive</em> a document is listed here, not the office that already sent it.
+              A document waiting on two offices appears under both, so these can total more
+              than the {{ overdue_all }} overdue above.
+            </div>
+            <div class="report-caption">
+              Grouped by who must act. The dashboard memo groups the same documents by where
+              they physically sit, so the per-office figures differ.
             </div>
           </div>
           <div class="chart-legend">

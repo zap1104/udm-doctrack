@@ -243,8 +243,16 @@ class DashboardMemoMixin:
                 attention.append(
                     line("Oldest", self._plural(overdue["oldest_days"], "day"))
                 )
-            # One row per office holding something late, capped by
-            # `overdue_offices` at the same limit the panel above uses.
+            # One row per office holding something late — grouped by *custody*,
+            # where each document physically is. Reports groups the same
+            # documents by who owes the next move, and the two give different
+            # per-office figures for one overdue set; both are right and they
+            # answer different questions. The line below says which one this
+            # is, because a memo handed across a desk carries no docstring.
+            #
+            # Capped at `analytics.TOP_N`, with an "Other" row for the rest.
+            if overdue_rows:
+                attention.append(line("", "By where each document is sitting:"))
             for row in overdue_rows:
                 attention.append(line(row["name"], "{} overdue, oldest {}".format(
                     row["total"], self._plural(row["oldest_days"], "day"))))
