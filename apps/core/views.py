@@ -1870,6 +1870,11 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
                 "tag_count": Tag.objects.filter(is_active=True).count(),
                 "rule_count": TagRule.objects.filter(is_active=True).count(),
                 "field_count": MetadataFieldDefinition.objects.filter(is_active=True).count(),
+                # FIXME: unscoped. An office administrator sees the last ten
+                # audit events from every office — other offices' document
+                # titles and account changes. Scope to their office (as the
+                # search-activity panel below is withheld) before a demo with
+                # office administrators from more than one office.
                 "recent_audit": AuditLog.objects.all()[:10],
                 "master_data": master_data_for(self.request.user),
             }
