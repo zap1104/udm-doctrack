@@ -1042,16 +1042,22 @@ def overdue_accountability(records):
             received_at__isnull=True,
             batch=F("record__current_batch"),
         )
+        .order_by()
         .values("to_office__code", "to_office__name")
         .annotate(total=Count("record", distinct=True))
     }
 
     holding = {
         (row["current_office__code"], row["current_office__name"]): row["total"]
-        for row in overdue.annotate(
-            _held=Exists(_current_batch_steps(received_at__isnull=False))
+        # Filtered on the `Exists` directly, not annotated and then filtered: an
+        # annotation made before `.values()` joins the GROUP BY by the columns it
+        # references from outside, which here is the record's primary key — one
+        # row per record, and the dict kept the last. Every holder read 1.
+        for row in overdue.filter(
+            Exists(_current_batch_steps(received_at__isnull=False)),
+            current_office__isnull=False,
         )
-        .filter(_held=True, current_office__isnull=False)
+        .order_by()
         .values("current_office__code", "current_office__name")
         .annotate(total=Count("id", distinct=True))
     }
@@ -1170,6 +1176,7 @@ def direction_totals(records, office) -> dict:
         return counts
     rows = (
         records.annotate(_direction=annotation)
+        .order_by()
         .values("_direction")
         .annotate(total=Count("id", distinct=True))
     )
@@ -1194,7 +1201,11 @@ def by_status_direction(records, office) -> list[dict]:
 
     tally: dict[str, dict] = {}
     if annotation is None:
-        rows = live.values("status").annotate(total=Count("id", distinct=True))
+        # `.order_by()` because Reports hands this a `.distinct()` queryset, and
+        # distinct puts Meta.ordering in the GROUP BY: a row per record, and the
+        # assignment below kept the last. Every status read 1 for a system
+        # administrator viewing every office.
+        rows = live.order_by().values("status").annotate(total=Count("id", distinct=True))
         for row in rows:
             tally[row["status"]] = {
                 "incoming": 0, "outgoing": 0, "other": 0, "total": row["total"],
@@ -1202,6 +1213,7 @@ def by_status_direction(records, office) -> list[dict]:
     else:
         rows = (
             live.annotate(_direction=annotation)
+            .order_by()
             .values("status", "_direction")
             .annotate(total=Count("id", distinct=True))
         )

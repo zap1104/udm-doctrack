@@ -1281,7 +1281,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         from apps.documents.models import OcrStatus
 
         counts = {status.value: 0 for status in OcrStatus}
-        for row in documents.values("ocr_status").annotate(total=Count("id", distinct=True)):
+        grouped = documents.order_by().values("ocr_status").annotate(total=Count("id", distinct=True))
+        for row in grouped:
             counts[row["ocr_status"]] = counts.get(row["ocr_status"], 0) + row["total"]
         return {
             "by_status": counts,

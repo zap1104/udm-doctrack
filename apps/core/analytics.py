@@ -518,9 +518,14 @@ def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
         datetime.combine(current_month, time.min), timezone.get_current_timezone()
     )
 
+    # `.order_by()` before each grouping: both querysets arrive `.distinct()`
+    # from the dashboard, and a distinct queryset puts its Meta.ordering columns
+    # in the GROUP BY — one row per document, each counting 1, and the dict kept
+    # the last. Every office read 1.
     uploaded = {
         row["office__code"]: row["total"]
         for row in documents.filter(created_at__gte=since)
+        .order_by()
         .values("office__code")
         .annotate(total=Count("id", distinct=True))
         if row["office__code"]
@@ -528,6 +533,7 @@ def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
     filed = {
         row["current_office__code"]: row["total"]
         for row in records.filter(status__in=COMPLETED_STATUSES, completed_at__gte=since)
+        .order_by()
         .values("current_office__code")
         .annotate(total=Count("id", distinct=True))
         if row["current_office__code"]
