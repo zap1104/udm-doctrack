@@ -548,7 +548,13 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             "monthly": analytics.monthly_volume(records),
             "turnaround_trend_points": self._trend_points(memo_context["turnaround_trend"]),
             "turnaround_trend_geometry": self._trend_geometry(),
-            "live_by_status": analytics.live_records_by_status(records),
+            # `live_by_status` was computed here — a grouped query on every load —
+            # and no template has read it since the "Records by status" panel
+            # left the dashboard. Found by the context allowlist in
+            # tests/test_dashboard_reports_agreement.py, which exists to catch
+            # exactly this. `analytics.live_records_by_status` is kept: it is a
+            # tested helper, and removing a function is a separate decision from
+            # removing a call nobody reads.
         }
 
     def _domain_donut(self, breakdown, group):

@@ -362,7 +362,7 @@ NEW_KEYS = [
     "overdue_offices", "overdue_summary", "tracking_donut", "repository_donut", "monthly",
     "turnaround_trend", "turnaround_trend_points", "turnaround_trend_geometry",
     "turnaround",
-    "uploads_by_office", "live_by_status", "memo", "scope",
+    "uploads_by_office", "memo", "scope",
 ]
 
 
@@ -410,7 +410,6 @@ def test_the_panels_respect_visibility(client, users, finished_record):
     everything = client.get(DASHBOARD).context
 
     assert hr <= everything["overdue_summary"]["total"]
-    assert everything["live_by_status"] is not None
 
 
 # --- the rings -------------------------------------------------------------
@@ -1670,7 +1669,9 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
 
-    for key in ("overdue_offices", "overdue_summary", "live_by_status"):
+    # `live_by_status` left this list when it was deleted — nothing rendered
+    # it. The two overdue aggregates stay: the memo reads them.
+    for key in ("overdue_offices", "overdue_summary"):
         assert key in context, key
 
 
