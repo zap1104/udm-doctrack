@@ -57,6 +57,48 @@ def bar(part: int, whole: int) -> int:
     return max(1, int(round(100 * part / whole)))
 
 
+def axis_ticks(ceiling: int, steps: int = 4) -> list[dict]:
+    """Labelled y-axis ticks for a column chart scaled to `ceiling`.
+
+    Round numbers — 0, 50, 100, 150 — then the ceiling itself on top. Round
+    steps rather than exact quarters of the ceiling: quarters of 180 are 45, 90
+    and 135, which a reader has to work at, and quarters of 5 round to 0, 1, 3,
+    4, 5 — gridlines at uneven spacing with a value missing. A round step keeps
+    the lines evenly spaced and the labels easy to read against.
+
+    The step is the smallest of 1, 2, 2.5 and 5 times a power of ten that
+    divides the scale into at most `steps` intervals, and never less than 1: a
+    count has no half-documents. The ceiling is always the top tick, so the
+    axis and "Tallest column = N" never disagree, and a round tick within 10% of
+    it is dropped rather than printed on top of it.
+
+    Each tick carries the height of the value it prints, so a label never sits
+    at a height that is not its value. A zero ceiling is an empty chart: one tick
+    at zero, and no division by it.
+    """
+    if ceiling <= 0:
+        return [{"value": 0, "offset_percent": 0.0}]
+
+    magnitude = 1
+    while True:
+        # 2.5 times a power of ten is only a whole number from 10 upward.
+        multiples = (1, 2, 2.5, 5) if magnitude >= 10 else (1, 2, 5)
+        fitting = [int(m * magnitude) for m in multiples if ceiling // int(m * magnitude) <= steps]
+        if fitting:
+            step = fitting[0]
+            break
+        magnitude *= 10
+
+    values = list(range(0, ceiling, step))
+    if values and values[-1] and (ceiling - values[-1]) * 10 < ceiling:
+        values.pop()
+    values.append(ceiling)
+    return [
+        {"value": value, "offset_percent": round(100 * value / ceiling, 2)}
+        for value in values
+    ]
+
+
 def humanise_duration(delta) -> str:
     """A timedelta as office language: '2 days 4 hrs', '3 hrs', '18 mins'."""
     if delta is None:
