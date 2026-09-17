@@ -359,7 +359,7 @@ def test_live_by_status_leaves_overdue_out(overdue_record, users):
 # ============================================================== Group B
 # --- context ---------------------------------------------------------------
 NEW_KEYS = [
-    "overdue_offices", "overdue_summary", "tracking_donut", "repository_donut", "monthly",
+    "overdue_offices", "overdue_summary", "tracking_rings", "repository_donut", "monthly",
     "turnaround_trend", "turnaround_trend_points", "turnaround_trend_geometry",
     "turnaround",
     "uploads_by_office", "memo", "scope",
@@ -415,24 +415,39 @@ def test_the_panels_respect_visibility(client, users, finished_record):
 # --- the rings -------------------------------------------------------------
 # One ring per domain. The combined ring could show the split between tracking
 # and the repository but not the shape of either, and tracking is the half
-# somebody acts on.
-DONUTS = ["tracking_donut", "repository_donut"]
+# somebody acts on. Tracking is now itself one ring per direction when the page
+# answers for an office, and one ring under every office; `_rings` reads them
+# all, so every property below holds for each.
+DONUTS = ["tracking", "repository_donut"]
+
+
+def _rings(context, key):
+    if key == "tracking":
+        return [ring["status"] for ring in context["tracking_rings"]["rings"]]
+    return [context[key]]
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
-def test_each_ring_closes_at_one_hundred_percent(client, users, filed_record, key):
+@pytest.mark.parametrize("who", ["admin", "sup"])
+def test_each_ring_closes_at_one_hundred_percent(
+    client, users, overdue_record, filed_record, key, who
+):
     """Independently rounded values leave a hairline gap or an overlap, and a
-    ring with a slit in it reads as a rendering fault."""
-    client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
+    ring with a slit in it reads as a rendering fault.
 
-    slices = donut["slices"]
-    assert slices, f"{key} drew nothing"
-    assert slices[0]["arc_start"] == 0
-    assert slices[-1]["arc_end"] == 100
-    for before, after in zip(slices, slices[1:], strict=False):
-        assert before["arc_end"] == after["arc_start"], "no slit and no overlap"
+    `overdue_record` for a live document: `filed_record` alone is completed,
+    which is the figure beside the tracking rings and not a slice of them."""
+    client.force_login(users[who])
+    drawn = [ring for ring in _rings(client.get(DASHBOARD).context, key) if ring["slices"]]
+
+    assert drawn, f"{key} drew nothing for {who}"
+    for ring in drawn:
+        slices = ring["slices"]
+        assert slices[0]["arc_start"] == 0
+        assert slices[-1]["arc_end"] == 100
+        for before, after in zip(slices, slices[1:], strict=False):
+            assert before["arc_end"] == after["arc_start"], "no slit and no overlap"
 
 
 @pytest.mark.django_db
@@ -443,20 +458,34 @@ def test_each_ring_is_measured_against_its_own_domain(client, users, filed_recor
     100%, so a Repository ring covering a third of all documents would be drawn
     as a third of a circle with two thirds of it blank."""
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
 
-    assert sum(row["percent"] for row in donut["slices"]) == 100
-    assert donut["total"] == sum(row["total"] for row in donut["slices"])
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        if donut["slices"]:
+            assert sum(row["percent"] for row in donut["slices"]) == 100
+        assert donut["total"] == sum(row["total"] for row in donut["slices"])
 
 
 @pytest.mark.django_db
-def test_the_two_rings_together_are_the_whole(client, users, filed_record):
-    """Two rings replace one; between them they still account for everything."""
+def test_every_office_ring_and_the_figure_beside_it_still_account_for_everything(
+    client, users, filed_record
+):
+    """Under every office, the tracking ring, the pending-upload figure beside
+    it and the repository ring are the whole breakdown.
+
+    Rewritten when the tracking ring split by direction. "The two rings
+    together are the whole" cannot survive a split for one office: Incoming and
+    Outgoing leave out what the office has passed on. It still holds where there
+    is one ring, and that is where it is asserted."""
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
+    tracking = context["tracking_rings"]
 
+    assert tracking["split"] is False
+    (ring,) = tracking["rings"]
     assert (
-        context["tracking_donut"]["total"] + context["repository_donut"]["total"]
+        ring["status"]["total"]
+        + tracking["pending_upload"]["total"]
+        + context["repository_donut"]["total"]
         == context["breakdown"]["total"]
     )
 
@@ -474,23 +503,24 @@ def test_splitting_the_ring_did_not_rewrite_the_shared_slices(client, users, fil
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
-def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key):
+@pytest.mark.parametrize("who", ["admin", "sup"])
+def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key, who):
     """Not the mockup's forest-green and gold."""
-    client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
+    client.force_login(users[who])
 
-    for slice_ in donut["slices"]:
-        assert slice_["colour"].startswith("var(--"), slice_["key"]
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        for slice_ in donut["slices"]:
+            assert slice_["colour"].startswith("var(--"), slice_["key"]
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
 def test_an_empty_domain_draws_no_ring(client, users, key):
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
 
-    assert donut["slices"] == []
-    assert donut["total"] == 0
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        assert donut["slices"] == []
+        assert donut["total"] == 0
 
 
 @pytest.mark.django_db

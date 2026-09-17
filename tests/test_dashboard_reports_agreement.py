@@ -328,7 +328,7 @@ DASHBOARD_CONTEXT = {
     "incoming_count", "incoming_new_today", "memo", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
     "recent_documents", "recent_records", "repository_donut", "scope",
-    "show_office_columns", "tracking_donut", "turnaround", "turnaround_trend",
+    "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
 }
 

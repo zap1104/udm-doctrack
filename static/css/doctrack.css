@@ -2045,8 +2045,39 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .donut-tooltip strong { color:var(--udm-navy-text); font-size:14px; }
 .donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
 .donut-hole-value { color:var(--udm-navy-text); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
-.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+/* .06em, not .1em: "DOCUMENTS" at .1em is 76px, which touched the rim of the
+   78px hole a 150px ring has. */
+.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 .donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
+
+/* Incoming and Outgoing side by side, sized by the card rather than the
+   viewport for the reason the column charts are (the card is half-width, and
+   narrowest, on a desktop: 395px inside the card at 1200px, 435px at 1280px).
+   Each ring stacks its legend beneath it, and the two stack on each other only
+   when the card cannot hold two 150px rings with their legends, below 360px.
+   Stacked on a desktop, the Tracking card ran twice the height of the
+   Repository card it shares a row with. */
+/* The grid is on .ring-pair-rings, inside the container: a container query
+   styles what is in a container, never the container itself. */
+.ring-pair { container:ring-pair / inline-size; }
+.ring-pair--split .ring-pair-rings { display:grid; grid-template-columns:1fr; gap:22px; }
+@container ring-pair (min-width:360px) {
+  .ring-pair--split .ring-pair-rings { grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
+  .ring-pair--split .breakdown-item { gap:6px; font-size:12.5px; }
+  .ring-pair--split .breakdown-percent { min-width:34px; }
+}
+.ring-pair-item { min-width:0; }
+.ring-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin:0 0 12px; color:var(--udm-navy-text); font-size:13px; font-weight:800; letter-spacing:.02em; }
+.ring-title span { color:var(--udm-muted); font-size:12px; font-weight:500; letter-spacing:0; }
+.ring-pair--split .donut-layout { flex-direction:column; align-items:stretch; gap:14px; }
+.ring-pair--split .donut { flex:0 0 auto; width:150px; height:150px; margin:0 auto; }
+.ring-pair--split .donut-hole { inset:36px; }
+.ring-pair--split .donut-hole-value { font-size:21px; }
+.ring-pair--split .donut-hole-label { font-size:9.5px; }
+.ring-pair--split .donut-legend { flex:0 0 auto; }
+.ring-aside { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:9px; margin-top:16px; padding:9px 4px 0; border-top:1px solid var(--chart-grid); color:var(--udm-muted); font-size:13px; text-decoration:none; }
+.ring-aside strong { color:var(--udm-navy-text); }
+.ring-aside:hover,.ring-aside:focus { color:var(--udm-navy-text); }
 
 /* ------------------------------------------------------------ trend line */
 /* Chart and summary side by side. They stacked while this panel sat in a

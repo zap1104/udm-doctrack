@@ -139,17 +139,57 @@
       <div class="card-udm-head">
         <div>
           <h2>Tracking</h2>
+          {% comment %}
+            No "N in total". The two rings are not a whole: an office has also
+            touched documents it has passed on, which are in neither, and a
+            total over the pair would invite the reader to add them up and find
+            they do not match the single ring they replaced.
+          {% endcomment %}
           <div class="card-udm-caption">
-            Documents still moving between offices &mdash;
-            {{ tracking_donut.total }} in total.
+            {% if tracking_rings.split %}
+              Documents moving in and out of {{ tracking_rings.office_label }} on their current hop.
+            {% else %}
+              Documents still moving between offices.
+            {% endif %}
           </div>
         </div>
       </div>
       <div class="card-udm-body">
-        {% if tracking_donut.total %}
-          {% include "core/_donut.html" with donut=tracking_donut %}
-        {% else %}
-          <div class="report-empty">Nothing is in tracking.</div>
+        <div class="ring-pair{% if tracking_rings.split %} ring-pair--split{% endif %}">
+          <div class="ring-pair-rings">
+          {% for ring in tracking_rings.rings %}
+            <section class="ring-pair-item" aria-labelledby="tracking-ring-{{ ring.key }}">
+              {% if tracking_rings.split %}
+                <h3 class="ring-title" id="tracking-ring-{{ ring.key }}">
+                  {{ ring.title }}
+                  <span>{% if ring.key == "incoming" %}addressed to {{ tracking_rings.office_code }}{% else %}sent by {{ tracking_rings.office_code }}{% endif %}</span>
+                </h3>
+              {% else %}
+                <h3 class="visually-hidden" id="tracking-ring-{{ ring.key }}">{{ ring.title }}</h3>
+              {% endif %}
+              {% if ring.status.total %}
+                {% include "core/_donut.html" with donut=ring.status %}
+              {% elif tracking_rings.split %}
+                <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %}.</div>
+              {% else %}
+                <div class="report-empty">Nothing is in tracking.</div>
+              {% endif %}
+            </section>
+          {% endfor %}
+          </div>
+        </div>
+        {% comment %}
+          Completed - pending upload, beside the rings rather than in them:
+          Incoming and Outgoing exclude finished work, so it cannot be a slice
+          of either without opening a page that could never list it. Same count
+          and link it had as the old ring's fourth slice.
+        {% endcomment %}
+        {% if tracking_rings.pending_upload.total %}
+          <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}">
+            <i class="breakdown-swatch" style="background:var(--chart-one)" aria-hidden="true"></i>
+            <span>Completed - pending upload</span>
+            <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
+          </a>
         {% endif %}
       </div>
     </div>

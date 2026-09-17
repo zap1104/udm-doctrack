@@ -348,7 +348,7 @@ def test_one_record_is_one_slice_that_closes_the_ring(client, users, offices, me
     client.force_login(users["admin"])
 
     response = client.get("/")
-    ring = response.context["tracking_donut"]
+    (ring,) = [ring["status"] for ring in response.context["tracking_rings"]["rings"]]
 
     assert [(s["arc_start"], s["arc_end"], s["percent"]) for s in ring["slices"]] == [(0, 100, 100)]
     assert ring["slices"][0]["path"] == analytics.ring_arc(0, 100)
@@ -410,8 +410,9 @@ def test_every_slice_has_a_title_and_the_figures_its_tooltip_shows(client, users
     body = response.content.decode()
 
     slices = _slices(body)
-    drawn = [s for ring in ("tracking_donut", "repository_donut")
-             for s in response.context[ring]["slices"] if s["path"]]
+    rings = [ring["status"] for ring in response.context["tracking_rings"]["rings"]]
+    rings.append(response.context["repository_donut"])
+    drawn = [s for ring in rings for s in ring["slices"] if s["path"]]
     assert len(slices) == len(drawn) >= 2
     for (attributes, inner), expected in zip(slices, drawn, strict=True):
         assert re.search(r"<title>[^<]+</title>", inner), inner

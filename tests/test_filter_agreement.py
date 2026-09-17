@@ -341,6 +341,112 @@ def test_the_status_of_a_slice_and_its_page_agree(client, users, traffic):
         assert all(record.status == status for record in listed), key
 
 
+# --- the direction rings ----------------------------------------------------
+# The Tracking card splits into a ring for what is coming in and one for what
+# is going out. Each is counted from the queryset its stat card counts, so the
+# hole must equal the card, and the card must equal the page it opens. Checked
+# through to the page rather than stopping at the card: two numbers that agree
+# with each other and not with the list behind them are two wrong numbers.
+def _ring_totals(context):
+    return {
+        ring["key"]: ring["status"]["total"]
+        for ring in context["tracking_rings"]["rings"]
+    }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("direction", ["incoming", "outgoing"])
+def test_each_direction_ring_is_the_card_above_it_and_the_page_it_opens(
+    client, users, traffic, direction
+):
+    client.force_login(users["sup"])
+    context = client.get(DASHBOARD).context
+
+    ring = _ring_totals(context)[direction]
+    assert ring > 0, "the fixture sends SUP work both ways"
+    assert ring == context[f"{direction}_count"]
+    assert ring == len(page_records(client, f"{TRACKING}?scope={direction}"))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("code", ["MED", "SUP", "HR"])
+def test_the_rings_answer_for_the_picked_office(client, users, offices, traffic, code):
+    client.force_login(users["admin"])
+    pk = offices[code].pk
+    context = client.get(f"{DASHBOARD}?office={pk}").context
+
+    rings = _ring_totals(context)
+    assert set(rings) == {"incoming", "outgoing"}
+    for direction in ("incoming", "outgoing"):
+        assert rings[direction] == context[f"{direction}_count"], (code, direction)
+        assert rings[direction] == len(
+            page_records(client, f"{TRACKING}?scope={direction}&office={pk}")
+        ), (code, direction)
+
+
+def _slice_records(client, context):
+    """Every direction ring slice checked against its page, returning the pks
+    each ring's slices open, per direction."""
+    opened = {}
+    for ring in context["tracking_rings"]["rings"]:
+        seen = set()
+        for row in ring["status"]["slices"]:
+            listed = page_records(client, row["url"])
+            assert row["total"] == len(listed), (ring["key"], row["label"], row["url"])
+            assert not seen & listed, "a record in two slices of one ring"
+            seen |= listed
+        assert len(seen) == ring["status"]["total"], ring["key"]
+        opened[ring["key"]] = seen
+    return opened
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("who", "picked"), [("sup", None), ("admin", "SUP"), ("admin", "HR"), ("med_admin", None)]
+)
+def test_every_direction_slice_opens_exactly_what_it_counted(
+    client, users, offices, traffic, who, picked
+):
+    """Looped over the slices, like the ring test above, so a stage added to
+    the rings later is covered without anybody remembering to cover it."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _slice_records(client, context)
+    assert set(opened) == {"incoming", "outgoing"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), [("sup", None), ("admin", "SUP"), ("admin", "HR")])
+def test_no_record_is_in_both_rings(client, users, offices, traffic, who, picked):
+    """Compared as records, not as counts. Two rings of 3 and 2 could share a
+    record and still add up to five of something."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _slice_records(client, context)
+    assert opened["incoming"] and opened["outgoing"], "both directions have traffic"
+    assert opened["incoming"].isdisjoint(opened["outgoing"])
+
+
+@pytest.mark.django_db
+def test_a_slice_link_names_the_office_only_when_one_was_picked(client, users, offices, traffic):
+    """An ordinary account's own office is implied, and naming it anyway puts
+    "your account may not filter by office" on every slice it clicks."""
+    client.force_login(users["sup"])
+    for ring in client.get(DASHBOARD).context["tracking_rings"]["rings"]:
+        for row in ring["status"]["slices"]:
+            assert "office=" not in row["url"], row["url"]
+
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+    for ring in client.get(f"{DASHBOARD}?office={pk}").context["tracking_rings"]["rings"]:
+        for row in ring["status"]["slices"]:
+            assert f"office={pk}" in row["url"], row["url"]
+
+
 # --- the office picker -----------------------------------------------------
 @pytest.mark.django_db
 def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traffic):
@@ -361,6 +467,10 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     theirs = client.get(DASHBOARD).context
     assert picked["incoming_count"] == theirs["incoming_count"]
     assert picked["outgoing_count"] == theirs["outgoing_count"]
+    # And the rings under the cards moved with them.
+    assert _ring_totals(picked) == _ring_totals(theirs) == {
+        "incoming": theirs["incoming_count"], "outgoing": theirs["outgoing_count"],
+    }
 
 
 @pytest.mark.django_db
@@ -470,6 +580,13 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         for row in response.context["breakdown"]["slices"]:
             if row["url"].startswith(TRACKING):
                 assert row["total"] == len(page_records(client, row["url"])), (row["label"], query)
+
+        rings = response.context["tracking_rings"]
+        for ring in rings["rings"]:
+            for row in ring["status"]["slices"]:
+                assert row["total"] == len(page_records(client, row["url"])), (ring["key"], row["label"], query)
+        figure = rings["pending_upload"]
+        assert figure["total"] == len(page_records(client, figure["url"])), query
 
 
 @pytest.mark.django_db

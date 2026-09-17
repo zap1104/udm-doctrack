@@ -459,6 +459,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
 
         incoming = queue(tracking_services.SCOPE_INCOMING)
         outgoing = queue(tracking_services.SCOPE_OUTGOING)
+        tracking_rings = self._tracking_rings(
+            scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"]
+        )
         # Was overdue_for(user), which has no office in it at all — so the card
         # read the same figure whichever office the picker named. This is the
         # figure the ring and the memo already use, over the scoped queryset.
@@ -522,9 +525,19 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # Renamed from inbox_count / custody_count so the old names
                 # cannot be picked up again by accident — they counted a
                 # different queue from the one their card opened.
-                "incoming_count": incoming.count(),
+                # Read off the rings when there are rings: each ring counted its
+                # queue grouped by status, and the sum of those groups is the
+                # count. Taking it from the same query is what makes "the hole
+                # equals the card above it" true by construction rather than by
+                # two queries happening to agree.
+                "incoming_count": (
+                    tracking_rings["counts"]["incoming"] if tracking_rings["split"] else incoming.count()
+                ),
                 "incoming_new_today": incoming.filter(last_movement_at__date=today).count(),
-                "outgoing_count": outgoing.count(),
+                "outgoing_count": (
+                    tracking_rings["counts"]["outgoing"] if tracking_rings["split"] else outgoing.count()
+                ),
+                "tracking_rings": tracking_rings,
                 "overdue_count": overdue_count,
                 "attention_records": attention,
                 "recent_records": recent,
@@ -551,7 +564,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         breakdown = memo_context["breakdown"]
 
         return {
-            "tracking_donut": self._domain_donut(breakdown, "tracking"),
             "repository_donut": self._domain_donut(breakdown, "repository"),
             "monthly": analytics.monthly_volume(records),
             "turnaround_trend_points": self._trend_points(memo_context["turnaround_trend"]),
@@ -565,6 +577,86 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             # removing a call nobody reads.
         }
 
+    #: The live stages a tracking ring is sliced by, in the order the ring has
+    #: always drawn them. Completed - pending upload is not among them. Incoming
+    #: and Outgoing exclude every completed status, so as a slice of a direction
+    #: ring it would always be empty, and counted any other way it would open a
+    #: page that can never list it. It is a figure beside the rings instead.
+    RING_STAGES = (
+        ("pending_receipt", Status.PENDING_RECEIPT, "Pending receipt"),
+        ("received", Status.RECEIVED, "Received"),
+        ("in_process", Status.IN_PROCESS, "In process"),
+    )
+
+    def _tracking_rings(self, scope, queues, breakdown):
+        """The Tracking card: a ring for what is coming in, and one for what is
+        going out, measured from the office the page answers for.
+
+        One ring used to cover everything the office had touched, which cannot
+        say whether a pile of "Received" is work arriving at this office or work
+        it sent and another office signed for. Direction is a property of a
+        document and an office, so the split needs an office: under every office
+        there is one ring, because Incoming and Outgoing return the same records
+        there (`apply_scope` reduces both office terms to the empty Q).
+
+        Each direction ring is counted from the same queryset as the stat card
+        above it, grouped by status in one query, and its slices open that
+        card's page narrowed by status: `?scope=incoming&status=X`, with the
+        office when one was picked, exactly as the card carries it. The two
+        rings are not a whole, and nothing on the card says they are: an office
+        also touched documents it has passed on, which are in neither.
+
+        Completed - pending upload is the tracking ring's old fourth slice,
+        carried beside the rings with the count and link it always had.
+        """
+        tracking_url = reverse("tracking:list")
+        office_pk = scope["office"].pk if scope["office"] else None
+        pending = next(row for row in breakdown["slices"] if row["key"] == "pending_upload")
+        rings = {
+            "split": not scope["all_offices"],
+            "office_label": scope["display"],
+            # Short form for the ring titles, where the full name already sits
+            # in the caption above and would wrap each title onto two lines.
+            "office_code": (
+                scope["office"].code if scope["office"]
+                else getattr(self.request.user.office, "code", "") or scope["display"]
+            ),
+            "pending_upload": {"total": pending["total"], "url": pending["url"]},
+            "counts": {},
+            "rings": [],
+        }
+
+        if scope["all_offices"]:
+            live = [
+                row for row in breakdown["slices"]
+                if row["group"] == "tracking" and row["key"] != "pending_upload"
+            ]
+            rings["rings"].append({"key": "all", "title": "Every office", "status": self._ring(live)})
+            return rings
+
+        for key, title in (("incoming", "Incoming"), ("outgoing", "Outgoing")):
+            grouped = {
+                row["status"]: row["total"]
+                # `.order_by()`: the queue is `.distinct()`, and a distinct
+                # queryset puts Meta.ordering in the GROUP BY. See 6753354.
+                for row in queues[key].order_by().values("status").annotate(
+                    total=Count("id", distinct=True)
+                )
+            }
+            rings["counts"][key] = sum(grouped.values())
+            rows = [
+                {
+                    "key": slug,
+                    "label": label,
+                    "total": grouped.get(status, 0),
+                    "colour": BREAKDOWN_COLOURS[slug],
+                    "url": core_filters.link(tracking_url, scope=key, status=status, office=office_pk),
+                }
+                for slug, status, label in self.RING_STAGES
+            ]
+            rings["rings"].append({"key": key, "title": title, "status": self._ring(rows)})
+        return rings
+
     def _domain_donut(self, breakdown, group):
         """Ring segments for one domain's slice of the combined breakdown.
 
@@ -573,6 +665,11 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         not the shape of either: five tracking stages competing with two
         repository ones in a single ring left the tracking slices too thin to
         read, which is the half somebody acts on.
+        """
+        return self._ring([row for row in breakdown["slices"] if row["group"] == group])
+
+    def _ring(self, rows):
+        """Ring segments for a set of slices, each with a total, colour and url.
 
         The ring is inline SVG, one path per slice, so each slice has geometry of
         its own; it was one `conic-gradient`, which has none. The paths come from
@@ -591,10 +688,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         independently rounded values leave either a hairline gap or an overlap,
         and a ring with a slit in it reads as a rendering fault.
         """
-        domain = [
-            row for row in breakdown["slices"]
-            if row["group"] == group and row["total"]
-        ]
+        domain = [row for row in rows if row["total"]]
         if not domain:
             return {"slices": [], "total": 0}
 
