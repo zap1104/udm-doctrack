@@ -27,10 +27,11 @@
       {# Carried, or changing the type filter would reset the page length. #}
       <input type="hidden" name="per_page" value="{{ page_size }}">
       <label class="visually-hidden" for="notification-kind">Filter by type</label>
-      <select id="notification-kind" name="kind" class="form-select form-select-sm" onchange="this.form.submit()">
+      <select id="notification-kind" name="kind" class="form-select form-select-sm" data-auto-submit>
         <option value="">All types</option>
         {% for value, label in notification_kinds %}<option value="{{ value }}"{% if active_kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
+      <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
     </form>
   </div>
 </div>

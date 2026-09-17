@@ -27,7 +27,6 @@
       for the whole site. The listener is in static/js/doctrack.js beside the
       print trigger, and the Tracking page's picker uses the same one.
 
-      FIXME: templates/core/notifications.html still has the inline version.
     {% endcomment %}
     {% if scope.can_pick %}
       <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">

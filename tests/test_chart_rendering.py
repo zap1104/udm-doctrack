@@ -353,3 +353,40 @@ def test_one_record_is_one_slice_that_closes_the_ring(client, users, offices, me
     assert [(s["arc_start"], s["arc_end"], s["percent"]) for s in ring["slices"]] == [(0, 100, 100)]
     assert ring["slices"][0]["path"] == analytics.ring_arc(0, 100)
     assert f'd="{analytics.ring_arc(0, 100)}"' in response.content.decode()
+
+
+# --- nothing the Content-Security-Policy would refuse -------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("page", ["/", "/reports/", "/notifications/"])
+def test_no_page_carries_an_inline_event_handler(client, users, charted, page):
+    """CSP allows no inline script, so an onclick= is not slow behaviour but
+    none: the browser refuses it and the control does nothing."""
+    import re
+
+    client.force_login(users["admin"])
+    response = client.get(page)
+
+    assert response.status_code == 200
+    handlers = re.findall(r"<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=", response.content.decode())
+    assert handlers == []
+
+
+def test_the_template_check_refuses_an_inline_handler(tmp_path):
+    import importlib.util
+    import pathlib
+
+    spec = importlib.util.spec_from_file_location(
+        "check_templates", pathlib.Path("scripts/check_templates.py")
+    )
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+
+    problems = []
+    checker.check_inline_handlers(
+        "x.html",
+        '<p>Turn on= the lights</p>\n{% comment %}<a onclick="no">{% endcomment %}\n'
+        '<button type="button"\n        onclick="go()">Go</button>',
+        problems,
+    )
+
+    assert len(problems) == 1 and "x.html:4: inline onclick=" in problems[0]

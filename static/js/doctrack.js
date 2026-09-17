@@ -340,6 +340,15 @@
      The markup keeps a <noscript> submit button, so the control still works
      with scripting off.
   ---------------------------------------------------------------------- */
+  /* [data-reload]: the error page's "Try Again". It carried
+     onclick="window.location.reload()", which the Content-Security-Policy
+     refuses, so the button did nothing. */
+  document.addEventListener("click", function (event) {
+    if (event.target.closest && event.target.closest("[data-reload]")) {
+      window.location.reload();
+    }
+  });
+
   document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
     select.addEventListener("change", function () {
       var form = select.form;

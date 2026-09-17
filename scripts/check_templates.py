@@ -9,6 +9,7 @@ Checks:
   3. Every {% url 'app:name' %} matches a real URL name
   4. Every {% load %} library exists
   5. Every {# comment #} closes on its own line
+  6. No inline event handler (onclick=, onchange=, ...) on any tag
 
 Runs without Django installed, so it is usable in CI before anything is set up.
 It is a linter, not a substitute for opening the pages in a browser.
@@ -124,6 +125,26 @@ def check_inline_comments(path: Path, text: str, problems: list[str]) -> None:
             cursor = end + 2
 
 
+#: An attribute starting "on" inside a tag. The site's Content-Security-Policy
+#: allows no inline script, so a handler written this way is not a slower
+#: version of the behaviour but none at all: the browser refuses it and the
+#: control silently does nothing. Two had shipped that way, the notifications
+#: type filter and the error page's "Try Again". Behaviour is declared as data-*
+#: and listened for in static/js/doctrack.js.
+HANDLER_RE = re.compile(r"<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=", re.S)
+COMMENT_BLOCK_RE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}|{#.*?#}", re.S)
+
+
+def check_inline_handlers(path: Path, text: str, problems: list[str]) -> None:
+    code = COMMENT_BLOCK_RE.sub(lambda match: "\n" * match.group(0).count("\n"), text)
+    for match in HANDLER_RE.finditer(code):
+        line_number = code.count("\n", 0, match.start(1)) + 1
+        problems.append(
+            f"{path}:{line_number}: inline {match.group(1)}= handler, which the "
+            "Content-Security-Policy blocks; use a data-* attribute and a listener"
+        )
+
+
 def main() -> int:
     if not TEMPLATES.exists():
         print(f"No templates directory at {TEMPLATES}")
@@ -142,6 +163,7 @@ def main() -> int:
 
         check_balance(shown, text, problems)
         check_inline_comments(shown, text, problems)
+        check_inline_handlers(shown, text, problems)
 
         for target in INCLUDE_RE.findall(text):
             if target not in relative:
