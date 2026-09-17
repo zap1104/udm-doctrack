@@ -153,7 +153,49 @@ def test_the_tracking_label_is_the_tallest_column_not_the_sum(users, charted):
 def test_the_repository_label_is_the_month_total(client, users, charted):
     client.force_login(users["admin"])
 
-    rows = client.get("/reports/").context["document_months"]
+    rows = client.get("/reports/").context["document_months"]["rows"]
 
     for row in rows:
         assert row["label_value"] == row["completed"] + row["historical"]
+
+
+# --- a labelled y-axis --------------------------------------------------------
+def _axis_values(body):
+    import re
+
+    values = []
+    for axis in re.findall(r'class="column-chart-axis[^"]*"[^>]*>(.*?)</div>', body, re.S):
+        values.append([int(v) for v in re.findall(r">(\d+)</span>", axis)])
+    return values
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("page, charts", [("/", 1), ("/reports/", 2)])
+def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
+    client, users, charted, page, charts
+):
+    client.force_login(users["admin"])
+    response = client.get(page)
+    body = response.content.decode()
+
+    axes = _axis_values(body)
+    assert len(axes) == charts == body.count('class="column-chart"')
+    context = response.context
+    ceilings = [context["monthly"]["ceiling"]]
+    if page == "/reports/":
+        ceilings.append(context["document_months"]["ceiling"])
+    for values, ceiling in zip(axes, ceilings, strict=True):
+        assert values[0] == 0
+        assert values[-1] == ceiling
+        assert values == sorted(set(values))
+
+
+@pytest.mark.django_db
+def test_the_axis_and_the_scale_line_agree(client, users, charted):
+    """The prose stays; it must name the same top the axis does."""
+    client.force_login(users["admin"])
+    response = client.get("/")
+
+    ceiling = response.context["monthly"]["ceiling"]
+    assert f"Tallest column = {ceiling} document" in response.content.decode()
+    assert _axis_values(response.content.decode())[0][-1] == ceiling

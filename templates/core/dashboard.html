@@ -430,7 +430,7 @@
         {% if monthly.total %}
           <div class="column-chart" role="img"
                aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
-            <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            {% include "core/_column_axis.html" with ticks=monthly.ticks %}
             <div class="column-chart-plot">
               {% for row in monthly.rows %}
                 <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">

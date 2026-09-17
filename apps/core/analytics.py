@@ -391,6 +391,7 @@ def monthly_volume(records) -> dict:
     return {
         "rows": rows,
         "ceiling": ceiling,
+        "ticks": axis_ticks(ceiling),
         "total": rows[-1]["created"] if rows else 0,
         "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
     }

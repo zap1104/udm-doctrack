@@ -173,7 +173,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     as the reverse and means the opposite thing about how the office is doing."""
     client.force_login(users["admin"])
     response = client.get(REPORTS)
-    rows = [row for row in response.context["document_months"] if row["total"]]
+    rows = [row for row in response.context["document_months"]["rows"] if row["total"]]
     body = response.content.decode()
 
     assert rows, "the fixture filed six documents this month"
@@ -207,7 +207,7 @@ def test_a_scan_is_historical_everywhere_it_is_counted(
     assert totals["historical"] == 3, "two uploads and the scan"
 
     client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["document_months"]
+    rows = client.get(REPORTS).context["document_months"]["rows"]
     assert sum(row["historical"] for row in rows) == totals["historical"]
     assert sum(row["completed"] for row in rows) == totals["completed"]
 

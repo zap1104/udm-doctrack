@@ -206,7 +206,7 @@
           {% if monthly.total %}
             <div class="column-chart" role="img"
                  aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
-              <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              {% include "core/_column_axis.html" with ticks=monthly.ticks %}
               <div class="column-chart-plot">
                 {% for row in monthly.rows %}
                   {% comment %}
@@ -625,9 +625,9 @@
           {% if total_documents %}
             <div class="column-chart" role="img"
                  aria-label="Grouped column chart of documents added per month, split into completed records filed from tracking and historical uploads. The table below lists every value.">
-              <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              {% include "core/_column_axis.html" with ticks=document_months.ticks %}
               <div class="column-chart-plot">
-                {% for row in document_months %}
+                {% for row in document_months.rows %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.completed }} completed, {{ row.historical }} historical">
                     <div class="column-pair">
                       {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
@@ -658,7 +658,7 @@
                   <th class="text-end">Total added</th>
                 </tr></thead>
                 <tbody>
-                  {% for row in document_months %}
+                  {% for row in document_months.rows %}
                     <tr>
                       <td>{{ row.month|date:"F Y" }}</td>
                       <td class="text-end num">{{ row.completed }}</td>

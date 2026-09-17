@@ -942,10 +942,19 @@ a:hover { text-decoration: underline; }
 /* --column-value-band is the strip above the tallest column that holds its
    value label, so a label at 100% sits inside the plot rather than over the
    card head. The grid starts below it: the band is not part of the scale. */
-.column-chart { --column-value-band:16px; position:relative; padding-top:6px; }
+/* --column-gutter holds the y-axis labels. The column charts only: the trend
+   chart states its scale in words and dropped its gutter as dead space, which
+   was right for it. Here four unlabelled hairlines could not say what the
+   second one meant. */
+.column-chart { --column-value-band:16px; --column-gutter:38px; position:relative; padding:6px 0 0 var(--column-gutter); }
+/* The axis and the grid cover exactly the columns' own area: below the value
+   band, above the month labels. Ticks are placed by the value they print. */
+.column-chart-axis,.column-chart-grid { position:absolute; top:calc(6px + var(--column-value-band)); bottom:22px; pointer-events:none; }
+.column-chart-axis { left:0; width:calc(var(--column-gutter) - 8px); }
+.column-chart-axis span { position:absolute; right:0; transform:translateY(50%); color:var(--udm-muted); font-size:10.5px; line-height:1; white-space:nowrap; }
 /* Hairline, solid, one shade off the surface — never dashed. */
-.column-chart-grid { position:absolute; inset:calc(6px + var(--column-value-band)) 0 22px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
-.column-chart-grid i { display:block; height:1px; background:var(--chart-grid); }
+.column-chart-grid { left:var(--column-gutter); right:0; }
+.column-chart-grid i { position:absolute; left:0; right:0; height:1px; transform:translateY(50%); background:var(--chart-grid); }
 .column-chart-plot { position:relative; display:flex; align-items:flex-end; gap:6px; height:190px; }
 /* Heights are percentages, so every box between the plot and the mark keeps a
    definite height — flex-grow here would leave the percentage unresolvable. */
@@ -1073,7 +1082,7 @@ a:hover { text-decoration: underline; }
   .h-100 { height:auto !important; }
   .row > [class*="col-"] { width:100% !important; max-width:100% !important; }
   /* Bars and columns are background paint; without this they print blank. */
-  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill {
+  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill,.column-chart-grid i {
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .chart-table { display:none; }

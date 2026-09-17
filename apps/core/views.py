@@ -1397,7 +1397,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "label_percent": _bar(completed + historical, ceiling),
                 }
             )
-        return rows
+        return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling)}
 
 # ---------------------------------------------------------------------------
 # Search activity — university-wide, so system administrators only
