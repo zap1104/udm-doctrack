@@ -435,6 +435,7 @@
               {% for row in monthly.rows %}
                 <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">
                   <div class="column-pair">
+                    {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
                     {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
                     {% if row.transferred %}<span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>{% endif %}
                     {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}

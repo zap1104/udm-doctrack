@@ -216,6 +216,7 @@
                   {% endcomment %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
                     <div class="column-pair">
+                      {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
                       {% if row.created %}
                         <span class="column column--one" style="height:{{ row.created_percent }}%"></span>
                       {% endif %}
@@ -629,6 +630,7 @@
                 {% for row in document_months %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.completed }} completed, {{ row.historical }} historical">
                     <div class="column-pair">
+                      {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
                       {% comment %}
                         A zero draws nothing: a minimum-height stub would paint a
                         value that is not there, and on this chart it would read

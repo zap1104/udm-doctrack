@@ -939,16 +939,23 @@ a:hover { text-decoration: underline; }
 .chart-swatch--alert-soft { background:var(--chart-alert-soft); }
 
 /* -------------------------------------------------------- column charts */
-.column-chart { position:relative; padding-top:6px; }
+/* --column-value-band is the strip above the tallest column that holds its
+   value label, so a label at 100% sits inside the plot rather than over the
+   card head. The grid starts below it: the band is not part of the scale. */
+.column-chart { --column-value-band:16px; position:relative; padding-top:6px; }
 /* Hairline, solid, one shade off the surface — never dashed. */
-.column-chart-grid { position:absolute; inset:6px 0 22px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+.column-chart-grid { position:absolute; inset:calc(6px + var(--column-value-band)) 0 22px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
 .column-chart-grid i { display:block; height:1px; background:var(--chart-grid); }
 .column-chart-plot { position:relative; display:flex; align-items:flex-end; gap:6px; height:190px; }
 /* Heights are percentages, so every box between the plot and the mark keeps a
    definite height — flex-grow here would leave the percentage unresolvable. */
 .column-group { flex:1 1 0; min-width:0; height:100%; }
 /* The 2px gap is the surface doing the separating — no stroke around a mark. */
-.column-pair { display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px); }
+.column-pair { position:relative; display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px - var(--column-value-band)); margin-top:var(--column-value-band); }
+/* One count per month, on the cap of the column the axis can read it against.
+   Text ink, never the series colour. Centred on the group rather than on one
+   column so it cannot drift into the neighbouring month. */
+.column-value { position:absolute; left:50%; margin-bottom:2px; transform:translateX(-50%); color:var(--udm-muted); font-size:11px; line-height:14px; text-align:center; white-space:nowrap; pointer-events:none; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
 .column--one { background:var(--chart-one); }
 .column--two { background:var(--chart-two); }

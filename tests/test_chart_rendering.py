@@ -69,3 +69,91 @@ def test_each_tick_sits_at_the_height_of_the_value_it_prints():
     for ceiling in (3, 7, 41, 180):
         for tick in analytics.axis_ticks(ceiling):
             assert tick["offset_percent"] == round(100 * tick["value"] / ceiling, 2)
+
+
+# --- a value on every column group --------------------------------------------
+@pytest.fixture
+def charted(users, offices, memo_type):
+    """A year of nothing and one month with work in it: a routed record, a
+    completed one, and a document uploaded, so every chart has a group that
+    must be labelled and groups that must not."""
+    from django.utils import timezone
+
+    from apps.documents.models import Document, Source
+    from apps.tracking.services import (
+        complete_record,
+        confirm_receipt,
+        create_draft_record,
+        route_record,
+    )
+
+    for subject in ("Moving", "Finished"):
+        record = create_draft_record(
+            user=users["med"], subject=subject, instructions="x", document_type=memo_type,
+        )
+        route_record(record, [offices["SUP"]], user=users["med"])
+        if subject == "Finished":
+            confirm_receipt(record, user=users["sup"])
+            record.refresh_from_db()
+            complete_record(record, user=users["sup"])
+    Document.objects.create(
+        title="Scanned ledger", office=offices["MED"], document_type=memo_type,
+        year=timezone.localdate().year, source=Source.UPLOAD, uploaded_by=users["med"],
+    )
+
+
+def _column_groups(body):
+    """Each column group's markup, from its opening tag to its month label."""
+    groups = []
+    for chunk in body.split('class="column-group"')[1:]:
+        groups.append(chunk.split('class="column-label"', 1)[0])
+    return groups
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("page", ["/", "/reports/"])
+def test_every_group_with_a_column_carries_its_value(client, users, charted, page):
+    """On a phone there is no hover, so a value only in a title attribute could
+    not be read at all."""
+    client.force_login(users["admin"])
+    groups = _column_groups(client.get(page).content.decode())
+
+    drawn = [group for group in groups if 'class="column column--' in group]
+    assert drawn, "the fixture puts work in the current month"
+    for group in drawn:
+        assert group.count('class="column-value') == 1, group
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("page", ["/", "/reports/"])
+def test_an_empty_month_has_no_label(client, users, charted, page):
+    client.force_login(users["admin"])
+    groups = _column_groups(client.get(page).content.decode())
+
+    empty = [group for group in groups if 'class="column column--' not in group]
+    assert empty, "eleven of the twelve months are empty"
+    assert all("column-value" not in group for group in empty)
+
+
+@pytest.mark.django_db
+def test_the_tracking_label_is_the_tallest_column_not_the_sum(users, charted):
+    """Running totals in different units do not add. The label is the value the
+    axis can read, so it never exceeds the ceiling."""
+    from apps.tracking.models import TrackingRecord
+
+    volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
+
+    for row in volume["rows"]:
+        assert row["label_value"] == max(row["created"], row["transferred"], row["completed"])
+        assert row["label_value"] <= volume["ceiling"]
+    assert volume["rows"][-1]["label_percent"] == 100
+
+
+@pytest.mark.django_db
+def test_the_repository_label_is_the_month_total(client, users, charted):
+    client.force_login(users["admin"])
+
+    rows = client.get("/reports/").context["document_months"]
+
+    for row in rows:
+        assert row["label_value"] == row["completed"] + row["historical"]

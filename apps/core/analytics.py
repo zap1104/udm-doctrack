@@ -369,11 +369,24 @@ def monthly_volume(records) -> dict:
             }
         )
 
-    ceiling = max([row["transferred"] for row in rows] + [row["created"] for row in rows] + [0])
+    # Completed is in the ceiling too. It is normally below Created — a record is
+    # created before it is completed — so this changes nothing on real data, but
+    # a backdated import that completes a record "before" it was created would
+    # otherwise draw a column taller than the plot and a label above the axis.
+    ceiling = max(
+        [max(row["created"], row["transferred"], row["completed"]) for row in rows] + [0]
+    )
     for row in rows:
         row["created_percent"] = bar(row["created"], ceiling)
         row["transferred_percent"] = bar(row["transferred"], ceiling)
         row["completed_percent"] = bar(row["completed"], ceiling)
+        # One label per month, on the tallest of its three columns. Not the sum:
+        # these are running totals in different units (Transferred counts
+        # routing steps, the other two count records), so created + transferred
+        # + completed counts nothing, and it would print above the top of the
+        # axis. The tallest value is the one the axis can be read against.
+        row["label_value"] = max(row["created"], row["transferred"], row["completed"])
+        row["label_percent"] = bar(row["label_value"], ceiling)
 
     return {
         "rows": rows,

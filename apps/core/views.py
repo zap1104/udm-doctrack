@@ -1389,6 +1389,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "historical_percent": _bar(historical, ceiling),
                     # Kept: the empty-state check and the table both read it.
                     "percent": _bar(completed + historical, ceiling),
+                    # The month's total over the two columns. Unlike the tracking
+                    # chart's running totals, these add: both count documents
+                    # filed that month. The ceiling is the tallest month total,
+                    # so the label sits at a height the axis can read.
+                    "label_value": completed + historical,
+                    "label_percent": _bar(completed + historical, ceiling),
                 }
             )
         return rows
