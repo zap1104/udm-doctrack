@@ -199,3 +199,30 @@ def test_the_axis_and_the_scale_line_agree(client, users, charted):
     ceiling = response.context["monthly"]["ceiling"]
     assert f"Tallest column = {ceiling} document" in response.content.decode()
     assert _axis_values(response.content.decode())[0][-1] == ceiling
+
+
+# --- horizontal bar rows ------------------------------------------------------
+def _css():
+    import pathlib
+
+    return pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+
+def test_a_row_with_a_share_has_a_column_for_it():
+    """The share was a fourth child in a three-column grid and wrapped onto a
+    line of its own under the office name."""
+    import pathlib
+
+    markup = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
+    row = markup[markup.index("{% for row in uploads_by_office.rows %}"):]
+    row = row[: row.index("{% endfor %}")]
+
+    assert "status-share" in row
+    assert "report-series-item--share" in row
+    assert ".report-series-item--share { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px; }" in _css()
+
+
+def test_the_series_label_column_fits_awaiting_receipt():
+    """At 82px the overdue panel read "Awaiting recei…"."""
+    assert ".report-series-item { display:grid; grid-template-columns:100px " in _css()
+    assert ".report-series-item { grid-template-columns:96px " in _css()
