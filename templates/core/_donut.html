@@ -1,14 +1,19 @@
 {% comment %}
   One ring plus its legend. Shared by the Tracking and Repository cards so the
-  two cannot drift apart — they differ only in which context variable feeds
+  two cannot drift apart: they differ only in which context variable feeds
   them, which is the `donut` argument.
 
-  The ring itself is presentation: one conic-gradient with server-computed
-  stops, hidden from assistive technology because the legend beneath carries
-  every figure it encodes.
+  The ring itself is presentation: inline SVG, one path per slice with the
+  geometry computed server-side (analytics.ring_arc), hidden from assistive
+  technology because the legend beneath carries every figure it encodes. Fill
+  goes through `style` rather than the fill attribute because the colours are
+  CSS custom properties, which presentation attributes do not resolve.
 {% endcomment %}
 <div class="donut-layout">
-  <div class="donut" style="background:conic-gradient({{ donut.stops }})" aria-hidden="true">
+  <div class="donut" aria-hidden="true">
+    <svg class="donut-ring" viewBox="0 0 190 190" focusable="false">
+      {% for slice in donut.slices %}{% if slice.path %}<path d="{{ slice.path }}" fill-rule="evenodd" style="fill:{{ slice.colour }}"></path>{% endif %}{% endfor %}
+    </svg>
     <div class="donut-hole">
       <div class="donut-hole-value num">{{ donut.total }}</div>
       <div class="donut-hole-label">documents</div>

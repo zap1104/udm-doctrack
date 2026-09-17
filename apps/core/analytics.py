@@ -20,6 +20,7 @@ Two rules hold throughout:
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+from math import cos, pi, sin
 
 from django.db.models import Avg, Count, DurationField, F, Q
 from django.db.models.functions import TruncMonth
@@ -97,6 +98,58 @@ def axis_ticks(ceiling: int, steps: int = 4) -> list[dict]:
         {"value": value, "offset_percent": round(100 * value / ceiling, 2)}
         for value in values
     ]
+
+
+#: The ring, in SVG user units. The same geometry the conic-gradient ring had in
+#: pixels: a 190 box, and a hole inset 46 from its edge. The SVG scales with the
+#: box, so the narrower rings CSS draws below 992px keep these proportions.
+RING_SIZE = 190
+RING_OUTER = 95
+RING_INNER = 49
+
+
+def _ring_point(percent: float, radius: float) -> str:
+    """A point on a circle about the ring's centre, `percent` of the way round
+    clockwise from twelve o'clock: where a conic-gradient starts, and the way
+    it runs."""
+    angle = 2 * pi * percent / 100
+    centre = RING_SIZE / 2
+    x = centre + radius * sin(angle)
+    y = centre - radius * cos(angle)
+    return f"{x:.3f} {y:.3f}"
+
+
+def ring_arc(start: float, end: float) -> str:
+    """SVG path `d` for the ring segment from `start`% to `end`%.
+
+    An annular sector: along the outer circle, in, and back along the inner
+    one. Empty for a segment with no width, which would be a zero-area path
+    nobody can see or point at.
+
+    A segment covering the whole ring is two half-circles on each radius. An
+    SVG arc whose start and end points coincide draws nothing at all, so a ring
+    with a single slice (an office whose every document is pending receipt)
+    would otherwise render as an empty box. Painted with `fill-rule: evenodd`
+    so the inner circle cuts the hole.
+    """
+    span = end - start
+    if span <= 0:
+        return ""
+    outer, inner = RING_OUTER, RING_INNER
+    if span >= 100:
+        top_o, bottom_o = _ring_point(0, outer), _ring_point(50, outer)
+        top_i, bottom_i = _ring_point(0, inner), _ring_point(50, inner)
+        return (
+            f"M {top_o} A {outer} {outer} 0 1 1 {bottom_o} A {outer} {outer} 0 1 1 {top_o} Z "
+            f"M {top_i} A {inner} {inner} 0 1 0 {bottom_i} A {inner} {inner} 0 1 0 {top_i} Z"
+        )
+    large = 1 if span > 50 else 0
+    return (
+        f"M {_ring_point(start, outer)} "
+        f"A {outer} {outer} 0 {large} 1 {_ring_point(end, outer)} "
+        f"L {_ring_point(end, inner)} "
+        f"A {inner} {inner} 0 {large} 0 {_ring_point(start, inner)} Z"
+    )
 
 
 def humanise_duration(delta) -> str:

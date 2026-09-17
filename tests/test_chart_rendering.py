@@ -303,3 +303,53 @@ def test_print_keeps_the_axis_and_the_value_labels():
     for selectors in hiding:
         for kept in ("column-value", "column-chart-axis", "column-chart-grid", "column-chart"):
             assert not re.search(rf"\.{kept}(?![-\w])", selectors), selectors
+
+
+# --- the ring, as arcs --------------------------------------------------------
+def test_a_segment_with_no_width_draws_no_path():
+    assert analytics.ring_arc(40, 40) == ""
+
+
+def test_a_ring_of_one_slice_is_drawn_as_a_whole_annulus():
+    """An SVG arc whose ends coincide draws nothing, so a single 0-100% arc
+    would render an empty box. Two half circles on each radius instead."""
+    path = analytics.ring_arc(0, 100)
+
+    assert path.count("M ") == 2, "outer circle and the hole"
+    assert path.count(" A ") == 4
+
+
+def test_the_arc_starts_at_twelve_o_clock_and_runs_clockwise():
+    """Where a conic-gradient starts and the way it runs, so the redraw puts
+    every slice where the gradient had it."""
+    size, outer = analytics.RING_SIZE, analytics.RING_OUTER
+    path = analytics.ring_arc(0, 25)
+
+    start = path.split(" A ")[0].removeprefix("M ").split()
+    assert [float(v) for v in start] == [size / 2, size / 2 - outer]
+    quarter = path.split(" A ")[1].split()[5:7]
+    assert [float(v) for v in quarter] == [size / 2 + outer, size / 2]
+
+
+@pytest.mark.parametrize("span, large", [(49, "0"), (51, "1")])
+def test_a_slice_past_half_the_ring_takes_the_long_way(span, large):
+    arc = analytics.ring_arc(0, span).split(" A ")[1].split()
+    assert arc[3] == large
+
+
+@pytest.mark.django_db
+def test_one_record_is_one_slice_that_closes_the_ring(client, users, offices, memo_type):
+    from apps.tracking.services import create_draft_record, route_record
+
+    record = create_draft_record(
+        user=users["med"], subject="Alone", instructions="x", document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    client.force_login(users["admin"])
+
+    response = client.get("/")
+    ring = response.context["tracking_donut"]
+
+    assert [(s["arc_start"], s["arc_end"], s["percent"]) for s in ring["slices"]] == [(0, 100, 100)]
+    assert ring["slices"][0]["path"] == analytics.ring_arc(0, 100)
+    assert f'd="{analytics.ring_arc(0, 100)}"' in response.content.decode()

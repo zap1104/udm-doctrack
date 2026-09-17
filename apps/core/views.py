@@ -574,10 +574,12 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         repository ones in a single ring left the tracking slices too thin to
         read, which is the half somebody acts on.
 
-        The ring is drawn with one `conic-gradient`, which needs its stops as
-        cumulative percentages — computed here rather than in the template,
-        because a running total is arithmetic and templates in this codebase do
-        not do arithmetic.
+        The ring is inline SVG, one path per slice, so each slice has geometry of
+        its own; it was one `conic-gradient`, which has none. The paths come from
+        the same walk that gave the gradient its stops (cumulative whole
+        percentages, each slice from `arc_start` to `arc_end`), computed here
+        rather than in the template, because a running total is arithmetic and
+        templates in this codebase do not do arithmetic.
 
         Percentages are recomputed against this domain's own subtotal. Reusing
         the grand-total percentages already on the slices would leave each ring
@@ -594,7 +596,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             if row["group"] == group and row["total"]
         ]
         if not domain:
-            return {"stops": "", "slices": [], "total": 0}
+            return {"slices": [], "total": 0}
 
         subtotal = sum(row["total"] for row in domain)
         # Copied, not mutated: `_memo` and the donut panels read the
@@ -602,12 +604,13 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # would silently change what the prose beneath the rings says.
         domain = [{**row, "percent": _percent(row["total"], subtotal)} for row in domain]
 
-        stops, running = [], 0
+        running = 0
         for index, row in enumerate(domain):
             share = row["percent"] if index < len(domain) - 1 else 100 - running
             start, running = running, running + share
-            stops.append("{} {}% {}%".format(row["colour"], start, running))
-        return {"stops": ", ".join(stops), "slices": domain, "total": subtotal}
+            row["arc_start"], row["arc_end"] = start, running
+            row["path"] = analytics.ring_arc(start, running)
+        return {"slices": domain, "total": subtotal}
 
     #: Plot box for the turnaround trend line, in SVG user units. Fixed, so the
     #: polyline can be built from plain numbers here and scaled by CSS in the

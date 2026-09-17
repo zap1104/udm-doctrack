@@ -427,8 +427,12 @@ def test_each_ring_closes_at_one_hundred_percent(client, users, filed_record, ke
     client.force_login(users["admin"])
     donut = client.get(DASHBOARD).context[key]
 
-    assert donut["stops"], f"{key} drew nothing"
-    assert donut["stops"].rstrip().endswith("100%")
+    slices = donut["slices"]
+    assert slices, f"{key} drew nothing"
+    assert slices[0]["arc_start"] == 0
+    assert slices[-1]["arc_end"] == 100
+    for before, after in zip(slices, slices[1:], strict=False):
+        assert before["arc_end"] == after["arc_start"], "no slit and no overlap"
 
 
 @pytest.mark.django_db
@@ -485,7 +489,7 @@ def test_an_empty_domain_draws_no_ring(client, users, key):
     client.force_login(users["admin"])
     donut = client.get(DASHBOARD).context[key]
 
-    assert donut["stops"] == ""
+    assert donut["slices"] == []
     assert donut["total"] == 0
 
 
