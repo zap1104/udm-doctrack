@@ -26,7 +26,6 @@
       blocks in production — it either failed there or held 'unsafe-inline' open
       for the whole site. The listener is in static/js/doctrack.js beside the
       print trigger, and the Tracking page's picker uses the same one.
-
     {% endcomment %}
     {% if scope.can_pick %}
       <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
@@ -40,6 +39,8 @@
             </option>
           {% endfor %}
         </select>
+        {# The ring view survives a change of office; the script keeps it in step. #}
+        <input type="hidden" name="ring" value="overdue" data-ring-view-input{% if tracking_rings.view != 'overdue' %} disabled{% endif %}>
         <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
       </form>
     {% endif %}
@@ -135,7 +136,7 @@
 
 <div class="row g-4 mb-3">
   <div class="col-xl-6">
-    <div class="card-udm h-100">
+    <div class="card-udm h-100" data-ring-card>
       <div class="card-udm-head">
         <div>
           <h2>Tracking</h2>
@@ -153,6 +154,21 @@
             {% endif %}
           </div>
         </div>
+        {% comment %}
+          A segmented control, not checkboxes: the two are alternative views of
+          the same rings, and a checkbox says the options combine. Links rather
+          than buttons, so it works with scripting off; the script swaps the
+          views in place and keeps the address in step so a refresh or a shared
+          link opens the same view.
+        {% endcomment %}
+        <nav class="segmented" aria-label="Show the tracking rings by">
+          <a class="segmented-option{% if tracking_rings.view == 'status' %} is-active{% endif %}"
+             href="{{ tracking_rings.view_urls.status }}" data-ring-view="status"
+             {% if tracking_rings.view == 'status' %}aria-current="true"{% endif %}>Status</a>
+          <a class="segmented-option{% if tracking_rings.view == 'overdue' %} is-active{% endif %}"
+             href="{{ tracking_rings.view_urls.overdue }}" data-ring-view="overdue"
+             {% if tracking_rings.view == 'overdue' %}aria-current="true"{% endif %}>Overdue</a>
+        </nav>
       </div>
       <div class="card-udm-body">
         <div class="ring-pair{% if tracking_rings.split %} ring-pair--split{% endif %}">
@@ -167,13 +183,24 @@
               {% else %}
                 <h3 class="visually-hidden" id="tracking-ring-{{ ring.key }}">{{ ring.title }}</h3>
               {% endif %}
-              {% if ring.status.total %}
-                {% include "core/_donut.html" with donut=ring.status %}
-              {% elif tracking_rings.split %}
-                <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %}.</div>
-              {% else %}
-                <div class="report-empty">Nothing is in tracking.</div>
-              {% endif %}
+              <div data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
+                {% if ring.status.total %}
+                  {% include "core/_donut.html" with donut=ring.status %}
+                {% elif tracking_rings.split %}
+                  <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %}.</div>
+                {% else %}
+                  <div class="report-empty">Nothing is in tracking.</div>
+                {% endif %}
+              </div>
+              <div data-ring-panel="overdue"{% if tracking_rings.view != 'overdue' %} hidden{% endif %}>
+                {% if ring.overdue.total %}
+                  {% include "core/_donut.html" with donut=ring.overdue hole_label="overdue" %}
+                {% elif tracking_rings.split %}
+                  <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %} is overdue.</div>
+                {% else %}
+                  <div class="report-empty">Nothing is overdue.</div>
+                {% endif %}
+              </div>
             </section>
           {% endfor %}
           </div>
@@ -182,15 +209,31 @@
           Completed - pending upload, beside the rings rather than in them:
           Incoming and Outgoing exclude finished work, so it cannot be a slice
           of either without opening a page that could never list it. Same count
-          and link it had as the old ring's fourth slice.
+          and link it had as the old ring's fourth slice. Status view only:
+          finished work is never overdue.
         {% endcomment %}
         {% if tracking_rings.pending_upload.total %}
-          <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}">
+          <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
             <i class="breakdown-swatch" style="background:var(--chart-one)" aria-hidden="true"></i>
             <span>Completed - pending upload</span>
             <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
           </a>
         {% endif %}
+        {% comment %}
+          The overdue rings are not the Overdue card, and the page says so
+          rather than leaving a reader who adds them up to find out. The card
+          counts every overdue document the office has touched on any hop; the
+          rings, only those moving in or out of it now.
+        {% endcomment %}
+        <p class="ring-note" data-ring-panel="overdue"{% if tracking_rings.view != 'overdue' %} hidden{% endif %}>
+          {% if tracking_rings.split %}
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total|pluralize:"is,are" }} moving in or out of {{ tracking_rings.office_code }} on this hop.
+          {% else %}
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total|pluralize:"is,are" }} moving between offices.
+          {% endif %}
+        </p>
       </div>
     </div>
   </div>

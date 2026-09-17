@@ -460,7 +460,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         incoming = queue(tracking_services.SCOPE_INCOMING)
         outgoing = queue(tracking_services.SCOPE_OUTGOING)
         tracking_rings = self._tracking_rings(
-            scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"]
+            scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], desk
         )
         # Was overdue_for(user), which has no office in it at all — so the card
         # read the same figure whichever office the picker named. This is the
@@ -588,9 +588,15 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         ("in_process", Status.IN_PROCESS, "In process"),
     )
 
-    def _tracking_rings(self, scope, queues, breakdown):
+    #: The two views the Tracking card can show, read from `?ring=`. Anything else
+    #: is the status view, the way every other filter on the site treats a value
+    #: it does not recognise.
+    RING_VIEWS = ("status", "overdue")
+
+    def _tracking_rings(self, scope, queues, breakdown, desk):
         """The Tracking card: a ring for what is coming in, and one for what is
-        going out, measured from the office the page answers for.
+        going out, measured from the office the page answers for, each drawable
+        by stage or by the overdue documents at each stage.
 
         One ring used to cover everything the office had touched, which cannot
         say whether a pile of "Received" is work arriving at this office or work
@@ -606,14 +612,38 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         rings are not a whole, and nothing on the card says they are: an office
         also touched documents it has passed on, which are in neither.
 
+        The overdue view keeps the same slices, overdue documents only, so it
+        reads as a subset of the status view rather than a different chart: the
+        switch changes which documents are counted and nothing else. It comes
+        from the same grouped query, as a filtered count beside the total, and
+        its slices add `&overdue=yes`. Each overdue ring equals the pages its
+        slices open; together they are not the Overdue card, which counts every
+        overdue document the office has touched on any hop, and the card says so.
+
+        Both views are computed here and both are rendered; the switch swaps
+        them in the browser. Refetching on every press would be a round trip for
+        numbers the page already had.
+
         Completed - pending upload is the tracking ring's old fourth slice,
-        carried beside the rings with the count and link it always had.
+        carried beside the rings with the count and link it always had. It is
+        never overdue, so the overdue view has no figure beside it.
         """
         tracking_url = reverse("tracking:list")
+        dashboard_url = reverse("core:dashboard")
         office_pk = scope["office"].pk if scope["office"] else None
+        requested = self.request.GET.get("ring")
+        view = requested if requested in self.RING_VIEWS else "status"
         pending = next(row for row in breakdown["slices"] if row["key"] == "pending_upload")
         rings = {
             "split": not scope["all_offices"],
+            "view": view,
+            # The switch is two links, so it works without script; the script
+            # swaps in place and keeps the address in step. The office rides
+            # along, as it does on every other link on this page.
+            "view_urls": {
+                "status": core_filters.link(dashboard_url, self.request, ring=None),
+                "overdue": core_filters.link(dashboard_url, self.request, ring="overdue"),
+            },
             "office_label": scope["display"],
             # Short form for the ring titles, where the full name already sits
             # in the caption above and would wrap each title onto two lines.
@@ -623,39 +653,58 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             ),
             "pending_upload": {"total": pending["total"], "url": pending["url"]},
             "counts": {},
+            "overdue_total": 0,
             "rings": [],
         }
 
         if scope["all_offices"]:
-            live = [
-                row for row in breakdown["slices"]
-                if row["group"] == "tracking" and row["key"] != "pending_upload"
+            directions = [("all", "Every office", desk, {})]
+        else:
+            directions = [
+                (key, title, queues[key], {"scope": key})
+                for key, title in (("incoming", "Incoming"), ("outgoing", "Outgoing"))
             ]
-            rings["rings"].append({"key": "all", "title": "Every office", "status": self._ring(live)})
-            return rings
 
-        for key, title in (("incoming", "Incoming"), ("outgoing", "Outgoing")):
+        for key, title, queryset, narrowing in directions:
             grouped = {
-                row["status"]: row["total"]
-                # `.order_by()`: the queue is `.distinct()`, and a distinct
+                row["status"]: row
+                # `.order_by()`: these querysets are `.distinct()`, and a distinct
                 # queryset puts Meta.ordering in the GROUP BY. See 6753354.
-                for row in queues[key].order_by().values("status").annotate(
-                    total=Count("id", distinct=True)
+                for row in queryset.order_by().values("status").annotate(
+                    total=Count("id", distinct=True),
+                    overdue=Count("id", filter=tracking_services.overdue_q(), distinct=True),
                 )
             }
-            rings["counts"][key] = sum(grouped.values())
-            rows = [
-                {
-                    "key": slug,
-                    "label": label,
-                    "total": grouped.get(status, 0),
-                    "colour": BREAKDOWN_COLOURS[slug],
-                    "url": core_filters.link(tracking_url, scope=key, status=status, office=office_pk),
-                }
-                for slug, status, label in self.RING_STAGES
-            ]
-            rings["rings"].append({"key": key, "title": title, "status": self._ring(rows)})
+            if narrowing:
+                rings["counts"][key] = sum(row["total"] for row in grouped.values())
+
+            links = {**narrowing, "office": office_pk}
+            ring = {
+                "key": key,
+                "title": title,
+                "status": self._ring(self._stage_slices(grouped, "total", tracking_url, links)),
+                "overdue": self._ring(
+                    self._stage_slices(grouped, "overdue", tracking_url, {**links, "overdue": "yes"})
+                ),
+            }
+            rings["overdue_total"] += ring["overdue"]["total"]
+            rings["rings"].append(ring)
         return rings
+
+    def _stage_slices(self, grouped, measure, tracking_url, links):
+        """One slice per live stage: `measure` ("total" or "overdue") from the
+        grouped counts, and a link to the tracking list narrowed by `links`
+        plus the stage. A None in `links` leaves that parameter off."""
+        return [
+            {
+                "key": slug,
+                "label": label,
+                "total": grouped.get(status, {}).get(measure, 0),
+                "colour": BREAKDOWN_COLOURS[slug],
+                "url": core_filters.link(tracking_url, **{**links, "status": status}),
+            }
+            for slug, status, label in self.RING_STAGES
+        ]
 
     def _domain_donut(self, breakdown, group):
         """Ring segments for one domain's slice of the combined breakdown.

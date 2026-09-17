@@ -2075,6 +2075,14 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .ring-pair--split .donut-hole-value { font-size:21px; }
 .ring-pair--split .donut-hole-label { font-size:9.5px; }
 .ring-pair--split .donut-legend { flex:0 0 auto; }
+/* Two options, one pressed. The pressed one is filled rather than merely
+   underlined so it reads at a glance which view the rings are in. */
+.segmented { display:inline-flex; flex:0 0 auto; padding:2px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-canvas); }
+.segmented-option { padding:4px 12px; border-radius:6px; color:var(--udm-muted); font-size:12.5px; font-weight:700; text-decoration:none; }
+.segmented-option:hover,.segmented-option:focus-visible { color:var(--udm-navy-text); }
+.segmented-option.is-active { background:var(--udm-surface); box-shadow:0 1px 2px rgba(6,28,52,.12); color:var(--udm-navy-text); }
+.ring-note { margin:16px 0 0; padding-top:9px; border-top:1px solid var(--chart-grid); color:var(--udm-muted); font-size:12.5px; }
+.ring-note[hidden],.ring-aside[hidden] { display:none; }
 .ring-aside { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:9px; margin-top:16px; padding:9px 4px 0; border-top:1px solid var(--chart-grid); color:var(--udm-muted); font-size:13px; text-decoration:none; }
 .ring-aside strong { color:var(--udm-navy-text); }
 .ring-aside:hover,.ring-aside:focus { color:var(--udm-navy-text); }

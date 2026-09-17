@@ -1129,4 +1129,34 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") clear();
   });
+
+  /* The Tracking card's Status | Overdue switch. Both views are already on the
+     page; this shows one and hides the other, and keeps the address and the
+     office picker in step so a refresh, a shared link or a change of office
+     keeps the view. The links still work with scripting off, by loading the
+     page with ?ring= set. */
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest && event.target.closest("[data-ring-view]");
+    var card = link && link.closest("[data-ring-card]");
+    if (!card) return;
+    event.preventDefault();
+    clear();
+    var view = link.getAttribute("data-ring-view");
+    var panels = card.querySelectorAll("[data-ring-panel]");
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].hidden = panels[i].getAttribute("data-ring-panel") !== view;
+    }
+    var options = card.querySelectorAll("[data-ring-view]");
+    for (var k = 0; k < options.length; k++) {
+      var on = options[k] === link;
+      options[k].classList.toggle("is-active", on);
+      if (on) options[k].setAttribute("aria-current", "true");
+      else options[k].removeAttribute("aria-current");
+    }
+    var inputs = document.querySelectorAll("[data-ring-view-input]");
+    for (var n = 0; n < inputs.length; n++) inputs[n].disabled = view !== "overdue";
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", link.getAttribute("href"));
+    }
+  });
 })();

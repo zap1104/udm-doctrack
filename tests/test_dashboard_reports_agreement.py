@@ -400,7 +400,11 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: system administrator viewing every office. A change that adds a panel query
 #: moves these, and the failure says by how much. Raise them deliberately, with
 #: the reason in the commit.
-DASHBOARD_QUERIES = 50
+#: 51 from feature/chart-legibility's Status | Overdue switch: under every office
+#: the single tracking ring counts its stages and their overdue documents in one
+#: grouped query of its own, where it used to read the stage counts off the
+#: breakdown and had no overdue counts to read.
+DASHBOARD_QUERIES = 51
 REPORTS_QUERIES = 48
 
 

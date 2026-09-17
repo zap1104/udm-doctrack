@@ -447,6 +447,121 @@ def test_a_slice_link_names_the_office_only_when_one_was_picked(client, users, o
             assert f"office={pk}" in row["url"], row["url"]
 
 
+# --- the overdue view of the rings -------------------------------------------
+@pytest.fixture
+def late_traffic(traffic):
+    """Four of the fixture's five documents past their deadline, spread across
+    both directions and all three stages, so the overdue rings have something in
+    every place a mistake could hide."""
+    from django.utils import timezone
+
+    past = timezone.now() - timedelta(days=2)
+    late = [traffic[key].pk for key in ("arriving", "working", "sent", "elsewhere")]
+    TrackingRecord.objects.filter(pk__in=late).update(due_at=past)
+    return traffic
+
+
+VIEWERS = [("sup", None), ("admin", "SUP"), ("admin", "HR"), ("admin", None), ("med_admin", None)]
+
+
+def _opened(client, context, view):
+    """Each ring's slices for one view checked against their pages; the pks each
+    ring's slices open."""
+    opened = {}
+    for ring in context["tracking_rings"]["rings"]:
+        seen = set()
+        for row in ring[view]["slices"]:
+            listed = page_records(client, row["url"])
+            assert row["total"] == len(listed), (ring["key"], view, row["label"], row["url"])
+            seen |= listed
+        assert len(seen) == ring[view]["total"], (ring["key"], view)
+        opened[ring["key"]] = seen
+    return opened
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_every_overdue_slice_opens_exactly_what_it_counted(
+    client, users, offices, late_traffic, who, picked
+):
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _opened(client, context, "overdue")
+    rings = context["tracking_rings"]
+    assert rings["overdue_total"] == sum(len(pks) for pks in opened.values())
+    assert rings["overdue_total"] > 0, "the fixture is late in every direction"
+    for row in (s for ring in rings["rings"] for s in ring["overdue"]["slices"]):
+        assert "overdue=yes" in row["url"], row["url"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_the_overdue_rings_are_a_subset_of_the_status_rings(
+    client, users, offices, late_traffic, who, picked
+):
+    """Same slices, overdue documents only: the switch changes which documents
+    are counted and nothing else, so every overdue slice is inside the status
+    slice of the same stage."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    status, overdue = _opened(client, context, "status"), _opened(client, context, "overdue")
+    for key in status:
+        assert overdue[key] <= status[key], key
+    for ring in context["tracking_rings"]["rings"]:
+        by_stage = {row["key"]: row["total"] for row in ring["status"]["slices"]}
+        for row in ring["overdue"]["slices"]:
+            assert row["total"] <= by_stage[row["key"]], (ring["key"], row["key"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_the_overdue_note_says_how_the_rings_relate_to_the_card(
+    client, users, offices, late_traffic, who, picked
+):
+    """The rings count what is moving in or out now; the card, every overdue
+    document the office has touched. Never more in the rings than on the card,
+    and the page says which is which rather than leaving the reader to add."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    response = client.get(DASHBOARD + query)
+    context = response.context
+
+    rings, card = context["tracking_rings"]["overdue_total"], context["overdue_count"]
+    assert rings <= card
+    body = " ".join(response.content.decode().split())
+    assert f"{rings} of the {card} overdue document" in body
+
+
+@pytest.mark.django_db
+def test_the_view_is_in_the_address_and_survives_a_change_of_office(
+    client, users, offices, late_traffic
+):
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+
+    default = client.get(f"{DASHBOARD}?office={pk}")
+    assert default.context["tracking_rings"]["view"] == "status"
+    body = default.content.decode()
+    assert 'name="ring" value="overdue" data-ring-view-input disabled' in body
+
+    chosen = client.get(f"{DASHBOARD}?office={pk}&ring=overdue")
+    rings = chosen.context["tracking_rings"]
+    assert rings["view"] == "overdue"
+    assert f"office={pk}" in rings["view_urls"]["status"]
+    assert "ring=" not in rings["view_urls"]["status"]
+    assert f"office={pk}" in rings["view_urls"]["overdue"] and "ring=overdue" in rings["view_urls"]["overdue"]
+    body = chosen.content.decode()
+    assert 'data-ring-view-input disabled' not in body
+    assert '<div data-ring-panel="overdue">' in body
+    assert '<div data-ring-panel="status" hidden>' in body
+
+    assert client.get(f"{DASHBOARD}?ring=nonsense").context["tracking_rings"]["view"] == "status"
+
+
 # --- the office picker -----------------------------------------------------
 @pytest.mark.django_db
 def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traffic):
