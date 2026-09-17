@@ -226,3 +226,80 @@ def test_the_series_label_column_fits_awaiting_receipt():
     """At 82px the overdue panel read "Awaiting recei…"."""
     assert ".report-series-item { display:grid; grid-template-columns:100px " in _css()
     assert ".report-series-item { grid-template-columns:96px " in _css()
+
+
+# --- legible at every width ---------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("page", ["/", "/reports/"])
+def test_every_column_chart_is_sized_by_its_own_width(client, users, charted, page):
+    """Each chart, its scale line and its table sit inside one frame, because
+    the frame is what the width queries measure and what the narrow tier opens
+    the table inside."""
+    client.force_login(users["admin"])
+    body = client.get(page).content.decode()
+
+    frames = body.split('<div class="column-chart-frame">')[1:]
+    assert len(frames) == body.count('class="column-chart"') >= 1
+    for frame in frames:
+        assert frame.index('class="column-chart"') < frame.index('class="chart-table"')
+
+
+def test_the_width_tiers_are_container_queries_not_viewport_ones():
+    css = _css()
+
+    assert ".column-chart-frame { container:column-chart / inline-size; }" in css
+    assert "@container column-chart (max-width:419.98px)" in css
+    assert "@container column-chart (max-width:359.98px)" in css
+    # Nothing sizes the column plot off the viewport any more.
+    import re
+
+    for block in re.findall(r"@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)", css):
+        assert ".column-chart-plot" not in block, block
+
+
+def test_below_the_narrow_tier_the_plot_gives_way_to_the_open_table():
+    css = _css()
+    narrow = css[css.index("@container column-chart (max-width:359.98px) {"):]
+    narrow = narrow[: narrow.index("\n}")]
+
+    assert ".column-chart,.chart-scale { display:none; }" in narrow
+    assert ".chart-table::details-content { content-visibility:visible; }" in css
+    assert ".chart-table > summary { display:none; }" in css
+
+
+def test_a_chart_table_is_not_held_to_the_record_list_minimum_width():
+    """720px inside a 435px card scrolled the Completed column out of sight."""
+    assert ".chart-table .table-responsive > .table-udm { min-width:0; }" in _css()
+
+
+@pytest.mark.django_db
+def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted):
+    client.force_login(users["admin"])
+    body = client.get("/reports/").content.decode()
+
+    assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 24
+
+
+def test_a_legend_in_a_card_head_wraps_rather_than_clips():
+    assert ".card-udm .card-udm-head:has(> .chart-legend) { flex-wrap:wrap;" in _css()
+
+
+def test_print_keeps_the_axis_and_the_value_labels():
+    """Print hides the tables, so the numbers on paper are the ones on the
+    chart. No rule that hides something when printing may name them."""
+    import re
+
+    css = _css()
+    hiding = []
+    for block in re.split(r"@media print\s*\{", css)[1:]:
+        depth, end = 1, 0
+        while depth and end < len(block):
+            depth += {"{": 1, "}": -1}.get(block[end], 0)
+            end += 1
+        for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", block[:end]):
+            if re.search(r"display\s*:\s*none", body):
+                hiding.append(selectors)
+    assert hiding, "the print blocks do hide things, so this is not vacuous"
+    for selectors in hiding:
+        for kept in ("column-value", "column-chart-axis", "column-chart-grid", "column-chart"):
+            assert not re.search(rf"\.{kept}(?![-\w])", selectors), selectors

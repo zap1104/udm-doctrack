@@ -982,6 +982,68 @@ a:hover { text-decoration: underline; }
 .chart-table { margin-top:12px; }
 .chart-table summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
 .chart-table table { margin-top:8px; }
+/* The site-wide `.table-responsive > .table-udm { min-width:720px }` is for the
+   record lists. A chart's table has three to five short columns, and under that
+   minimum it scrolled sideways inside a 435px dashboard card, hiding the
+   Completed column behind a scroll nobody could see. */
+.chart-table .table-responsive > .table-udm { min-width:0; }
+
+/* ------------------------------------------- column charts, by their width */
+/* Sized by the chart's own width, not the viewport's. The dashboard chart sits
+   in a half-width column beside the sidebar from 1200px up, so it is at its
+   narrowest on a desktop: 395px at a 1200px viewport and 435px on a 1280px
+   laptop (a 1920px panel at 150%), against 679px on a 768px tablet. Viewport
+   breakpoints would have shrunk the chart where it had room and left it full
+   size where it had none. Measured widths, 320px to 1920px viewports:
+   dashboard 245-755px, Reports 245-891px.
+
+   Pitch per month is (width - gutter - 11 gaps) / 12. A three-digit value label
+   is about 20px at 11px type.
+     >= 420px  full: 190px plot, 38px gutter, every label.
+     360-419px compact: 170px plot, 10px type, narrower columns. Every label
+               still fits: the pitch never drops below 27px.
+     < 360px   the grouped plot stops pretending. Twelve months of three
+               columns come to under 5px a column, so the plot is hidden and
+               the "View as table" fallback is shown open instead. Every phone
+               held upright lands here (300px at 375, 339px at 414). */
+.column-chart-frame { container:column-chart / inline-size; }
+.chart-month-short { display:none; }
+@container column-chart (max-width:419.98px) {
+  .column-chart { --column-value-band:14px; --column-gutter:30px; }
+  .column-chart-plot { height:170px; gap:4px; }
+  .column { max-width:10px; }
+  .column-value,.column-label,.column-chart-axis span { font-size:10px; }
+}
+@container column-chart (max-width:359.98px) {
+  .column-chart,.chart-scale { display:none; }
+  .chart-table { margin-top:0; }
+  /* The table is the chart now, so it has to fit: up to five columns in 245px.
+     Short month names, and headers that may wrap onto two lines. */
+  .chart-table .table-udm th,.chart-table .table-udm td { padding:9px 4px; font-size:12px; }
+  .chart-table .table-udm th { font-size:9.5px; letter-spacing:0; white-space:normal; vertical-align:bottom; }
+  .chart-month-long { display:none; }
+  .chart-month-short { display:inline; white-space:nowrap; }
+}
+/* Open by default at that width. `open` is an attribute, not something a query
+   can set, so the closed content is made visible instead and the summary that
+   would toggle nothing is hidden. Browsers without ::details-content keep the
+   summary, so the table is one tap away rather than gone. */
+@supports selector(::details-content) {
+  @container column-chart (max-width:359.98px) {
+    .chart-table::details-content { content-visibility:visible; }
+    .chart-table > summary { display:none; }
+    .chart-table table { margin-top:0; }
+  }
+}
+
+/* A chart's legend is its identity channel, so it must never be clipped. The
+   card head is one flex row inside a card that hides overflow: a long caption
+   squeezed the legend into a single column at 1280px and cut it off at 375px
+   ("Awaitin"). The caption keeps at least 260px and the legend drops below it
+   when the two do not fit on one line. */
+.card-udm .card-udm-head:has(> .chart-legend) { flex-wrap:wrap; align-items:flex-start; }
+.card-udm .card-udm-head:has(> .chart-legend) > div:first-child { flex:1 1 260px; }
+.card-udm .card-udm-head > .chart-legend { flex:0 1 auto; }
 
 /* ---------------------------------------------------------- status by row */
 /* The label column is a fixed width rather than sized to its own content
@@ -1050,8 +1112,6 @@ a:hover { text-decoration: underline; }
   /* Same label width as the desktop rule — the content that has to fit does
      not shrink on a narrow screen, only the bar column does. */
   .status-row { grid-template-columns:152px minmax(0,1fr) 30px 36px; gap:8px; }
-  .column-chart-plot { height:150px; }
-  .column-label { font-size:10px; }
 }
 @media print {
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }

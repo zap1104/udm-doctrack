@@ -204,6 +204,7 @@
         </div>
         <div class="card-udm-body">
           {% if monthly.total %}
+            <div class="column-chart-frame">
             <div class="column-chart" role="img"
                  aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
               {% include "core/_column_axis.html" with ticks=monthly.ticks %}
@@ -249,7 +250,7 @@
                 <tbody>
                   {% for row in monthly.rows %}
                     <tr>
-                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                       <td class="text-end num">{{ row.created }}</td>
                       <td class="text-end num">{{ row.transferred }}</td>
                       <td class="text-end num">{{ row.completed }}</td>
@@ -259,6 +260,7 @@
                 </tbody>
               </table></div>
             </details>
+            </div>
           {% else %}
             <div class="report-empty">No tracking activity recorded yet.</div>
           {% endif %}
@@ -623,6 +625,7 @@
         </div>
         <div class="card-udm-body">
           {% if total_documents %}
+            <div class="column-chart-frame">
             <div class="column-chart" role="img"
                  aria-label="Grouped column chart of documents added per month, split into completed records filed from tracking and historical uploads. The table below lists every value.">
               {% include "core/_column_axis.html" with ticks=document_months.ticks %}
@@ -660,7 +663,7 @@
                 <tbody>
                   {% for row in document_months.rows %}
                     <tr>
-                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                       <td class="text-end num">{{ row.completed }}</td>
                       <td class="text-end num">{{ row.historical }}</td>
                       <td class="text-end num">{{ row.total }}</td>
@@ -669,6 +672,7 @@
                 </tbody>
               </table></div>
             </details>
+            </div>
           {% else %}
             <div class="report-empty">The repository is empty for these filters.</div>
           {% endif %}
