@@ -1155,6 +1155,7 @@ a:hover { text-decoration: underline; }
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .chart-table { display:none; }
+  .donut-tooltip { display:none !important; }
 }
 
 /* ================================================================
@@ -2023,12 +2024,25 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) 44px 116px; }
 
 /* ------------------------------------------------------------------ ring */
-.donut-layout { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+.donut-layout { position:relative; display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
 /* Inline SVG, one path per slice, geometry computed server-side so the ring
    always closes at 100%. The paths are annular sectors, so the hole is really
    empty; the disc behind the figure stays for the figure's legibility. */
 .donut { position:relative; flex:0 0 190px; width:190px; height:190px; border-radius:50%; }
 .donut-ring { position:absolute; inset:0; display:block; width:100%; height:100%; overflow:visible; }
+/* Pointing at a slice brings it forward by setting the others back, rather than
+   by moving it: the ring's geometry stays exactly the numbers it encodes. The
+   legend row for the same slice lights up with it, so the reader sees which
+   line of figures the slice is. */
+.donut-slice { cursor:pointer; transition:opacity 120ms ease; }
+.donut-layout.has-active-slice .donut-slice:not(.is-active) { opacity:.4; }
+.donut-layout .breakdown-item.is-active { background:var(--udm-canvas); }
+/* The value leads and the label follows; the key is a short stroke of the
+   slice's colour, and the text stays in text ink. */
+.donut-tooltip { position:absolute; z-index:5; display:flex; align-items:baseline; gap:7px; max-width:240px; padding:6px 10px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); box-shadow:0 6px 18px rgba(6,28,52,.16); color:var(--udm-muted); font-size:12px; line-height:1.3; pointer-events:none; }
+.donut-tooltip[hidden] { display:none; }
+.donut-tooltip-key { flex:0 0 12px; align-self:center; height:3px; border-radius:2px; }
+.donut-tooltip strong { color:var(--udm-navy-text); font-size:14px; }
 .donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
 .donut-hole-value { color:var(--udm-navy-text); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
 .donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }

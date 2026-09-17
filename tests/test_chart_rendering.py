@@ -390,3 +390,72 @@ def test_the_template_check_refuses_an_inline_handler(tmp_path):
     )
 
     assert len(problems) == 1 and "x.html:4: inline onclick=" in problems[0]
+
+
+# --- pointing at a slice ------------------------------------------------------
+def _slices(body):
+    import re
+
+    return re.findall(r"<path class=\"donut-slice\"([^>]*)>(.*?)</path>", body, re.S)
+
+
+@pytest.mark.django_db
+def test_every_slice_has_a_title_and_the_figures_its_tooltip_shows(client, users, charted):
+    """<title> is the fallback where script does not run. It is not enough by
+    itself: a touch screen never shows one, which is why the data is there."""
+    import re
+
+    client.force_login(users["admin"])
+    response = client.get("/")
+    body = response.content.decode()
+
+    slices = _slices(body)
+    drawn = [s for ring in ("tracking_donut", "repository_donut")
+             for s in response.context[ring]["slices"] if s["path"]]
+    assert len(slices) == len(drawn) >= 2
+    for (attributes, inner), expected in zip(slices, drawn, strict=True):
+        assert re.search(r"<title>[^<]+</title>", inner), inner
+        assert f'data-count="{expected["total"]}"' in attributes
+        assert f'data-percent="{expected["percent"]}"' in attributes
+        assert f'data-slice="{expected["key"]}"' in attributes
+
+
+@pytest.mark.django_db
+def test_a_slice_follows_the_same_link_as_its_legend_row(client, users, charted):
+    """The ring adds no destination of its own and no second set of links for
+    a screen reader: the path is aria-hidden, the legend is the link."""
+    import html
+    import re
+
+    client.force_login(users["admin"])
+    body = client.get("/").content.decode()
+
+    for attributes, _inner in _slices(body):
+        key = re.search(r'data-slice="([^"]+)"', attributes).group(1)
+        href = html.unescape(re.search(r'data-href="([^"]*)"', attributes).group(1))
+        legend = re.search(rf'<a class="breakdown-item" href="([^"]*)" data-slice="{key}"', body)
+        assert legend and html.unescape(legend.group(1)) == href
+    assert "<a " not in body[body.index('<svg class="donut-ring"'):body.index("</svg>")]
+
+
+def test_the_tooltip_never_prints():
+    assert ".donut-tooltip { display:none !important; }" in _css()
+
+
+def test_the_slice_dimming_respects_reduced_motion():
+    """The hover is an opacity change with a short transition, and the global
+    reduced-motion rule collapses every transition."""
+    css = _css()
+    assert ".donut-slice { cursor:pointer; transition:opacity 120ms ease; }" in css
+    assert "@media (prefers-reduced-motion: reduce) {\n  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }" in css
+
+
+def test_the_ring_listener_is_delegated_and_writes_text_not_markup():
+    import pathlib
+
+    script = pathlib.Path("static/js/doctrack.js").read_text(encoding="utf-8")
+    ring = script[script.index("Ring slices"):]
+
+    assert "innerHTML" not in ring
+    assert 'document.addEventListener("click"' in ring
+    assert ".textContent =" in ring

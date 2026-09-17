@@ -975,3 +975,158 @@
     else if (query.addListener) query.addListener(onChange);
   }
 })();
+
+/* --------------------------------------------------------------------------
+   Ring slices
+
+   The rings are aria-hidden SVG; the legend beside each one is the accessible
+   path to its figures and links. This is the pointer's way into the same
+   figures: point at a slice for its count, label and share, and follow it the
+   way its legend row would be followed.
+
+   - Mouse or pen: hovering shows the tooltip, clicking follows the slice.
+   - Touch has no hover, so the first tap shows the tooltip and a second tap
+     on the same slice follows it. A tap anywhere else puts it away.
+   - Hovering or focusing a legend row lights up its slice, so a keyboard
+     user tabbing through the legend sees which slice each row is.
+
+   One set of delegated listeners on the document, so a ring rendered later (or
+   more than one ring on a page) needs no setup of its own. Labels are written
+   with textContent: they are data, not markup.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  var active = null;
+  var pointerType = "mouse";
+
+  function layoutOf(node) {
+    return node && node.closest ? node.closest(".donut-layout") : null;
+  }
+
+  function sliceIn(layout, key) {
+    var slices = layout.querySelectorAll(".donut-slice");
+    for (var i = 0; i < slices.length; i++) {
+      if (slices[i].getAttribute("data-slice") === key) return slices[i];
+    }
+    return null;
+  }
+
+  function clear() {
+    if (!active) return;
+    var layout = layoutOf(active);
+    active.classList.remove("is-active");
+    if (layout) {
+      layout.classList.remove("has-active-slice");
+      var lit = layout.querySelectorAll(".breakdown-item.is-active");
+      for (var i = 0; i < lit.length; i++) lit[i].classList.remove("is-active");
+      var tip = layout.querySelector(".donut-tooltip");
+      if (tip) tip.hidden = true;
+    }
+    active = null;
+  }
+
+  function activate(slice) {
+    if (active === slice) return;
+    clear();
+    var layout = layoutOf(slice);
+    if (!layout) return;
+    active = slice;
+    slice.classList.add("is-active");
+    layout.classList.add("has-active-slice");
+    var items = layout.querySelectorAll(".breakdown-item[data-slice]");
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getAttribute("data-slice") === slice.getAttribute("data-slice")) {
+        items[i].classList.add("is-active");
+      }
+    }
+  }
+
+  function showTooltip(slice, clientX, clientY) {
+    activate(slice);
+    var layout = layoutOf(slice);
+    var tip = layout && layout.querySelector(".donut-tooltip");
+    if (!tip) return;
+    tip.querySelector(".donut-tooltip-key").style.background = slice.style.fill;
+    tip.querySelector("strong").textContent = slice.getAttribute("data-count");
+    tip.querySelector("span").textContent =
+      slice.getAttribute("data-label") + " \u00b7 " + slice.getAttribute("data-percent") + "%";
+    tip.hidden = false;
+
+    /* Above the pointer, centred on it, kept inside the ring's own panel so the
+       card's clipped edge never cuts it. Below the pointer when there is no
+       room above. */
+    var box = layout.getBoundingClientRect();
+    var width = tip.offsetWidth;
+    var height = tip.offsetHeight;
+    var x = clientX - box.left;
+    var y = clientY - box.top;
+    var left = Math.max(0, Math.min(x - width / 2, box.width - width));
+    var top = y - height - 12;
+    if (top < 0) top = y + 18;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function follow(slice) {
+    var href = slice.getAttribute("data-href");
+    if (href) window.location.assign(href);
+  }
+
+  document.addEventListener("pointerdown", function (event) {
+    pointerType = event.pointerType || "mouse";
+  });
+
+  document.addEventListener("pointermove", function (event) {
+    if (event.pointerType === "touch") return;
+    var slice = event.target.closest && event.target.closest(".donut-slice");
+    if (slice) showTooltip(slice, event.clientX, event.clientY);
+  });
+
+  document.addEventListener("pointerout", function (event) {
+    if (event.pointerType === "touch" || !active) return;
+    var into = event.relatedTarget;
+    if (event.target.closest && event.target.closest(".donut-slice") &&
+        !(into && into.closest && into.closest(".donut-slice"))) {
+      clear();
+    }
+  });
+
+  document.addEventListener("click", function (event) {
+    var slice = event.target.closest && event.target.closest(".donut-slice");
+    if (!slice) {
+      if (pointerType === "touch") clear();
+      return;
+    }
+    if (pointerType === "touch" && active !== slice) {
+      showTooltip(slice, event.clientX, event.clientY);
+      return;
+    }
+    follow(slice);
+  });
+
+  function fromLegend(event, on) {
+    var item = event.target.closest && event.target.closest(".breakdown-item[data-slice]");
+    var layout = layoutOf(item);
+    if (!item || !layout) return;
+    if (!on) {
+      /* Moving between the label and the count inside one row is not leaving
+         the row. */
+      var into = event.relatedTarget;
+      if (into && into.closest && into.closest(".breakdown-item") === item) return;
+      clear();
+      return;
+    }
+    var slice = sliceIn(layout, item.getAttribute("data-slice"));
+    if (slice) activate(slice);
+  }
+
+  document.addEventListener("mouseover", function (event) { fromLegend(event, true); });
+  document.addEventListener("mouseout", function (event) { fromLegend(event, false); });
+  document.addEventListener("focusin", function (event) { fromLegend(event, true); });
+  document.addEventListener("focusout", function (event) { fromLegend(event, false); });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") clear();
+  });
+})();
