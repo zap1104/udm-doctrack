@@ -32,7 +32,13 @@
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office"
                 data-auto-submit>
-          <option value="">All offices</option>
+          {% comment %}
+            System administrators only. For an office administrator an empty
+            office means their own office, so an "All offices" option reloaded
+            the page on the office already selected and claimed a scope the page
+            never showed. The Tracking picker gates its option the same way.
+          {% endcomment %}
+          {% if user.is_system_admin %}<option value="">All offices</option>{% endif %}
           {% for office in scope.offices %}
             <option value="{{ office.pk }}" {% if scope.office.pk == office.pk %}selected{% endif %}>
               {{ office.code }} · {{ office.name }}
@@ -87,6 +93,30 @@
   counted, and it cost a fifth count query on every dashboard load.
 {% endcomment %}
 <div class="row g-3 mb-4">
+  {% comment %}
+    Under every office the two direction cards are shown disabled, as the
+    Tracking page shows its Incoming and Outgoing pills: with no office there is
+    no direction, and both queues return the same records. Kept in place rather
+    than removed, so the row does not rearrange itself when the picker changes,
+    and not a link, because there is no page for them to open that means what
+    the label says.
+  {% endcomment %}
+  {% if scope.all_offices %}
+    <div class="col-6 col-md-4">
+      <div class="stat-card is-disabled" aria-disabled="true">
+        <div class="label">Incoming</div>
+        <div class="value" aria-hidden="true">&mdash;</div>
+        <div class="hint">Pick an office above to count what is addressed to it</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="stat-card gold is-disabled" aria-disabled="true">
+        <div class="label">Outgoing</div>
+        <div class="value" aria-hidden="true">&mdash;</div>
+        <div class="hint">Pick an office above to count what it has sent</div>
+      </div>
+    </div>
+  {% else %}
   <div class="col-6 col-md-4">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
@@ -107,6 +137,7 @@
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
+  {% endif %}
   <div class="col-6 col-md-4">
     {% comment %}
       Overdue opens the tracking list, like the three cards beside it. It used
@@ -150,7 +181,7 @@
             {% if tracking_rings.split %}
               Documents moving in and out of {{ tracking_rings.office_label }} on their current hop.
             {% else %}
-              Documents still moving between offices.
+              Every office. Pick an office above to see incoming and outgoing separately.
             {% endif %}
           </div>
         </div>

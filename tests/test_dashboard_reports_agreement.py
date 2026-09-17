@@ -400,11 +400,13 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: system administrator viewing every office. A change that adds a panel query
 #: moves these, and the failure says by how much. Raise them deliberately, with
 #: the reason in the commit.
-#: 51 from feature/chart-legibility's Status | Overdue switch: under every office
-#: the single tracking ring counts its stages and their overdue documents in one
-#: grouped query of its own, where it used to read the stage counts off the
-#: breakdown and had no overdue counts to read.
-DASHBOARD_QUERIES = 51
+#: 48 on feature/chart-legibility. The Status | Overdue switch added one: under
+#: every office the single tracking ring counts its stages and their overdue
+#: documents in a grouped query of its own, where it used to read stage counts
+#: off the breakdown, which had no overdue counts. Disabling the Incoming and
+#: Outgoing cards under every office took three away: their two counts and
+#: "moved today", for a direction that does not exist there.
+DASHBOARD_QUERIES = 48
 REPORTS_QUERIES = 48
 
 

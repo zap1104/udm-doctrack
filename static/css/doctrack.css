@@ -254,6 +254,10 @@ a:hover { text-decoration: underline; }
   height: 100%;
 }
 .stat-card:hover { text-decoration: none; border-color: var(--udm-teal); }
+/* Inert, like .pill-toggle.is-disabled: there is no count to show, and the
+   hint says what would give it one. */
+.stat-card.is-disabled { border-style:dashed; border-left-style:solid; box-shadow:none; opacity:.75; }
+.stat-card.is-disabled:hover { border-color:var(--udm-line); }
 .stat-card .label { color: var(--udm-muted); font-size: 13px; }
 .stat-card .value {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;

@@ -457,8 +457,16 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 desk, scope, user, office=scope_office
             ).distinct()
 
-        incoming = queue(tracking_services.SCOPE_INCOMING)
-        outgoing = queue(tracking_services.SCOPE_OUTGOING)
+        # Not counted under every office. Direction is a property of a document
+        # and an office, and with no office `apply_scope` reduces both office
+        # terms to the empty Q: Incoming and Outgoing return the same records,
+        # so the two cards showed one number twice under labels ("addressed to
+        # your office", "sent by your office") that answered for nobody. The
+        # Tracking page already disables its Incoming and Outgoing pills there;
+        # the cards now say the same thing, and three queries go with them.
+        split = not scope["all_offices"]
+        incoming = queue(tracking_services.SCOPE_INCOMING) if split else None
+        outgoing = queue(tracking_services.SCOPE_OUTGOING) if split else None
         tracking_rings = self._tracking_rings(
             scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], desk
         )
@@ -530,13 +538,13 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # count. Taking it from the same query is what makes "the hole
                 # equals the card above it" true by construction rather than by
                 # two queries happening to agree.
-                "incoming_count": (
-                    tracking_rings["counts"]["incoming"] if tracking_rings["split"] else incoming.count()
+                # None under every office, where there is no direction to count;
+                # the template shows the cards disabled rather than a number.
+                "incoming_count": tracking_rings["counts"].get("incoming"),
+                "incoming_new_today": (
+                    incoming.filter(last_movement_at__date=today).count() if split else None
                 ),
-                "incoming_new_today": incoming.filter(last_movement_at__date=today).count(),
-                "outgoing_count": (
-                    tracking_rings["counts"]["outgoing"] if tracking_rings["split"] else outgoing.count()
-                ),
+                "outgoing_count": tracking_rings["counts"].get("outgoing"),
                 "tracking_rings": tracking_rings,
                 "overdue_count": overdue_count,
                 "attention_records": attention,

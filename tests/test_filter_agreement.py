@@ -562,6 +562,45 @@ def test_the_view_is_in_the_address_and_survives_a_change_of_office(
     assert client.get(f"{DASHBOARD}?ring=nonsense").context["tracking_rings"]["view"] == "status"
 
 
+@pytest.mark.django_db
+def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffic):
+    """Under every office Incoming and Outgoing are the same records, so two
+    rings would be two identical rings. One ring for the university, a caption
+    saying how to get the split, and the two direction cards disabled."""
+    client.force_login(users["admin"])
+    response = client.get(DASHBOARD)
+    rings = response.context["tracking_rings"]
+    body = " ".join(response.content.decode().split())
+
+    assert rings["split"] is False
+    assert [ring["key"] for ring in rings["rings"]] == ["all"]
+    assert "Pick an office above to see incoming and outgoing separately." in body
+    assert body.count('stat-card is-disabled') == 1 and body.count('stat-card gold is-disabled') == 1
+    assert response.context["incoming_count"] is None
+    assert response.context["outgoing_count"] is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["sup", "med_admin"])
+def test_an_office_is_never_shown_the_every_office_view(client, users, traffic, who):
+    client.force_login(users[who])
+    response = client.get(DASHBOARD)
+
+    assert response.context["tracking_rings"]["split"] is True
+    assert "is-disabled" not in response.content.decode().split('<div class="row g-4 mb-1"')[0]
+
+
+@pytest.mark.django_db
+def test_only_a_system_administrator_is_offered_all_offices(client, users, offices, traffic):
+    """For an office administrator the empty choice means their own office, so
+    an "All offices" option claimed a scope the page never showed."""
+    client.force_login(users["med_admin"])
+    assert '<option value="">All offices</option>' not in client.get(DASHBOARD).content.decode()
+
+    client.force_login(users["admin"])
+    assert '<option value="">All offices</option>' in client.get(DASHBOARD).content.decode()
+
+
 # --- the office picker -----------------------------------------------------
 @pytest.mark.django_db
 def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traffic):
@@ -576,7 +615,10 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     own = client.get(DASHBOARD).context
     picked = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context
 
-    assert picked["incoming_count"] != own["incoming_count"], "the picker did nothing"
+    # Every office has no direction to count, so the cards are not counted
+    # there at all (see test_every_office_shows_one_ring_and_no_direction).
+    assert own["incoming_count"] is None and own["outgoing_count"] is None
+    assert picked["incoming_count"] is not None, "the picker did nothing"
     # SUP's desk, as SUP sees it.
     client.force_login(users["sup"])
     theirs = client.get(DASHBOARD).context
@@ -684,9 +726,13 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         # condition across the stages and not a queue. Its query is named here
         # rather than assumed, so a card that stops carrying the office is still
         # caught — a missing match raises on .group() rather than passing.
-        for key, filter_query in (("incoming_count", "scope=incoming"),
-                                  ("outgoing_count", "scope=outgoing"),
-                                  ("overdue_count", "overdue=yes")):
+        cards = [("overdue_count", "overdue=yes")]
+        if query:
+            cards += [("incoming_count", "scope=incoming"), ("outgoing_count", "scope=outgoing")]
+        else:
+            # Disabled under every office: no link to follow.
+            assert not re.search(r'class="stat-card[^"]*" href="/tracking/\?scope=(in|out)going', body)
+        for key, filter_query in cards:
             match = re.search(rf'href="(/tracking/\?{filter_query}[^"]*)"', body)
             assert match, (filter_query, query)
             href = match.group(1)
@@ -1316,6 +1362,12 @@ def test_the_scope_label_matches_what_the_cards_count(client, users, traffic, wh
     client.force_login(users[who])
     context = client.get(DASHBOARD).context
 
+    if context["scope"]["all_offices"]:
+        # Every office has no direction to count. The card is disabled rather
+        # than showing the degenerate number, which read every routed record
+        # over a page that also listed drafts and pending uploads.
+        assert context["incoming_count"] is None
+        return
     assert context["incoming_count"] == len(page_records(client, f"{TRACKING}?scope=incoming"))
 
 

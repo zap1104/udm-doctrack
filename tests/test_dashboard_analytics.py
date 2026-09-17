@@ -1214,8 +1214,11 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     """Overdue used to open Reports on the argument that "why are these late"
     is a report rather than a list. True of the question, not of the click: a
     card counting documents is opened to see the documents, and one card
-    behaving unlike the three beside it is a surprise every time."""
-    client.force_login(users["admin"])
+    behaving unlike the three beside it is a surprise every time.
+
+    As an office user: under every office the Incoming and Outgoing cards are
+    disabled and open nothing."""
+    client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     for scope in ("incoming", "outgoing"):
