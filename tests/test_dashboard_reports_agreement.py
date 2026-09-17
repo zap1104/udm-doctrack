@@ -432,6 +432,39 @@ def test_the_reports_query_count_is_pinned(
         client.get(f"{REPORTS}?office=all")
 
 
+#: The same two pages with an office picked, which is where the dashboard draws
+#: two direction rings instead of one. Pinned separately because the pin under
+#: every office cannot see them: there, the rings do not exist. Both views of
+#: the rings are one pass, so asking for the overdue view costs nothing extra.
+DASHBOARD_OFFICE_QUERIES = 49
+REPORTS_OFFICE_QUERIES = 53
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ring", ["", "&ring=overdue"])
+def test_the_dashboard_query_count_is_pinned_for_an_office(
+    client, users, offices, agreement, django_assert_num_queries, ring
+):
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+    client.get(f"{REPORTS}?office={pk}")
+
+    with django_assert_num_queries(DASHBOARD_OFFICE_QUERIES):
+        client.get(f"{DASHBOARD}?office={pk}{ring}")
+
+
+@pytest.mark.django_db
+def test_the_reports_query_count_is_pinned_for_an_office(
+    client, users, offices, agreement, django_assert_num_queries
+):
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+    client.get(f"{DASHBOARD}?office={pk}")
+
+    with django_assert_num_queries(REPORTS_OFFICE_QUERIES):
+        client.get(f"{REPORTS}?office={pk}")
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("page", [DASHBOARD, REPORTS])
 @pytest.mark.parametrize("scope", ["all", "SUP"])

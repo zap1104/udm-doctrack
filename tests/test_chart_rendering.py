@@ -460,3 +460,39 @@ def test_the_ring_listener_is_delegated_and_writes_text_not_markup():
     assert "innerHTML" not in ring
     assert 'document.addEventListener("click"' in ring
     assert ".textContent =" in ring
+
+
+# --- nothing to draw ----------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
+@pytest.mark.parametrize("page", ["/", "/reports/", "/?ring=overdue"])
+def test_an_empty_database_draws_every_chart_as_empty(client, users, who, page):
+    """No records and no documents: no ZeroDivisionError, no max() of nothing,
+    and the rings say they are empty rather than drawing a blank circle."""
+    client.force_login(users[who])
+    response = client.get(page)
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert '<path class="donut-slice"' not in body
+    if page != "/reports/":
+        for ring in response.context["tracking_rings"]["rings"]:
+            assert ring["status"] == {"slices": [], "total": 0}
+            assert ring["overdue"] == {"slices": [], "total": 0}
+        assert response.context["tracking_rings"]["overdue_total"] == 0
+        assert response.context["monthly"]["ticks"] == [{"value": 0, "offset_percent": 0.0}]
+    else:
+        assert response.context["document_months"]["ticks"] == [{"value": 0, "offset_percent": 0.0}]
+
+
+@pytest.mark.django_db
+def test_the_dashboard_context_names_no_ring_it_does_not_draw(client, users, charted):
+    """The old single-ring key is gone for good, and the rings carry both views
+    so the switch never has to ask the server."""
+    client.force_login(users["sup"])
+    context = client.get("/").context
+
+    assert "tracking_donut" not in context
+    for ring in context["tracking_rings"]["rings"]:
+        assert set(ring) == {"key", "title", "status", "overdue"}
+
