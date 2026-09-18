@@ -370,10 +370,16 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
     }
 
 
-#: The three cumulative series, in the order the chart draws them. A tie keeps
-#: the first, so the label does not jump between series from month to month on
-#: equal values.
-VOLUME_SERIES = ("Created", "created"), ("Transferred", "transferred"), ("Completed", "completed")
+#: The series the chart draws, in order. Two, not three: Transferred counts
+#: routing steps where these count documents, and two units on one axis is a
+#: chart a reader cannot add up. One document endorsed four times is four
+#: transfers, one created and one completed, so the Transferred column ran above
+#: both others and set the scale they were drawn against. It is still counted,
+#: and the table under the chart still lists it.
+#:
+#: A tie keeps the first, so the label does not jump between series from month
+#: to month on equal values.
+VOLUME_SERIES = ("Created", "created"), ("Completed", "completed")
 
 
 def tallest_series(row) -> tuple[str, int]:
@@ -436,16 +442,13 @@ def monthly_volume(records) -> dict:
             }
         )
 
-    # Completed is in the ceiling too. It is normally below Created — a record is
-    # created before it is completed — so this changes nothing on real data, but
-    # a backdated import that completes a record "before" it was created would
-    # otherwise draw a column taller than the plot and a label above the axis.
-    ceiling = max(
-        [max(row["created"], row["transferred"], row["completed"]) for row in rows] + [0]
-    )
+    # Over the plotted series only. Completed is normally below Created — a
+    # document is created before it is completed — so the ceiling is normally
+    # Created's last month, but a backdated import that completes a document
+    # "before" it was created would otherwise draw a column taller than the plot.
+    ceiling = max([max(row["created"], row["completed"]) for row in rows] + [0])
     for row in rows:
         row["created_percent"] = bar(row["created"], ceiling)
-        row["transferred_percent"] = bar(row["transferred"], ceiling)
         row["completed_percent"] = bar(row["completed"], ceiling)
         # One label per month, on the tallest of its three columns. Not the sum:
         # these are running totals in different units (Transferred counts

@@ -136,17 +136,37 @@ def test_an_empty_month_has_no_label(client, users, charted, page):
 
 
 @pytest.mark.django_db
-def test_the_tracking_label_is_the_tallest_column_not_the_sum(users, charted):
-    """Running totals in different units do not add. The label is the value the
-    axis can read, so it never exceeds the ceiling."""
+def test_the_tracking_label_is_the_tallest_plotted_column(users, charted):
+    """The label is the value the axis can be read against, so it never exceeds
+    the ceiling, and it never comes from a series the chart does not draw."""
     from apps.tracking.models import TrackingRecord
 
     volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
 
     for row in volume["rows"]:
-        assert row["label_value"] == max(row["created"], row["transferred"], row["completed"])
+        assert row["label_value"] == max(row["created"], row["completed"])
         assert row["label_value"] <= volume["ceiling"]
     assert volume["rows"][-1]["label_percent"] == 100
+
+
+@pytest.mark.django_db
+def test_handovers_are_counted_but_not_plotted(client, users, charted):
+    """Transferred counts routing steps where the other series count documents,
+    and two units on one axis is a chart nobody can add up. It stays in the
+    table and in the hover text."""
+    from apps.tracking.models import TrackingRecord
+
+    volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
+    assert volume["rows"][-1]["transferred"] >= 1
+    assert "transferred_percent" not in volume["rows"][-1]
+    assert [name for name, _ in analytics.VOLUME_SERIES] == ["Created", "Completed"]
+
+    client.force_login(users["admin"])
+    body = client.get("/").content.decode()
+    chart = body[body.index('class="column-chart"'):body.index('class="chart-table"')]
+    assert "column--three" not in chart, "the third series is off the plot"
+    assert "handovers" in chart, "still named in the hover text"
+    assert ">Transferred</th>" in body, "still a column in the table"
 
 
 @pytest.mark.django_db
@@ -543,18 +563,19 @@ def test_each_month_records_its_own_tallest_series(users, charted):
 
 
 def test_months_that_disagree_are_not_given_one_name():
-    """Transferred runs at or above Created only once records are routed. A
-    month of records raised and not yet sent is taller in Created, so the
-    series is derived per month; the caption then says the labels follow the
+    """Created is the taller series on any ordinary data, but it is derived per
+    month rather than assumed; the caption then says the labels follow the
     tallest series rather than naming one that is not always theirs."""
-    unrouted = {"created": 5, "transferred": 0, "completed": 0}
-    routed = {"created": 6, "transferred": 9, "completed": 2}
+    ordinary = {"created": 6, "completed": 2}
+    # Completed above Created only happens on a backdated import, where a
+    # document is filed under a completion date earlier than its creation.
+    backdated = {"created": 5, "completed": 9}
 
-    assert analytics.tallest_series(unrouted) == ("Created", 5)
-    assert analytics.tallest_series(routed) == ("Transferred", 9)
+    assert analytics.tallest_series(ordinary) == ("Created", 6)
+    assert analytics.tallest_series(backdated) == ("Completed", 9)
 
 
 def test_a_tie_keeps_the_first_series_rather_than_jumping():
     """Equal values must not move the label from one series to another between
     neighbouring months."""
-    assert analytics.tallest_series({"created": 4, "transferred": 4, "completed": 4}) == ("Created", 4)
+    assert analytics.tallest_series({"created": 4, "completed": 4}) == ("Created", 4)

@@ -198,7 +198,6 @@
           </div>
           <div class="chart-legend">
             <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
             <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
           </div>
         </div>
@@ -206,7 +205,7 @@
           {% if monthly.total %}
             <div class="column-chart-frame">
             <div class="column-chart" role="img"
-                 aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
+                 aria-label="Grouped column chart of documents created and completed per month, as running totals. The table below lists every value, including handovers.">
               {% include "core/_column_axis.html" with ticks=monthly.ticks %}
               <div class="column-chart-plot">
                 {% for row in monthly.rows %}
@@ -215,14 +214,11 @@
                     paint a value that is not there. On a cumulative series this
                     only happens before the first record exists.
                   {% endcomment %}
-                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
+                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
                     <div class="column-pair">
                       {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
                       {% if row.created %}
                         <span class="column column--one" style="height:{{ row.created_percent }}%"></span>
-                      {% endif %}
-                      {% if row.transferred %}
-                        <span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>
                       {% endif %}
                       {% if row.completed %}
                         <span class="column column--two" style="height:{{ row.completed_percent }}%"></span>
