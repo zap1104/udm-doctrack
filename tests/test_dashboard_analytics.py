@@ -1150,7 +1150,7 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     for heading in ("Action Centre", "Newest in the Document Repository",
-                    "Documents created and completed", "How long documents take"):
+                    "Created, handed over and completed", "How long documents take"):
         assert f"<h2>{heading}</h2>" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
@@ -1594,7 +1594,7 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 EXPECTED_ROWS = [
     ("Tracking", "Repository"),
     ("Action Centre", "Newest in the Document Repository"),
-    ("Documents created and completed", "Added to the repository"),
+    ("Created, handed over and completed", "Added to the repository"),
     "How long documents take",
 ]
 
@@ -1633,9 +1633,13 @@ def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, fil
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    columns = re.findall(r'<div class="col-xl-6">(.*?)(?=<div class="col-xl-6">|</div>\s*</div>\s*$)', body, re.S)
-    assert any("Newest in the Document Repository" in c and "Office Flow Today" not in c
-               for c in columns), "the two are still sharing one column"
+    # Split on column boundaries rather than pairing one class with the next
+    # one like it: the charts below are full width now, so a regex looking for
+    # the next col-xl-6 runs off the end of the page and matches nothing.
+    columns = re.split(r'<div class="col[ -]', body)
+    holding = [c for c in columns if "Newest in the Document Repository" in c]
+    assert len(holding) == 1, "the panel should open exactly one column"
+    assert "Action Centre" not in holding[0], "the two are still sharing one column"
 
 
 def test_the_turnaround_panel_is_full_width_and_comes_last():

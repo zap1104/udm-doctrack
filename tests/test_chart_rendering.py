@@ -112,21 +112,22 @@ def _column_groups(body):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("page", ["/", "/reports/"])
-def test_every_group_with_a_column_carries_its_value(client, users, charted, page):
-    """On a phone there is no hover, so a value only in a title attribute could
-    not be read at all."""
+def test_every_column_carries_its_own_value(client, users, charted, page):
+    """One number per bar, not one per month. A single number said nothing
+    about the two columns it did not sit on, and on a phone there is no hover,
+    so a value only in a title attribute could not be read at all."""
     client.force_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
 
     drawn = [group for group in groups if 'class="column column--' in group]
     assert drawn, "the fixture puts work in the current month"
     for group in drawn:
-        assert group.count('class="column-value') == 1, group
+        assert group.count('class="column-value') == group.count('class="column column--'), group
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("page", ["/", "/reports/"])
-def test_an_empty_month_has_no_label(client, users, charted, page):
+def test_an_empty_month_has_no_columns_and_no_labels(client, users, charted, page):
     client.force_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
 
@@ -136,47 +137,55 @@ def test_an_empty_month_has_no_label(client, users, charted, page):
 
 
 @pytest.mark.django_db
-def test_the_tracking_label_is_the_tallest_plotted_column(users, charted):
-    """The label is the value the axis can be read against, so it never exceeds
-    the ceiling, and it never comes from a series the chart does not draw."""
+def test_each_label_sits_at_the_height_of_its_own_bar(users, charted):
+    """Not at the group's tallest. A label at any other height is a number in
+    the wrong place on the axis."""
     from apps.tracking.models import TrackingRecord
 
     volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
 
     for row in volume["rows"]:
-        assert row["label_value"] == max(row["created"], row["completed"])
-        assert row["label_value"] <= volume["ceiling"]
-    assert volume["rows"][-1]["label_percent"] == 100
+        assert [column["label"] for column in row["columns"]] == [
+            "Created", "Handovers", "Completed",
+        ]
+        for column in row["columns"]:
+            assert column["value"] == row[
+                {"Created": "created", "Handovers": "transferred", "Completed": "completed"}[
+                    column["label"]
+                ]
+            ]
+            assert column["percent"] == analytics.bar(column["value"], volume["ceiling"])
+            assert column["percent"] <= 100
 
 
 @pytest.mark.django_db
-def test_handovers_are_counted_but_not_plotted(client, users, charted):
-    """Transferred counts routing steps where the other series count documents,
-    and two units on one axis is a chart nobody can add up. It stays in the
-    table and in the hover text."""
-    from apps.tracking.models import TrackingRecord
-
-    volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
-    assert volume["rows"][-1]["transferred"] >= 1
-    assert "transferred_percent" not in volume["rows"][-1]
-    assert [name for name, _ in analytics.VOLUME_SERIES] == ["Created", "Completed"]
-
+def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
+    """They count moves between offices where the other two count documents —
+    one document endorsed four times is four handovers — so the bar is there,
+    labelled with its own number, and the legend and the note say what it
+    counts rather than leaving the reader to assume documents."""
     client.force_login(users["admin"])
     body = client.get("/").content.decode()
     chart = body[body.index('class="column-chart"'):body.index('class="chart-table"')]
-    assert "column--three" not in chart, "the third series is off the plot"
-    assert "handovers" in chart, "still named in the hover text"
-    assert ">Transferred</th>" in body, "still a column in the table"
+    text = " ".join(body.split())
+
+    assert "column--three" in chart, "the handovers bar is drawn"
+    assert "Handovers</span>" in text, "and named in the legend"
+    assert "Handovers count moves between offices" in text
+    assert ">Handovers</th>" in body, "the table calls it the same thing"
 
 
 @pytest.mark.django_db
-def test_the_repository_label_is_the_month_total(client, users, charted):
+def test_the_repository_chart_labels_both_of_its_bars(client, users, charted):
     client.force_login(users["admin"])
 
     rows = client.get("/reports/").context["document_months"]["rows"]
 
     for row in rows:
-        assert row["label_value"] == row["completed"] + row["historical"]
+        assert [column["label"] for column in row["columns"]] == ["Completed", "Historical"]
+        assert [column["value"] for column in row["columns"]] == [
+            row["completed"], row["historical"],
+        ]
 
 
 # --- a labelled y-axis --------------------------------------------------------
@@ -217,7 +226,7 @@ def test_the_axis_and_the_scale_line_agree(client, users, charted):
     response = client.get("/")
 
     ceiling = response.context["monthly"]["ceiling"]
-    assert f"Top of the chart = {ceiling} document" in response.content.decode()
+    assert f"Top of the chart = {ceiling} " in response.content.decode()
     assert _axis_values(response.content.decode())[0][-1] == ceiling
 
 
@@ -530,52 +539,26 @@ def test_the_dashboard_context_names_no_ring_it_does_not_draw(client, users, cha
 
 
 
-# --- saying which series the label counts -------------------------------------
-@pytest.mark.django_db
-def test_the_label_names_the_series_it_counts(client, users, charted):
-    """A number on the tallest column does not say whether it counts documents
-    or transfers of them, and Transferred counts routing steps: one document
-    endorsed four times is four transfers and one document."""
-    client.force_login(users["admin"])
-    response = client.get("/")
+# --- room for three numbers over one month ------------------------------------
+def test_the_labels_turn_on_their_side_when_a_month_is_narrow():
+    """Three numbers side by side need about 70px of month, which only a chart
+    with the page to itself has. Turned, each is no wider than the bar it
+    labels, so every bar keeps its number instead of some losing it."""
+    css = _css()
+    narrow = css[css.index("@container column-chart (max-width:699.98px) {"):]
+    narrow = narrow[: narrow.index("\n}")]
 
-    series = response.context["monthly"]["label_series"]
-    assert series in ("Created", "Completed")
-    assert f"numbers show {series.lower()} to date" in " ".join(
-        response.content.decode().split()
-    )
+    assert "writing-mode:vertical-rl" in narrow
+    assert "--column-value-band:34px" in narrow, "room above the bars for a turned label"
 
 
 @pytest.mark.django_db
-def test_each_month_records_its_own_tallest_series(users, charted):
-    from apps.tracking.models import TrackingRecord
+@pytest.mark.parametrize("page, template", [("/", "core/dashboard.html"), ("/reports/", "reports/reports.html")])
+def test_a_column_chart_has_the_page_to_itself(client, users, charted, page, template):
+    """Half a row is 34px a month, which three numbers cannot sit in."""
+    import pathlib
+    import re
 
-    volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
-
-    for row in volume["rows"]:
-        by_name = {
-            "Created": row["created"],
-            "Transferred": row["transferred"],
-            "Completed": row["completed"],
-        }
-        assert by_name[row["label_series"]] == row["label_value"]
-        assert row["label_value"] == max(by_name.values())
-
-
-def test_months_that_disagree_are_not_given_one_name():
-    """Created is the taller series on any ordinary data, but it is derived per
-    month rather than assumed; the caption then says the labels follow the
-    tallest series rather than naming one that is not always theirs."""
-    ordinary = {"created": 6, "completed": 2}
-    # Completed above Created only happens on a backdated import, where a
-    # document is filed under a completion date earlier than its creation.
-    backdated = {"created": 5, "completed": 9}
-
-    assert analytics.tallest_series(ordinary) == ("Created", 6)
-    assert analytics.tallest_series(backdated) == ("Completed", 9)
-
-
-def test_a_tie_keeps_the_first_series_rather_than_jumping():
-    """Equal values must not move the label from one series to another between
-    neighbouring months."""
-    assert analytics.tallest_series({"created": 4, "completed": 4}) == ("Created", 4)
+    markup = pathlib.Path("templates", template).read_text(encoding="utf-8")
+    for match in re.finditer(r'<div class="(col[^"]*)">(?:(?!<div class="col).)*?column-chart-frame', markup, re.S):
+        assert match.group(1) == "col-12", match.group(1)

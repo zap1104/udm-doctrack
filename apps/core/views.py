@@ -1550,12 +1550,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "historical_percent": _bar(historical, ceiling),
                     # Kept: the empty-state check and the table both read it.
                     "percent": _bar(completed + historical, ceiling),
-                    # The month's total over the two columns. Unlike the tracking
-                    # chart's running totals, these add: both count documents
-                    # filed that month. The ceiling is the tallest month total,
-                    # so the label sits at a height the axis can read.
-                    "label_value": completed + historical,
-                    "label_percent": _bar(completed + historical, ceiling),
+                    # Every column carries its own value, above its own bar.
+                    "columns": [
+                        {"label": "Completed", "series": "one", "value": completed,
+                         "percent": _bar(completed, ceiling)},
+                        {"label": "Historical", "series": "three", "value": historical,
+                         "percent": _bar(historical, ceiling)},
+                    ],
                 }
             )
         return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling)}

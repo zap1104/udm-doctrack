@@ -517,7 +517,12 @@
 </div>
 
 <div class="row g-4 mb-4">
-  <div class="col-xl-6">
+  {% comment %}
+    Full width, not half. Three labelled columns a month need about 70px of
+    month to sit in; in a half-width card a month is 34px and the numbers
+    collide. The panel beside it moves under it.
+  {% endcomment %}
+  <div class="col-12">
     {% comment %}
             Monthly volume. The same cumulative three-series chart Reports draws, from
             the same function — running totals rather than monthly resets, because the
@@ -527,13 +532,14 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Documents created and completed</h2>
+          <h2>Created, handed over and completed</h2>
           <div class="card-udm-caption">
-            Running totals. The gap between the two bars is work still in the building.
+            Running totals. The gap between created and completed is work still in the building.
           </div>
         </div>
         <div class="chart-legend">
           <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Handovers</span>
           <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
         </div>
       </div>
@@ -541,15 +547,13 @@
         {% if monthly.total %}
           <div class="column-chart-frame">
           <div class="column-chart" role="img"
-               aria-label="Grouped column chart of documents created and completed per month, as running totals. The table below lists every value, including handovers.">
+               aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
             {% include "core/_column_axis.html" with ticks=monthly.ticks %}
             <div class="column-chart-plot">
               {% for row in monthly.rows %}
-                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers">
+                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} handovers, {{ row.completed }} completed">
                   <div class="column-pair">
-                    {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
-                    {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
-                    {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}
+                    {% for column in row.columns %}{% if column.value %}<span class="column-item"><span class="column-value num" style="bottom:{{ column.percent }}%">{{ column.value }}</span><span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span></span>{% endif %}{% endfor %}
                   </div>
                   <div class="column-label">{{ row.month|date:"M" }}</div>
                 </div>
@@ -557,9 +561,8 @@
             </div>
           </div>
           <div class="chart-scale">
-            Top of the chart = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
-            {{ monthly.outstanding }} still open &middot;
-            numbers show {% if monthly.label_series %}{{ monthly.label_series|lower }}{% else %}the taller bar{% endif %} to date
+            Top of the chart = {{ monthly.ceiling }} &middot; {{ monthly.outstanding }} still open &middot;
+            every bar carries its own running total
           </div>
           <details class="chart-note">
             <summary>How to read this</summary>
@@ -569,11 +572,11 @@
               with nothing finished still shows every document finished before it.
             </p>
             <p>
-              Both bars count documents, so the gap between them is the work still in
-              the building. Handovers are counted too &mdash; one document endorsed four
-              times is four handovers &mdash; but they are not drawn here, because a
-              count of handovers cannot be compared with a count of documents on one
-              scale. They are in the table below and in Reports.
+              Created and Completed count documents; the gap between them is the work
+              still in the building. Handovers count moves between offices, so one
+              document endorsed four times adds four &mdash; which is why that bar is
+              usually the tallest and why it is not a count of documents. Each bar
+              carries its own number so the three are never mistaken for one another.
             </p>
           </details>
           <details class="chart-table">
@@ -581,7 +584,7 @@
             <div class="table-responsive"><table class="table-udm">
               <thead><tr>
                 <th>Month</th><th class="text-end">Created</th>
-                <th class="text-end">Transferred</th><th class="text-end">Completed</th>
+                <th class="text-end">Handovers</th><th class="text-end">Completed</th>
               </tr></thead>
               <tbody>
                 {% for row in monthly.rows %}
@@ -602,7 +605,7 @@
       </div>
     </div>
   </div>
-  <div class="col-xl-6">
+  <div class="col-12">
     {% comment %}
             Uploads by office. One combined figure per office — a document uploaded
             directly and a tracked record completed and filed are both an office adding

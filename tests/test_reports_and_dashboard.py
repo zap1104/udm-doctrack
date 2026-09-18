@@ -74,7 +74,7 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Documents created and completed",
+    "Created, handed over and completed",
     "Documents by stage",
     "How long documents take",
     "Overdue: who must act next",

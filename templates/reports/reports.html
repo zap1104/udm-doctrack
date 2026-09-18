@@ -186,17 +186,18 @@
       reset that gap cannot be seen at all. Created is the tracking side and
       Completed is the repository side, which is what the pairing is for.
     {% endcomment %}
-    <div class="col-xl-7">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Documents created and completed</h2>
+            <h2>Created, handed over and completed</h2>
             <div class="report-caption">
-              Running totals. The gap between the two bars is work still in the building.
+              Running totals. The gap between created and completed is work still in the building.
             </div>
           </div>
           <div class="chart-legend">
             <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Handovers</span>
             <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
           </div>
         </div>
@@ -204,7 +205,7 @@
           {% if monthly.total %}
             <div class="column-chart-frame">
             <div class="column-chart" role="img"
-                 aria-label="Grouped column chart of documents created and completed per month, as running totals. The table below lists every value, including handovers.">
+                 aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
               {% include "core/_column_axis.html" with ticks=monthly.ticks %}
               <div class="column-chart-plot">
                 {% for row in monthly.rows %}
@@ -215,13 +216,7 @@
                   {% endcomment %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
                     <div class="column-pair">
-                      {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
-                      {% if row.created %}
-                        <span class="column column--one" style="height:{{ row.created_percent }}%"></span>
-                      {% endif %}
-                      {% if row.completed %}
-                        <span class="column column--two" style="height:{{ row.completed_percent }}%"></span>
-                      {% endif %}
+                      {% for column in row.columns %}{% if column.value %}<span class="column-item"><span class="column-value num" style="bottom:{{ column.percent }}%">{{ column.value }}</span><span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span></span>{% endif %}{% endfor %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>
@@ -229,9 +224,8 @@
               </div>
             </div>
             <div class="chart-scale">
-              Top of the chart = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} ·
-              {{ monthly.outstanding }} still open ·
-              numbers show {% if monthly.label_series %}{{ monthly.label_series|lower }}{% else %}the taller bar{% endif %} to date
+              Top of the chart = {{ monthly.ceiling }} · {{ monthly.outstanding }} still open ·
+              every bar carries its own running total
             </div>
             <details class="chart-note">
               <summary>How to read this</summary>
@@ -240,10 +234,11 @@
                 first document in the system — not that month on its own.
               </p>
               <p>
-                Both bars count documents, so the gap between them is the work still in
-                the building. Handovers are counted in the table below — one document
-                endorsed four times is four handovers — but not drawn here, because a
-                count of handovers cannot share a scale with a count of documents.
+                Created and Completed count documents; the gap between them is the work
+                still in the building. Handovers count moves between offices, so one
+                document endorsed four times adds four — which is why that bar is
+                usually the tallest and why it is not a count of documents. Each bar
+                carries its own number so the three are never mistaken for one another.
               </p>
             </details>
             <details class="chart-table">
@@ -252,7 +247,7 @@
                 <thead><tr>
                   <th>Month</th>
                   <th class="text-end">Created</th>
-                  <th class="text-end">Transferred</th>
+                  <th class="text-end">Handovers</th>
                   <th class="text-end">Completed</th>
                   <th class="text-end">Added this month</th>
                 </tr></thead>
@@ -278,7 +273,7 @@
     </div>
 
     <!-- status mix -->
-    <div class="col-xl-5">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
@@ -610,7 +605,7 @@
   </div>
 
   <div class="row g-4">
-    <div class="col-xl-7">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
@@ -643,25 +638,20 @@
                 {% for row in document_months.rows %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.completed }} completed, {{ row.historical }} historical">
                     <div class="column-pair">
-                      {% if row.label_value %}<span class="column-value num" style="bottom:{{ row.label_percent }}%">{{ row.label_value }}</span>{% endif %}
                       {% comment %}
-                        A zero draws nothing: a minimum-height stub would paint a
-                        value that is not there, and on this chart it would read
-                        as "a few were filed" in a month when none were.
+                        A zero draws nothing, and gets no label: a minimum-height
+                        stub would paint a value that is not there, and on this
+                        chart it would read as "a few were filed" in a month when
+                        none were.
                       {% endcomment %}
-                      {% if row.completed %}
-                        <span class="column column--one" style="height:{{ row.completed_percent }}%"></span>
-                      {% endif %}
-                      {% if row.historical %}
-                        <span class="column column--three" style="height:{{ row.historical_percent }}%"></span>
-                      {% endif %}
+                      {% for column in row.columns %}{% if column.value %}<span class="column-item"><span class="column-value num" style="bottom:{{ column.percent }}%">{{ column.value }}</span><span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span></span>{% endif %}{% endfor %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>
                 {% endfor %}
               </div>
             </div>
-            <div class="chart-scale">Numbers above each month show the month total.</div>
+            <div class="chart-scale">Top of the chart = {{ document_months.ceiling }} · every bar carries its own count.</div>
             <details class="chart-table">
               <summary>View as table</summary>
               <div class="table-responsive"><table class="table-udm">
@@ -691,7 +681,7 @@
       </div>
     </div>
 
-    <div class="col-xl-5">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head"><h2>Documents by type</h2></div>
         <div class="card-udm-body">

@@ -370,24 +370,17 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
     }
 
 
-#: The series the chart draws, in order. Two, not three: Transferred counts
-#: routing steps where these count documents, and two units on one axis is a
-#: chart a reader cannot add up. One document endorsed four times is four
-#: transfers, one created and one completed, so the Transferred column ran above
-#: both others and set the scale they were drawn against. It is still counted,
-#: and the table under the chart still lists it.
-#:
-#: A tie keeps the first, so the label does not jump between series from month
-#: to month on equal values.
-VOLUME_SERIES = ("Created", "created"), ("Completed", "completed")
-
-
-def tallest_series(row) -> tuple[str, int]:
-    """The name and value of the tallest of a month's three columns, which is
-    what the chart labels and what the caption under it names."""
-    return max(
-        ((name, row[key]) for name, key in VOLUME_SERIES), key=lambda pair: pair[1]
-    )
+#: The series the chart draws, in order, with the colour class each is painted
+#: in. Handovers count routing steps where the other two count documents — one
+#: document endorsed four times is four handovers — so that column runs above
+#: the others and usually sets the scale. Every column carries its own number,
+#: and the legend and the note say which unit each counts, because a reader who
+#: can see all three needs to know that one of them is not documents.
+VOLUME_SERIES = (
+    ("Created", "created", "one"),
+    ("Handovers", "transferred", "three"),
+    ("Completed", "completed", "two"),
+)
 
 
 def monthly_volume(records) -> dict:
@@ -442,38 +435,28 @@ def monthly_volume(records) -> dict:
             }
         )
 
-    # Over the plotted series only. Completed is normally below Created — a
-    # document is created before it is completed — so the ceiling is normally
-    # Created's last month, but a backdated import that completes a document
-    # "before" it was created would otherwise draw a column taller than the plot.
-    ceiling = max([max(row["created"], row["completed"]) for row in rows] + [0])
+    # Over every plotted series, so no column can be drawn above the plot.
+    ceiling = max(
+        [max(row[key] for _, key, _ in VOLUME_SERIES) for row in rows] + [0]
+    )
     for row in rows:
-        row["created_percent"] = bar(row["created"], ceiling)
-        row["completed_percent"] = bar(row["completed"], ceiling)
-        # One label per month, on the tallest of its three columns. Not the sum:
-        # these are running totals in different units (Transferred counts
-        # routing steps, the other two count records), so created + transferred
-        # + completed counts nothing, and it would print above the top of the
-        # axis. The tallest value is the one the axis can be read against.
-        #
-        # Which series that is, is recorded too, because the chart has to say:
-        # a number on the tallest column alone does not tell the reader whether
-        # it counts documents or transfers of them. It is usually Transferred,
-        # which counts routing steps and so runs at or above Created — but not
-        # in a month whose records have been raised and not yet routed, so the
-        # series is derived per month rather than assumed.
-        row["label_series"], row["label_value"] = tallest_series(row)
-        row["label_percent"] = bar(row["label_value"], ceiling)
+        # Every column carries its own value, above its own bar. One number per
+        # month said nothing about the two columns it did not sit on, and which
+        # column it sat on changed with the data.
+        row["columns"] = [
+            {
+                "label": label,
+                "series": colour,
+                "value": row[key],
+                "percent": bar(row[key], ceiling),
+            }
+            for label, key, colour in VOLUME_SERIES
+        ]
 
-    # Named once under the chart when every labelled month shows the same
-    # series, which is the usual case; otherwise the caption says the labels
-    # follow the tallest series rather than naming one they do not all share.
-    labelled = {row["label_series"] for row in rows if row["label_value"]}
     return {
         "rows": rows,
         "ceiling": ceiling,
         "ticks": axis_ticks(ceiling),
-        "label_series": labelled.pop() if len(labelled) == 1 else "",
         "total": rows[-1]["created"] if rows else 0,
         "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
     }
