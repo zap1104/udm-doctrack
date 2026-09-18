@@ -217,7 +217,7 @@ def test_the_axis_and_the_scale_line_agree(client, users, charted):
     response = client.get("/")
 
     ceiling = response.context["monthly"]["ceiling"]
-    assert f"Tallest column = {ceiling} document" in response.content.decode()
+    assert f"Top of the chart = {ceiling} document" in response.content.decode()
     assert _axis_values(response.content.decode())[0][-1] == ceiling
 
 
@@ -540,8 +540,8 @@ def test_the_label_names_the_series_it_counts(client, users, charted):
     response = client.get("/")
 
     series = response.context["monthly"]["label_series"]
-    assert series in ("Created", "Transferred", "Completed")
-    assert f"Numbers above each month show {series}, its tallest series." in " ".join(
+    assert series in ("Created", "Completed")
+    assert f"numbers show {series.lower()} to date" in " ".join(
         response.content.decode().split()
     )
 

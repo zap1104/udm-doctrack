@@ -527,10 +527,9 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Monthly volume</h2>
+          <h2>Documents created and completed</h2>
           <div class="card-udm-caption">
-            Running totals since records began. The gap between created and
-            completed is what is still open.
+            Running totals. The gap between the two bars is work still in the building.
           </div>
         </div>
         <div class="chart-legend">
@@ -558,15 +557,25 @@
             </div>
           </div>
           <div class="chart-scale">
-            Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
-            {{ monthly.outstanding }} still open
-            <br>
-            {% if monthly.label_series %}
-              Numbers above each month show {{ monthly.label_series }}, its tallest series.
-            {% else %}
-              Numbers above each month show that month's tallest series.
-            {% endif %}
+            Top of the chart = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
+            {{ monthly.outstanding }} still open &middot;
+            numbers show {% if monthly.label_series %}{{ monthly.label_series|lower }}{% else %}the taller bar{% endif %} to date
           </div>
+          <details class="chart-note">
+            <summary>How to read this</summary>
+            <p>
+              Each month is the position at the end of that month, counted from the
+              first document in the system &mdash; not that month on its own. A month
+              with nothing finished still shows every document finished before it.
+            </p>
+            <p>
+              Both bars count documents, so the gap between them is the work still in
+              the building. Handovers are counted too &mdash; one document endorsed four
+              times is four handovers &mdash; but they are not drawn here, because a
+              count of handovers cannot be compared with a count of documents on one
+              scale. They are in the table below and in Reports.
+            </p>
+          </details>
           <details class="chart-table">
             <summary>View as table</summary>
             <div class="table-responsive"><table class="table-udm">
@@ -605,7 +614,7 @@
         <div>
           <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
           <div class="card-udm-caption">
-            Uploaded directly plus completed and filed, counted together.
+            Uploads, plus documents filed when tracking finished.
           </div>
         </div>
       </div>
@@ -665,11 +674,17 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>Turnaround by month</h2>
+          <h2>How long documents take</h2>
             <div class="card-udm-caption">
-              Average working days per stage, counted in <strong>office hours</strong>.
-              {{ turnaround_trend.office_hours_caveat }}
+              Average working days at each stage, month by month.
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Counted in office hours, so a document sitting over a weekend is not
+                charged for it. {{ turnaround_trend.office_hours_caveat }}
+              </p>
+            </details>
           </div>
         </div>
         <div class="card-udm-body">

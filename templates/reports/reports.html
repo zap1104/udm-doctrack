@@ -190,10 +190,9 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Cumulative tracking volume</h2>
+            <h2>Documents created and completed</h2>
             <div class="report-caption">
-              Running totals since records began — created, transferred or endorsed,
-              and completed. The gap between created and completed is what is still open.
+              Running totals. The gap between the two bars is work still in the building.
             </div>
           </div>
           <div class="chart-legend">
@@ -230,15 +229,23 @@
               </div>
             </div>
             <div class="chart-scale">
-              Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} ·
-              {{ monthly.outstanding }} still open
-              <br>
-              {% if monthly.label_series %}
-                Numbers above each month show {{ monthly.label_series }}, its tallest series.
-              {% else %}
-                Numbers above each month show that month's tallest series.
-              {% endif %}
+              Top of the chart = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} ·
+              {{ monthly.outstanding }} still open ·
+              numbers show {% if monthly.label_series %}{{ monthly.label_series|lower }}{% else %}the taller bar{% endif %} to date
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Each month is the position at the end of that month, counted from the
+                first document in the system — not that month on its own.
+              </p>
+              <p>
+                Both bars count documents, so the gap between them is the work still in
+                the building. Handovers are counted in the table below — one document
+                endorsed four times is four handovers — but not drawn here, because a
+                count of handovers cannot share a scale with a count of documents.
+              </p>
+            </details>
             <details class="chart-table">
               <summary>View as table</summary>
               <div class="table-responsive"><table class="table-udm">
@@ -275,15 +282,23 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Records by status</h2>
+            <h2>Documents by stage</h2>
             <div class="report-caption">
-              Where the {{ total_records }} record{{ total_records|pluralize }} stand right now.
-              Overdue is a deadline condition on top of these, counted separately above.
+              Where the {{ total_records }} document{{ total_records|pluralize }} stand right now.
               {% if scope_office %}
                 Incoming and outgoing are measured from
                 <strong>{{ scope_office.code }} — {{ scope_office.name }}</strong>.
               {% endif %}
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Every document is in exactly one stage, so these add up to the total
+                above. Overdue is not a stage: a document is late or on time whatever
+                stage it is at, so it is counted separately on its own card and in
+                <em>Overdue: who must act next</em> below.
+              </p>
+            </details>
           </div>
         </div>
         <div class="card-udm-body">
@@ -335,10 +350,9 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Turnaround</h2>
+            <h2>How long documents take</h2>
             <div class="report-caption">
-              Averages from the sent, received and completed timestamps, counted in
-              <strong>office hours</strong>. Calendar time is shown beneath each one.
+              Average time at each stage, in working hours. Calendar time is beneath each one.
             </div>
           </div>
         </div>
@@ -397,7 +411,7 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Overdue documents by accountable office</h2>
+            <h2>Overdue: who must act next</h2>
             {% comment %}
               Says which question it answers, on screen. The dashboard memo groups
               the same overdue documents by custody — where each one sits — and
@@ -405,14 +419,7 @@
               flipping between them had nothing telling them why they differ.
             {% endcomment %}
             <div class="report-caption">
-              Who owes the next move on overdue documents. An office waiting to
-              <em>receive</em> a document is listed here, not the office that already sent it.
-              A document waiting on two offices appears under both, so these can total more
-              than the {{ overdue_all }} overdue above.
-            </div>
-            <div class="report-caption">
-              Grouped by who must act. The dashboard memo groups the same documents by where
-              they physically sit, so the per-office figures differ.
+              The office that owes the next move on each overdue document.
             </div>
           </div>
           <div class="chart-legend">
@@ -480,8 +487,8 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Documents handled by office</h2>
-            <div class="report-caption">Confirmed receipts. Cumulative since records began, and this month.</div>
+            <h2>Documents received by office</h2>
+            <div class="report-caption">Receipts an office has confirmed, since records began.</div>
           </div>
           <div class="chart-legend">
             <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Since records began</span>
@@ -489,25 +496,22 @@
           </div>
         </div>
         <div class="card-udm-body">
+          {% comment %}
+            One line per office: one bar on one scale, with the part received
+            this month drawn at its end. Two bars against two ceilings (the
+            busiest office's total, and the busiest office's month) made 1 this
+            month look half as big as 42 since records began. The office name
+            carries the row, so no series label repeats the panel's title.
+          {% endcomment %}
           {% for row in office_volume.rows %}
-            <div class="report-office-row">
-              <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
-              <div class="report-series">
-                {% comment %}
-                  One bar on one scale, with the part received this month drawn
-                  at its end. Two bars against two ceilings (the busiest office's
-                  total, and the busiest office's month) made 1 this month look
-                  half as big as 42 since records began.
-                {% endcomment %}
-                <div class="report-series-item report-series-item--share">
-                  <span>Received</span>
-                  <div class="report-bar">
-                    <i class="bar-one" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
-                  </div>
-                  <strong class="num">{{ row.cumulative }}</strong>
-                  <span class="status-share num">+{{ row.this_month }}</span>
-                </div>
+            <div class="report-series-item report-series-item--wide report-series-item--share"
+                 title="{{ row.name }} &mdash; {{ row.cumulative }} received, {{ row.this_month }} this month">
+              <span>{{ row.code }} · {{ row.name|truncatechars:38 }}</span>
+              <div class="report-bar">
+                <i class="bar-one" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
               </div>
+              <strong class="num">{{ row.cumulative }}</strong>
+              <span class="status-share num">+{{ row.this_month }}</span>
             </div>
           {% empty %}
             <div class="report-empty">No office has confirmed receipt of a document yet.</div>
@@ -521,12 +525,12 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Transferred vs received by office</h2>
-            <div class="report-caption">Counted from routing steps, so every forward is included — not only first sends.</div>
+            <h2>Handovers by office: sent and confirmed</h2>
+            <div class="report-caption">Every forward counted, not only the first send.</div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Transferred</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Received</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Sent</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Confirmed</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -535,12 +539,12 @@
               <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
               <div class="report-series">
                 <div class="report-series-item">
-                  <span>Transferred</span>
+                  <span>Sent</span>
                   <div class="report-bar"><i class="bar-one" style="width:{{ row.sent_percent }}%"></i></div>
                   <strong class="num">{{ row.sent }}</strong>
                 </div>
                 <div class="report-series-item">
-                  <span>Received</span>
+                  <span>Confirmed</span>
                   <div class="report-bar"><i class="bar-two" style="width:{{ row.received_percent }}%"></i></div>
                   <strong class="num">{{ row.received }}</strong>
                 </div>
@@ -610,7 +614,7 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Monthly repository volume</h2>
+            <h2>Documents filed each month</h2>
             <div class="report-caption">
               Documents added to the repository, last 12 months. <strong>Completed</strong>
               came out of tracking — work the offices finished and an administrator

@@ -74,12 +74,12 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Cumulative tracking volume",
-    "Records by status",
-    "Turnaround",
-    "Overdue documents by accountable office",
-    "Documents handled by office",
-    "Transferred vs received by office",
+    "Documents created and completed",
+    "Documents by stage",
+    "How long documents take",
+    "Overdue: who must act next",
+    "Documents received by office",
+    "Handovers by office: sent and confirmed",
 )
 
 #: Document Repository Report, in order.
@@ -88,7 +88,7 @@ TRACKING_PANELS = (
 #: administrators only: it reads every office's search terms with no scope, on a
 #: page whose design is that it answers for one office.
 REPOSITORY_PANELS = (
-    "Monthly repository volume",
+    "Documents filed each month",
     "Documents by type",
 )
 
@@ -182,7 +182,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     assert sum(row["completed"] for row in rows) == 3
     assert sum(row["historical"] for row in rows) == 3
 
-    panel = body[body.index("Monthly repository volume"):body.index("Documents by type")]
+    panel = body[body.index("Documents filed each month"):body.index("Documents by type")]
     assert ">Completed</span>" in panel and ">Historical</span>" in panel, "legend"
     assert ">Completed</th>" in panel and ">Historical</th>" in panel, "table view"
 
@@ -306,7 +306,7 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
     assert "this_month_percent" not in row, "no second scale"
 
     body = client.get(REPORTS).content.decode()
-    assert "Documents handled by office" in body
+    assert "Documents received by office" in body
 
 
 # --- 3.10 naming -----------------------------------------------------------

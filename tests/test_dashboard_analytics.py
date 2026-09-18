@@ -561,7 +561,7 @@ def test_the_write_up_is_gone_from_the_page_and_from_the_context(
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
 
-    assert "What this shows" not in response.content.decode()
+    assert "What this shows" not in response.content.decode(), "the panel's heading"
     assert "dashboard-writeup" not in response.content.decode()
     assert "breakdown_summary" not in response.context
 
@@ -680,7 +680,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
-    assert body.index("trend-legend") > body.index("Turnaround by month")
+    assert body.index("trend-legend") > body.index("How long documents take")
 
 
 @pytest.mark.django_db
@@ -1150,12 +1150,12 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     for heading in ("Action Centre", "Newest in the Document Repository",
-                    "Monthly volume", "Turnaround by month"):
+                    "Documents created and completed", "How long documents take"):
         assert f"<h2>{heading}</h2>" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("Turnaround by month") < body.index('id="dashboard-memo"')
+    assert body.index("How long documents take") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Action Centre
@@ -1594,8 +1594,8 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 EXPECTED_ROWS = [
     ("Tracking", "Repository"),
     ("Action Centre", "Newest in the Document Repository"),
-    ("Monthly volume", "Added to the repository"),
-    "Turnaround by month",
+    ("Documents created and completed", "Added to the repository"),
+    "How long documents take",
 ]
 
 
@@ -1650,7 +1650,7 @@ def test_the_turnaround_panel_is_full_width_and_comes_last():
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    head = html.index("<h2>Turnaround by month</h2>")
+    head = html.index("<h2>How long documents take</h2>")
     column = html.rindex('<div class="col-', 0, head)
 
     assert html[column:].startswith('<div class="col-12">'), "not full width"

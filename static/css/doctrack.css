@@ -986,6 +986,12 @@ a:hover { text-decoration: underline; }
 .column--three { background:var(--chart-three); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
 .chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
+/* The reasoning a reader needs once and not on every visit: why a series is
+   cumulative, what "historical" means, why office hours. One plain line stays
+   under every title; this holds the rest. */
+.chart-note { margin-top:10px; }
+.chart-note summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
+.chart-note p { margin:8px 0 0; color:var(--udm-muted); font-size:12.5px; line-height:1.5; max-width:70ch; }
 .chart-table { margin-top:12px; }
 .chart-table summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
 .chart-table table { margin-top:8px; }
