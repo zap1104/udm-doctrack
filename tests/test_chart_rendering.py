@@ -280,8 +280,20 @@ def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted)
     assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 24
 
 
-def test_a_legend_in_a_card_head_wraps_rather_than_clips():
-    assert ".card-udm .card-udm-head:has(> .chart-legend) { flex-wrap:wrap;" in _css()
+def test_a_legend_or_a_switch_in_a_card_head_wraps_rather_than_clips():
+    """The head is one flex row inside a card that hides overflow, so a long
+    caption squeezed the legend into a column at 1280px and cut it off at
+    375px. Both the chart legends and the rings' Status | Overdue switch sit
+    there."""
+    css = _css()
+    wrap = next(
+        rule for rule in css.split("}")
+        if "flex-wrap:wrap" in rule and "card-udm-head" in rule
+    )
+
+    assert ":has(> .chart-legend)" in wrap
+    assert ":has(> .segmented)" in wrap
+    assert ".card-udm-head:has(> .segmented) > div:first-child { flex:1 1 260px; }" in css
 
 
 def test_print_keeps_the_axis_and_the_value_labels():

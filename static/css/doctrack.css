@@ -1045,8 +1045,9 @@ a:hover { text-decoration: underline; }
    squeezed the legend into a single column at 1280px and cut it off at 375px
    ("Awaitin"). The caption keeps at least 260px and the legend drops below it
    when the two do not fit on one line. */
-.card-udm .card-udm-head:has(> .chart-legend) { flex-wrap:wrap; align-items:flex-start; }
-.card-udm .card-udm-head:has(> .chart-legend) > div:first-child { flex:1 1 260px; }
+.card-udm .card-udm-head:has(> .chart-legend),.card-udm .card-udm-head:has(> .segmented) { flex-wrap:wrap; align-items:flex-start; }
+.card-udm .card-udm-head:has(> .chart-legend) > div:first-child,
+.card-udm .card-udm-head:has(> .segmented) > div:first-child { flex:1 1 260px; }
 .card-udm .card-udm-head > .chart-legend { flex:0 1 auto; }
 
 /* ---------------------------------------------------------- status by row */

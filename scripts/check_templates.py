@@ -131,7 +131,7 @@ def check_inline_comments(path: Path, text: str, problems: list[str]) -> None:
 #: control silently does nothing. Two had shipped that way, the notifications
 #: type filter and the error page's "Try Again". Behaviour is declared as data-*
 #: and listened for in static/js/doctrack.js.
-HANDLER_RE = re.compile(r"<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=", re.S)
+HANDLER_RE = re.compile(r"<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=", re.S | re.I)
 COMMENT_BLOCK_RE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}|{#.*?#}", re.S)
 
 
