@@ -370,6 +370,20 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
     }
 
 
+#: The three cumulative series, in the order the chart draws them. A tie keeps
+#: the first, so the label does not jump between series from month to month on
+#: equal values.
+VOLUME_SERIES = ("Created", "created"), ("Transferred", "transferred"), ("Completed", "completed")
+
+
+def tallest_series(row) -> tuple[str, int]:
+    """The name and value of the tallest of a month's three columns, which is
+    what the chart labels and what the caption under it names."""
+    return max(
+        ((name, row[key]) for name, key in VOLUME_SERIES), key=lambda pair: pair[1]
+    )
+
+
 def monthly_volume(records) -> dict:
     """Created, transferred-or-endorsed and completed — cumulative.
 
@@ -438,13 +452,25 @@ def monthly_volume(records) -> dict:
         # routing steps, the other two count records), so created + transferred
         # + completed counts nothing, and it would print above the top of the
         # axis. The tallest value is the one the axis can be read against.
-        row["label_value"] = max(row["created"], row["transferred"], row["completed"])
+        #
+        # Which series that is, is recorded too, because the chart has to say:
+        # a number on the tallest column alone does not tell the reader whether
+        # it counts documents or transfers of them. It is usually Transferred,
+        # which counts routing steps and so runs at or above Created — but not
+        # in a month whose records have been raised and not yet routed, so the
+        # series is derived per month rather than assumed.
+        row["label_series"], row["label_value"] = tallest_series(row)
         row["label_percent"] = bar(row["label_value"], ceiling)
 
+    # Named once under the chart when every labelled month shows the same
+    # series, which is the usual case; otherwise the caption says the labels
+    # follow the tallest series rather than naming one they do not all share.
+    labelled = {row["label_series"] for row in rows if row["label_value"]}
     return {
         "rows": rows,
         "ceiling": ceiling,
         "ticks": axis_ticks(ceiling),
+        "label_series": labelled.pop() if len(labelled) == 1 else "",
         "total": rows[-1]["created"] if rows else 0,
         "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
     }

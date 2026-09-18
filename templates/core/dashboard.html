@@ -562,6 +562,12 @@
           <div class="chart-scale">
             Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
             {{ monthly.outstanding }} still open
+            <br>
+            {% if monthly.label_series %}
+              Numbers above each month show {{ monthly.label_series }}, its tallest series.
+            {% else %}
+              Numbers above each month show that month's tallest series.
+            {% endif %}
           </div>
           <details class="chart-table">
             <summary>View as table</summary>

@@ -508,3 +508,53 @@ def test_the_dashboard_context_names_no_ring_it_does_not_draw(client, users, cha
     for ring in context["tracking_rings"]["rings"]:
         assert set(ring) == {"key", "title", "status", "overdue"}
 
+
+
+# --- saying which series the label counts -------------------------------------
+@pytest.mark.django_db
+def test_the_label_names_the_series_it_counts(client, users, charted):
+    """A number on the tallest column does not say whether it counts documents
+    or transfers of them, and Transferred counts routing steps: one document
+    endorsed four times is four transfers and one document."""
+    client.force_login(users["admin"])
+    response = client.get("/")
+
+    series = response.context["monthly"]["label_series"]
+    assert series in ("Created", "Transferred", "Completed")
+    assert f"Numbers above each month show {series}, its tallest series." in " ".join(
+        response.content.decode().split()
+    )
+
+
+@pytest.mark.django_db
+def test_each_month_records_its_own_tallest_series(users, charted):
+    from apps.tracking.models import TrackingRecord
+
+    volume = analytics.monthly_volume(TrackingRecord.objects.visible_to(users["admin"]))
+
+    for row in volume["rows"]:
+        by_name = {
+            "Created": row["created"],
+            "Transferred": row["transferred"],
+            "Completed": row["completed"],
+        }
+        assert by_name[row["label_series"]] == row["label_value"]
+        assert row["label_value"] == max(by_name.values())
+
+
+def test_months_that_disagree_are_not_given_one_name():
+    """Transferred runs at or above Created only once records are routed. A
+    month of records raised and not yet sent is taller in Created, so the
+    series is derived per month; the caption then says the labels follow the
+    tallest series rather than naming one that is not always theirs."""
+    unrouted = {"created": 5, "transferred": 0, "completed": 0}
+    routed = {"created": 6, "transferred": 9, "completed": 2}
+
+    assert analytics.tallest_series(unrouted) == ("Created", 5)
+    assert analytics.tallest_series(routed) == ("Transferred", 9)
+
+
+def test_a_tie_keeps_the_first_series_rather_than_jumping():
+    """Equal values must not move the label from one series to another between
+    neighbouring months."""
+    assert analytics.tallest_series({"created": 4, "transferred": 4, "completed": 4}) == ("Created", 4)
