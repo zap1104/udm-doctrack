@@ -943,6 +943,9 @@ a:hover { text-decoration: underline; }
    value must paint nothing (the view floors real values at 1% instead). */
 .report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
 .bar-one { background:var(--chart-one); }
+/* The end of a bar, in the second series' colour: a figure that is part of the
+   bar it sits in, rather than a second bar on a scale of its own. */
+.bar-part { display:block; height:100%; margin-left:auto; border-radius:0 4px 4px 0; background:var(--chart-two); }
 .bar-two { background:var(--chart-two); }
 .bar-three { background:var(--chart-three); }
 .bar-alert { background:var(--chart-alert); }

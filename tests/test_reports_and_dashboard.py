@@ -295,9 +295,15 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
     client.force_login(users["admin"])
     rows = client.get(REPORTS).context["office_volume"]["rows"]
 
+    from apps.core import analytics
+
     row = rows[0]
     assert row["cumulative"] >= row["this_month"]
-    assert "cumulative_percent" in row and "this_month_percent" in row
+    # One bar on one scale: the cumulative figure against the busiest office,
+    # and this month as a share of that office's own bar, drawn inside it.
+    assert row["cumulative_percent"] == 100, "the leader sets the scale"
+    assert row["this_month_share"] == analytics.bar(row["this_month"], row["cumulative"])
+    assert "this_month_percent" not in row, "no second scale"
 
     body = client.get(REPORTS).content.decode()
     assert "Documents handled by office" in body

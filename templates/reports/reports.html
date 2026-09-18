@@ -484,8 +484,8 @@
             <div class="report-caption">Confirmed receipts. Cumulative since records began, and this month.</div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Cumulative</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>This month</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Since records began</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>This month (+)</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -493,15 +493,19 @@
             <div class="report-office-row">
               <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
               <div class="report-series">
-                <div class="report-series-item">
-                  <span>Cumulative</span>
-                  <div class="report-bar"><i class="bar-one" style="width:{{ row.cumulative_percent }}%"></i></div>
+                {% comment %}
+                  One bar on one scale, with the part received this month drawn
+                  at its end. Two bars against two ceilings (the busiest office's
+                  total, and the busiest office's month) made 1 this month look
+                  half as big as 42 since records began.
+                {% endcomment %}
+                <div class="report-series-item report-series-item--share">
+                  <span>Received</span>
+                  <div class="report-bar">
+                    <i class="bar-one" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
+                  </div>
                   <strong class="num">{{ row.cumulative }}</strong>
-                </div>
-                <div class="report-series-item">
-                  <span>This month</span>
-                  <div class="report-bar"><i class="bar-two" style="width:{{ row.this_month_percent }}%"></i></div>
-                  <strong class="num">{{ row.this_month }}</strong>
+                  <span class="status-share num">+{{ row.this_month }}</span>
                 </div>
               </div>
             </div>

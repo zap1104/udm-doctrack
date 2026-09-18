@@ -1351,11 +1351,18 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         leaderboard.sort(key=lambda row: (row["cumulative"], row["this_month"]), reverse=True)
         leaderboard = leaderboard[:10]
 
+        # One scale for one row. This used to be two bars measured against two
+        # ceilings — the cumulative against the busiest office's total, this
+        # month against the busiest office's month — so an office with 42 since
+        # records began and 1 this month drew a full-length bar and a
+        # half-length one beside it, and the pair read as 42 against 21. This
+        # month is part of the cumulative figure, so it is drawn inside that
+        # bar: `this_month_share` is its share of the office's own bar, not of
+        # the panel's scale.
         cumulative_ceiling = max([row["cumulative"] for row in leaderboard], default=0)
-        month_ceiling = max([row["this_month"] for row in leaderboard], default=0)
         for row in leaderboard:
             row["cumulative_percent"] = _bar(row["cumulative"], cumulative_ceiling)
-            row["this_month_percent"] = _bar(row["this_month"], month_ceiling)
+            row["this_month_share"] = _bar(row["this_month"], row["cumulative"])
         return {
             "rows": leaderboard,
             "months": months,
