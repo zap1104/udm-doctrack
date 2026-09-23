@@ -407,7 +407,9 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: Outgoing cards under every office took three away: their two counts and
 #: "moved today", for a direction that does not exist there.
 DASHBOARD_QUERIES = 48
-REPORTS_QUERIES = 48
+#: 51: the repository section gained its three retention counts (due, due in
+#: 90 days, never scheduled), each one query, for every reader.
+REPORTS_QUERIES = 51
 
 
 @pytest.mark.django_db
@@ -437,7 +439,11 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 DASHBOARD_OFFICE_QUERIES = 49
-REPORTS_OFFICE_QUERIES = 53
+#: 52: with an office picked, the two office rankings are no longer computed
+#: (their rows would have been built from that office's documents only) and one
+#: grouped query gives that office's own handover figures instead; the three
+#: retention counts are added.
+REPORTS_OFFICE_QUERIES = 52
 
 
 @pytest.mark.django_db

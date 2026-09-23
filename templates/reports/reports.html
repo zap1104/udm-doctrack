@@ -53,8 +53,8 @@
         <h2 id="report-filters-title">Report scope</h2>
         <div class="report-caption">Applied to every figure and chart on this page.</div>
       </div>
-      {% if filters.office %}
-        <a class="small" href="{% url 'core:reports' %}">Clear</a>
+      {% if filters.office and not filters.defaulted %}
+        <a class="small" href="{% url 'core:reports' %}">{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
       {% endif %}
     </div>
     <div class="card-udm-body">
@@ -73,7 +73,12 @@
         <div class="col-sm-6 col-lg-6">
           <label class="form-label" for="report-office">Office</label>
           <select class="form-select" id="report-office" name="office" data-auto-submit>
-            <option value="">All offices you can see</option>
+            {% comment %}
+              System administrators only. For an office administrator an empty
+              choice is their own office, so this option reloaded the page on the
+              office already shown under a label promising more.
+            {% endcomment %}
+            {% if user.is_system_admin %}<option value="">All offices</option>{% endif %}
             {% for office in filter_offices %}
               <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
                 {{ office.code }} — {{ office.name }}
@@ -470,6 +475,7 @@
       </div>
     </div>
 
+    {% if university_wide %}
     {% comment %}
       Which office handled the most documents. "Handled" means received: an
       office that confirms receipt has taken the document on. Counting what an
@@ -551,6 +557,48 @@
         </div>
       </div>
     </div>
+    {% elif office_activity %}
+      {% comment %}
+        One office's own handovers, where the two rankings would otherwise sit.
+        Ranked beside other offices, those rows counted only the documents this
+        office touched and read as the other offices' whole figures. This row is
+        complete: every handover to or from an office is on a document it touched.
+      {% endcomment %}
+      <div class="col-12">
+        <div class="card-udm">
+          <div class="card-udm-head">
+            <div>
+              <h2>What {{ scope_office.code }} received and sent</h2>
+              <div class="report-caption">Counted in handovers: a document forwarded twice is two.</div>
+            </div>
+          </div>
+          <div class="card-udm-body">
+            <div class="office-activity">
+              <div class="office-activity-figure">
+                <span>Received and confirmed</span>
+                <strong class="num">{{ office_activity.received }}</strong>
+                <small>since records began</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Received in {{ office_activity.month|date:"F" }}</span>
+                <strong class="num">{{ office_activity.received_this_month }}</strong>
+                <small>confirmed this month</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Sent</span>
+                <strong class="num">{{ office_activity.sent }}</strong>
+                <small>{{ office_activity.sent_confirmed }} confirmed by the receiving office</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Sent, not yet confirmed</span>
+                <strong class="num">{{ office_activity.sent_waiting }}</strong>
+                <small>waiting on the receiving office</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 </section>
 
@@ -559,50 +607,83 @@
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>
-      <p>Repository volume and document types.</p>
+      <p>How much is kept, what kind, and where it stands against its retention schedule.</p>
     </div>
   </div>
 
+  {% comment %}
+    What every reader of the repository report needs: how much is kept, and
+    where it stands against its retention schedule. Each card opens the
+    repository filtered the same way, so the number is the list.
+
+    "Document types in use" was here, and counted the rows of the type panel —
+    which include "Unclassified" and an "Other (n types)" line — so it was
+    neither the number of types nor anything a reader acted on.
+  {% endcomment %}
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-      <div class="stat-card green">
+      <a class="stat-card green" href="{{ retention.all_url }}">
         <div class="label">Repository documents</div>
         <div class="value">{{ total_documents }}</div>
-        <div class="hint">Completed, archived and historical records</div>
-      </div>
+        <div class="hint">Filed from tracking, and historical files and scans</div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="stat-card gold">
-        <div class="label">Without tags</div>
-        <div class="value">{{ untagged_documents }}</div>
-        <div class="hint">Metadata cleanup required</div>
-      </div>
+      <a class="stat-card red" href="{{ retention.due_url }}">
+        <div class="label">Due for retention review</div>
+        <div class="value">{{ retention.due }}</div>
+        <div class="hint">Past their retention date</div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
-      {% comment %}
-        Failed and empty only — the documents with no text and none coming
-        unless somebody acts. It counted every blank `ocr_text`, so a document
-        queued for extraction seconds ago read the same as one whose extraction
-        failed. In-progress and skipped are named underneath, not folded in.
-      {% endcomment %}
-      <div class="stat-card navy">
-        <div class="label">Without extracted text</div>
-        <div class="value">{{ extraction.needs_attention }}</div>
-        <div class="hint">
-          {{ extraction.failed }} failed · {{ extraction.empty }} found no text
-          {% if extraction.in_progress %}<br>{{ extraction.in_progress }} still extracting{% endif %}
-          {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped, searchable by metadata only{% endif %}
+      <a class="stat-card gold" href="{{ retention.soon_url }}">
+        <div class="label">Due in the next 90 days</div>
+        <div class="value">{{ retention.soon }}</div>
+        <div class="hint">Retention date coming up</div>
+      </a>
+    </div>
+    <div class="col-6 col-lg-3">
+      <a class="stat-card" href="{{ retention.unscheduled_url }}">
+        <div class="label">No retention date</div>
+        <div class="value">{{ retention.unscheduled }}</div>
+        <div class="hint">Never scheduled for review</div>
+      </a>
+    </div>
+  </div>
+
+  {% if extraction %}
+    {% comment %}
+      Upkeep, for administrators: tagging and text extraction are theirs to fix,
+      and an office clerk shown "12 failed extractions" has nothing to do with it.
+    {% endcomment %}
+    <div class="report-section-subhead">Repository upkeep · administrators</div>
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="stat-card">
+          <div class="label">Without tags</div>
+          <div class="value">{{ untagged_documents }}</div>
+          <div class="hint">Harder to find by tag</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        {% comment %}
+          Failed and empty only — the documents with no text and none coming
+          unless somebody acts. It counted every blank `ocr_text`, so a document
+          queued for extraction seconds ago read the same as one whose extraction
+          failed. In-progress and skipped are named underneath, not folded in.
+        {% endcomment %}
+        <div class="stat-card navy">
+          <div class="label">Without extracted text</div>
+          <div class="value">{{ extraction.needs_attention }}</div>
+          <div class="hint">
+            {{ extraction.failed }} failed · {{ extraction.empty }} found no text
+            {% if extraction.in_progress %}<br>{{ extraction.in_progress }} still extracting{% endif %}
+            {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped, searchable by metadata only{% endif %}
+          </div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-lg-3">
-      <div class="stat-card">
-        <div class="label">Document types in use</div>
-        <div class="value">{{ document_types|length }}</div>
-        <div class="hint">Distinct types across the repository</div>
-      </div>
-    </div>
-  </div>
+  {% endif %}
 
   <div class="row g-4">
     <div class="col-12">

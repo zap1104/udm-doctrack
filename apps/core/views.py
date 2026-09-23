@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -175,7 +175,8 @@ class DashboardMemoMixin:
     def _scoped(self, user, office):
         """The two base querysets the analytics panels and the memo read from."""
         records = TrackingRecord.objects.visible_to(user)
-        documents = Document.objects.visible_to(user)
+        # Active only, as the repository lists them — see ReportsView.
+        documents = Document.objects.visible_to(user).filter(is_active=True)
         if office:
             # The same definition Reports uses, called rather than restated —
             # see core_filters.office_touches_record_q. The two-condition copy
@@ -519,7 +520,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # without the picker, whose `visible_to` is already its bound, or a
         # system administrator viewing every office — and then nothing is added.
         recent_records_qs = tracking_services.active_for(user)
-        recent_documents_qs = Document.objects.visible_to(user)
+        recent_documents_qs = Document.objects.visible_to(user).filter(is_active=True)
         if scope["office"]:
             recent_records_qs = recent_records_qs.filter(
                 core_filters.office_touches_record_q(scope["office"])
@@ -999,10 +1000,24 @@ def report_filters_from_request(request):
     # have, on a hand-typed `?office=all`, with `Q(originating_office="__all__")`.
     all_offices = picked == tracking_services.ALL_OFFICES
     office = None if all_offices else picked
+    # An office administrator who has picked nothing is reading their own
+    # office's report, as they are on the dashboard. Left at None, the page was
+    # titled with their office while counting everything they could see, gave no
+    # incoming/outgoing split, and asked them to pick an office they had in
+    # effect already picked. Only a system administrator's unpicked report is
+    # the whole university.
+    user = request.user
+    defaulted = (
+        office is None and not all_offices and can_pick
+        and not user.is_system_admin and bool(user.office_id)
+    )
+    if defaulted:
+        office = user.office
     return {
         "office": office,
         "all_offices": all_offices,
         "can_pick": can_pick,
+        "defaulted": defaulted,
     }
 
 
@@ -1119,7 +1134,10 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         filters = self._filters()
 
         records = self._apply(TrackingRecord.objects.visible_to(user), filters).distinct()
-        documents = Document.objects.visible_to(user)
+        # Active documents only, as the repository and search list them. A
+        # document deactivated from Django's admin site vanished from every list
+        # while still counting here, so a figure could exceed the page it opens.
+        documents = Document.objects.visible_to(user).filter(is_active=True)
         if filters["office"]:
             documents = documents.filter(office=filters["office"])
         documents = documents.distinct()
@@ -1128,6 +1146,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         # from. None for a system administrator who has picked nothing — those
         # panels then say so rather than inventing a split.
         scope_office = report_scope_office(self.request, filters)
+        university_wide = user.is_system_admin and scope_office is None
 
         total_records = records.count()
         total_documents = documents.count()
@@ -1200,18 +1219,84 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "awaiting_split": awaiting_split,
                 "stale_receipts": stale_receipts,
                 "by_status": self._by_status(records, total_records, scope_office),
-                "office_flow": self._office_flow(records),
                 "monthly": self._monthly(records),
-                "office_volume": self._office_volume(records),
                 "turnaround": self._turnaround(records),
                 "overdue_accountability": self._overdue_accountability(records),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
-                "untagged_documents": documents.filter(tags__isnull=True).distinct().count(),
-                "extraction": self._extraction_state(documents),
+                "retention": self._retention(documents, filters),
+                "university_wide": university_wide,
             }
         )
+        # Rankings of offices only where the report covers every office. For one
+        # office the other rows were built from the documents that office
+        # touched, so each read as another office's figure while counting a
+        # fraction of it: MED's clerk saw "PAY received 20" under PAY's name. The
+        # office's own row is complete, and it is what that reader needs.
+        if university_wide:
+            context["office_flow"] = self._office_flow(records)
+            context["office_volume"] = self._office_volume(records)
+        elif scope_office:
+            context["office_activity"] = self._office_activity(records, scope_office)
+        # Repository upkeep is an administrator's work: an office clerk cannot
+        # retry an extraction or change the tag vocabulary, so the figures are
+        # not computed for anyone else.
+        if user.is_office_admin:
+            context["untagged_documents"] = documents.filter(tags__isnull=True).distinct().count()
+            context["extraction"] = self._extraction_state(documents)
         return context
+
+    def _office_activity(self, records, office):
+        """What one office itself received and sent, counted in handovers.
+
+        The office's own row of the two office rankings, and complete: every
+        handover to or from an office is on a record that touches it, so the
+        records this report covers hold all of them. One grouped query.
+        """
+        months, _ = _month_window()
+        month_start = timezone.make_aware(
+            datetime.combine(months[-1], time.min), timezone.get_current_timezone()
+        )
+        steps = RoutingStep.objects.filter(record__in=records.order_by().values("pk"))
+        figures = steps.aggregate(
+            received=Count("id", filter=Q(to_office=office, received_at__isnull=False)),
+            received_this_month=Count(
+                "id", filter=Q(to_office=office, received_at__gte=month_start)
+            ),
+            sent=Count("id", filter=Q(from_office=office)),
+            sent_confirmed=Count("id", filter=Q(from_office=office, received_at__isnull=False)),
+        )
+        figures["sent_waiting"] = figures["sent"] - figures["sent_confirmed"]
+        figures["month"] = months[-1]
+        return figures
+
+    def _retention(self, documents, filters):
+        """How many documents are due for their retention review, and when.
+
+        The records-management figure the repository exists to keep: a document
+        past its retention date is due for review or disposal, and one with no
+        date has never been scheduled. Each count opens the repository filtered
+        the same way, through the same `due_for_retention_review` the
+        repository's own queue uses, so the number and the list are one query.
+        """
+        today = timezone.localdate()
+        office = filters["office"]
+        base = reverse("documents:repository")
+
+        def link(state):
+            return core_filters.link(base, retention=state, office=office.pk if office else None)
+
+        return {
+            "due": documents.due_for_retention_review(today).count(),
+            "soon": documents.filter(
+                retention_until__gt=today, retention_until__lte=today + timedelta(days=90)
+            ).count(),
+            "unscheduled": documents.filter(retention_until__isnull=True).count(),
+            "due_url": link("due"),
+            "soon_url": link("soon"),
+            "unscheduled_url": link("unscheduled"),
+            "all_url": core_filters.link(base, office=office.pk if office else None),
+        }
 
     # -- tracking panels ---------------------------------------------------
     # The aggregations below live in apps/core/analytics.py because the

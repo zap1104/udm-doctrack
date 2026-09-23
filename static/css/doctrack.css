@@ -1015,6 +1015,14 @@ a:hover { text-decoration: underline; }
 /* A date input's native width is wider than a narrow column; let it fit. */
 .admin-filter-date .form-control { min-width:0; padding-inline:8px; }
 
+/* One office's own handover figures, where the rankings sit for every office. */
+.office-activity { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; }
+.office-activity-figure { display:flex; flex-direction:column; gap:2px; padding:12px 14px; border:1px solid var(--chart-grid); border-radius:8px; }
+.office-activity-figure span { color:var(--udm-muted); font-size:12.5px; font-weight:600; }
+.office-activity-figure strong { color:var(--udm-navy-text); font-size:26px; font-weight:800; line-height:1.15; }
+.office-activity-figure small { color:var(--udm-muted); font-size:12px; }
+.report-section-subhead { margin:-6px 0 10px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+
 /* The reasoning a reader needs once and not on every visit: why a series is
    cumulative, what "historical" means, why office hours. One plain line stays
    under every title; this holds the rest. */
