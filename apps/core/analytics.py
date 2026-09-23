@@ -32,9 +32,11 @@ from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingSte
 
 from .business_time import (
     OFFICE_HOURS_CAVEAT,
+    _two_units,
     average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
+    working_day_seconds,
 )
 from .colors import STATUS_COLOURS
 
@@ -162,11 +164,7 @@ def humanise_duration(delta) -> str:
     days, remainder = divmod(total, 86400)
     hours, remainder = divmod(remainder, 3600)
     minutes = remainder // 60
-    if days:
-        return f"{days} day{'s' if days != 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
-    if hours:
-        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min{'s' if minutes != 1 else ''}"
-    return f"{minutes} min{'s' if minutes != 1 else ''}"
+    return _two_units(days, "day", hours, "hr", minutes, "min")
 
 
 def month_window(months_back: int = REPORT_MONTHS):
@@ -477,9 +475,11 @@ def turnaround(records) -> dict:
     sit over a weekend; showing only the second charges them for the weekend.
     """
     steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-    receipt = steps.aggregate(
-        value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
-    )["value"]
+    receipt_row = steps.aggregate(
+        value=Avg(F("received_at") - F("sent_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    receipt = receipt_row["value"]
     receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
 
     # Turnaround measures how long the *work* took, so it ends at completion
@@ -487,15 +487,20 @@ def turnaround(records) -> dict:
     # queue and would otherwise be charged to the office that finished on time.
     done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
     processing_set = done.filter(first_received_at__isnull=False)
-    processing = processing_set.aggregate(
-        value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
-    )["value"]
+    # Each average and how many it is taken over, from one query.
+    processing_row = processing_set.aggregate(
+        value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    processing = processing_row["value"]
     processing_office = average_business_seconds(
         processing_set.values_list("first_received_at", "completed_at")
     )
-    lifetime = done.aggregate(
-        value=Avg(F("completed_at") - F("created_at"), output_field=DurationField())
-    )["value"]
+    lifetime_row = done.aggregate(
+        value=Avg(F("completed_at") - F("created_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    lifetime = lifetime_row["value"]
     lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
 
     with_deadline = done.filter(due_at__isnull=False)
@@ -512,21 +517,26 @@ def turnaround(records) -> dict:
         "processing_calendar": humanise_duration(processing),
         "lifetime_calendar": humanise_duration(lifetime),
         "office_hours_caveat": OFFICE_HOURS_CAVEAT,
-        "receipt_samples": steps.count(),
+        # How many each average is taken over, so "4 hrs" from three documents
+        # is not read with the weight of "4 hrs" from three hundred.
+        "receipt_samples": receipt_row["samples"],
+        "processing_samples": processing_row["samples"],
+        "lifetime_samples": lifetime_row["samples"],
         "on_time": on_time,
         "on_time_total": deadline_total,
         "on_time_percent": percent(on_time, deadline_total),
-        "unreceived": RoutingStep.objects.filter(
-            record__in=records, received_at__isnull=True
-        ).count(),
+        # Handovers the receipt average cannot include yet: sent in the batch
+        # the document is on now, not yet confirmed, on a document still in
+        # circulation. It counted every unconfirmed step ever written, which
+        # included siblings on finished documents and hops the document had
+        # already moved past — 83 on the seeded data, beside a Pending receipt
+        # card reading 20. None of those will ever be confirmed.
+        "awaiting_confirmation": RoutingStep.objects.filter(
+            record__in=records,
+            received_at__isnull=True,
+            batch=F("record__current_batch"),
+        ).exclude(record__status__in=COMPLETED_STATUSES).count(),
     }
-
-
-#: A working day, for turning the office-hours averages into a number that fits
-#: on a chart axis. Reports says "4 hrs 20 mins"; a twelve-month trend line
-#: cannot, so it plots working days and labels the axis in days.
-WORKING_HOURS_PER_DAY = 8
-WORKING_SECONDS_PER_DAY = WORKING_HOURS_PER_DAY * 3600
 
 
 def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
@@ -550,24 +560,38 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
         completed_at__gte=since,
     ).values_list("created_at", "first_received_at", "completed_at", "due_at")
 
+    # Office seconds for the chart and the headline, calendar seconds beside
+    # them — the same pair Reports shows for the whole period.
     buckets = {
-        month: {"receipt": [], "processing": [], "lifetime": [], "on_time": 0, "closed": 0}
+        month: {
+            "receipt": [], "processing": [], "lifetime": [],
+            "receipt_calendar": [], "processing_calendar": [], "lifetime_calendar": [],
+            "on_time": 0, "closed": 0,
+        }
         for month in months
     }
+
+    def calendar_seconds(start, end):
+        return max(0.0, (end - start).total_seconds())
 
     for sent_at, received_at in step_rows:
         bucket = buckets.get(_month_of(received_at))
         if bucket is not None:
             bucket["receipt"].append(business_seconds_between(sent_at, received_at))
+            bucket["receipt_calendar"].append(calendar_seconds(sent_at, received_at))
 
     for created_at, first_received_at, completed_at, due_at in done_rows:
         bucket = buckets.get(_month_of(completed_at))
         if bucket is None:
             continue
         bucket["lifetime"].append(business_seconds_between(created_at, completed_at))
+        bucket["lifetime_calendar"].append(calendar_seconds(created_at, completed_at))
         if first_received_at:
             bucket["processing"].append(
                 business_seconds_between(first_received_at, completed_at)
+            )
+            bucket["processing_calendar"].append(
+                calendar_seconds(first_received_at, completed_at)
             )
         if due_at:
             bucket["closed"] += 1
@@ -577,25 +601,36 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     def average_seconds(samples):
         return sum(samples) / len(samples) if samples else None
 
+    day = working_day_seconds()
+
     def average_days(samples):
         seconds = average_seconds(samples)
-        return None if seconds is None else round(seconds / WORKING_SECONDS_PER_DAY, 1)
+        return None if seconds is None else round(seconds / day, 1)
+
+    def calendar_label(samples):
+        seconds = average_seconds(samples)
+        return humanise_duration(None if seconds is None else timedelta(seconds=seconds))
 
     rows = []
     for month in months:
         bucket = buckets[month]
+        row = {
+            "month": month,
+            "receipt": average_days(bucket["receipt"]),
+            "processing": average_days(bucket["processing"]),
+            "lifetime": average_days(bucket["lifetime"]),
+        }
+        # Days for the axis, office language for the prose beside it. A
+        # sentence reading "an average of 0.0 working days" is not something
+        # anybody would write; "under a minute" is. The month's own figures,
+        # so the summary beside the chart can say what its last point says.
+        for key in ("receipt", "processing", "lifetime"):
+            row[f"{key}_label"] = humanise_business_seconds(average_seconds(bucket[key]))
+            row[f"{key}_calendar"] = calendar_label(bucket[f"{key}_calendar"])
+            row[f"{key}_samples"] = len(bucket[key])
         rows.append(
             {
-                "month": month,
-                "receipt": average_days(bucket["receipt"]),
-                "processing": average_days(bucket["processing"]),
-                "lifetime": average_days(bucket["lifetime"]),
-                # Days for the axis, office language for the prose beside it.
-                # A sentence reading "an average of 0.0 working days" is not
-                # something anybody would write; "under a minute" is.
-                "lifetime_label": humanise_business_seconds(
-                    average_seconds(bucket["lifetime"])
-                ),
+                **row,
                 "on_time": bucket["on_time"],
                 "closed": bucket["closed"],
                 "on_time_percent": percent(bucket["on_time"], bucket["closed"]),
@@ -618,9 +653,11 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     return {
         "rows": rows,
         "ceiling": ceiling,
+        "ticks": axis_ticks(ceiling),
         "has_data": bool(measured),
         "office_hours_caveat": OFFICE_HOURS_CAVEAT,
         "latest": rows[-1] if rows else None,
+        "working_day_hours": round(day / 3600, 1),
     }
 
 

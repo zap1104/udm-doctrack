@@ -583,7 +583,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             "repository_donut": self._domain_donut(breakdown, "repository"),
             "monthly": analytics.monthly_volume(records),
             "turnaround_trend_points": self._trend_points(memo_context["turnaround_trend"]),
-            "turnaround_trend_geometry": self._trend_geometry(),
+            "turnaround_trend_geometry": self._trend_geometry(memo_context["turnaround_trend"]),
             # `live_by_status` was computed here — a grouped query on every load —
             # and no template has read it since the "Records by status" panel
             # left the dashboard. Found by the context allowlist in
@@ -792,22 +792,38 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: is the baseline and is drawn heavier.
     TREND_GRID_STEPS = (1.0, 0.75, 0.5, 0.25, 0.0)
 
-    def _trend_geometry(self):
+    def _trend_geometry(self, trend=None):
         """The plot box and its grid lines, in the units the viewBox declares.
 
         Computed here rather than written into the template as literals. They
         were literals, and the plot's own geometry lived in Python: the two
         agreed only because they had been matched by hand, so changing the box
         moved the lines off the data silently.
+
+        With a trend, the rules sit at its labelled ticks (0, 2, 4, 6 working
+        days) and each carries its value and its height as a share of the box,
+        for the axis labels drawn beside the SVG. They were four unlabelled
+        rules at quarters of the height, so no point could be read off them.
+        Without one, the quarter rules, which is what an empty chart draws.
         """
         plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        if trend and trend.get("ticks"):
+            ceiling = trend["ceiling"] or 1
+            steps = [
+                (tick["value"], tick["value"] / ceiling) for tick in reversed(trend["ticks"])
+            ]
+        else:
+            steps = [(None, step) for step in self.TREND_GRID_STEPS]
         lines = []
-        for index, step in enumerate(self.TREND_GRID_STEPS):
+        for index, (value, step) in enumerate(steps):
+            y = round(self.TREND_PAD_TOP + (1 - step) * plot_h, 1)
             lines.append(
                 {
-                    "y": round(self.TREND_PAD_TOP + (1 - step) * plot_h, 1),
+                    "y": y,
+                    "value": value,
+                    "top_percent": round(100 * y / self.TREND_HEIGHT, 2),
                     # The baseline is the axis, not another rule behind the data.
-                    "axis": index == len(self.TREND_GRID_STEPS) - 1,
+                    "axis": index == len(steps) - 1,
                 }
             )
         return {

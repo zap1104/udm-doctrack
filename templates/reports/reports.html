@@ -352,7 +352,7 @@
           <div>
             <h2>How long documents take</h2>
             <div class="report-caption">
-              Average time at each stage, in working hours. Calendar time is beneath each one.
+              Averages since records began, in working hours. Calendar time is beneath each one.
             </div>
           </div>
         </div>
@@ -365,20 +365,25 @@
             actually waited, which is the fair way to answer them. Either one
             alone misleads, in opposite directions.
           {% endcomment %}
+          {% comment %}
+            Each average says how many it is taken over, so "4 hrs" from three
+            documents is not read with the weight of "4 hrs" from three hundred.
+            A stage with nothing to average says so rather than printing a dash.
+          {% endcomment %}
           <div class="report-metric">
-            <span>Average time to confirm receipt</span>
+            <span>Average time to confirm receipt<br><small class="text-muted">sent → confirmed · {{ turnaround.receipt_samples }} handover{{ turnaround.receipt_samples|pluralize }}</small></span>
             <strong>{{ turnaround.receipt }}
               <small class="d-block text-muted fw-normal">{{ turnaround.receipt_calendar }} on the calendar</small>
             </strong>
           </div>
           <div class="report-metric">
-            <span>Average time in process<br><small class="text-muted">first receipt → completion</small></span>
+            <span>Average time in process<br><small class="text-muted">first receipt → completion · {{ turnaround.processing_samples }} document{{ turnaround.processing_samples|pluralize }}</small></span>
             <strong>{{ turnaround.processing }}
               <small class="d-block text-muted fw-normal">{{ turnaround.processing_calendar }} on the calendar</small>
             </strong>
           </div>
           <div class="report-metric">
-            <span>Average total lifetime<br><small class="text-muted">created → completed</small></span>
+            <span>Average total lifetime<br><small class="text-muted">created → completed · {{ turnaround.lifetime_samples }} document{{ turnaround.lifetime_samples|pluralize }}</small></span>
             <strong>{{ turnaround.lifetime }}
               <small class="d-block text-muted fw-normal">{{ turnaround.lifetime_calendar }} on the calendar</small>
             </strong>
@@ -394,14 +399,22 @@
               <span class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></span>
             </div>
             <div class="meter-foot">
-              {{ turnaround.on_time }} of {{ turnaround.on_time_total }} completed record{{ turnaround.on_time_total|pluralize }} that had a deadline
+              {{ turnaround.on_time }} of {{ turnaround.on_time_total }} completed document{{ turnaround.on_time_total|pluralize }} that had a deadline
             </div>
           </div>
 
-          <p class="form-text mt-3 mb-0">
-            {{ turnaround.unreceived }} routing step{{ turnaround.unreceived|pluralize }}
-            {{ turnaround.unreceived|pluralize:"is,are" }} still waiting for a receipt confirmation.
-          </p>
+          {% comment %}
+            Why the receipt average cannot be complete yet: handovers still
+            waiting to be confirmed, in the batch each document is on now. It
+            counted every unconfirmed step ever written, finished documents and
+            superseded hops included, which will never be confirmed.
+          {% endcomment %}
+          {% if turnaround.awaiting_confirmation %}
+            <p class="form-text mt-3 mb-0">
+              Not yet in the receipt average: {{ turnaround.awaiting_confirmation }}
+              handover{{ turnaround.awaiting_confirmation|pluralize }} still waiting for the receiving office to confirm.
+            </p>
+          {% endif %}
         </div>
       </div>
     </div>

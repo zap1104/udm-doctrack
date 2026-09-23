@@ -117,8 +117,9 @@ def test_a_day_means_a_working_day_not_twenty_four_hours():
     avoids — the unit has to match the thing being counted."""
     one_day = int(settings.OFFICE_HOURS_PER_DAY * HOUR)
 
-    assert humanise_business_seconds(one_day) == "1 day 0 hrs"
-    assert humanise_business_seconds(one_day * 2) == "2 days 0 hrs"
+    # A zero second unit is dropped: "1 day", not "1 day 0 hrs".
+    assert humanise_business_seconds(one_day) == "1 day"
+    assert humanise_business_seconds(one_day * 2) == "2 days"
 
 
 @pytest.mark.parametrize(

@@ -406,10 +406,10 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: off the breakdown, which had no overdue counts. Disabling the Incoming and
 #: Outgoing cards under every office took three away: their two counts and
 #: "moved today", for a direction that does not exist there.
-DASHBOARD_QUERIES = 48
+DASHBOARD_QUERIES = 47
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
-REPORTS_QUERIES = 51
+REPORTS_QUERIES = 50
 
 
 @pytest.mark.django_db
@@ -434,16 +434,19 @@ def test_the_reports_query_count_is_pinned(
         client.get(f"{REPORTS}?office=all")
 
 
+#: All four fell by one on the turnaround fixes: the average receipt time and the
+#: number of handovers it is taken over now come from one query, where the count
+#: was a query of its own.
 #: The same two pages with an office picked, which is where the dashboard draws
 #: two direction rings instead of one. Pinned separately because the pin under
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
-DASHBOARD_OFFICE_QUERIES = 49
+DASHBOARD_OFFICE_QUERIES = 48
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 52
+REPORTS_OFFICE_QUERIES = 51
 
 
 @pytest.mark.django_db

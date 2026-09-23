@@ -2167,6 +2167,15 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    letterboxes the plot inside its own card without erroring anywhere, which is
    why a test asserts the two agree. */
 .trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/170; }
+/* The plot and its y-axis. The SVG keeps the whole width it is given (it has no
+   gutter of its own); the gutter is here, and the month labels under it are
+   padded by the same amount so each stays under its point. */
+.trend-plot { --trend-gutter:26px; position:relative; padding-left:var(--trend-gutter); }
+.trend-axis-values { position:absolute; top:0; bottom:0; left:0; width:calc(var(--trend-gutter) - 6px); }
+.trend-axis-values span { position:absolute; right:0; transform:translateY(-50%); color:var(--udm-muted); font-size:10.5px; line-height:1; }
+.trend-plot + .trend-axis-labels { padding-left:var(--trend-gutter); }
+.trend-summary-none { color:var(--udm-muted) !important; font-weight:600 !important; font-size:13px !important; }
+.trend-summary-figures .report-metric > span small { display:block; font-size:11px; font-weight:500; }
 .trend-grid { stroke:var(--chart-grid); stroke-width:1; }
 .trend-axis { stroke:var(--udm-line); stroke-width:1; }
 /* The month labels sit outside the SVG so they are real text at a real size —

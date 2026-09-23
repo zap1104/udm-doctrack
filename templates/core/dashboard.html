@@ -708,6 +708,16 @@
             <div class="trend-layout">
               <div class="trend-chart">
                 {% comment %}
+                  The y-axis, in working days, beside the SVG rather than inside it:
+                  SVG text scales with the chart and would shrink to nothing at the
+                  widths this card is drawn at. Placed by the same geometry as the
+                  rules, so a label is level with its rule.
+                {% endcomment %}
+                <div class="trend-plot">
+                <div class="trend-axis-values num" aria-hidden="true">
+                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent }}%">{{ line.value }}</span>{% endif %}{% endfor %}
+                </div>
+                {% comment %}
                   No preserveAspectRatio="none": it stretches the plot to the column
                   width, which turns every data point from a circle into an oval.
                   The default uniform scaling keeps the dots round, and the CSS sizes
@@ -739,34 +749,55 @@
                     {% endfor %}
                   {% endfor %}
                 </svg>
+                </div>
                 <div class="trend-axis-labels" aria-hidden="true">
                   {% for row in turnaround_trend.rows %}
                     <span>{{ row.month|date:"M" }}</span>
                   {% endfor %}
                 </div>
                 <div class="chart-scale">
-                  Top of the chart = {{ turnaround_trend.ceiling }} working day{{ turnaround_trend.ceiling|pluralize }}
-                  &middot; one day is eight office hours
+                  Working days, averaged per month &middot; one working day is
+                  {{ turnaround_trend.working_day_hours|floatformat:"-1" }} office hours
                 </div>
               </div>
               <div class="trend-summary">
-                <div class="trend-summary-head">
-                  {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
-                </div>
+                {% comment %}
+                  The month the chart ends on, in words. It printed the all-time
+                  averages under this month's name, so its figures disagreed with
+                  the last point of the line beside it: "In process 3 days 3 hrs"
+                  next to a line reading one day. Each figure now says how many
+                  documents it is taken over, and a stage with none this month
+                  says so rather than printing a dash.
+                {% endcomment %}
+                {% with month=turnaround_trend.latest %}
+                <div class="trend-summary-head">{{ month.month|date:"F" }} so far</div>
                 <div class="trend-summary-figures">
                   <div class="report-metric">
-                    <span>Receipt</span>
-                    <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
+                    <span>Receipt<small class="text-muted">{{ month.receipt_samples }} handover{{ month.receipt_samples|pluralize }}</small></span>
+                    {% if month.receipt_samples %}
+                      <strong>{{ month.receipt_label }}<small class="text-muted">{{ month.receipt_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None confirmed yet</strong>
+                    {% endif %}
                   </div>
                   <div class="report-metric">
-                    <span>In process</span>
-                    <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
+                    <span>In process<small class="text-muted">{{ month.processing_samples }} document{{ month.processing_samples|pluralize }}</small></span>
+                    {% if month.processing_samples %}
+                      <strong>{{ month.processing_label }}<small class="text-muted">{{ month.processing_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None completed yet</strong>
+                    {% endif %}
                   </div>
                   <div class="report-metric">
-                    <span>Total lifetime</span>
-                    <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+                    <span>Total lifetime<small class="text-muted">{{ month.lifetime_samples }} document{{ month.lifetime_samples|pluralize }}</small></span>
+                    {% if month.lifetime_samples %}
+                      <strong>{{ month.lifetime_label }}<small class="text-muted">{{ month.lifetime_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None completed yet</strong>
+                    {% endif %}
                   </div>
                 </div>
+                {% endwith %}
                 {% comment %}
                   Only shown when something actually had a deadline that month. A 0%
                   printed for a month in which nothing was due would read as

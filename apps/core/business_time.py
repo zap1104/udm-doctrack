@@ -102,6 +102,18 @@ def business_timedelta_between(start, end) -> timedelta:
     return timedelta(seconds=business_seconds_between(start, end))
 
 
+def working_day_seconds() -> int:
+    """The length of one working day, in counted seconds.
+
+    The one definition every turnaround figure uses. It is the day's cap below,
+    OFFICE_HOURS_PER_DAY: the 8AM-5PM window counts seven hours, so a document
+    that waited one full office day is charged seven hours and reported as one
+    day. The trend chart used its own eight-hour day, so the same wait read
+    "1 day" in the text beside the chart and 0.9 on the chart itself.
+    """
+    return int(_setting("OFFICE_HOURS_PER_DAY", 7) * 3600)
+
+
 def humanise_business_seconds(seconds) -> str:
     """Office-hours seconds as office language: '2 days 4 hrs', '3 hrs'.
 
@@ -115,16 +127,27 @@ def humanise_business_seconds(seconds) -> str:
     if seconds < 60:
         return "under a minute"
 
-    day_seconds = int(_setting("OFFICE_HOURS_PER_DAY", 7) * 3600)
-    days, remainder = divmod(seconds, day_seconds)
+    days, remainder = divmod(seconds, working_day_seconds())
     hours, remainder = divmod(remainder, 3600)
     minutes = remainder // 60
 
+    return _two_units(days, "day", hours, "hr", minutes, "min")
+
+
+def _two_units(days, day_word, hours, hour_word, minutes, minute_word) -> str:
+    """The two largest units that are not zero: "4 days", not "4 days 0 hrs".
+
+    Shared with the calendar figure in analytics.humanise_duration, so the two
+    numbers printed one above the other are worded the same way.
+    """
+    def unit(value, word):
+        return f"{value} {word}{'s' if value != 1 else ''}"
+
     if days:
-        return f"{days} day{'s' if days != 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
+        return unit(days, day_word) + (f" {unit(hours, hour_word)}" if hours else "")
     if hours:
-        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min{'s' if minutes != 1 else ''}"
-    return f"{minutes} min{'s' if minutes != 1 else ''}"
+        return unit(hours, hour_word) + (f" {unit(minutes, minute_word)}" if minutes else "")
+    return unit(minutes, minute_word)
 
 
 def average_business_seconds(pairs) -> float | None:
