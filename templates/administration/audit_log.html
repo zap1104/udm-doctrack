@@ -10,25 +10,55 @@
 {% include "administration/_tabs.html" with tab='audit' %}
 
 <div class="card-udm mb-3"><div class="card-udm-body">
-  <form method="get" class="row g-2">
+  <form method="get" class="row g-2 align-items-end admin-filters">
     {% comment %}
       Both sizes ride through the filter, so narrowing the log does not silently
       snap a reader who asked for 100 rows back to 25. `page` is deliberately not
-      carried: page four of the old filter is not page four of the new one.
+      carried: page four of the old filter is not page four of the new one. The
+      record-access panel's filters ride through too, so narrowing this trail
+      does not reset the other one.
     {% endcomment %}
     <input type="hidden" name="per_page" value="{{ system_page.page_size }}">
     <input type="hidden" name="access_per_page" value="{{ access_page.page_size }}">
-    <div class="col-md-7"><input class="form-control" name="q" value="{{ query }}" placeholder="Search the log…"></div>
-    <div class="col-md-3">
-      <select class="form-select" name="action">
+    {% for name, value in access_filters.items %}{% if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}
+    <div class="col-lg-{% if filter_offices %}3{% else %}5{% endif %}">
+      <label class="form-label" for="audit-q">Search</label>
+      <input class="form-control" id="audit-q" name="q" value="{{ query }}" placeholder="What happened, or who did it">
+    </div>
+    <div class="col-6 col-lg-2">
+      <label class="form-label" for="audit-action">Action</label>
+      <select class="form-select" id="audit-action" name="action" data-auto-submit>
         <option value="">All actions</option>
         {% for value, label in actions %}
           <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+    {% if filter_offices %}
+      <div class="col-6 col-lg-2">
+        <label class="form-label" for="audit-office">Office</label>
+        <select class="form-select" id="audit-office" name="office" data-auto-submit>
+          <option value="">All offices</option>
+          {% for office in filter_offices %}
+            <option value="{{ office.pk }}" {% if system_filters.office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.code }} · {{ office.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    <div class="col-6 col-lg-2 admin-filter-date">
+      <label class="form-label" for="audit-since">From</label>
+      <input class="form-control" type="date" id="audit-since" name="since" value="{{ system_filters.since }}">
+    </div>
+    <div class="col-6 col-lg-2 admin-filter-date">
+      <label class="form-label" for="audit-until">To</label>
+      <input class="form-control" type="date" id="audit-until" name="until" value="{{ system_filters.until }}">
+    </div>
+    <div class="col-lg-1 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
   </form>
+  <div class="admin-filter-summary">
+    {{ system_page.page_obj.paginator.count }} entr{{ system_page.page_obj.paginator.count|pluralize:"y,ies" }}
+    {% if system_is_filtered %}· <a href="?{% for name, value in access_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}">Clear these filters</a>{% endif %}
+  </div>
 </div></div>
 
 {% comment %}
@@ -76,22 +106,44 @@
     </div>
   </div>
   <div class="card-udm-body">
-    <form method="get" class="row g-2">
+    <form method="get" class="row g-2 align-items-end admin-filters">
       {# Carried through so filtering one panel does not reset the other. #}
-      {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
-      {% if selected_action %}<input type="hidden" name="action" value="{{ selected_action }}">{% endif %}
+      {% for name, value in system_filters.items %}{% if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}
       <input type="hidden" name="per_page" value="{{ system_page.page_size }}">
       <input type="hidden" name="access_per_page" value="{{ access_page.page_size }}">
-      <div class="col-md-5">
-        <input class="form-control" name="record" value="{{ record_query }}"
-               placeholder="Tracking number or subject…" aria-label="Filter by document">
+      <div class="col-lg-3">
+        <label class="form-label" for="access-record">Document</label>
+        <input class="form-control" id="access-record" name="record" value="{{ record_query }}"
+               placeholder="Tracking number or subject">
       </div>
-      <div class="col-md-5">
-        <input class="form-control" name="who" value="{{ who_query }}"
-               placeholder="Who opened or printed it…" aria-label="Filter by person">
+      <div class="col-lg-2">
+        <label class="form-label" for="access-who">Person</label>
+        <input class="form-control" id="access-who" name="who" value="{{ who_query }}"
+               placeholder="Who opened or printed it">
       </div>
-      <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+      <div class="col-6 col-lg-2">
+        <label class="form-label" for="access-event">What</label>
+        <select class="form-select" id="access-event" name="event" data-auto-submit>
+          <option value="">Opened or printed</option>
+          {% for value, label in access_events %}
+            <option value="{{ value }}" {% if access_filters.event == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-lg-2 admin-filter-date">
+        <label class="form-label" for="access-since">From</label>
+        <input class="form-control" type="date" id="access-since" name="access_since" value="{{ access_filters.access_since }}">
+      </div>
+      <div class="col-6 col-lg-2 admin-filter-date">
+        <label class="form-label" for="access-until">To</label>
+        <input class="form-control" type="date" id="access-until" name="access_until" value="{{ access_filters.access_until }}">
+      </div>
+      <div class="col-lg-1 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
     </form>
+    <div class="admin-filter-summary">
+      {{ access_page.page_obj.paginator.count }} entr{{ access_page.page_obj.paginator.count|pluralize:"y,ies" }}
+      {% if access_is_filtered %}· <a href="?{% for name, value in system_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}">Clear these filters</a>{% endif %}
+    </div>
   </div>
   <div class="card-udm-body pb-0">{% pager access_page section="size" %}</div>
   <div class="card-udm-body p-0 table-responsive">

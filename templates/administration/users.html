@@ -10,20 +10,54 @@
 {% include "administration/_tabs.html" with tab='users' %}
 
 <div class="card-udm mb-3"><div class="card-udm-body">
-  <form method="get" class="row g-2">
+  {% comment %}
+    Search, then three narrowing choices. The choices apply themselves on change
+    (data-auto-submit, listened for in doctrack.js; no inline handler, which the
+    Content-Security-Policy refuses); the search box needs Enter or the button,
+    because applying on every keystroke would reload the page mid-word.
+  {% endcomment %}
+  <form method="get" class="row g-2 align-items-end admin-filters">
     {# Carried so filtering does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
-    <div class="col-md-6"><input class="form-control" name="q" value="{{ query }}" placeholder="Search users…"></div>
     <div class="col-md-4">
-      <select class="form-select" name="office">
-        <option value="">All offices</option>
-        {% for office in offices %}
-          <option value="{{ office.pk }}" {% if selected_office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.name }}</option>
+      <label class="form-label" for="user-q">Search</label>
+      <input class="form-control" id="user-q" name="q" value="{{ query }}" placeholder="Name, username or email">
+    </div>
+    {% if not is_office_scoped %}
+      <div class="col-md-3">
+        <label class="form-label" for="user-office">Office</label>
+        <select class="form-select" id="user-office" name="office" data-auto-submit>
+          <option value="">All offices</option>
+          {% for office in offices %}
+            <option value="{{ office.pk }}" {% if selected_office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="user-role">Role</label>
+      <select class="form-select" id="user-role" name="role" data-auto-submit>
+        <option value="">Any role</option>
+        {% for value, label in roles %}
+          <option value="{{ value }}" {% if selected_role == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="user-status">Status</label>
+      <select class="form-select" id="user-status" name="status" data-auto-submit>
+        <option value="">Any status</option>
+        {% for value, label in statuses %}
+          <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-1 d-grid"><button class="btn btn-udm-outline">Filter</button></div>
   </form>
+  <div class="admin-filter-summary">
+    {{ page_obj.paginator.count }} account{{ page_obj.paginator.count|pluralize }}{% if is_office_scoped %} in {{ user.office_label }}{% endif %}
+    {% if is_filtered %}· <a href="{% url 'accounts:user_list' %}">Clear filters</a>{% endif %}
+  </div>
 </div></div>
 
 {% comment %}

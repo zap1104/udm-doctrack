@@ -1,6 +1,10 @@
 <ul class="nav nav-tabs mb-4">
   <li class="nav-item"><a class="nav-link {% if tab == 'users' %}active{% endif %}" href="{% url 'accounts:user_list' %}">Users</a></li>
-  <li class="nav-item"><a class="nav-link {% if tab == 'offices' %}active{% endif %}" href="{% url 'accounts:office_list' %}">Offices</a></li>
+  {% comment %}
+    Offices is a system administrator's screen. Shown to an office administrator,
+    the tab answered with a 403 — a control that exists to refuse the reader.
+  {% endcomment %}
+  {% if user.is_system_admin %}<li class="nav-item"><a class="nav-link {% if tab == 'offices' %}active{% endif %}" href="{% url 'accounts:office_list' %}">Offices</a></li>{% endif %}
   <li class="nav-item"><a class="nav-link {% if slug == 'document-types' %}active{% endif %}" href="{% url 'core:masterdata_list' 'document-types' %}">Document types</a></li>
   <li class="nav-item"><a class="nav-link {% if slug == 'tags' %}active{% endif %}" href="{% url 'core:masterdata_list' 'tags' %}">Tags</a></li>
   <li class="nav-item"><a class="nav-link {% if slug == 'metadata-rules' %}active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-rules' %}">Metadata rules</a></li>

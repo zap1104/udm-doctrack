@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import csv
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.core.exceptions import FieldDoesNotExist, PermissionDenied
+from django.db.models import CharField, Count, Exists, F, OuterRef, Q, TextField
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -24,7 +24,14 @@ from apps.documents.models import (
     Source,
 )
 from apps.tracking import services as tracking_services
-from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord
+from apps.tracking.models import (
+    COMPLETED_STATUSES,
+    QUIET_EVENTS,
+    RecordActivity,
+    RoutingStep,
+    Status,
+    TrackingRecord,
+)
 
 from . import analytics
 from . import filters as core_filters
@@ -2024,6 +2031,35 @@ class MasterDataAccessMixin:
         return config
 
 
+#: The record-access trail: every open (VIEWED) and every print.
+ACCESS_EVENTS = frozenset(set(QUIET_EVENTS) | {RecordActivity.Event.PRINTED})
+
+
+def audit_entries_for(user):
+    """`AuditLog`, narrowed to what this administrator may see.
+
+    Scoped by the actor's office for anyone but a system administrator. The log
+    screen used to be reachable only by the global ADMIN role, so the unscoped
+    queryset was correct; opening it to office administrators is what makes it
+    a leak, and it is the same leak the account screens had — a role that
+    gained a boundary, behind a queryset that never had one.
+
+    Rows with no actor are system actions belonging to no office, so they stay
+    with the system administrators.
+
+    A module function rather than a method, because the Administration home page
+    shows the latest of the same entries and read them unscoped: an office
+    administrator's "Latest activity" listed every office's account changes and
+    document titles.
+    """
+    entries = AuditLog.objects.select_related("actor")
+    if user.is_system_admin:
+        return entries
+    if not user.office_id:
+        return entries.none()
+    return entries.filter(actor__office_id=user.office_id)
+
+
 class AdministrationHomeView(AdminRequiredMixin, TemplateView):
     template_name = "administration/home.html"
 
@@ -2031,20 +2067,26 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
         from apps.accounts.models import User
 
         context = super().get_context_data(**kwargs)
+        user = self.request.user
+        # The accounts this administrator can open, not every account in the
+        # university: the card links to the Users screen, which is office-scoped,
+        # so an office administrator read "Users 16" over a list of 4.
+        accounts = User.objects.filter(is_active=True)
+        if not user.is_system_admin:
+            accounts = accounts.filter(office_id=user.office_id) if user.office_id else accounts.none()
         context.update(
             {
-                "user_count": User.objects.filter(is_active=True).count(),
-                "office_count": Office.objects.filter(is_active=True).count(),
+                "user_count": accounts.count(),
+                # Offices is a system administrator's screen; the card that
+                # opened it answered an office administrator with a 403.
+                "office_count": (
+                    Office.objects.filter(is_active=True).count() if user.is_system_admin else None
+                ),
                 "type_count": DocumentType.objects.filter(is_active=True).count(),
                 "tag_count": Tag.objects.filter(is_active=True).count(),
                 "rule_count": TagRule.objects.filter(is_active=True).count(),
                 "field_count": MetadataFieldDefinition.objects.filter(is_active=True).count(),
-                # FIXME: unscoped. An office administrator sees the last ten
-                # audit events from every office — other offices' document
-                # titles and account changes. Scope to their office (as the
-                # search-activity panel below is withheld) before a demo with
-                # office administrators from more than one office.
-                "recent_audit": AuditLog.objects.all()[:10],
+                "recent_audit": audit_entries_for(user)[:10],
                 "master_data": master_data_for(self.request.user),
             }
         )
@@ -2062,11 +2104,35 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
 
     def get(self, request, slug):
         config = self.config_or_404(slug)
-        objects = config["model"].objects.all()
+        model = config["model"]
+        objects = model.objects.all()
         query = request.GET.get("q", "").strip()
         if query:
-            first_field = config["columns"][0][0]
-            objects = objects.filter(**{f"{first_field}__icontains": query})
+            # Every text column on screen, not only the first: a search for a
+            # rule's pattern or a tag's category found nothing, because only the
+            # name was searched.
+            text_fields = []
+            for name, _label in config["columns"]:
+                try:
+                    field = model._meta.get_field(name)
+                except FieldDoesNotExist:
+                    continue  # a computed column, such as a tag's usage count
+                if isinstance(field, (CharField, TextField)):
+                    text_fields.append(name)
+            match = Q()
+            for name in text_fields:
+                match |= Q(**{f"{name}__icontains": query})
+            objects = objects.filter(match)
+        # Active or retired. Master data is retired rather than deleted, so a
+        # section fills with rows nobody can pick any more; this is how an
+        # administrator finds the ones still in use, or the ones to bring back.
+        has_status = any(field.name == "is_active" for field in model._meta.get_fields())
+        raw_status = request.GET.get("status", "").strip()
+        status = raw_status if has_status and raw_status in ("active", "inactive") else ""
+        if raw_status and not status:
+            messages.warning(request, "Ignored a filter that was not recognised.")
+        if status:
+            objects = objects.filter(is_active=status == "active")
         # Tags are the reason this pages at all: they are created by the tagging
         # rules as documents arrive, so the section that started with a dozen
         # rows is the one that grows without anybody adding to it by hand.
@@ -2075,6 +2141,7 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
             request,
             self.template_name,
             {"slug": slug, "config": config, "query": query,
+             "has_status": has_status, "selected_status": status,
              **page_context,
              "objects": page_context["page_obj"].object_list,
              "master_data": master_data_for(request.user)},
@@ -2172,9 +2239,7 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         sight of an outsider who read one of its own documents, which is the
         case the trail matters most for.
         """
-        from apps.tracking.models import QUIET_EVENTS, RecordActivity, TrackingRecord
-
-        access_events = set(QUIET_EVENTS) | {RecordActivity.Event.PRINTED}
+        access_events = ACCESS_EVENTS
         entries = (
             RecordActivity.objects.filter(event__in=access_events)
             .select_related("actor", "actor_office", "record")
@@ -2186,6 +2251,21 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
 
         record_query = self.request.GET.get("record", "").strip()
         who_query = self.request.GET.get("who", "").strip()
+        event = self.request.GET.get("event", "").strip()
+        if event in {choice for choice in access_events}:
+            entries = entries.filter(event=event)
+        else:
+            event = ""
+        since, until = self.date_range("access_since", "access_until")
+        if since:
+            entries = entries.filter(created_at__date__gte=since)
+        if until:
+            entries = entries.filter(created_at__date__lte=until)
+        self.access_filters = {
+            "record": record_query, "who": who_query, "event": event,
+            "access_since": since.isoformat() if since else "",
+            "access_until": until.isoformat() if until else "",
+        }
         if record_query:
             entries = entries.filter(
                 Q(record__tracking_number__icontains=record_query)
@@ -2200,35 +2280,67 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         return entries, record_query, who_query
 
     def system_log_entries(self):
-        """`AuditLog`, narrowed to what this administrator may see.
+        """See `audit_entries_for`, which the home page shares."""
+        return audit_entries_for(self.request.user)
 
-        Scoped by the actor's office for anyone but a system administrator.
-        This screen used to be reachable only by the global ADMIN role, so the
-        unscoped queryset was correct; opening it to office administrators is
-        what makes it a leak, and it is the same leak the account screens had —
-        a role that gained a boundary, behind a queryset that never had one.
+    def date_range(self, since_param, until_param):
+        """Two YYYY-MM-DD parameters as dates, both ends inclusive.
 
-        Rows with no actor are system actions belonging to no office, so they
-        stay with the system administrators.
+        A value that is not a date is dropped and said, like every other filter
+        here. Ends given the wrong way round are swapped rather than returning
+        nothing: "from the 20th to the 5th" means the same fortnight.
         """
-        entries = AuditLog.objects.select_related("actor")
-        if not self.request.user.is_system_admin:
-            if not self.request.user.office_id:
-                return entries.none()
-            entries = entries.filter(actor__office_id=self.request.user.office_id)
-        return entries
+        values = []
+        for param in (since_param, until_param):
+            raw = self.request.GET.get(param, "").strip()
+            try:
+                values.append(date.fromisoformat(raw) if raw else None)
+            except ValueError:
+                values.append(None)
+                self.unrecognised = True
+        since, until = values
+        if since and until and since > until:
+            since, until = until, since
+        return since, until
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        self.unrecognised = False
         entries = self.system_log_entries()
         action = self.request.GET.get("action", "")
+        if action not in AuditLog.Action.values:
+            self.unrecognised = self.unrecognised or bool(action)
+            action = ""
         query = self.request.GET.get("q", "").strip()
         if action:
             entries = entries.filter(action=action)
         if query:
             entries = entries.filter(Q(summary__icontains=query) | Q(actor_label__icontains=query))
+        since, until = self.date_range("since", "until")
+        if since:
+            entries = entries.filter(created_at__date__gte=since)
+        if until:
+            entries = entries.filter(created_at__date__lte=until)
+        # By the office of whoever acted. A system administrator's filter: an
+        # office administrator's log is already their own office.
+        office = ""
+        offices = []
+        if self.request.user.is_system_admin:
+            offices = Office.active.all().order_by("name")
+            raw_office = self.request.GET.get("office", "").strip()
+            office = raw_office if raw_office.isdigit() else ""
+            self.unrecognised = self.unrecognised or bool(raw_office and not office)
+            if office:
+                entries = entries.filter(actor__office_id=office)
+        system_filters = {
+            "q": query, "action": action, "office": office,
+            "since": since.isoformat() if since else "",
+            "until": until.isoformat() if until else "",
+        }
 
         access_entries, record_query, who_query = self.record_access_entries()
+        if self.unrecognised:
+            messages.warning(self.request, "Ignored a filter that was not recognised.")
 
         # Two paginators, two sets of parameters. The template renders a
         # `{% pager %}` per panel against its own page object, so filtering or
@@ -2253,10 +2365,18 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
                 "access_page": access_page,
                 "record_query": record_query,
                 "who_query": who_query,
+                "system_filters": system_filters,
+                "access_filters": self.access_filters,
+                "filter_offices": offices,
+                "access_events": [
+                    (value, label) for value, label in RecordActivity.Event.choices
+                    if value in ACCESS_EVENTS
+                ],
+                "system_is_filtered": any(system_filters.values()),
                 "view_dedup_minutes": settings.VIEW_LOG_DEDUP_MINUTES,
                 # Only the panel the administrator asked about, so a search for
                 # one record does not leave the other panel looking unfiltered.
-                "access_is_filtered": bool(record_query or who_query),
+                "access_is_filtered": any(self.access_filters.values()),
                 "master_data": master_data_for(self.request.user),
             }
         )

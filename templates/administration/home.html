@@ -8,7 +8,7 @@
 
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-2"><a class="stat-card navy" href="{% url 'accounts:user_list' %}"><div class="label">Users</div><div class="value">{{ user_count }}</div></a></div>
-  <div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'accounts:office_list' %}"><div class="label">Offices</div><div class="value">{{ office_count }}</div></a></div>
+  {% if user.is_system_admin %}<div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'accounts:office_list' %}"><div class="label">Offices</div><div class="value">{{ office_count }}</div></a></div>{% endif %}
   <div class="col-6 col-lg-2"><a class="stat-card gold" href="{% url 'core:masterdata_list' 'document-types' %}"><div class="label">Doc types</div><div class="value">{{ type_count }}</div></a></div>
   <div class="col-6 col-lg-2"><a class="stat-card green" href="{% url 'core:masterdata_list' 'tags' %}"><div class="label">Tags</div><div class="value">{{ tag_count }}</div></a></div>
   <div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'core:masterdata_list' 'metadata-rules' %}"><div class="label">Rules</div><div class="value">{{ rule_count }}</div></a></div>

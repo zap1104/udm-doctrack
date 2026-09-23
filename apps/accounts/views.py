@@ -159,6 +159,11 @@ class ProfileView(AppLoginRequiredMixin, View):
 # ---------------------------------------------------------------------------
 # Administration — users
 # ---------------------------------------------------------------------------
+#: The account states the Users screen filters by. Suspended is what the screen
+#: and its buttons already call an inactive account.
+USER_STATUSES = {"active": "Active", "suspended": "Suspended"}
+
+
 class OfficeScopedUserMixin:
     """Every account screen sees only the accounts its user may administer.
 
@@ -209,11 +214,26 @@ class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
                 self.request, "Ignored an office filter that was not recognised."
             )
         if query:
+            # Email too: it is the one detail an administrator is usually handed
+            # ("the account for j.cruz@…"), and the name columns missed it.
             users = users.filter(
-                Q(username__icontains=query) | Q(first_name__icontains=query) | Q(last_name__icontains=query)
+                Q(username__icontains=query) | Q(first_name__icontains=query)
+                | Q(last_name__icontains=query) | Q(email__icontains=query)
             )
         if office:
             users = users.filter(office_id=office)
+        # Role and status, validated the way office is: a value that is not one
+        # of the choices is dropped and said, never passed to the ORM.
+        raw_role = self.request.GET.get("role", "").strip()
+        role = raw_role if raw_role in User.Role.values else ""
+        raw_status = self.request.GET.get("status", "").strip()
+        status = raw_status if raw_status in USER_STATUSES else ""
+        if (raw_role and not role) or (raw_status and not status):
+            messages.warning(self.request, "Ignored a filter that was not recognised.")
+        if role:
+            users = users.filter(role=role)
+        if status:
+            users = users.filter(is_active=status == "active")
         # Paged, where it used to render every account on one screen. A single
         # office is a short list; the system administrator's view is every
         # account in the university.
@@ -223,8 +243,13 @@ class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
                 **page_context,
                 "users": page_context["page_obj"].object_list,
                 "offices": self.selectable_offices(),
+                "roles": User.Role.choices,
+                "statuses": USER_STATUSES.items(),
                 "query": query,
                 "selected_office": office,
+                "selected_role": role,
+                "selected_status": status,
+                "is_filtered": bool(query or office or role or status),
                 "is_office_scoped": not self.request.user.is_system_admin,
             }
         )
