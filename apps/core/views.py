@@ -1557,6 +1557,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                         {"label": "Historical", "series": "three", "value": historical,
                          "percent": _bar(historical, ceiling)},
                     ],
+                    "has_values": bool(completed or historical),
                 }
             )
         return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling)}

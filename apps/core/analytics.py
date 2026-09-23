@@ -452,6 +452,10 @@ def monthly_volume(records) -> dict:
             }
             for label, key, colour in VOLUME_SERIES
         ]
+        # A month with nothing in any series draws nothing and says nothing: the
+        # axis already reads 0. A month with something in it names every series,
+        # a zero included, so a series is never missing without explanation.
+        row["has_values"] = any(column["value"] for column in row["columns"])
 
     return {
         "rows": rows,

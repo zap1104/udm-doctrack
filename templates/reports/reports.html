@@ -216,7 +216,7 @@
                   {% endcomment %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
                     <div class="column-pair">
-                      {% for column in row.columns %}{% if column.value %}<span class="column-item"><span class="column-value num" style="bottom:{{ column.percent }}%">{{ column.value }}</span><span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span></span>{% endif %}{% endfor %}
+                      {% include "core/_columns.html" %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>
@@ -644,7 +644,7 @@
                         chart it would read as "a few were filed" in a month when
                         none were.
                       {% endcomment %}
-                      {% for column in row.columns %}{% if column.value %}<span class="column-item"><span class="column-value num" style="bottom:{{ column.percent }}%">{{ column.value }}</span><span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span></span>{% endif %}{% endfor %}
+                      {% include "core/_columns.html" %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>

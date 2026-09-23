@@ -1160,3 +1160,68 @@
     }
   });
 })();
+
+/* --------------------------------------------------------------------------
+   Column values: flat when they fit, turned when they do not
+
+   Every bar on a column chart carries its number. Flat numbers read best, but
+   three of them over one month need room the month may not have, and whether
+   it does depends on the chart's width, how many series it draws and how many
+   digits its biggest number runs to. So it is measured: lay the numbers out
+   flat, and if any two touch, turn them all on their side. A turned number is
+   no wider than its bar, so turned numbers cannot touch.
+
+   Re-measured when a chart changes width, and turned for printing, where the
+   page width is not the screen's and there is no second chance to measure.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  var charts = document.querySelectorAll(".column-chart");
+  if (!charts.length) return;
+
+  function touching(chart) {
+    var labels = chart.querySelectorAll(".column-value");
+    var previous = null;
+    for (var i = 0; i < labels.length; i++) {
+      var box = labels[i].getBoundingClientRect();
+      if (!box.width) continue; /* the chart is hidden: nothing to measure */
+      if (previous && box.left < previous.right + 2) return true;
+      previous = box;
+    }
+    return false;
+  }
+
+  function fit(chart) {
+    chart.classList.add("column-chart--measured");
+    chart.classList.remove("column-chart--turned");
+    if (touching(chart)) chart.classList.add("column-chart--turned");
+  }
+
+  function fitAll() {
+    for (var i = 0; i < charts.length; i++) fit(charts[i]);
+  }
+
+  fitAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
+
+  if (window.ResizeObserver) {
+    var widths = new WeakMap();
+    var observer = new ResizeObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var chart = entries[i].target;
+        var width = Math.round(entries[i].contentRect.width);
+        if (widths.get(chart) === width) continue;
+        widths.set(chart, width);
+        fit(chart);
+      }
+    });
+    for (var n = 0; n < charts.length; n++) observer.observe(charts[n]);
+  }
+
+  window.addEventListener("beforeprint", function () {
+    for (var i = 0; i < charts.length; i++) charts[i].classList.add("column-chart--turned");
+  });
+  window.addEventListener("afterprint", fitAll);
+})();
+

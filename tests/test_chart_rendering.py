@@ -122,7 +122,10 @@ def test_every_column_carries_its_own_value(client, users, charted, page):
     drawn = [group for group in groups if 'class="column column--' in group]
     assert drawn, "the fixture puts work in the current month"
     for group in drawn:
-        assert group.count('class="column-value') == group.count('class="column column--'), group
+        # One slot per series, and every slot has its number, a zero included.
+        slots = group.count('class="column-item"')
+        assert slots in (2, 3), group
+        assert group.count('class="column-value') == slots, group
 
 
 @pytest.mark.django_db
@@ -540,16 +543,67 @@ def test_the_dashboard_context_names_no_ring_it_does_not_draw(client, users, cha
 
 
 # --- room for three numbers over one month ------------------------------------
-def test_the_labels_turn_on_their_side_when_a_month_is_narrow():
-    """Three numbers side by side need about 70px of month, which only a chart
-    with the page to itself has. Turned, each is no wider than the bar it
-    labels, so every bar keeps its number instead of some losing it."""
-    css = _css()
-    narrow = css[css.index("@container column-chart (max-width:699.98px) {"):]
-    narrow = narrow[: narrow.index("\n}")]
+def test_whether_numbers_turn_is_measured_not_guessed():
+    """Flat numbers read best, and whether three of them fit over a month
+    depends on the chart's width, its series and its digits. The script lays
+    them out flat and turns them only if two touch; a turned number is no wider
+    than its bar, so turned numbers cannot touch."""
+    import pathlib
 
-    assert "writing-mode:vertical-rl" in narrow
-    assert "--column-value-band:34px" in narrow, "room above the bars for a turned label"
+    script = pathlib.Path("static/js/doctrack.js").read_text(encoding="utf-8")
+    fitter = script[script.index("Column values: flat when they fit"):]
+    css = _css()
+
+    assert 'classList.add("column-chart--measured")' in fitter
+    assert 'classList.add("column-chart--turned")' in fitter
+    assert "ResizeObserver" in fitter, "re-measured when the chart changes width"
+    assert '"beforeprint"' in fitter, "turned for printing, where it cannot measure"
+    assert ".column-chart--turned .column-value { writing-mode:vertical-rl;" in css
+    assert ".column-chart--turned { --column-value-band:34px; --column-slot:12px; }" in css
+
+
+def test_without_script_the_numbers_turn_wherever_they_could_not_fit():
+    """The fallback applies only to charts the script has not measured, so the
+    measurement always wins once it has run."""
+    css = _css()
+    fallback = css[css.index("@container column-chart (max-width:939.98px) {"):]
+    fallback = fallback[: fallback.index("\n}")]
+
+    assert ".column-chart:not(.column-chart--measured) .column-value { writing-mode:vertical-rl;" in fallback
+
+
+def test_every_number_has_a_slot_as_wide_as_itself():
+    """The month is shared between slots, not between 12px bars, so two
+    neighbouring numbers cannot overlap while the month has room for them."""
+    css = _css()
+
+    assert "--column-slot:22px;" in css
+    assert ".column-item { position:relative; display:flex; align-items:flex-end; justify-content:center; flex:0 1 var(--column-slot);" in css
+
+
+@pytest.mark.django_db
+def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
+    """No bar can be drawn for a zero, so without its "0" the series would
+    simply be missing from the month. The fixture's month has a scan and no
+    document filed from tracking."""
+    client.force_login(users["admin"])
+    body = client.get("/reports/").content.decode()
+
+    repository = body[body.index("Documents filed each month"):body.index("Documents by type")]
+    month = _column_groups(repository)[-1]
+    assert 'class="column-value column-value--zero" style="bottom:0%">0</span>' in month
+    assert month.count('class="column column--') == 1, "the zero has no bar"
+
+
+def test_the_three_column_charts_share_one_labelling_rule():
+    import pathlib
+
+    dashboard = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
+    reports = pathlib.Path("templates/reports/reports.html").read_text(encoding="utf-8")
+
+    assert dashboard.count('{% include "core/_columns.html" %}') == 1
+    assert reports.count('{% include "core/_columns.html" %}') == 2
+    assert "column-value" not in dashboard + reports, "the rule lives in the partial only"
 
 
 @pytest.mark.django_db

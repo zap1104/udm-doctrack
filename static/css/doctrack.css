@@ -961,7 +961,7 @@ a:hover { text-decoration: underline; }
    chart states its scale in words and dropped its gutter as dead space, which
    was right for it. Here four unlabelled hairlines could not say what the
    second one meant. */
-.column-chart { --column-value-band:16px; --column-gutter:38px; position:relative; padding:6px 0 0 var(--column-gutter); }
+.column-chart { --column-value-band:18px; --column-gutter:38px; --column-slot:22px; position:relative; padding:6px 0 0 var(--column-gutter); }
 /* The axis and the grid cover exactly the columns' own area: below the value
    band, above the month labels. Ticks are placed by the value they print. */
 .column-chart-axis,.column-chart-grid { position:absolute; top:calc(6px + var(--column-value-band)); bottom:22px; pointer-events:none; }
@@ -976,12 +976,32 @@ a:hover { text-decoration: underline; }
 .column-group { flex:1 1 0; min-width:0; height:100%; }
 /* The 2px gap is the surface doing the separating — no stroke around a mark. */
 .column-pair { position:relative; display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px - var(--column-value-band)); margin-top:var(--column-value-band); }
-/* Every column is its own full-height box, so its value sits at the height of
-   its own bar rather than the group's tallest. */
-.column-item { position:relative; display:flex; align-items:flex-end; justify-content:center; flex:0 1 12px; min-width:0; height:100%; }
-/* The count on the cap of the bar it belongs to. Text ink, never the series
-   colour; centred on its own column. */
-.column-value { position:absolute; left:50%; margin-bottom:2px; transform:translateX(-50%); color:var(--udm-muted); font-size:11px; line-height:14px; text-align:center; white-space:nowrap; pointer-events:none; }
+/* ------------------------------------------------ the number on each bar
+
+   Every column is a slot as wide as the number it carries, with the bar centred
+   in it. The slot, not the 12px bar, is what the month is divided between, so
+   two neighbouring numbers cannot overlap while the month has room for them.
+
+   When it has not, the numbers turn on their side (.column-chart--turned):
+   still one per bar, still on its cap, and no wider than the bar. Whether they
+   fit is measured in the browser (static/js/doctrack.js) rather than guessed
+   from the viewport, because it depends on the chart's width, how many series
+   it has, and how many digits the biggest number runs to. Without script, the
+   container query further down turns them wherever three three-digit numbers
+   would not fit.
+
+   Text ink, never the series colour: a light series hue is illegible as text,
+   and the legend and the bar beside the number already say which series it is.
+   The current month is set in the heading ink, because it is the one read. */
+.column-item { position:relative; display:flex; align-items:flex-end; justify-content:center; flex:0 1 var(--column-slot); min-width:0; height:100%; }
+.column-value { position:absolute; left:50%; margin-bottom:3px; transform:translateX(-50%); color:var(--udm-slate-text); font-size:10.5px; font-weight:600; line-height:1; letter-spacing:-.01em; font-variant-numeric:tabular-nums; text-align:center; white-space:nowrap; pointer-events:none; }
+/* A zero has no bar to sit on, so it sits on the baseline, lighter, saying the
+   series is there and empty rather than leaving a gap nobody can read. */
+.column-value--zero { color:var(--udm-muted); font-weight:500; }
+.column-group:last-child .column-value { color:var(--udm-navy-text); font-weight:700; }
+.column-group:last-child .column-value--zero { color:var(--udm-muted); font-weight:500; }
+.column-chart--turned { --column-value-band:34px; --column-slot:12px; }
+.column-chart--turned .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
 .column--one { background:var(--chart-one); }
 .column--two { background:var(--chart-two); }
@@ -1023,18 +1043,19 @@ a:hover { text-decoration: underline; }
                held upright lands here (300px at 375, 339px at 414). */
 .column-chart-frame { container:column-chart / inline-size; }
 .chart-month-short { display:none; }
-/* Three numbers over one month need about 70px of month to sit side by side,
-   and a month is only that wide when the chart has the page to itself. Below
-   that the numbers turn on their side: still one per bar, still above it, and
-   no wider than the bar it labels. */
-@container column-chart (max-width:699.98px) {
-  .column-chart { --column-value-band:34px; }
-  .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; font-size:10px; line-height:12px; }
+/* Without script there is no measurement, so turn the numbers wherever three
+   three-digit numbers would not fit side by side: twelve months of three 22px
+   slots need about 900px of chart. Script marks each chart it has measured, and
+   from then on the measurement decides. */
+@container column-chart (max-width:939.98px) {
+  .column-chart:not(.column-chart--measured) { --column-value-band:34px; --column-slot:12px; }
+  .column-chart:not(.column-chart--measured) .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
 }
 @container column-chart (max-width:419.98px) {
   .column-chart { --column-gutter:30px; }
   .column-chart-plot { height:170px; gap:4px; }
-  .column,.column-item { max-width:10px; flex-basis:10px; }
+  .column { max-width:10px; }
+  .column-chart--turned,.column-chart:not(.column-chart--measured) { --column-slot:10px; }
   .column-label,.column-chart-axis span { font-size:10px; }
 }
 @container column-chart (max-width:359.98px) {
