@@ -797,6 +797,17 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: is the baseline and is drawn heavier.
     TREND_GRID_STEPS = (1.0, 0.75, 0.5, 0.25, 0.0)
 
+    #: The three lines: data key, name, the status whose colour it wears, what
+    #: it measures (for the legend), and what its samples are (for the hover).
+    #: The receipt wait wears the Pending receipt amber, the work In process
+    #: mauve, and the whole life ends Completed green, so a line and the stage
+    #: it measures are one colour across the page.
+    TREND_SERIES = (
+        ("receipt", "Receipt", Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
+        ("processing", "In process", Status.IN_PROCESS, "confirmed until completed", "document"),
+        ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
+    )
+
     def _trend_geometry(self, trend=None):
         """The plot box and its grid lines, in the units the viewBox declares.
 
@@ -831,12 +842,69 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     "axis": index == len(steps) - 1,
                 }
             )
+        months = self._trend_months(trend) if trend and trend.get("has_data") else []
         return {
             "width": self.TREND_WIDTH,
             "height": self.TREND_HEIGHT,
             "view_box": f"0 0 {self.TREND_WIDTH} {self.TREND_HEIGHT}",
             "grid": lines,
+            "months": months,
+            # Where the plot area sits inside the box, for the hover guide, so
+            # it runs from the top rule to the baseline and no further.
+            "plot_top_percent": round(100 * self.TREND_PAD_TOP / self.TREND_HEIGHT, 2),
+            "plot_bottom_percent": round(100 * self.TREND_PAD_BOTTOM / self.TREND_HEIGHT, 2),
         }
+
+    def _trend_months(self, trend):
+        """One hover target per month, placed by the geometry that places the dots.
+
+        Each carries, for every line drawn that month, where its dot sits (as a
+        share of the box, so an HTML overlay lands on the SVG point) and the
+        month's figure in office language with how many it is averaged over:
+        what a reader pointing at March wants, which the line alone could only
+        show as a height. The tooltip opens away from the chart's nearer edge,
+        so it is never cut off and never covers the dots it describes.
+        """
+        rows = trend["rows"]
+        ceiling = trend["ceiling"] or 1
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        width = 100 / len(rows)
+        months = []
+        for index, row in enumerate(rows):
+            points = []
+            for key, label, status, _measures, unit in self.TREND_SERIES:
+                if row[key] is None:
+                    continue
+                y = self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h
+                samples = row[f"{key}_samples"]
+                points.append(
+                    {
+                        "label": label,
+                        "colour": STATUS_COLOURS[status],
+                        "text": row[f"{key}_label"],
+                        "calendar": row[f"{key}_calendar"],
+                        "samples": samples,
+                        "unit": unit + ("" if samples == 1 else "s"),
+                        "top_percent": round(100 * y / self.TREND_HEIGHT, 2),
+                    }
+                )
+            month = f"{row['month']:%B %Y}"
+            summary = "; ".join(
+                f"{point['label']} {point['text']} over {point['samples']} {point['unit']}"
+                for point in points
+            ) or "nothing received or completed"
+            centre = (index + 0.5) * width
+            months.append(
+                {
+                    "label": month,
+                    "left": round(index * width, 3),
+                    "width": round(width, 3),
+                    "side": "right" if centre < 50 else "left",
+                    "points": points,
+                    "summary": f"{month}: {summary}.",
+                }
+            )
+        return months
 
     def _trend_points(self, trend):
         """The three turnaround series as SVG polylines.
@@ -863,16 +931,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # from that confirmation to completion. The second is a stage, not the
         # IN_PROCESS status: a document is in somebody's hands for the whole of
         # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
-        series = [
-            # Each stage in its status's colour: the wait for a receipt is the
-            # Pending receipt amber, the work is In process mauve, and the whole
-            # life ends Completed green.
-            ("receipt", "Receipt", STATUS_COLOURS[Status.PENDING_RECEIPT]),
-            ("processing", "In process", STATUS_COLOURS[Status.IN_PROCESS]),
-            ("lifetime", "Total lifetime", STATUS_COLOURS[Status.COMPLETED]),
-        ]
         built = []
-        for key, label, colour in series:
+        for key, label, status, measures, _unit in self.TREND_SERIES:
+            colour = STATUS_COLOURS[status]
             points = [
                 place(index, row[key])
                 for index, row in enumerate(rows)
@@ -884,6 +945,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 {
                     "key": key,
                     "label": label,
+                    "measures": measures,
                     "colour": colour,
                     "polyline": " ".join(f"{x},{y}" for x, y in points),
                     "dots": [{"x": x, "y": y} for x, y in points],

@@ -2219,6 +2219,64 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-axis-values span { position:absolute; right:0; transform:translateY(-50%); color:var(--udm-muted); font-size:10.5px; line-height:1; }
 .trend-plot + .trend-axis-labels { padding-left:var(--trend-gutter); }
 .trend-summary-none { color:var(--udm-muted) !important; font-weight:600 !important; font-size:13px !important; }
+
+/* ---------------------------------------------------- the line, and its hover
+
+   The lines draw in from their start once (pathLength="1" makes the dash one
+   line long whatever its real length), then the dots arrive. Readers who ask
+   for less motion get the finished chart at once. */
+.trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round;
+  stroke-dasharray:1; stroke-dashoffset:1; animation:trend-draw 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
+.trend-point { fill:var(--udm-surface); stroke-width:2; opacity:0; animation:trend-fade 280ms ease-out 650ms forwards; }
+@keyframes trend-draw { to { stroke-dashoffset:0; } }
+@keyframes trend-fade { to { opacity:1; } }
+
+.trend-key { gap:8px; font-weight:500; }
+.trend-key strong { color:var(--udm-navy-text); font-weight:700; }
+.trend-key-line { flex:0 0 16px; width:16px; height:3px; border-radius:2px; }
+
+/* The hover layer sits exactly over the SVG: past the axis gutter, the same
+   height. Each month's target is a full-height column, so a reader aims at a
+   month, not at a 6px dot. */
+.trend-hover { position:absolute; top:0; bottom:0; left:var(--trend-gutter); right:0; outline:none; border-radius:6px; }
+.trend-hover:focus-visible { box-shadow:0 0 0 2px var(--udm-teal); }
+.trend-hit { position:absolute; top:0; bottom:0; cursor:crosshair; }
+.trend-cross { position:absolute; top:var(--plot-top); bottom:var(--plot-bottom); left:50%; width:0;
+  border-left:1px solid var(--udm-line-strong); opacity:0; transition:opacity 140ms ease; }
+.trend-dot { position:absolute; left:50%; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; border-radius:50%;
+  background:var(--udm-surface); border:3px solid var(--dot); box-shadow:0 0 0 2px var(--udm-surface);
+  opacity:0; transform:scale(.35); transition:transform 180ms cubic-bezier(.2,.9,.3,1.35), opacity 120ms ease; }
+.trend-tip { position:absolute; top:var(--plot-top); z-index:6; min-width:200px; max-width:260px; padding:9px 11px 10px;
+  border:1px solid var(--udm-line); border-radius:9px; background:var(--udm-surface);
+  box-shadow:0 10px 24px rgba(6,28,52,.16); pointer-events:none;
+  opacity:0; visibility:hidden; transform:translateY(6px);
+  transition:opacity 150ms ease, transform 170ms cubic-bezier(.2,.8,.2,1), visibility 0s linear 170ms; }
+.trend-hit--right .trend-tip { left:calc(50% + 12px); }
+.trend-hit--left .trend-tip { right:calc(50% + 12px); }
+.trend-tip-month { margin-bottom:6px; color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
+.trend-tip-row { display:grid; grid-template-columns:14px auto; column-gap:8px; align-items:baseline; padding:2px 0; }
+.trend-tip-row i { grid-row:span 2; align-self:center; width:14px; height:3px; border-radius:2px; }
+.trend-tip-row strong { color:var(--udm-navy-text); font-size:13.5px; font-weight:800; line-height:1.2; }
+.trend-tip-row span { grid-column:2; color:var(--udm-muted); font-size:11.5px; line-height:1.3; }
+.trend-tip-empty { display:block; color:var(--udm-muted); font-size:12.5px; }
+
+.trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
+.trend-hit:hover .trend-dot,.trend-hit.is-active .trend-dot { opacity:1; transform:scale(1); }
+.trend-hit:hover .trend-tip,.trend-hit.is-active .trend-tip {
+  opacity:1; visibility:visible; transform:translateY(0); transition-delay:0s; }
+/* While one month is shown, the lines step back so its dots read first. */
+.trend-plot:has(.trend-hit:hover) .trend-line,.trend-plot:has(.trend-hit.is-active) .trend-line { opacity:.55; transition:opacity 150ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trend-line { animation:none; stroke-dashoffset:0; }
+  .trend-point { animation:none; opacity:1; }
+  .trend-dot,.trend-tip,.trend-cross { transition:none; }
+}
+@media print {
+  .trend-line { animation:none; stroke-dashoffset:0; opacity:1 !important; }
+  .trend-point { animation:none; opacity:1; }
+  .trend-hover { display:none; }
+}
 .trend-summary-figures .report-metric > span small { display:block; font-size:11px; font-weight:500; }
 .trend-grid { stroke:var(--chart-grid); stroke-width:1; }
 .trend-axis { stroke:var(--udm-line); stroke-width:1; }

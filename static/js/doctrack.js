@@ -1225,3 +1225,82 @@
   window.addEventListener("afterprint", fitAll);
 })();
 
+/* --------------------------------------------------------------------------
+   Turnaround chart: a month at a time, by touch and by keyboard
+
+   Pointing at a month is CSS alone (:hover). This adds the two ways a pointer
+   cannot: a tap on a touch screen shows that month (a second tap, or a tap
+   elsewhere, puts it away), and the chart is one tab stop whose left and right
+   arrow keys walk the months, each read out through a polite live region.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  function monthsOf(box) {
+    return Array.prototype.slice.call(box.querySelectorAll("[data-trend-month]"));
+  }
+
+  function show(box, month) {
+    monthsOf(box).forEach(function (each) {
+      each.classList.toggle("is-active", each === month);
+    });
+    var live = box.querySelector("[data-trend-announce]");
+    if (live) live.textContent = month ? month.getAttribute("aria-label") : "";
+  }
+
+  function clearAll(except) {
+    var boxes = document.querySelectorAll("[data-trend-hover]");
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i] !== except) show(boxes[i], null);
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    var month = event.target.closest && event.target.closest("[data-trend-month]");
+    if (!month) {
+      clearAll(null);
+      return;
+    }
+    var box = month.closest("[data-trend-hover]");
+    clearAll(box);
+    show(box, month.classList.contains("is-active") ? null : month);
+  });
+
+  /* A mouse needs no help from here; drop anything a tap or a key left
+     showing, so two months are never open at once. */
+  document.addEventListener("pointerover", function (event) {
+    if (event.pointerType !== "mouse") return;
+    var box = event.target.closest && event.target.closest("[data-trend-hover]");
+    if (box && box.querySelector(".is-active")) show(box, null);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    var box = event.target.closest && event.target.closest("[data-trend-hover]");
+    if (!box) return;
+    var months = monthsOf(box);
+    if (!months.length) return;
+    var current = months.findIndex(function (month) { return month.classList.contains("is-active"); });
+    var next = null;
+    if (event.key === "ArrowRight") next = current < 0 ? months.length - 1 : Math.min(months.length - 1, current + 1);
+    else if (event.key === "ArrowLeft") next = current < 0 ? months.length - 1 : Math.max(0, current - 1);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = months.length - 1;
+    else if (event.key === "Escape") { show(box, null); return; }
+    if (next === null) return;
+    event.preventDefault();
+    show(box, months[next]);
+  });
+
+  document.addEventListener("focusin", function (event) {
+    var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
+    if (box && !box.querySelector(".is-active")) {
+      var months = monthsOf(box);
+      show(box, months[months.length - 1]);
+    }
+  });
+
+  document.addEventListener("focusout", function (event) {
+    var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
+    if (box && !box.contains(event.relatedTarget)) show(box, null);
+  });
+})();

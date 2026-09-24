@@ -698,10 +698,17 @@
               which at this column width left three keys fighting a sentence for
               the same few centimetres.
             {% endcomment %}
+            {% comment %}
+              A line key, not a square: the legend mirrors the mark it names.
+              Each says what its line measures, from which moment to which,
+              because "Receipt" alone does not say whether the clock starts when
+              a document is sent or when it is opened.
+            {% endcomment %}
             <div class="chart-legend trend-legend">
               {% for series in turnaround_trend_points %}
-                <span class="chart-key">
-                  <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
+                <span class="chart-key trend-key">
+                  <i class="trend-key-line" style="background:{{ series.colour }}" aria-hidden="true"></i>
+                  <span><strong>{{ series.label }}</strong> {{ series.measures }}</span>
                 </span>
               {% endfor %}
             </div>
@@ -724,7 +731,7 @@
                   the box by the viewBox's own ratio so nothing is letterboxed.
                 {% endcomment %}
                 <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
-                     aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
+                     aria-label="Line chart of average turnaround in working days per month. Point at a month for its figures; the table below lists every value.">
                   {% comment %}
                     Rules and baseline from the same constants that place the
                     data. They were literals here while the plot geometry lived in
@@ -738,17 +745,59 @@
                             class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
                     {% endfor %}
                   </g>
+                  {% comment %}
+                    Colours through `style`, not the stroke attribute: they are CSS
+                    custom properties, which not every browser resolves in a
+                    presentation attribute. pathLength="1" lets the stylesheet draw
+                    each line in from its start without knowing how long it is.
+                    Dots are filled with the card's own surface, not white, so they
+                    do not glare on the dark theme.
+                  {% endcomment %}
                   {% for series in turnaround_trend_points %}
-                    <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
-                              stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
-                              vector-effect="non-scaling-stroke"></polyline>
+                    <polyline class="trend-line" points="{{ series.polyline }}" pathLength="1"
+                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
                     {% for dot in series.dots %}
-                      <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" fill="#fff"
-                              stroke="{{ series.colour }}" stroke-width="2"
-                              vector-effect="non-scaling-stroke"></circle>
+                      <circle class="trend-point" cx="{{ dot.x }}" cy="{{ dot.y }}" r="3"
+                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
                     {% endfor %}
                   {% endfor %}
                 </svg>
+                {% comment %}
+                  The hover layer: one target per month, over the plot and aligned
+                  to it by the same geometry. Pointing at a month draws a guide
+                  down to the baseline, enlarges that month's dots, and opens a
+                  card with its three figures in words and what each is averaged
+                  over. CSS does the showing, so it works without script; the
+                  script adds a tap on a touch screen and the arrow keys for a
+                  keyboard, which reach the chart as one tab stop rather than
+                  twelve. The table below still holds every value.
+                {% endcomment %}
+                {% if turnaround_trend_geometry.months %}
+                  <div class="trend-hover" tabindex="0" role="group" data-trend-hover
+                       style="--plot-top:{{ turnaround_trend_geometry.plot_top_percent }}%;--plot-bottom:{{ turnaround_trend_geometry.plot_bottom_percent }}%"
+                       aria-label="Turnaround by month. Use the left and right arrow keys to read each month.">
+                    {% for month in turnaround_trend_geometry.months %}
+                      <div class="trend-hit trend-hit--{{ month.side }}" data-trend-month
+                           style="left:{{ month.left }}%;width:{{ month.width }}%" aria-label="{{ month.summary }}">
+                        <span class="trend-cross" aria-hidden="true"></span>
+                        {% for point in month.points %}<span class="trend-dot" style="top:{{ point.top_percent }}%;--dot:{{ point.colour }}" aria-hidden="true"></span>{% endfor %}
+                        <div class="trend-tip" aria-hidden="true">
+                          <div class="trend-tip-month">{{ month.label }}</div>
+                          {% for point in month.points %}
+                            <div class="trend-tip-row">
+                              <i style="background:{{ point.colour }}"></i>
+                              <strong>{{ point.text }}</strong>
+                              <span>{{ point.label }} &middot; {{ point.samples }} {{ point.unit }}</span>
+                            </div>
+                          {% empty %}
+                            <div class="trend-tip-row trend-tip-empty">Nothing received or completed</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                    <div class="visually-hidden" aria-live="polite" data-trend-announce></div>
+                  </div>
+                {% endif %}
                 </div>
                 <div class="trend-axis-labels" aria-hidden="true">
                   {% for row in turnaround_trend.rows %}

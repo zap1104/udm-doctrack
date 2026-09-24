@@ -208,3 +208,108 @@ def test_the_trend_rules_are_its_labelled_ticks(client, users, slow_then_fast):
     assert [line["value"] for line in grid] == [tick["value"] for tick in reversed(trend["ticks"])]
     assert grid[0]["value"] == trend["ceiling"] and grid[-1]["value"] == 0
     assert grid[-1]["axis"] is True
+
+
+# --- the line chart: readable, and something to point at ----------------------
+def _dashboard(client, users):
+    client.force_login(users["admin"])
+    return client.get("/")
+
+
+@pytest.mark.django_db
+def test_every_month_has_a_hover_target_placed_on_its_dots(client, users, slow_then_fast):
+    """The overlay is HTML over an SVG; a dot and its hover marker must land on
+    the same spot, so both come from one geometry."""
+    context = _dashboard(client, users).context
+    geometry = context["turnaround_trend_geometry"]
+    height = geometry["height"]
+    months = geometry["months"]
+
+    assert len(months) == len(context["turnaround_trend"]["rows"]) == 12
+    for series in context["turnaround_trend_points"]:
+        drawn = [round(100 * dot["y"] / height, 1) for dot in series["dots"]]
+        marked = [
+            round(point["top_percent"], 1)
+            for month in months for point in month["points"] if point["label"] == series["label"]
+        ]
+        assert drawn == marked, series["label"]
+
+
+@pytest.mark.django_db
+def test_a_month_reads_out_in_words_with_what_it_is_averaged_over(client, users, slow_then_fast):
+    response = _dashboard(client, users)
+    body = " ".join(response.content.decode().split())
+    latest = response.context["turnaround_trend"]["latest"]
+    month = response.context["turnaround_trend_geometry"]["months"][-1]
+
+    assert month["label"] == f'{latest["month"]:%B %Y}'
+    lifetime = next(point for point in month["points"] if point["label"] == "Total lifetime")
+    assert lifetime["text"] == latest["lifetime_label"]
+    assert lifetime["unit"] == "document" and lifetime["samples"] == 1
+    assert f'{latest["month"]:%B %Y}: ' in month["summary"]
+    assert "Nothing received or completed" in body, "an empty month says so"
+
+
+@pytest.mark.django_db
+def test_the_tooltip_opens_away_from_the_nearer_edge(client, users, slow_then_fast):
+    months = _dashboard(client, users).context["turnaround_trend_geometry"]["months"]
+
+    assert months[0]["side"] == "right" and months[-1]["side"] == "left"
+
+
+@pytest.mark.django_db
+def test_the_chart_is_one_tab_stop_with_a_label_for_every_month(client, users, slow_then_fast):
+    body = _dashboard(client, users).content.decode()
+    layer = body[body.index("data-trend-hover"):]
+
+    assert body.count("data-trend-hover") == 1
+    assert 'tabindex="0" role="group" data-trend-hover' in body
+    assert layer.count("data-trend-month") == 12
+    assert "data-trend-announce" in layer, "the arrow keys are read out"
+
+
+@pytest.mark.django_db
+def test_lines_take_their_colour_in_a_way_every_browser_reads(client, users, slow_then_fast):
+    """The colours are CSS custom properties, which a presentation attribute
+    does not resolve everywhere; and white dots glared on the dark theme."""
+    body = _dashboard(client, users).content.decode()
+    svg = body[body.index('class="trend-svg"'):body.index("</svg>", body.index('class="trend-svg"'))]
+
+    assert 'stroke="var(' not in svg
+    assert 'fill="#fff"' not in svg
+    assert 'style="stroke:var(--status-pending)"' in svg
+    assert 'pathLength="1"' in svg, "drawn in from its start"
+
+
+@pytest.mark.django_db
+def test_the_legend_says_what_each_line_measures(client, users, slow_then_fast):
+    body = " ".join(_dashboard(client, users).content.decode().split())
+
+    for words in ("Receipt</strong> sent until confirmed",
+                  "In process</strong> confirmed until completed",
+                  "Total lifetime</strong> created until completed"):
+        assert words in body
+
+
+def test_the_motion_is_skipped_for_readers_who_ask_and_never_printed():
+    import pathlib
+    import re
+
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+    reduced = [block for block in re.split(r"@media \(prefers-reduced-motion: reduce\)", css)[1:]
+               if ".trend-line" in block[:400]]
+    assert reduced, "a reduced-motion rule for the chart"
+    assert ".trend-line { animation:none; stroke-dashoffset:0; }" in reduced[0][:400]
+    assert ".trend-hover { display:none; }" in css
+
+
+def test_touch_and_keyboard_are_handled_by_one_delegated_listener():
+    import pathlib
+
+    script = pathlib.Path("static/js/doctrack.js").read_text(encoding="utf-8")
+    block = script[script.index("Turnaround chart: a month at a time"):]
+
+    for needle in ('"ArrowLeft"', '"ArrowRight"', '"Escape"', "data-trend-announce",
+                   'document.addEventListener("click"'):
+        assert needle in block, needle
+    assert "innerHTML" not in block
