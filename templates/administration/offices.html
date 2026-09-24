@@ -19,7 +19,7 @@
           <td>{{ office.cluster }}</td>
           <td>{{ office.head_name|default:"—" }}</td>
           <td>{{ office.member_count }}</td>
-          <td>{% if office.is_active %}<span class="pill pill-received">Active</span>{% else %}<span class="pill pill-draft">Inactive</span>{% endif %}</td>
+          <td>{% if office.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span class="pill pill-draft">Inactive</span>{% endif %}</td>
           <td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{% url 'accounts:office_edit' office.pk %}">Edit</a></td>
         </tr>
       {% empty %}<tr><td colspan="7" class="p-4 text-muted">No offices yet. Run <code>manage.py seed_demo</code> or add them here.</td></tr>{% endfor %}

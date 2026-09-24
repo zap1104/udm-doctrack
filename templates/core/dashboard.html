@@ -245,7 +245,7 @@
         {% endcomment %}
         {% if tracking_rings.pending_upload.total %}
           <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
-            <i class="breakdown-swatch" style="background:var(--chart-one)" aria-hidden="true"></i>
+            <i class="breakdown-swatch" style="background:var(--status-upload)" aria-hidden="true"></i>
             <span>Completed - pending upload</span>
             <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
           </a>
@@ -538,9 +538,9 @@
           </div>
         </div>
         <div class="chart-legend">
-          <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Handovers</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
         </div>
       </div>
       <div class="card-udm-body">
@@ -649,7 +649,7 @@
                  title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
               <span>{{ row.name }}</span>
               <div class="report-bar">
-                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
+                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-completed-strong{% else %}bar-completed{% endif %}"
                    style="width:{{ row.bar_percent }}%"></i>
               </div>
               <strong class="num">{{ row.total }}</strong>

@@ -375,9 +375,13 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
 #: and the legend and the note say which unit each counts, because a reader who
 #: can see all three needs to know that one of them is not documents.
 VOLUME_SERIES = (
-    ("Created", "created", "one"),
-    ("Handovers", "transferred", "three"),
-    ("Completed", "completed", "two"),
+    # The colour class suffix, named for the meaning: Completed is the
+    # Completed-status green everywhere, handovers the Pending receipt amber of
+    # a document between offices. Completed was gold on this chart and
+    # handovers green, the reverse of every other page.
+    ("Created", "created", "created"),
+    ("Handovers", "transferred", "handover"),
+    ("Completed", "completed", "completed"),
 )
 
 

@@ -201,9 +201,9 @@
             </div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Handovers</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -505,8 +505,8 @@
             <div class="report-caption">Receipts an office has confirmed, since records began.</div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Since records began</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>This month (+)</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received" aria-hidden="true"></i>Since records began</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received-part" aria-hidden="true"></i>This month (+)</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -522,7 +522,7 @@
                  title="{{ row.name }} &mdash; {{ row.cumulative }} received, {{ row.this_month }} this month">
               <span>{{ row.code }} · {{ row.name|truncatechars:38 }}</span>
               <div class="report-bar">
-                <i class="bar-one" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
+                <i class="bar-received" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
               </div>
               <strong class="num">{{ row.cumulative }}</strong>
               <span class="status-share num">+{{ row.this_month }}</span>
@@ -543,8 +543,8 @@
             <div class="report-caption">Every forward counted, not only the first send.</div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Sent</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Confirmed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Sent</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received" aria-hidden="true"></i>Confirmed</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -554,12 +554,12 @@
               <div class="report-series">
                 <div class="report-series-item">
                   <span>Sent</span>
-                  <div class="report-bar"><i class="bar-one" style="width:{{ row.sent_percent }}%"></i></div>
+                  <div class="report-bar"><i class="bar-pending" style="width:{{ row.sent_percent }}%"></i></div>
                   <strong class="num">{{ row.sent }}</strong>
                 </div>
                 <div class="report-series-item">
                   <span>Confirmed</span>
-                  <div class="report-bar"><i class="bar-two" style="width:{{ row.received_percent }}%"></i></div>
+                  <div class="report-bar"><i class="bar-received" style="width:{{ row.received_percent }}%"></i></div>
                   <strong class="num">{{ row.received }}</strong>
                 </div>
               </div>
@@ -718,8 +718,8 @@
             office is doing.
           {% endcomment %}
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Completed</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Historical</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--historical" aria-hidden="true"></i>Historical</span>
           </div>
         </div>
         <div class="card-udm-body">
@@ -787,7 +787,7 @@
           {% for row in document_types %}
             <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.label|truncatechars:30 }}</span>
-              <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
+              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
             </div>
           {% empty %}

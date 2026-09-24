@@ -76,7 +76,7 @@
           <td>{% include "partials/_office_badge.html" with office=row.office %}</td>
           <td>{{ row.get_role_display }}</td>
           <td>
-            {% if row.is_active %}<span class="pill pill-received">Active</span>
+            {% if row.is_active %}<span class="pill pill-ok">Active</span>
             {% else %}<span class="pill pill-overdue">Suspended</span>{% endif %}
           </td>
           <td class="text-end">

@@ -6,6 +6,7 @@ from django import template
 from django.http import QueryDict
 from django.utils.safestring import mark_safe
 
+from apps.core.colors import STATUS_PILLS
 from apps.core.utils import human_size as _human_size
 
 register = template.Library()
@@ -155,15 +156,9 @@ def filter_url(context, param, value, multi=False) -> str:
     return f"?{query}" if query else (request.path if request is not None else "?")
 
 
-STATUS_PILL = {
-    "DRAFT": "pill-draft",
-    "PENDING_RECEIPT": "pill-pending",
-    "RECEIVED": "pill-received",
-    "IN_PROCESS": "pill-process",
-    "COMPLETED_PENDING_UPLOAD": "pill-process",
-    "COMPLETED": "pill-completed",
-    "OVERDUE": "pill-overdue",
-}
+#: From apps.core.colors, the one status-to-colour mapping, so a pill cannot
+#: disagree with the chart slice for the same status.
+STATUS_PILL = STATUS_PILLS
 
 STATUS_LABEL = {
     "DRAFT": "Draft",

@@ -24,7 +24,7 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <h2>Extracted Text</h2>
-          <span class="pill {% if document.ocr_status == 'DONE' %}pill-received{% else %}pill-draft{% endif %}">
+          <span class="pill {% if document.ocr_status == 'DONE' %}pill-ok{% else %}pill-draft{% endif %}">
             {{ document.get_ocr_status_display }}
           </span>
         </div>

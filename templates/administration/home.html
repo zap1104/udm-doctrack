@@ -73,7 +73,7 @@
           {% for row in top_searches %}
             <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
-              <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
+              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
             </div>
           {% empty %}

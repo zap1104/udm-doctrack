@@ -39,6 +39,7 @@ from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
+from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
@@ -82,12 +83,16 @@ def decorate_notification(notification):
 #: across the three live stages rather than beside them. It keeps --udm-red on
 #: its stat card, which is the only place it is drawn now.
 BREAKDOWN_COLOURS = {
-    "pending_receipt": "var(--udm-gold)",
-    "received": "var(--udm-green)",
-    "in_process": "var(--udm-teal)",
-    "pending_upload": "var(--chart-one)",
-    "historical": "var(--udm-muted)",
-    "completed": "var(--chart-three)",
+    # The status slices take their status's colour (apps.core.colors), so a
+    # ring slice, a stage bar and a pill for one status are one colour. The ring
+    # had its own map: Completed - pending upload was blue here and teal on the
+    # stage bars, Received green here and on the Completed pill.
+    "pending_receipt": STATUS_COLOURS[Status.PENDING_RECEIPT],
+    "received": STATUS_COLOURS[Status.RECEIVED],
+    "in_process": STATUS_COLOURS[Status.IN_PROCESS],
+    "pending_upload": STATUS_COLOURS[Status.COMPLETED_PENDING_UPLOAD],
+    "historical": "var(--chart-historical)",
+    "completed": STATUS_COLOURS[Status.COMPLETED],
 }
 
 
@@ -859,9 +864,12 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # IN_PROCESS status: a document is in somebody's hands for the whole of
         # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
         series = [
-            ("receipt", "Receipt", "var(--chart-two)"),
-            ("processing", "In process", "var(--chart-one)"),
-            ("lifetime", "Total lifetime", "var(--chart-three)"),
+            # Each stage in its status's colour: the wait for a receipt is the
+            # Pending receipt amber, the work is In process mauve, and the whole
+            # life ends Completed green.
+            ("receipt", "Receipt", STATUS_COLOURS[Status.PENDING_RECEIPT]),
+            ("processing", "In process", STATUS_COLOURS[Status.IN_PROCESS]),
+            ("lifetime", "Total lifetime", STATUS_COLOURS[Status.COMPLETED]),
         ]
         built = []
         for key, label, colour in series:
@@ -1660,9 +1668,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "percent": _bar(completed + historical, ceiling),
                     # Every column carries its own value, above its own bar.
                     "columns": [
-                        {"label": "Completed", "series": "one", "value": completed,
+                        # Completed green and historical slate, as the
+                        # repository ring colours them. This chart had them the
+                        # other way: completed blue, historical green.
+                        {"label": "Completed", "series": "completed", "value": completed,
                          "percent": _bar(completed, ceiling)},
-                        {"label": "Historical", "series": "three", "value": historical,
+                        {"label": "Historical", "series": "historical", "value": historical,
                          "percent": _bar(historical, ceiling)},
                     ],
                     "has_values": bool(completed or historical),

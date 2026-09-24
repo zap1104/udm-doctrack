@@ -83,6 +83,30 @@
   --chart-alert-soft: #cf6a5e;
   --chart-track: #e8edf3;
   --chart-grid: #eef1f6;
+  /* One colour per status, and the same colour wherever that status is drawn:
+     pill, ring slice, stage bar, trend line. The lifecycle reads left to right
+     as slate, amber, blue, mauve, teal, green; red is overdue, a condition on
+     top of any stage rather than a stage. Chosen so the statuses that touch in
+     a chart (ring slices, trend lines, the monthly columns) stay apart for
+     protanopia, deuteranopia and tritanopia, not only for full colour vision;
+     every status is also always drawn with its label. Each has a mark colour
+     (at least 3:1 on the surface), a soft fill and an ink (at least 7:1 on the
+     soft fill) for pills.
+
+     The --chart-* series below are not statuses and do not borrow one:
+     "created" is the brand navy, "historical" a neutral slate, "neutral" the
+     bars that count things with no status (document types, searches). */
+  --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
+  --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
+  --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
+  --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
+  --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
+  --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
+  --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
+  --chart-created: #0b315a;
+  --chart-historical: #7d889a;
+  --chart-received-part: #8fb3d6;
+  --chart-neutral: #55637a;
   --sidebar-width: 236px;
   --radius: 10px;
   --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
@@ -276,9 +300,17 @@ a:hover { text-decoration: underline; }
   font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap;
 }
-.pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
+/* Status pills: one per status, from the --status-* tokens, so a pill and the
+   chart slice for the same status are the same colour. Received and Completed
+   were both green here, and In process and Completed - pending upload both
+   teal: six statuses in four colours. */
+.pill-received  { background: var(--status-received-soft);  color: var(--status-received-ink); }
+.pill-completed { background: var(--status-completed-soft); color: var(--status-completed-ink); }
+.pill-pending   { background: var(--status-pending-soft);   color: var(--status-pending-ink); }
+.pill-upload    { background: var(--status-upload-soft);    color: var(--status-upload-ink); }
+/* Not a status: a plain "this is fine" badge (an active account, text
+   extracted), so those stop borrowing a status's colour. */
+.pill-ok        { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 /* Approaching, not yet late. Gold rather than red, because red is the claim
    that something has already gone wrong and this one is still actionable — and
    the dark ink, not the plain: gold-ink on gold-soft is 4.34:1 and a pill runs
@@ -292,8 +324,8 @@ a:hover { text-decoration: underline; }
 /* The date under the pills. Muted and small: it is the evidence for the tag
    above it, not a column in its own right. */
 .deadline-when-cell { margin-top:4px; color:var(--udm-muted); font-size:12px; white-space:nowrap; }
-.pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
-.pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
+.pill-process   { background: var(--status-process-soft);   color: var(--status-process-ink); }
+.pill-overdue   { background: var(--status-overdue-soft);   color: var(--status-overdue-ink); }
 /* Overdue is not a stage — it is a condition sitting on top of one, and it is
    rendered *beside* the status pill rather than instead of it. Soft-fill like
    its neighbour, it read as a second status and disappeared into the row; a
@@ -346,7 +378,7 @@ a:hover { text-decoration: underline; }
    between "a stage this document is at" and "a document that has not started".
    It also stops Draft reading as another solid chip alongside Pending receipt,
    which is the one it was being confused with. */
-.pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
+.pill-draft     { background: transparent; color: var(--status-draft-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 
 /* ----------------------------------------------------------------- tables */
@@ -909,9 +941,18 @@ a:hover { text-decoration: underline; }
 .chart-legend { display:flex; flex-wrap:wrap; gap:14px; }
 .chart-key { display:inline-flex; align-items:center; gap:6px; color:var(--udm-muted); font-size:12px; font-weight:600; }
 .chart-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
-.chart-swatch--one { background:var(--chart-one); }
-.chart-swatch--two { background:var(--chart-two); }
-.chart-swatch--three { background:var(--chart-three); }
+/* Named for what they mean, not for their position in a palette: a legend
+   swatch, a bar and a column for the same thing take the same class suffix. */
+.chart-swatch--draft { background:var(--status-draft); }
+.chart-swatch--pending { background:var(--status-pending); }
+.chart-swatch--received { background:var(--status-received); }
+.chart-swatch--process { background:var(--status-process); }
+.chart-swatch--upload { background:var(--status-upload); }
+.chart-swatch--completed { background:var(--status-completed); }
+.chart-swatch--created { background:var(--chart-created); }
+.chart-swatch--historical { background:var(--chart-historical); }
+.chart-swatch--received-part { background:var(--chart-received-part); }
+.chart-swatch--neutral { background:var(--chart-neutral); }
 
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
@@ -942,12 +983,14 @@ a:hover { text-decoration: underline; }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
 .report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
-.bar-one { background:var(--chart-one); }
+.bar-pending { background:var(--status-pending); }
+.bar-received { background:var(--status-received); }
+.bar-completed { background:var(--status-completed); }
+.bar-completed-strong { background:var(--status-completed-ink); }
+.bar-neutral { background:var(--chart-neutral); }
 /* The end of a bar, in the second series' colour: a figure that is part of the
    bar it sits in, rather than a second bar on a scale of its own. */
-.bar-part { display:block; height:100%; margin-left:auto; border-radius:0 4px 4px 0; background:var(--chart-two); }
-.bar-two { background:var(--chart-two); }
-.bar-three { background:var(--chart-three); }
+.bar-part { display:block; height:100%; margin-left:auto; border-radius:0 4px 4px 0; background:var(--chart-received-part); }
 .bar-alert { background:var(--chart-alert); }
 .bar-alert-soft { background:var(--chart-alert-soft); }
 .chart-swatch--alert { background:var(--chart-alert); }
@@ -1003,9 +1046,10 @@ a:hover { text-decoration: underline; }
 .column-chart--turned { --column-value-band:34px; --column-slot:12px; }
 .column-chart--turned .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
-.column--one { background:var(--chart-one); }
-.column--two { background:var(--chart-two); }
-.column--three { background:var(--chart-three); }
+.column--created { background:var(--chart-created); }
+.column--handover { background:var(--status-pending); }
+.column--completed { background:var(--status-completed); }
+.column--historical { background:var(--chart-historical); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
 .chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
 /* Administration filter bars: a labelled row, then one line saying how many
@@ -1910,12 +1954,12 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* Keyed to the slice names in views.BREAKDOWN_COLOURS. There is no --overdue
    segment any more: overdue lies across the live stages instead of beside them,
    so it is a stat card rather than a slice. */
-.breakdown-seg--pending_receipt { background:var(--udm-gold); }
-.breakdown-seg--received { background:var(--udm-green); }
-.breakdown-seg--in_process { background:var(--udm-teal); }
-.breakdown-seg--pending_upload { background:var(--chart-one); }
-.breakdown-seg--historical { background:var(--udm-muted); }
-.breakdown-seg--completed { background:var(--chart-three); }
+.breakdown-seg--pending_receipt { background:var(--status-pending); }
+.breakdown-seg--received { background:var(--status-received); }
+.breakdown-seg--in_process { background:var(--status-process); }
+.breakdown-seg--pending_upload { background:var(--status-upload); }
+.breakdown-seg--historical { background:var(--chart-historical); }
+.breakdown-seg--completed { background:var(--status-completed); }
 
 .breakdown-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:2px 18px; }
 .breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy-text); font-size:13px; text-decoration:none; }
@@ -2365,6 +2409,21 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --chart-three: #5cb37e;
   --chart-track: #212d3a;
   --chart-grid: #202b36;
+  /* The status palette for the dark surface: the same hues, stepped so each
+     mark still clears 3:1 on #17212c and each ink 7:1 on its soft fill, and
+     re-checked for colour-blind separation on this surface rather than
+     assumed from the light one. */
+  --status-draft: #8e9bb0; --status-draft-soft: #2c3136; --status-draft-ink: #c7d6e8;
+  --status-pending: #e3ad4b; --status-pending-soft: #3d2d14; --status-pending-ink: #f0cf9d;
+  --status-received: #7fb6ee; --status-received-soft: #1e3246; --status-received-ink: #b7d8fb;
+  --status-process: #c876c1; --status-process-soft: #3d283b; --status-process-ink: #f1c3ec;
+  --status-upload: #9cd7da; --status-upload-soft: #0d3739; --status-upload-ink: #98e4e8;
+  --status-completed: #62946c; --status-completed-soft: #1f3724; --status-completed-ink: #b2e3bb;
+  --status-overdue: #ff8a7a; --status-overdue-soft: #442724; --status-overdue-ink: #fac6bf;
+  --chart-created: #d0dae6;
+  --chart-historical: #b3bfd0;
+  --chart-received-part: #c9e2fb;
+  --chart-neutral: #a8b6c8;
 
   --shadow-card: 0 1px 2px rgba(0,0,0,.5);
 }
@@ -2492,7 +2551,18 @@ textarea.form-control { resize: vertical; min-height: 64px; }
     --chart-two: #b58c24;
     --chart-three: #2f7d4f;
     --chart-track: #e8edf3;
-    --chart-grid: #eef1f6;
+      --chart-grid: #eef1f6;
+    --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
+    --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
+    --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
+    --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
+    --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
+    --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
+    --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
+    --chart-created: #0b315a;
+    --chart-historical: #7d889a;
+    --chart-received-part: #8fb3d6;
+    --chart-neutral: #55637a;
   }
 }
 

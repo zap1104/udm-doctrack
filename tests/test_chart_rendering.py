@@ -172,7 +172,7 @@ def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
     chart = body[body.index('class="column-chart"'):body.index('class="chart-table"')]
     text = " ".join(body.split())
 
-    assert "column--three" in chart, "the handovers bar is drawn"
+    assert "column--handover" in chart, "the handovers bar is drawn"
     assert "Handovers</span>" in text, "and named in the legend"
     assert "Handovers count moves between offices" in text
     assert ">Handovers</th>" in body, "the table calls it the same thing"

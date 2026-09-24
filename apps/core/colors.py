@@ -1,8 +1,15 @@
-"""Single source of truth for the UDM DocTrack brand palette (Python side).
+"""Single source of truth for the UDM DocTrack palette (Python side).
 
-Mirrors the CSS custom properties declared in the :root block at the top of
-static/css/doctrack.css — when a new palette is adopted, update the hex
-values here and there together.
+`PALETTE` mirrors the brand custom properties at the top of
+static/css/doctrack.css — when a new palette is adopted, update the hex values
+here and there together.
+
+Statuses are different. Their colours live only in the stylesheet, as the
+--status-<token> custom properties, because each has a light value, a dark value
+and a print value, and a hex written here could carry only one of them: Reports'
+stage bars were painted from hex, so in dark mode they stayed their light-theme
+colour on a dark card. Python hands out the *variable*, and the stylesheet
+decides what it resolves to.
 """
 
 from __future__ import annotations
@@ -18,21 +25,30 @@ PALETTE = {
     "muted": "#63718a",
 }
 
-#: Bar colour per record status, used by the reports/analytics charts.
-#: Statuses are states, not series identities, so they wear this reserved
-#: palette and are always shown with their label — never colour alone.
-#: Kept in step with STATUS_PILL in apps/core/templatetags/doctrack.py.
-STATUS_COLOUR_KEYS = {
-    "DRAFT": "muted",
-    "PENDING_RECEIPT": "gold",
-    "RECEIVED": "green",
-    "IN_PROCESS": "teal",
-    # Finished, but not yet in the repository. Teal rather than green: green is
-    # the colour of "done" here, and this stage is precisely the one that looks
-    # done and is not.
-    "COMPLETED_PENDING_UPLOAD": "teal",
-    "COMPLETED": "green",
-    "OVERDUE": "red",
+#: The one mapping from a status to its colour, by token name. Every place a
+#: status is drawn reads it: pills (`pill-<token>`), chart marks
+#: (`var(--status-<token>)`), legend swatches (`chart-swatch--<token>`).
+#:
+#: Six statuses, six colours, in lifecycle order. It used to be four: Received
+#: and Completed were both green, In process and Completed - pending upload both
+#: teal, so the stage bars for each pair were the same colour, and a pill could
+#: not tell a reader whether a document was received or finished.
+#:
+#: Overdue is a condition on top of a stage, not a stage, and wears red as a tag
+#: beside the status pill. Never colour alone: every status is always drawn
+#: with its label.
+STATUS_TOKENS = {
+    "DRAFT": "draft",
+    "PENDING_RECEIPT": "pending",
+    "RECEIVED": "received",
+    "IN_PROCESS": "process",
+    "COMPLETED_PENDING_UPLOAD": "upload",
+    "COMPLETED": "completed",
+    "OVERDUE": "overdue",
 }
 
-STATUS_COLOURS = {status: PALETTE[key] for status, key in STATUS_COLOUR_KEYS.items()}
+#: A CSS colour per status, for inline chart marks.
+STATUS_COLOURS = {status: f"var(--status-{token})" for status, token in STATUS_TOKENS.items()}
+
+#: The pill class per status.
+STATUS_PILLS = {status: f"pill-{token}" for status, token in STATUS_TOKENS.items()}
