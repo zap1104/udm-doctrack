@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load doctrack %}
 {% block title %}Administration · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head"><div>
@@ -62,7 +63,10 @@
         <div class="card-udm-head">
           <div>
             <h2>Most used searches</h2>
-            <div class="report-caption">Every office, since records began. Visible to system administrators only.</div>
+            <div class="report-caption">
+              Every office, since records began. Visible to system administrators only.
+              {% if search_analytics.queries %}Each bar is a query's share of all {{ search_analytics.queries }}.{% endif %}
+            </div>
           </div>
         </div>
         <div class="card-udm-body">
@@ -71,10 +75,11 @@
             <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
           </div>
           {% for row in top_searches %}
-            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
+            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
-              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.percent }}%"></i></div>
+              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.bar_percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{% share row.total search_analytics.queries %}</span>
             </div>
           {% empty %}
             <div class="report-empty">No searches have been recorded.</div>

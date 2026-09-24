@@ -299,9 +299,11 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
 
     row = rows[0]
     assert row["cumulative"] >= row["this_month"]
-    # One bar on one scale: the cumulative figure against the busiest office,
+    # One bar on one scale: the cumulative figure as a share of every receipt,
     # and this month as a share of that office's own bar, drawn inside it.
-    assert row["cumulative_percent"] == 100, "the leader sets the scale"
+    receipts = client.get(REPORTS).context["office_volume"]["receipts"]
+    assert receipts == sum(entry["cumulative"] for entry in rows)
+    assert row["cumulative_percent"] == analytics.bar(row["cumulative"], receipts)
     assert row["this_month_share"] == analytics.bar(row["this_month"], row["cumulative"])
     assert "this_month_percent" not in row, "no second scale"
 

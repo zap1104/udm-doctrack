@@ -6,6 +6,7 @@ from django import template
 from django.http import QueryDict
 from django.utils.safestring import mark_safe
 
+from apps.core.analytics import share_text
 from apps.core.colors import STATUS_PILLS
 from apps.core.utils import human_size as _human_size
 
@@ -244,6 +245,13 @@ def attr(obj, name: str):
     if callable(getter):
         return getter()
     return value
+
+
+@register.simple_tag
+def share(part, whole) -> str:
+    """`part` as a share of `whole`, printed the way its bar is drawn: "<1%"
+    for a real value too small to round up, never a "0%" beside a visible bar."""
+    return share_text(part or 0, whole or 0)
 
 
 @register.simple_tag

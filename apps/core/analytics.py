@@ -54,10 +54,33 @@ def percent(part: int, whole: int) -> int:
 
 def bar(part: int, whole: int) -> int:
     """Bar width as a percentage. Zero stays zero — a minimum-width stub would
-    paint a value that is not there — but a real value never rounds away."""
+    paint a value that is not there — but a real value never rounds away.
+
+    `whole` is the total the panel states, never the largest row. A bar track
+    is 100% of something, and measured against the busiest row the leader
+    always filled it: 3 documents of 15 drew a full bar beside the words "20%".
+    """
     if not part or not whole:
         return 0
     return max(1, int(round(100 * part / whole)))
+
+
+def share_text(part: int, whole: int) -> str:
+    """A share as printed beside its bar.
+
+    `percent` rounds, so one document in three hundred printed "0%" beside a
+    bar `bar` had floored at 1% so that it shows: the label and the mark
+    disagreeing about whether anything is there. "<1%" says both. ">99%" is
+    the same guard at the other end, because 999 of 1,000 is not all of them.
+    """
+    if not part or not whole:
+        return "0%"
+    value = percent(part, whole)
+    if value == 0:
+        return "<1%"
+    if value == 100 and part < whole:
+        return ">99%"
+    return f"{value}%"
 
 
 def axis_ticks(ceiling: int, steps: int = 4) -> list[dict]:
@@ -210,17 +233,19 @@ def _month_of(value):
 # Tracking panels
 # ---------------------------------------------------------------------------
 def by_status(records, total: int) -> list[dict]:
-    """One row per status: share of the whole, plus a bar against the largest
-    status so the shortest bar is still visible."""
+    """One row per status, its bar the share of every document it states.
+
+    Every document is in exactly one stage, so the bars add up to one full
+    track across the rows. `bar_percent` is `percent` with the 1% floor that
+    keeps a single document visible."""
     rows = list(
         records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total")
     )
     labels = dict(Status.choices)
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         row["label"] = labels.get(row["status"], row["status"])
         row["percent"] = percent(row["total"], total)
-        row["bar_percent"] = bar(row["total"], ceiling)
+        row["bar_percent"] = bar(row["total"], total)
         row["colour"] = STATUS_COLOURS.get(row["status"], STATUS_COLOURS["DRAFT"])
     return rows
 
@@ -296,20 +321,15 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
         if code not in earliest or due_at < earliest[code]:
             earliest[code] = due_at
 
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         code = row["current_office__code"]
         row["code"] = code
         row["name"] = row["current_office__name"] or code
-        row["percent"] = bar(row["total"], ceiling)
-        # The reports template reads `percent`; the dashboard reads
-        # `bar_percent` like every other bar on that page. Same number.
-        row["bar_percent"] = row["percent"]
-        # Distinct from both: `percent` scales the bar against the *longest*
-        # queue so the widest bar fills its track, which is a drawing
-        # instruction. `share` is the reportable figure — this office's portion
-        # of every overdue document there is.
+        # `share` is the reportable figure — this office's portion of every
+        # overdue document there is. `percent` and `bar_percent` are the bar
+        # drawn at that share, floored at 1% so a single document shows.
         row["share"] = percent(row["total"], everywhere)
+        row["percent"] = row["bar_percent"] = bar(row["total"], everywhere)
         due_at = earliest.get(code)
         # Whole days late, floored: "3 days" must mean the deadline is three
         # full days behind, never "some part of a third day".
@@ -317,10 +337,8 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
 
     # The tail, as a row. Without it the office lines never sum to the headline
     # they sit under, and `overdue_summary["total"]` is counted over the whole
-    # queryset, so the gap is visible to anybody who adds them up.
-    #
-    # Its bar is not drawn: `ceiling` is taken from the kept rows only, so a
-    # large tail cannot flatten the real ones into slivers.
+    # queryset, so the gap is visible to anybody who adds them up. Its bar is
+    # drawn like the others: its share of the whole is as real as theirs.
     if cut:
         # Read from `earliest`, because the loop above enriches only the kept
         # rows — a cut row has no `oldest_days` of its own to take a max over.
@@ -335,8 +353,8 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
                 "code": "",
                 "name": f"Other ({len(cut)} office{'' if len(cut) == 1 else 's'})",
                 "total": cut_total,
-                "percent": 0,
-                "bar_percent": 0,
+                "percent": bar(cut_total, everywhere),
+                "bar_percent": bar(cut_total, everywhere),
                 "share": percent(cut_total, everywhere),
                 "oldest_days": max(
                     (max(0, (now - due).days) for due in cut_dues), default=0
@@ -738,14 +756,15 @@ def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
     grand_total = sum(row["total"] for row in rows)
     rows, cut, remainder_label = cap_with_remainder(rows, limit, "office")
 
-    ceiling = max([row["total"] for row in rows], default=0)
+    # Each bar is the share of `grand_total` printed beside it. Scaled to the
+    # busiest office instead, the leader always drew a full track, so an office
+    # with 3 of 15 filled the card next to the words "20%".
     for row in rows:
-        row["bar_percent"] = bar(row["total"], ceiling)
+        row["bar_percent"] = bar(row["total"], grand_total)
         row["percent"] = percent(row["total"], grand_total)
 
-    # The tail, so the rows add up to `total` rather than to a subset of it.
-    # No bar: `ceiling` came from the kept rows, so a large tail cannot flatten
-    # the real ones into slivers.
+    # The tail, so the rows add up to `total` rather than to a subset of it,
+    # with its bar drawn at its share like every other row.
     if cut:
         cut_total = sum(row["total"] for row in cut)
         rows.append(
@@ -755,7 +774,7 @@ def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
                 "uploaded": sum(row["uploaded"] for row in cut),
                 "filed": sum(row["filed"] for row in cut),
                 "total": cut_total,
-                "bar_percent": 0,
+                "bar_percent": bar(cut_total, grand_total),
                 "percent": percent(cut_total, grand_total),
                 "is_remainder": True,
             }

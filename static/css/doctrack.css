@@ -967,16 +967,23 @@ a:hover { text-decoration: underline; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
 /* A fourth column for rows that carry a share beside the count. Without it the
    share was a fourth child in a three-column grid and wrapped onto a line of
-   its own under the label. */
-.report-series-item--share { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px; }
+   its own under the label. Every bar is drawn at that share: the track is the
+   whole the panel states, never its largest row. */
+.report-series-item--share { grid-template-columns:100px minmax(0,1fr) 44px 40px; }
+.report-series-item--wide.report-series-item--share { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px; }
+/* And a fifth for "+n this month" beside the share, on Documents received by
+   office. */
+.report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px 40px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
 /* "Other (n offices)": what a top-N cap left out, as one row, so the rows add up
    to the total above them. Secondary ink, because it is an aggregate and not a
-   peer of the ranked rows beside it. Its bar is drawn at zero width on purpose —
-   the ceiling came from the ranked rows, and a long bar for "everything else"
-   would out-shout the offices it exists to account for. */
-.report-series-item--remainder { color:var(--udm-muted); font-style:italic; }
+   peer of the ranked rows beside it. Its bar is drawn at its share like every
+   other row's, faded for the same reason: with bars measured against the
+   whole, a long "everything else" is a true finding, not one row's scale
+   flattening the others. */
+.report-series-item--remainder,.report-office-row--remainder .report-office-label { color:var(--udm-muted); font-style:italic; }
 .report-series-item--remainder strong { color:var(--udm-muted); }
+.report-series-item--remainder .report-bar i,.report-office-row--remainder .report-bar i { opacity:.55; }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .report-series-item strong { text-align:right; color:var(--udm-navy-text); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
@@ -1212,10 +1219,19 @@ a:hover { text-decoration: underline; }
   .reports-tab { flex:0 0 auto; }
   .report-series-item { grid-template-columns:96px minmax(0,1fr) 38px; }
   .report-series-item--wide { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px; }
-  .report-series-item--share { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px 36px; }
+  .report-series-item--share { grid-template-columns:96px minmax(0,1fr) 38px 36px; }
+  .report-series-item--wide.report-series-item--share { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px 36px; }
+  .report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px 36px 36px; }
   /* Same label width as the desktop rule — the content that has to fit does
      not shrink on a narrow screen, only the bar column does. */
   .status-row { grid-template-columns:152px minmax(0,1fr) 30px 36px; gap:8px; }
+}
+/* Phones: three figures beside the office name left the bar about 40px wide.
+   The bar takes a full line under the name and its figures instead; placed
+   explicitly, so the other four children auto-place along the first line. */
+@media (max-width:575.98px) {
+  .report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,1fr) 38px 36px 36px; row-gap:5px; }
+  .report-series-item--month > .report-bar { grid-column:1 / -1; grid-row:2; }
 }
 @media print {
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }

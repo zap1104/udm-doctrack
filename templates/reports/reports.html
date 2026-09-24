@@ -285,6 +285,7 @@
             <h2>Documents by stage</h2>
             <div class="report-caption">
               Where the {{ total_records }} document{{ total_records|pluralize }} stand right now.
+              {% if total_records %}Each bar is a stage's share of all of them.{% endif %}
               {% if scope_office %}
                 Incoming and outgoing are measured from
                 <strong>{{ scope_office.code }} — {{ scope_office.name }}</strong>.
@@ -327,7 +328,7 @@
               <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
               <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
               <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.percent }}%</span>
+              <span class="status-share num">{% share row.total total_records %}</span>
             </div>
             {% if scope_office %}
               <div class="status-direction">
@@ -433,6 +434,10 @@
             {% endcomment %}
             <div class="report-caption">
               The office that owes the next move on each overdue document.
+              {% if overdue_accountability.whole %}
+                Each bar is a share of all {{ overdue_accountability.whole }} overdue document{{ overdue_accountability.whole|pluralize }}.
+                {% if overdue_accountability.overlaps %}A document waiting on two offices counts for both, so these add up to more than 100%.{% endif %}
+              {% endif %}
             </div>
           </div>
           <div class="chart-legend">
@@ -454,15 +459,17 @@
             <div class="report-office-row">
               <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
               <div class="report-series">
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>Awaiting receipt</span>
                   <div class="report-bar"><i class="bar-alert" style="width:{{ row.awaiting_percent }}%"></i></div>
                   <strong class="num">{{ row.awaiting }}</strong>
+                  <span class="status-share num">{% share row.awaiting overdue_accountability.whole %}</span>
                 </div>
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>In their hands</span>
                   <div class="report-bar"><i class="bar-alert-soft" style="width:{{ row.holding_percent }}%"></i></div>
                   <strong class="num">{{ row.holding }}</strong>
+                  <span class="status-share num">{% share row.holding overdue_accountability.whole %}</span>
                 </div>
               </div>
             </div>
@@ -502,7 +509,10 @@
         <div class="card-udm-head">
           <div>
             <h2>Documents received by office</h2>
-            <div class="report-caption">Receipts an office has confirmed, since records began.</div>
+            <div class="report-caption">
+              Receipts an office has confirmed, since records began.
+              {% if office_volume.receipts %}Each bar is an office's share of all {{ office_volume.receipts }}.{% endif %}
+            </div>
           </div>
           <div class="chart-legend">
             <span class="chart-key"><i class="chart-swatch chart-swatch--received" aria-hidden="true"></i>Since records began</span>
@@ -516,16 +526,20 @@
             busiest office's total, and the busiest office's month) made 1 this
             month look half as big as 42 since records began. The office name
             carries the row, so no series label repeats the panel's title.
+
+            The scale is every receipt, not the busiest office: the bar is the
+            share printed beside it. The last row may be "Other (n offices)".
           {% endcomment %}
           {% for row in office_volume.rows %}
-            <div class="report-series-item report-series-item--wide report-series-item--share"
+            <div class="report-series-item report-series-item--wide report-series-item--share report-series-item--month{% if row.is_remainder %} report-series-item--remainder{% endif %}"
                  title="{{ row.name }} &mdash; {{ row.cumulative }} received, {{ row.this_month }} this month">
-              <span>{{ row.code }} · {{ row.name|truncatechars:38 }}</span>
+              <span>{% if row.is_remainder %}{{ row.name }}{% else %}{{ row.code }} · {{ row.name|truncatechars:38 }}{% endif %}</span>
               <div class="report-bar">
                 <i class="bar-received" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
               </div>
               <strong class="num">{{ row.cumulative }}</strong>
-              <span class="status-share num">+{{ row.this_month }}</span>
+              <span class="status-share num">{% share row.cumulative office_volume.receipts %}</span>
+              <span class="status-share num" title="Received this month">+{{ row.this_month }}</span>
             </div>
           {% empty %}
             <div class="report-empty">No office has confirmed receipt of a document yet.</div>
@@ -540,7 +554,10 @@
         <div class="card-udm-head">
           <div>
             <h2>Handovers by office: sent and confirmed</h2>
-            <div class="report-caption">Every forward counted, not only the first send.</div>
+            <div class="report-caption">
+              Every forward counted, not only the first send.
+              {% if office_flow.handovers %}Each bar is a share of all {{ office_flow.handovers }} handovers.{% endif %}
+            </div>
           </div>
           <div class="chart-legend">
             <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Sent</span>
@@ -548,19 +565,21 @@
           </div>
         </div>
         <div class="card-udm-body">
-          {% for row in office_flow %}
-            <div class="report-office-row">
-              <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
+          {% for row in office_flow.rows %}
+            <div class="report-office-row{% if row.is_remainder %} report-office-row--remainder{% endif %}">
+              <div class="report-office-label" title="{{ row.name }}">{% if row.is_remainder %}{{ row.name }}{% else %}{{ row.code }} · {{ row.name|truncatechars:38 }}{% endif %}</div>
               <div class="report-series">
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>Sent</span>
                   <div class="report-bar"><i class="bar-pending" style="width:{{ row.sent_percent }}%"></i></div>
                   <strong class="num">{{ row.sent }}</strong>
+                  <span class="status-share num">{% share row.sent office_flow.handovers %}</span>
                 </div>
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>Confirmed</span>
                   <div class="report-bar"><i class="bar-received" style="width:{{ row.received_percent }}%"></i></div>
                   <strong class="num">{{ row.received }}</strong>
+                  <span class="status-share num">{% share row.received office_flow.handovers %}</span>
                 </div>
               </div>
             </div>
@@ -777,7 +796,12 @@
 
     <div class="col-12">
       <div class="card-udm h-100">
-        <div class="card-udm-head"><h2>Documents by type</h2></div>
+        <div class="card-udm-head">
+          <div>
+            <h2>Documents by type</h2>
+            {% if total_documents %}<div class="report-caption">Each bar is a type's share of all {{ total_documents }} document{{ total_documents|pluralize }}.</div>{% endif %}
+          </div>
+        </div>
         <div class="card-udm-body">
           {% comment %}
             The last row may be "Other (n types)", so the rows add up to every
@@ -785,10 +809,11 @@
             never folded into it — not knowing a document's type is a finding.
           {% endcomment %}
           {% for row in document_types %}
-            <div class="report-series-item report-series-item--wide{% if row.is_remainder %} report-series-item--remainder{% endif %}">
+            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.label|truncatechars:30 }}</span>
-              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.percent }}%"></i></div>
+              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.bar_percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{% share row.total total_documents %}</span>
             </div>
           {% empty %}
             <div class="report-empty">No documents are classified yet.</div>

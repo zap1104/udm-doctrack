@@ -618,6 +618,7 @@
           <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
           <div class="card-udm-caption">
             Uploads, plus documents filed when tracking finished.
+            {% if uploads_by_office.total %}Each bar is an office's share of all {{ uploads_by_office.total }}.{% endif %}
           </div>
         </div>
       </div>
@@ -634,15 +635,21 @@
               <span>
                 <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
                 {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
-                ({{ uploads_by_office.leader.percent }}%)
+                ({% share uploads_by_office.leader.total uploads_by_office.total %})
               </span>
             </div>
           {% endif %}
           {% comment %}
             The last row may be "Other (n offices)", carrying what the cap left
-            out so the rows add up to the total above them. It is muted and has
-            no bar. `not row.is_remainder` on the leader test because the
-            remainder's code is blank, and so is the leader's when there is none.
+            out so the rows add up to the total above them. It is muted, and its
+            bar is its share like every other row's. `not row.is_remainder` on
+            the leader test because the remainder's code is blank, and so is the
+            leader's when there is none.
+
+            Every bar is a share of the whole, the percentage printed beside it,
+            so the track is 100% and the bars together fill exactly one. They
+            were measured against the busiest office, which always drew a full
+            track: 3 of 15 filled the card beside the words "20%".
           {% endcomment %}
           {% for row in uploads_by_office.rows %}
             <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}"
@@ -653,7 +660,7 @@
                    style="width:{{ row.bar_percent }}%"></i>
               </div>
               <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.percent }}%</span>
+              <span class="status-share num">{% share row.total uploads_by_office.total %}</span>
             </div>
           {% endfor %}
         {% else %}

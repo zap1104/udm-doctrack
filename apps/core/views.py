@@ -378,10 +378,9 @@ class DashboardMemoMixin:
         ]
 
         total = sum(row["total"] for row in slices)
-        ceiling = max([row["total"] for row in slices], default=0)
         for row in slices:
             row["percent"] = _percent(row["total"], total)
-            row["bar_percent"] = _bar(row["total"], ceiling)
+            row["bar_percent"] = _bar(row["total"], total)
             row["colour"] = BREAKDOWN_COLOURS[row["key"]]
 
         tracking_total = sum(row["total"] for row in slices if row["group"] == "tracking")
@@ -1307,7 +1306,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "by_status": self._by_status(records, total_records, scope_office),
                 "monthly": self._monthly(records),
                 "turnaround": self._turnaround(records),
-                "overdue_accountability": self._overdue_accountability(records),
+                "overdue_accountability": self._overdue_accountability(records, overdue_all),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
                 "retention": self._retention(documents, filters),
@@ -1417,13 +1416,18 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         Transferred counts steps an office *sent*; received counts steps another
         office confirmed. Counting records by `originating_office` (what this
         panel used to do) misses every forward after the first hop.
+
+        Both bars are shares of one whole, every handover, so a row's two bars
+        compare with each other as well as with the rows around them: an office
+        that sent 5 and confirmed 5 draws two bars of one length. The whole is
+        read off the sent grouping, sender or none, rather than counted again.
         """
         steps = RoutingStep.objects.filter(record__in=records)
+        sent_rows = list(steps.values("from_office__code").annotate(total=Count("id")))
+        handovers = sum(row["total"] for row in sent_rows)
         sent = {
             row["from_office__code"]: row["total"]
-            for row in steps.exclude(from_office__isnull=True)
-            .values("from_office__code")
-            .annotate(total=Count("id"))
+            for row in sent_rows
             if row["from_office__code"]
         }
         received = {
@@ -1448,12 +1452,23 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 }
             )
         rows.sort(key=lambda row: row["sent"] + row["received"], reverse=True)
-        rows = rows[:10]
-        ceiling = max((max(row["sent"], row["received"]) for row in rows), default=0)
+        rows, cut, remainder_label = analytics.cap_with_remainder(
+            rows, analytics.TOP_N, "office"
+        )
+        if cut:
+            rows.append(
+                {
+                    "code": "",
+                    "name": remainder_label,
+                    "sent": sum(row["sent"] for row in cut),
+                    "received": sum(row["received"] for row in cut),
+                    "is_remainder": True,
+                }
+            )
         for row in rows:
-            row["sent_percent"] = _bar(row["sent"], ceiling)
-            row["received_percent"] = _bar(row["received"], ceiling)
-        return rows
+            row["sent_percent"] = _bar(row["sent"], handovers)
+            row["received_percent"] = _bar(row["received"], handovers)
+        return {"rows": rows, "handovers": handovers}
 
     def _monthly(self, records):
         return analytics.monthly_volume(records)
@@ -1527,22 +1542,37 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 )
 
         leaderboard.sort(key=lambda row: (row["cumulative"], row["this_month"]), reverse=True)
-        leaderboard = leaderboard[:10]
+        # Before the cap, so a share is of every receipt, not of the rows shown.
+        receipts = sum(row["cumulative"] for row in leaderboard)
+        leaderboard, cut, remainder_label = analytics.cap_with_remainder(
+            leaderboard, analytics.TOP_N, "office"
+        )
+        if cut:
+            leaderboard.append(
+                {
+                    "code": "",
+                    "name": remainder_label,
+                    "this_month": sum(row["this_month"] for row in cut),
+                    "cumulative": sum(row["cumulative"] for row in cut),
+                    "series": [
+                        sum(values) for values in zip(*(row["series"] for row in cut), strict=True)
+                    ],
+                    "is_remainder": True,
+                }
+            )
 
-        # One scale for one row. This used to be two bars measured against two
-        # ceilings — the cumulative against the busiest office's total, this
-        # month against the busiest office's month — so an office with 42 since
-        # records began and 1 this month drew a full-length bar and a
-        # half-length one beside it, and the pair read as 42 against 21. This
-        # month is part of the cumulative figure, so it is drawn inside that
-        # bar: `this_month_share` is its share of the office's own bar, not of
-        # the panel's scale.
-        cumulative_ceiling = max([row["cumulative"] for row in leaderboard], default=0)
+        # One scale for the whole panel: each bar is the office's share of every
+        # confirmed receipt, printed beside it. It was measured against the
+        # busiest office, which always drew a full track whatever its share.
+        # This month is part of the cumulative figure, so it is drawn inside
+        # that bar: `this_month_share` is its share of the office's own bar,
+        # which makes its drawn length this month's share of the whole too.
         for row in leaderboard:
-            row["cumulative_percent"] = _bar(row["cumulative"], cumulative_ceiling)
+            row["cumulative_percent"] = _bar(row["cumulative"], receipts)
             row["this_month_share"] = _bar(row["this_month"], row["cumulative"])
         return {
             "rows": leaderboard,
+            "receipts": receipts,
             "months": months,
             "current_month": current_month,
         }
@@ -1594,7 +1624,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             ).count(),
         }
 
-    def _overdue_accountability(self, records):
+    def _overdue_accountability(self, records, overdue_all):
         """Who owes the next move, and how many nobody can be charged for.
 
         Renamed from `_overdue_offices`, which delegated to
@@ -1604,9 +1634,17 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         office that had already done its part. `analytics.overdue_offices` stays
         exactly as it is, because the dashboard's overdue banner asks the custody
         question and is right to.
+
+        Bars are shares of `overdue_all`, the page's own count of overdue
+        documents. A document waiting on two offices is in both rows, so the
+        shares can add past 100%; `overlaps` lets the caption say so only when
+        they do.
         """
+        rows = tracking_services.overdue_accountability(records, whole=overdue_all)
         return {
-            "rows": tracking_services.overdue_accountability(records),
+            "rows": rows,
+            "whole": overdue_all,
+            "overlaps": sum(row["total"] for row in rows) > overdue_all,
             "unattributed": tracking_services.overdue_unattributed(records),
         }
 
@@ -1666,22 +1704,23 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         )
         for row in rows:
             row["label"] = row["document_type__name"] or "Unclassified"
+        documents_total = sum(row["total"] for row in rows)
         rows, cut, remainder_label = analytics.cap_with_remainder(
             rows, analytics.TOP_N, "type"
         )
-        # From the kept rows, so a large tail cannot flatten the real ones.
-        ceiling = max([row["total"] for row in rows], default=0)
-        for row in rows:
-            row["percent"] = _bar(row["total"], ceiling)
         if cut:
             rows.append(
                 {
                     "label": remainder_label,
                     "total": sum(row["total"] for row in cut),
-                    "percent": 0,
                     "is_remainder": True,
                 }
             )
+        # Every bar is the type's share of every document, the tail included,
+        # so together the rows make one full track.
+        for row in rows:
+            row["percent"] = _percent(row["total"], documents_total)
+            row["bar_percent"] = _bar(row["total"], documents_total)
         return rows
 
     def _document_months(self, documents):
@@ -1772,22 +1811,24 @@ def top_searches():
         .annotate(total=Count("id", distinct=True), clicks=Count("result_clicks"))
         .order_by("-total")
     )
+    # Before the cap: a share of every query run, the "Queries" figure above
+    # the list, not of the few shown.
+    queries = sum(row["total"] for row in rows)
     rows, cut, remainder_label = analytics.cap_with_remainder(
         rows, analytics.TOP_N, "query"
     )
-    ceiling = max([row["total"] for row in rows], default=0)
-    for row in rows:
-        row["percent"] = _bar(row["total"], ceiling)
     if cut:
         rows.append(
             {
                 "query": remainder_label,
                 "total": sum(row["total"] for row in cut),
                 "clicks": sum(row["clicks"] for row in cut),
-                "percent": 0,
                 "is_remainder": True,
             }
         )
+    for row in rows:
+        row["percent"] = _percent(row["total"], queries)
+        row["bar_percent"] = _bar(row["total"], queries)
     return rows
 
 

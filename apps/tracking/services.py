@@ -1009,7 +1009,7 @@ def _current_batch_steps(**extra):
     )
 
 
-def overdue_accountability(records):
+def overdue_accountability(records, whole=None):
     """Overdue work grouped by the office that owes the next move.
 
     Deliberately not `current_office`. `recalculate_status()` sets that to the
@@ -1032,8 +1032,16 @@ def overdue_accountability(records):
     some confirmed, and one awaiting record can raise rows against two offices.
     The counts are therefore per office, not a partition of the overdue total —
     the caller must label them that way.
+
+    Each bar is a share of `whole`, the number of overdue documents, which is
+    the question the panel answers: how much of the late work is this office's
+    to move. Pass it when the caller has already counted it; otherwise it is
+    counted here. Because of the overlap above the bars can add up to more than
+    one full track, and the caller says so when they do.
     """
     overdue = _overdue_scope(records)
+    if whole is None:
+        whole = overdue.count()
 
     awaiting = {
         (row["to_office__code"], row["to_office__name"]): row["total"]
@@ -1076,10 +1084,9 @@ def overdue_accountability(records):
         )
     rows.sort(key=lambda row: row["total"], reverse=True)
 
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
-        row["awaiting_percent"] = _bar(row["awaiting"], ceiling)
-        row["holding_percent"] = _bar(row["holding"], ceiling)
+        row["awaiting_percent"] = _bar(row["awaiting"], whole)
+        row["holding_percent"] = _bar(row["holding"], whole)
     return rows
 
 
@@ -1115,10 +1122,15 @@ def _overdue_scope(records):
 
 
 def _bar(part: int, whole: int) -> int:
-    """Bar width as a percentage of the longest row, floored so a 1 is visible."""
+    """Bar width as a share of `whole`, floored so a 1 is visible.
+
+    Floored at 1%, as `core.analytics.bar` is. It was 4% while bars were drawn
+    against the longest row, where it only lifted the stubs; against the whole,
+    4% would draw one document in a hundred four times its size.
+    """
     if not whole:
         return 0
-    return max(4, round(part * 100 / whole)) if part else 0
+    return max(1, round(part * 100 / whole)) if part else 0
 
 
 # ---------------------------------------------------------------------------
