@@ -325,7 +325,7 @@ def test_extraction_states_sum_to_the_repository(client, users, offices, agreeme
 #: existed.
 DASHBOARD_CONTEXT = {
     "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "greeting",
-    "incoming_count", "incoming_new_today", "memo", "monthly", "outgoing_count",
+    "incoming_count", "incoming_new_today", "memo", "month_picker", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
     "recent_documents", "recent_records", "repository_donut", "scope",
     "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",

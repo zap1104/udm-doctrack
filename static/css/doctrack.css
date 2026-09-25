@@ -1155,6 +1155,16 @@ a:hover { text-decoration: underline; }
 .card-udm .card-udm-head:has(> .chart-legend) > div:first-child,
 .card-udm .card-udm-head:has(> .segmented) > div:first-child { flex:1 1 260px; }
 .card-udm .card-udm-head > .chart-legend { flex:0 1 auto; }
+/* The month a turnaround card answers for. Wraps under the title like a legend
+   when the head is narrow, rather than squeezing the title into a column. */
+.card-udm .card-udm-head:has(> .month-picker) { flex-wrap:wrap; align-items:flex-start; }
+.card-udm .card-udm-head:has(> .month-picker) > div:first-child { flex:1 1 260px; }
+.month-picker { display:flex; align-items:center; gap:8px; flex:0 0 auto; margin:0; }
+.month-picker .form-select { width:auto; min-width:11.5rem; }
+.month-picker-label { color:var(--udm-muted); font-size:12.5px; font-weight:600; }
+/* "Average", "Fastest", "Slowest": which kind of figure this is, said in words
+   beside the figure rather than left to the heading. */
+.metric-kind { margin-right:4px; color:var(--udm-muted); font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
 
 /* ---------------------------------------------------------- status by row */
 /* The label column is a fixed width rather than sized to its own content

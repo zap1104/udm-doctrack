@@ -1,0 +1,17 @@
+{% comment %}
+  One row per stage of `turnaround` (analytics.turnaround), shared by the
+  dashboard's summary and Reports so the two word every figure the same way.
+  Each says what it measures and how many it is taken over — "4 hrs" from three
+  documents is not "4 hrs" from three hundred — and a stage with nothing to
+  measure says so rather than printing a dash.
+{% endcomment %}
+{% for stage in turnaround.stages %}
+  <div class="report-metric">
+    <span>{{ stage.label }}<small class="text-muted">{{ stage.measures }} &middot; {{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }}</small></span>
+    {% if stage.samples %}
+      <strong><span class="metric-kind">Average</span> {{ stage.average_label }}<small class="text-muted">{{ stage.average_calendar }} on the calendar</small></strong>
+    {% else %}
+      <strong class="trend-summary-none">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %}</strong>
+    {% endif %}
+  </div>
+{% endfor %}

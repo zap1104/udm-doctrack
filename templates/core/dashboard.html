@@ -696,6 +696,7 @@
               </p>
             </details>
           </div>
+          {% include "core/_month_picker.html" with picker=month_picker picker_id="turnaround-month" %}
         </div>
         <div class="card-udm-body">
           {% if turnaround_trend.has_data %}
@@ -826,51 +827,32 @@
                   documents it is taken over, and a stage with none this month
                   says so rather than printing a dash.
                 {% endcomment %}
-                {% with month=turnaround_trend.latest %}
-                <div class="trend-summary-head">{{ month.month|date:"F" }} so far</div>
+                {% comment %}
+                  The month picked above, from analytics.turnaround — the service
+                  Reports and the memo read — so a figure here is the figure they
+                  print for the same month. "So far" and "yet" only for the month
+                  still running.
+                {% endcomment %}
+                <div class="trend-summary-head">{{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}</div>
                 <div class="trend-summary-figures">
-                  <div class="report-metric">
-                    <span>Receipt<small class="text-muted">{{ month.receipt_samples }} handover{{ month.receipt_samples|pluralize }}</small></span>
-                    {% if month.receipt_samples %}
-                      <strong>{{ month.receipt_label }}<small class="text-muted">{{ month.receipt_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None confirmed yet</strong>
-                    {% endif %}
-                  </div>
-                  <div class="report-metric">
-                    <span>In process<small class="text-muted">{{ month.processing_samples }} document{{ month.processing_samples|pluralize }}</small></span>
-                    {% if month.processing_samples %}
-                      <strong>{{ month.processing_label }}<small class="text-muted">{{ month.processing_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None completed yet</strong>
-                    {% endif %}
-                  </div>
-                  <div class="report-metric">
-                    <span>Total lifetime<small class="text-muted">{{ month.lifetime_samples }} document{{ month.lifetime_samples|pluralize }}</small></span>
-                    {% if month.lifetime_samples %}
-                      <strong>{{ month.lifetime_label }}<small class="text-muted">{{ month.lifetime_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None completed yet</strong>
-                    {% endif %}
-                  </div>
+                  {% include "core/_turnaround_stages.html" %}
                 </div>
-                {% endwith %}
                 {% comment %}
                   Only shown when something actually had a deadline that month. A 0%
                   printed for a month in which nothing was due would read as
                   "everything was late", which is the opposite of the truth.
                 {% endcomment %}
-                {% if turnaround_trend.latest.has_on_time %}
+                {% if turnaround.has_on_time %}
                   <div class="meter-head">
                     <span>Completed on time</span>
-                    <strong class="num">{{ turnaround_trend.latest.on_time_percent }}%</strong>
+                    <strong class="num">{{ turnaround.on_time_percent }}%</strong>
                   </div>
                   <div class="meter-track">
-                    <i class="meter-fill" style="width:{{ turnaround_trend.latest.on_time_percent }}%"></i>
+                    <i class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></i>
                   </div>
                   <div class="meter-foot">
-                    {{ turnaround_trend.latest.on_time }} of {{ turnaround_trend.latest.closed }}
-                    document{{ turnaround_trend.latest.closed|pluralize }} with a deadline
+                    {{ turnaround.on_time }} of {{ turnaround.on_time_total }}
+                    document{{ turnaround.on_time_total|pluralize }} with a deadline
                   </div>
                 {% endif %}
               </div>
@@ -976,7 +958,7 @@
           so carrying it here grants nothing.
         {% endcomment %}
         <a class="btn btn-udm" target="_blank" rel="noopener"
-           href="{% url 'core:dashboard_memo_print' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+           href="{% url 'core:dashboard_memo_print' %}?{% if scope.office %}office={{ scope.office.pk }}&amp;{% endif %}month={{ turnaround.month|date:'Y-m' }}">
           Print
         </a>
       </div>

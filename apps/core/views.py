@@ -217,7 +217,7 @@ class DashboardMemoMixin:
     def _plural(count, noun):
         return "{} {}{}".format(count, noun, "" if count == 1 else "s")
 
-    def _memo(self, scope, breakdown, overdue, overdue_rows, trend, uploads):
+    def _memo(self, scope, breakdown, overdue, overdue_rows, turnaround, uploads):
         """The dashboard's own numbers, as labelled sections.
 
         Assembled here rather than in the template: a memo is a statement
@@ -289,22 +289,30 @@ class DashboardMemoMixin:
         else:
             attention = [line("", "Nothing is past its deadline.")]
 
-        turnaround = []
-        latest = trend["latest"]
-        if latest and latest["lifetime"] is not None:
-            turnaround.append(
+        # The month the reader picked, from the same service the dashboard's
+        # summary and Reports read, so the memo cannot print a different figure
+        # for the month it names.
+        lifetime = next(stage for stage in turnaround["stages"] if stage["key"] == "lifetime")
+        period = "{:%B %Y}".format(turnaround["month"])
+        timing = []
+        if lifetime["samples"]:
+            timing.append(
                 line(
-                    "Average lifetime, {:%B}".format(latest["month"]),
-                    "{}, counted in office hours".format(latest["lifetime_label"]),
+                    f"Average lifetime, {period}",
+                    "{}, counted in office hours ({})".format(
+                        lifetime["average_label"],
+                        self._plural(lifetime["samples"], "document"),
+                    ),
                 )
             )
-        if latest and latest["has_on_time"]:
-            turnaround.append(
+        if turnaround["has_on_time"]:
+            timing.append(
                 line("Completed on time", "{} of {} ({}%)".format(
-                    latest["on_time"], latest["closed"], latest["on_time_percent"]))
+                    turnaround["on_time"], turnaround["on_time_total"],
+                    turnaround["on_time_percent"]))
             )
-        if not turnaround:
-            turnaround = [line("", "Nothing has been completed yet.")]
+        if not timing:
+            timing = [line("", f"Nothing was completed in {period}.")]
 
         if uploads["rows"]:
             # Every office that added something, not only the leader. Naming one
@@ -320,7 +328,7 @@ class DashboardMemoMixin:
         return [
             {"heading": "Overview", "lines": overview},
             {"heading": "Needs attention", "lines": attention},
-            {"heading": "Turnaround", "lines": turnaround},
+            {"heading": "Turnaround", "lines": timing},
             {"heading": "Repository activity this month", "lines": activity},
         ]
 
@@ -420,6 +428,13 @@ class DashboardMemoMixin:
         overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
         uploads = analytics.uploads_by_office(documents, records)
         trend = analytics.turnaround_by_month(records)
+        # The month the turnaround figures are for: one of the months the trend
+        # charts, the current one unless the reader picked another.
+        months = [row["month"] for row in trend["rows"]]
+        month, refused = core_filters.picked_month(self.request, months)
+        if refused:
+            messages.warning(self.request, refused)
+        turnaround = analytics.turnaround(records, month=month)
 
         return {
             "scope": scope,
@@ -428,8 +443,9 @@ class DashboardMemoMixin:
             "overdue_summary": overdue,
             "uploads_by_office": uploads,
             "turnaround_trend": trend,
-            "turnaround": analytics.turnaround(records),
-            "memo": self._memo(scope, breakdown, overdue, overdue_rows, trend, uploads),
+            "turnaround": turnaround,
+            "month_picker": core_filters.month_picker(self.request, months, month),
+            "memo": self._memo(scope, breakdown, overdue, overdue_rows, turnaround, uploads),
             "printed_at": timezone.localtime(),
         }
 
@@ -1245,6 +1261,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         total_records = records.count()
         total_documents = documents.count()
         overdue_all = records.filter(tracking_services.overdue_q()).distinct().count()
+        # The month the turnaround panel answers for: the dashboard's twelve
+        # months and the same parameter, so a link carries its month between
+        # the two pages and both print one figure for it.
+        months, _since = _month_window()
+        month, refused = core_filters.picked_month(self.request, months)
+        if refused:
+            messages.warning(self.request, refused)
         # GATE A, option (a): the headline counts what *this* office owes, and
         # the hint names what it is waiting on somebody else to receive.
         # Grouping the chase-list by custody is the bug this branch exists for,
@@ -1314,7 +1337,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "stale_receipts": stale_receipts,
                 "by_status": self._by_status(records, total_records, scope_office),
                 "monthly": self._monthly(records),
-                "turnaround": self._turnaround(records),
+                "turnaround": self._turnaround(records, month),
+                "month_picker": core_filters.month_picker(self.request, months, month),
                 "overdue_accountability": self._overdue_accountability(records, overdue_all),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
@@ -1586,8 +1610,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             "current_month": current_month,
         }
 
-    def _turnaround(self, records):
-        return analytics.turnaround(records)
+    def _turnaround(self, records, month):
+        return analytics.turnaround(records, month=month)
 
     def _overdue_for_scope(self, records, office):
         """Overdue work this office owes, and overdue work it is waiting on.

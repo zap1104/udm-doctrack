@@ -122,17 +122,20 @@ def test_the_summary_shows_the_month_it_is_headed_with(client, users, slow_then_
     response = client.get("/")
     context = response.context
     latest = context["turnaround_trend"]["latest"]
+    month = context["turnaround"]
     body = " ".join(response.content.decode().split())
 
-    assert latest["lifetime_samples"] == 1, "only this month's completion"
-    assert f'{latest["month"]:%B} so far' in body
-    assert latest["lifetime_label"] in body
-    assert context["turnaround"]["lifetime"] != latest["lifetime_label"], (
-        "the all-time figure differs, and it is not the one printed under this month"
-    )
-    summary = body[body.index(f'{latest["month"]:%B} so far'):]
+    assert month["month"] == latest["month"], "the current month unless another is picked"
+    assert month["lifetime_samples"] == latest["lifetime_samples"] == 1, "only this month's completion"
+    assert month["lifetime"] == latest["lifetime_label"], "the summary is the chart's last point"
+    heading = f'{latest["month"]:%B %Y} so far'
+    assert heading in body
+    all_time = analytics.turnaround(TrackingRecord.objects.all())["lifetime"]
+    assert all_time != month["lifetime"], "the all-time figure differs"
+    summary = body[body.index(heading):]
     summary = summary[: summary.index("Completed on time") if "Completed on time" in summary else 800]
-    assert context["turnaround"]["lifetime"] not in summary
+    assert month["lifetime"] in summary
+    assert all_time not in summary
 
 
 @pytest.mark.django_db
@@ -187,13 +190,15 @@ def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_f
     response = client.get("/reports/")
     figures = response.context["turnaround"]
     body = " ".join(response.content.decode().split())
+    this_month = timezone.localtime().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    assert figures["receipt_samples"] == RoutingStep.objects.filter(received_at__isnull=False).count()
-    assert figures["processing_samples"] == 2
-    assert figures["lifetime_samples"] == 2
+    assert figures["month"] == this_month.date(), "Reports answers for the current month too"
+    assert figures["receipt_samples"] == RoutingStep.objects.filter(received_at__gte=this_month).count()
+    assert figures["processing_samples"] == 1, "only the document finished this month"
+    assert figures["lifetime_samples"] == 1
     assert f'{figures["receipt_samples"]} handovers' in body
-    assert "2 documents" in body
-    assert "completed documents that had a deadline" in body or figures["on_time_total"] == 0
+    assert "created → completed &middot; 1 document" in body
+    assert "that had a deadline" in body or figures["on_time_total"] == 0
 
 
 # --- the axis --------------------------------------------------------------------

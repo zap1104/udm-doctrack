@@ -634,6 +634,9 @@ def turnaround(records, month=None) -> dict:
 
     result = {
         "month": month,
+        # "So far" and "yet" belong to the month still running; a past month is
+        # finished, and "none completed yet" would promise work that never came.
+        "is_current": month == timezone.localdate().replace(day=1),
         "stages": stages,
         "office_hours_caveat": office_hours_caveat(),
         "working_day_hours": working_day_hours(),

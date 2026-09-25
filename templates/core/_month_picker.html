@@ -1,0 +1,16 @@
+{% comment %}
+  The month a turnaround figure answers for. A plain GET form: every other
+  filter on the page rides along as a hidden field, so picking a month keeps
+  the office. `data-auto-submit` sends it on change (doctrack.js, no inline
+  handler under the CSP); without script the Show button does.
+
+  Expects `picker` (core.filters.month_picker) and `picker_id`, unique on the page.
+{% endcomment %}
+<form class="month-picker no-print" method="get" action="">
+  {% for key, value in picker.keep %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+  <label class="month-picker-label" for="{{ picker_id }}">Month</label>
+  <select class="form-select form-select-sm" id="{{ picker_id }}" name="{{ picker.param }}" data-auto-submit>
+    {% for option in picker.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+  </select>
+  <noscript><button class="btn btn-sm btn-udm-outline" type="submit">Show</button></noscript>
+</form>

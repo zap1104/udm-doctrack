@@ -36,6 +36,7 @@ and are looking at the whole university.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from django.db.models import Q
 from django.http import QueryDict
@@ -323,6 +324,55 @@ def link(base: str, request=None, **overrides) -> str:
             params.setlist(key, [str(value)])
     query = params.urlencode()
     return f"{base}?{query}" if query else base
+
+
+#: The query parameter a turnaround figure's month is picked with.
+MONTH_PARAM = "month"
+
+
+def picked_month(request, months):
+    """The month `?month=YYYY-MM` asks for, and a note if it was refused.
+
+    `months` is what the page can answer for — the months the trend charts —
+    so the picker and the chart always cover the same year. No parameter means
+    the latest of them, the current month. A value that is not a month, or is
+    a month outside them, falls back to the same with a note saying so: a
+    hand-edited or stale link gets a page and an explanation, never an error.
+    """
+    latest = months[-1]
+    raw = (request.GET.get(MONTH_PARAM) or "").strip()
+    if not raw:
+        return latest, None
+    try:
+        asked = datetime.strptime(raw, "%Y-%m").date()
+    except ValueError:
+        asked = None
+    if asked in months:
+        return asked, None
+    return latest, (
+        f"Showing {latest:%B %Y}: “{raw[:20]}” is not one of the "
+        f"{len(months)} months the turnaround chart covers."
+    )
+
+
+def month_picker(request, months, selected) -> dict:
+    """What the month control needs: its options, newest first, and every other
+    filter on the page as hidden fields, so picking a month keeps the office."""
+    keep = [
+        (key, value)
+        for key, values in request.GET.lists()
+        if key not in (MONTH_PARAM, "page")
+        for value in values
+    ]
+    return {
+        "param": MONTH_PARAM,
+        "selected": selected,
+        "keep": keep,
+        "options": [
+            {"value": f"{month:%Y-%m}", "label": f"{month:%B %Y}", "selected": month == selected}
+            for month in reversed(months)
+        ],
+    }
 
 
 #: Filter pairs that cannot both hold, with the reason in the reader's terms.
