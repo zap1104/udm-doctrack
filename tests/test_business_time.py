@@ -9,13 +9,14 @@ the ones whose documents happened to arrive on a Friday.
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
 import pytest
 from django.conf import settings
 from django.utils import timezone
 
 from apps.core.business_time import (
+    NO_HOLIDAYS,
     average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
@@ -24,6 +25,10 @@ from apps.core.business_time import (
     working_day_hours,
     working_day_seconds,
 )
+from apps.core.models import Holiday
+
+#: Every interval now asks the holiday table, so these are database tests.
+pytestmark = pytest.mark.django_db
 
 
 def at(year, month, day, hour, minute=0):
@@ -216,11 +221,47 @@ def test_the_explanation_follows_the_settings(settings):
     assert "8.5 hours = 1 working day" in office_hours_caveat()
 
 
-# --- what the figure does not claim ---------------------------------------
-def test_a_holiday_is_counted_as_a_working_day():
-    """There is no holiday table, and inventing a wrong one is worse than
-    having none. The UI says so rather than implying the figure is exact —
-    this test exists so the limitation stays deliberate."""
-    rizal_day = at(2026, 12, 30, 9)  # a Wednesday
-    assert is_working_day(rizal_day.date()) is True
-    assert business_seconds_between(rizal_day, rizal_day + timedelta(hours=2)) == 2 * HOUR
+# --- holidays -----------------------------------------------------------------
+def test_a_holiday_counts_no_office_time():
+    """Tuesday 4PM to Thursday 9AM across Rizal Day: an hour, nothing, an hour."""
+    Holiday.objects.create(date=at(2026, 12, 30, 9).date(), name="Rizal Day")
+
+    assert is_working_day(at(2026, 12, 30, 9).date()) is False
+    assert business_seconds_between(at(2026, 12, 29, 16), at(2026, 12, 31, 9)) == 2 * HOUR
+
+
+def test_a_recurring_holiday_applies_every_year():
+    Holiday.objects.create(date=at(2020, 6, 12, 9).date(), name="Independence Day", recurring=True)
+
+    assert is_working_day(at(2026, 6, 12, 9).date()) is False  # a Friday
+    assert is_working_day(at(2026, 6, 11, 9).date()) is True
+
+
+def test_a_one_off_holiday_does_not_repeat():
+    """A typhoon suspension is one day, not the same date every year."""
+    Holiday.objects.create(date=at(2025, 7, 22, 9).date(), name="Work suspension")
+
+    assert is_working_day(at(2025, 7, 22, 9).date()) is False
+    assert is_working_day(at(2026, 7, 22, 9).date()) is True  # a Wednesday
+
+
+def test_a_retired_holiday_counts_as_a_working_day_again():
+    Holiday.objects.create(date=at(2026, 12, 30, 9).date(), name="Rizal Day", is_active=False)
+    assert is_working_day(at(2026, 12, 30, 9).date()) is True
+
+
+def test_a_holiday_does_not_shorten_the_working_day():
+    """The length of a day is not whether one particular day is off."""
+    Holiday.objects.create(date=at(2000, 1, 3, 9).date(), name="Any day", recurring=True)
+    assert working_day_seconds() == 8 * HOUR
+
+
+def test_many_intervals_ask_the_holiday_table_once(django_assert_num_queries):
+    pairs = [(at(2026, 8, day, 9), at(2026, 8, day, 11)) for day in (24, 25, 26, 27, 28)]
+    with django_assert_num_queries(1):
+        assert average_business_seconds(pairs) == 2 * HOUR
+
+
+def test_a_caller_can_pass_the_holidays_it_already_loaded(django_assert_num_queries):
+    with django_assert_num_queries(0):
+        assert business_seconds_between(at(2026, 8, 26, 9), at(2026, 8, 26, 11), NO_HOLIDAYS) == 2 * HOUR

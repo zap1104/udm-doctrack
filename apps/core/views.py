@@ -42,7 +42,16 @@ from .analytics import percent as _percent
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
-from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
+from .models import (
+    AuditLog,
+    DocumentType,
+    Holiday,
+    MetadataFieldDefinition,
+    Notification,
+    NotificationRead,
+    Tag,
+    TagRule,
+)
 from .pagination import DEFAULT_PAGE_SIZE, paginate
 from .utils import log_action
 
@@ -2145,13 +2154,22 @@ class ReportExportView(AppLoginRequiredMixin, View):
 # ---------------------------------------------------------------------------
 # Administration — master data
 # ---------------------------------------------------------------------------
-def _model_form(model_class, field_names):
+def _model_form(model_class, field_names, widgets=None):
     from django import forms
 
+    # A config names a widget kind rather than building one, so MASTER_DATA
+    # stays plain data. "date" is the browser's own picker, in the ISO format
+    # it requires; the default text box took any spelling of a date.
+    built = {
+        name: forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+        for name, kind in (widgets or {}).items()
+        if kind == "date"
+    }
+    meta = {"model": model_class, "fields": field_names, "widgets": built}
     return type(
         f"{model_class.__name__}Form",
         (BootstrapFormMixin, forms.ModelForm),
-        {"Meta": type("Meta", (), {"model": model_class, "fields": field_names})},
+        {"Meta": type("Meta", (), meta)},
     )
 
 
@@ -2210,6 +2228,19 @@ MASTER_DATA = {
         ],
         "columns": [("label", "Field"), ("key", "Key"), ("field_type", "Type"), ("is_required", "Required"), ("is_searchable", "Searchable")],
         "help": "Add a field here and it appears on every metadata review screen — no code change needed.",
+    },
+    "holidays": {
+        "model": Holiday,
+        "label": "Holidays",
+        "singular": "holiday",
+        "fields": ["date", "name", "recurring", "is_active"],
+        "widgets": {"date": "date"},
+        "columns": [("name", "Holiday"), ("date", "Date"), ("recurring", "Every year"), ("is_active", "Active")],
+        "help": "Days the offices are closed. A holiday counts no office time, so turnaround "
+                "figures do not charge an office for it. Enter a work suspension as a one-off "
+                "holiday on the day it happened.",
+        # Every office's turnaround figures move when this changes.
+        "system_admin_only": True,
     },
 }
 
@@ -2378,7 +2409,7 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         return get_object_or_404(self.config["model"], pk=pk) if pk else None
 
     def get(self, request, slug, pk=None):
-        form_class = _model_form(self.config["model"], self.config["fields"])
+        form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(instance=self._instance(pk))
         return render(
             request,
@@ -2389,7 +2420,7 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
 
     def post(self, request, slug, pk=None):
         instance = self._instance(pk)
-        form_class = _model_form(self.config["model"], self.config["fields"])
+        form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(request.POST, instance=instance)
         if form.is_valid():
             obj = form.save()

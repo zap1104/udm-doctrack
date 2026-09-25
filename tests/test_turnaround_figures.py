@@ -45,6 +45,7 @@ def _a_monday():
 
 
 # --- one working day ------------------------------------------------------------
+@pytest.mark.django_db  # the interval reads the holiday table
 def test_a_full_office_day_is_one_working_day_in_every_figure():
     monday = _a_monday()
     seconds = business_seconds_between(_local(monday, 8), _local(monday, 17))
@@ -57,7 +58,7 @@ def test_a_full_office_day_is_one_working_day_in_every_figure():
 @pytest.mark.django_db
 def test_the_trend_chart_counts_days_the_way_the_text_does(users, offices, memo_type):
     """A document that took exactly one office day plots at 1.0 and reads
-    "1 day"; with an eight-hour chart day it plotted at 0.9."""
+    "1 day"; when the chart used a day of its own length it plotted at 0.9."""
     record = create_draft_record(
         user=users["med"], subject="One day", instructions="x", document_type=memo_type,
     )

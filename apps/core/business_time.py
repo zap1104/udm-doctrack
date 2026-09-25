@@ -18,12 +18,15 @@ modelled rather than the day capped (which this did before, at seven hours) so
 that a partial day is exact: a cap charged 8AM-4PM as a full day, and charged a
 wait across the lunch hour as if somebody were at the desk.
 
-**Holidays are not excluded.** There is no holiday table in this system, and
-inventing one that is wrong is worse than not having one — a figure people
-believe is exact, that quietly mis-states every December. A document spanning
-Rizal Day is over-charged by one working day. Anything showing an office-hours
-figure must therefore say it excludes weekends and counts office hours only,
-*not* that it is exact; `apps.core.views` labels them that way.
+**Holidays are excluded**, from the `Holiday` table system administrators keep
+under Administration. A holiday counts no office time at all, whole day. The
+figures are only as right as that table: a holiday nobody entered is counted
+as a working day, which is why the explanation on screen names the table.
+
+The holiday set is loaded once per calculation, not once per interval: a
+report averages hundreds of intervals, and a query each would be hundreds of
+queries. Callers that measure many intervals load it with `load_holidays()`
+and pass it in; a single interval loads its own.
 
 Calendar time is kept alongside, never replaced. It is what a requester actually
 waited, and for "how long did this take from where I stand" it is the honest
@@ -33,6 +36,7 @@ an office had to act.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
@@ -41,6 +45,33 @@ from django.utils import timezone
 
 def _setting(name: str, default):
     return getattr(settings, name, default)
+
+
+@dataclass(frozen=True)
+class Holidays:
+    """The closed days, as dates and as every-year day-and-month pairs."""
+
+    dates: frozenset = frozenset()
+    every_year: frozenset = frozenset()
+
+    def __contains__(self, day: date) -> bool:
+        return day in self.dates or (day.month, day.day) in self.every_year
+
+
+NO_HOLIDAYS = Holidays()
+
+
+def load_holidays() -> Holidays:
+    """Every active holiday, in one query."""
+    from apps.core.models import Holiday
+
+    dates, every_year = set(), set()
+    for day, recurring in Holiday.active.values_list("date", "recurring"):
+        if recurring:
+            every_year.add((day.month, day.day))
+        else:
+            dates.add(day)
+    return Holidays(frozenset(dates), frozenset(every_year))
 
 
 def office_day_bounds(day: date) -> tuple[time, time]:
@@ -64,14 +95,14 @@ def _overlap_seconds(start, end, window_start, window_end) -> int:
     return max(0, int((min(end, window_end) - max(start, window_start)).total_seconds()))
 
 
-def is_working_day(day: date) -> bool:
-    """Monday-Friday. Holidays are not known to this system — see the module
-    docstring; they are counted as working days and slightly over-charge the
-    intervals that span them."""
-    return day.weekday() < _setting("OFFICE_WEEK_DAYS", 5)
+def is_working_day(day: date, holidays: Holidays | None = None) -> bool:
+    """Monday-Friday, less the holidays."""
+    if day.weekday() >= _setting("OFFICE_WEEK_DAYS", 5):
+        return False
+    return day not in (load_holidays() if holidays is None else holidays)
 
 
-def business_seconds_between(start, end) -> int:
+def business_seconds_between(start, end, holidays: Holidays | None = None) -> int:
     """Seconds between two datetimes that fall inside office hours.
 
     Walks day by day rather than trying to compute it in closed form: the
@@ -86,12 +117,14 @@ def business_seconds_between(start, end) -> int:
     if end <= start:
         return 0
 
+    if holidays is None:
+        holidays = load_holidays()
     tz = timezone.get_current_timezone()
     total = 0
 
     day = start.date()
     while day <= end.date():
-        if not is_working_day(day):
+        if not is_working_day(day, holidays):
             day += timedelta(days=1)
             continue
 
@@ -132,6 +165,7 @@ def working_day_seconds() -> int:
     return business_seconds_between(
         timezone.make_aware(datetime.combine(today, opens_at), tz),
         timezone.make_aware(datetime.combine(today, closes_at), tz),
+        holidays=NO_HOLIDAYS,  # the length of a day, not whether this one is off
     )
 
 
@@ -176,7 +210,7 @@ def _two_units(days, day_word, hours, hour_word, minutes, minute_word) -> str:
     return unit(minutes, minute_word)
 
 
-def average_business_seconds(pairs) -> float | None:
+def average_business_seconds(pairs, holidays: Holidays | None = None) -> float | None:
     """Mean office-hours duration over (start, end) pairs, or None if empty.
 
     Computed in Python rather than in the database because the office-hours rule
@@ -185,8 +219,10 @@ def average_business_seconds(pairs) -> float | None:
     The inputs are already narrowed by the report's filters, so the set is the
     page's own result rows rather than the whole table.
     """
+    if holidays is None:
+        holidays = load_holidays()
     totals = [
-        business_seconds_between(start, end)
+        business_seconds_between(start, end, holidays)
         for start, end in pairs
         if start is not None and end is not None
     ]
@@ -214,7 +250,6 @@ def office_hours_caveat() -> str:
     )
     return (
         f"Turnaround is counted in office hours ({working_day_hours():g} hours = "
-        f"1 working day: {_clock(opens)}–{_clock(closes)}{lunch}), excluding weekends. "
-        "Holidays are not excluded: this system has no holiday calendar, so an "
-        "interval spanning one is over-counted by a day."
+        f"1 working day: {_clock(opens)}–{_clock(closes)}{lunch}), excluding weekends "
+        "and the holidays listed under Administration."
     )

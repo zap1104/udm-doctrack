@@ -56,7 +56,7 @@ def test_turnaround_reports_office_hours_and_calendar_time_together(
 
 
 @pytest.mark.django_db
-def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
+def test_the_page_says_the_figure_excludes_weekends_and_holidays(
     client, finished_record, users
 ):
     """Labelled honestly rather than presented as exact."""
@@ -64,7 +64,7 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
     body = client.get(REPORTS).content.decode()
 
     assert "Turnaround is counted in office hours (8 hours = 1 working day" in body
-    assert "Holidays are not excluded" in body
+    assert "excluding weekends and the holidays listed under Administration" in body
 
 
 # --- the panels the report is specified to carry ----------------------------

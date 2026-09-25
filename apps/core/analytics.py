@@ -35,6 +35,7 @@ from .business_time import (
     average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
+    load_holidays,
     office_hours_caveat,
     working_day_hours,
     working_day_seconds,
@@ -497,13 +498,16 @@ def turnaround(records) -> dict:
     them. Showing only the first would flatter every office that let something
     sit over a weekend; showing only the second charges them for the weekend.
     """
+    holidays = load_holidays()
     steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
     receipt_row = steps.aggregate(
         value=Avg(F("received_at") - F("sent_at"), output_field=DurationField()),
         samples=Count("id"),
     )
     receipt = receipt_row["value"]
-    receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
+    receipt_office = average_business_seconds(
+        steps.values_list("sent_at", "received_at"), holidays
+    )
 
     # Turnaround measures how long the *work* took, so it ends at completion
     # rather than at approval — the wait for an administrator is somebody else's
@@ -517,14 +521,16 @@ def turnaround(records) -> dict:
     )
     processing = processing_row["value"]
     processing_office = average_business_seconds(
-        processing_set.values_list("first_received_at", "completed_at")
+        processing_set.values_list("first_received_at", "completed_at"), holidays
     )
     lifetime_row = done.aggregate(
         value=Avg(F("completed_at") - F("created_at"), output_field=DurationField()),
         samples=Count("id"),
     )
     lifetime = lifetime_row["value"]
-    lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
+    lifetime_office = average_business_seconds(
+        done.values_list("created_at", "completed_at"), holidays
+    )
 
     with_deadline = done.filter(due_at__isnull=False)
     deadline_total = with_deadline.count()
@@ -597,21 +603,23 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     def calendar_seconds(start, end):
         return max(0.0, (end - start).total_seconds())
 
+    holidays = load_holidays()
+
     for sent_at, received_at in step_rows:
         bucket = buckets.get(_month_of(received_at))
         if bucket is not None:
-            bucket["receipt"].append(business_seconds_between(sent_at, received_at))
+            bucket["receipt"].append(business_seconds_between(sent_at, received_at, holidays))
             bucket["receipt_calendar"].append(calendar_seconds(sent_at, received_at))
 
     for created_at, first_received_at, completed_at, due_at in done_rows:
         bucket = buckets.get(_month_of(completed_at))
         if bucket is None:
             continue
-        bucket["lifetime"].append(business_seconds_between(created_at, completed_at))
+        bucket["lifetime"].append(business_seconds_between(created_at, completed_at, holidays))
         bucket["lifetime_calendar"].append(calendar_seconds(created_at, completed_at))
         if first_received_at:
             bucket["processing"].append(
-                business_seconds_between(first_received_at, completed_at)
+                business_seconds_between(first_received_at, completed_at, holidays)
             )
             bucket["processing_calendar"].append(
                 calendar_seconds(first_received_at, completed_at)

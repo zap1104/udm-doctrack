@@ -193,6 +193,34 @@ class MetadataFieldDefinition(TimeStampedModel):
         return [choice.strip() for choice in self.choices_csv.split(",") if choice.strip()]
 
 
+class Holiday(TimeStampedModel):
+    """A day the offices are closed, so it counts no office time.
+
+    Full days only. A work suspension (a typhoon, an order from City Hall) is
+    entered as a one-off holiday on the day it happened; half-days are not
+    modelled. Retired rather than deleted, like the rest of the master data, so
+    the turnaround figures of a past month can be explained later.
+    """
+
+    date = models.DateField()
+    name = models.CharField(max_length=120)
+    recurring = models.BooleanField(
+        default=False,
+        help_text="Repeats every year on this day and month, e.g. Rizal Day, 30 December.",
+    )
+    is_active = models.BooleanField(default=True)
+
+    objects = models.Manager()
+    active = ActiveManager()
+
+    class Meta:
+        ordering = ["date", "name"]
+
+    def __str__(self) -> str:
+        when = f"{self.date:%d %B}, every year" if self.recurring else f"{self.date:%d %B %Y}"
+        return f"{self.name} ({when})"
+
+
 class AuditLog(models.Model):
     """Append-only record of who did what. Never edited, never deleted by the app."""
 
