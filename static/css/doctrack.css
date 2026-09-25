@@ -789,8 +789,8 @@ a:hover { text-decoration: underline; }
 .routing-slip-qr small { display:block; margin-top:5px; color:var(--udm-muted); font-size:9px; text-transform:uppercase; }
 /* The status pill sits in the narrow QR column of the letterhead. `.pill` is
    nowrap by default, so a long status ("PENDING RECEIPT", "IN PROCESS",
-   "FORWARDED") ran past the column and was clipped at the paper's edge —
-   printed slips came out reading "FORWARDE". Let it wrap and shrink to the
+   "COMPLETED - PENDING UPLOAD") ran past the column and was clipped at the paper's edge —
+   printed slips came out with the status cut off mid-word. Let it wrap and shrink to the
    column instead of overflowing it. */
 .routing-slip-header-status .pill {
   display:inline-flex; max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:center;

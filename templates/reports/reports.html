@@ -304,13 +304,12 @@
         </div>
         <div class="card-udm-body">
           {% comment %}
-            One labelled bar per status rather than a single stacked bar. The
-            statuses share colours by design — "pending receipt", "forwarded"
-            and "returned" are all the same gold pill everywhere else in the
-            app, because all three mean the same wait —
-            so segments of one stack could not be told apart. Giving each its
-            own row makes the pill the identity channel and leaves colour as
-            reinforcement.
+            One labelled bar per status rather than a single stacked bar: each
+            row names its status with the same pill as everywhere else, so the
+            label carries the identity and the colour (apps.core.colors) only
+            reinforces it. Forwarded and Returned are not statuses — they were
+            merged into Pending Receipt, and survive only as routing actions in
+            a document's history.
           {% endcomment %}
           {% comment %}
             Direction is relative — a document is incoming *to* somebody — so
