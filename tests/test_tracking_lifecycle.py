@@ -28,9 +28,12 @@ def _events(record):
     return list(record.activities.order_by("created_at", "pk").values_list("event", flat=True))
 
 
-def _audits(record):
+def _audits(target):
+    """By type and id: a record and a document can share a primary key."""
     return list(
-        AuditLog.objects.filter(target_id=str(record.pk)).order_by("pk").values_list("action", flat=True)
+        AuditLog.objects.filter(target_type=type(target).__name__, target_id=str(target.pk))
+        .order_by("pk")
+        .values_list("action", flat=True)
     )
 
 
@@ -101,7 +104,8 @@ def test_a_document_from_draft_to_repository(users, offices, memo_type):
     assert record.archived_document == document
     assert document.reference_number == record.tracking_number
     assert _events(record)[-1] == RecordActivity.Event.ARCHIVED
-    assert AuditLog.Action.ARCHIVE in _audits(record)
+    # The approval is audited against the document it created.
+    assert AuditLog.Action.ARCHIVE in _audits(document)
 
     # The abandoned draft is still a draft, still unnumbered.
     abandoned.refresh_from_db()
