@@ -1,22 +1,40 @@
 {% comment %}
   One ring plus its legend. Shared by the Tracking and Repository cards so the
-  two cannot drift apart — they differ only in which context variable feeds
+  two cannot drift apart: they differ only in which context variable feeds
   them, which is the `donut` argument.
 
-  The ring itself is presentation: one conic-gradient with server-computed
-  stops, hidden from assistive technology because the legend beneath carries
-  every figure it encodes.
+  The ring is inline SVG, one path per slice with the geometry computed
+  server-side (analytics.ring_arc). Fill goes through `style` rather than the
+  fill attribute because the colours are CSS custom properties, which
+  presentation attributes do not resolve.
+
+  It stays hidden from assistive technology. The legend beneath carries label,
+  count and percent for every slice and is already a set of links, so it is the
+  accessible path; the slices are a pointer's way into the same figures, not a
+  second set of links. Each slice carries its figures as data-* for the styled
+  tooltip (static/js/doctrack.js, one delegated listener, no inline handler)
+  and a <title> as the fallback where script does not run. A <title> alone would
+  not do: a touch screen never shows one.
+
+  `hole_label` is optional: what the figure in the hole counts. "documents"
+  unless the caller says otherwise, as the overdue view does.
 {% endcomment %}
 <div class="donut-layout">
-  <div class="donut" style="background:conic-gradient({{ donut.stops }})" aria-hidden="true">
+  <div class="donut" aria-hidden="true">
+    <svg class="donut-ring" viewBox="0 0 190 190" focusable="false">
+      {% for slice in donut.slices %}{% if slice.path %}<path class="donut-slice" d="{{ slice.path }}" fill-rule="evenodd" style="fill:{{ slice.colour }}" data-slice="{{ slice.key }}" data-label="{{ slice.label }}" data-count="{{ slice.total }}" data-percent="{{ slice.percent }}" data-href="{{ slice.url }}"><title>{{ slice.label }}: {{ slice.total }} ({{ slice.percent }}%)</title></path>{% endif %}{% endfor %}
+    </svg>
     <div class="donut-hole">
       <div class="donut-hole-value num">{{ donut.total }}</div>
-      <div class="donut-hole-label">documents</div>
+      <div class="donut-hole-label">{{ hole_label|default:"documents" }}</div>
     </div>
+  </div>
+  <div class="donut-tooltip" aria-hidden="true" hidden>
+    <i class="donut-tooltip-key"></i><strong class="num"></strong><span></span>
   </div>
   <div class="donut-legend">
     {% for slice in donut.slices %}
-      <a class="breakdown-item" href="{{ slice.url }}">
+      <a class="breakdown-item" href="{{ slice.url }}" data-slice="{{ slice.key }}">
         <i class="breakdown-swatch" style="background:{{ slice.colour }}" aria-hidden="true"></i>
         <span class="breakdown-label">{{ slice.label }}</span>
         <strong class="num">{{ slice.total }}</strong>

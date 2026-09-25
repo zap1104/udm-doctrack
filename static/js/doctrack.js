@@ -340,6 +340,15 @@
      The markup keeps a <noscript> submit button, so the control still works
      with scripting off.
   ---------------------------------------------------------------------- */
+  /* [data-reload]: the error page's "Try Again". It carried
+     onclick="window.location.reload()", which the Content-Security-Policy
+     refuses, so the button did nothing. */
+  document.addEventListener("click", function (event) {
+    if (event.target.closest && event.target.closest("[data-reload]")) {
+      window.location.reload();
+    }
+  });
+
   document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
     select.addEventListener("change", function () {
       var form = select.form;
@@ -965,4 +974,333 @@
     if (query.addEventListener) query.addEventListener("change", onChange);
     else if (query.addListener) query.addListener(onChange);
   }
+})();
+
+/* --------------------------------------------------------------------------
+   Ring slices
+
+   The rings are aria-hidden SVG; the legend beside each one is the accessible
+   path to its figures and links. This is the pointer's way into the same
+   figures: point at a slice for its count, label and share, and follow it the
+   way its legend row would be followed.
+
+   - Mouse or pen: hovering shows the tooltip, clicking follows the slice.
+   - Touch has no hover, so the first tap shows the tooltip and a second tap
+     on the same slice follows it. A tap anywhere else puts it away.
+   - Hovering or focusing a legend row lights up its slice, so a keyboard
+     user tabbing through the legend sees which slice each row is.
+
+   One set of delegated listeners on the document, so a ring rendered later (or
+   more than one ring on a page) needs no setup of its own. Labels are written
+   with textContent: they are data, not markup.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  var active = null;
+  var pointerType = "mouse";
+
+  function layoutOf(node) {
+    return node && node.closest ? node.closest(".donut-layout") : null;
+  }
+
+  function sliceIn(layout, key) {
+    var slices = layout.querySelectorAll(".donut-slice");
+    for (var i = 0; i < slices.length; i++) {
+      if (slices[i].getAttribute("data-slice") === key) return slices[i];
+    }
+    return null;
+  }
+
+  function clear() {
+    if (!active) return;
+    var layout = layoutOf(active);
+    active.classList.remove("is-active");
+    if (layout) {
+      layout.classList.remove("has-active-slice");
+      var lit = layout.querySelectorAll(".breakdown-item.is-active");
+      for (var i = 0; i < lit.length; i++) lit[i].classList.remove("is-active");
+      var tip = layout.querySelector(".donut-tooltip");
+      if (tip) tip.hidden = true;
+    }
+    active = null;
+  }
+
+  function activate(slice) {
+    if (active === slice) return;
+    clear();
+    var layout = layoutOf(slice);
+    if (!layout) return;
+    active = slice;
+    slice.classList.add("is-active");
+    layout.classList.add("has-active-slice");
+    var items = layout.querySelectorAll(".breakdown-item[data-slice]");
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].getAttribute("data-slice") === slice.getAttribute("data-slice")) {
+        items[i].classList.add("is-active");
+      }
+    }
+  }
+
+  function showTooltip(slice, clientX, clientY) {
+    activate(slice);
+    var layout = layoutOf(slice);
+    var tip = layout && layout.querySelector(".donut-tooltip");
+    if (!tip) return;
+    tip.querySelector(".donut-tooltip-key").style.background = slice.style.fill;
+    tip.querySelector("strong").textContent = slice.getAttribute("data-count");
+    tip.querySelector("span").textContent =
+      slice.getAttribute("data-label") + " \u00b7 " + slice.getAttribute("data-percent") + "%";
+    tip.hidden = false;
+
+    /* Above the pointer, centred on it, kept inside the ring's own panel so the
+       card's clipped edge never cuts it. Below the pointer when there is no
+       room above. */
+    var box = layout.getBoundingClientRect();
+    var width = tip.offsetWidth;
+    var height = tip.offsetHeight;
+    var x = clientX - box.left;
+    var y = clientY - box.top;
+    var left = Math.max(0, Math.min(x - width / 2, box.width - width));
+    var top = y - height - 12;
+    if (top < 0) top = y + 18;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function follow(slice) {
+    var href = slice.getAttribute("data-href");
+    if (href) window.location.assign(href);
+  }
+
+  document.addEventListener("pointerdown", function (event) {
+    pointerType = event.pointerType || "mouse";
+  });
+
+  document.addEventListener("pointermove", function (event) {
+    if (event.pointerType === "touch") return;
+    var slice = event.target.closest && event.target.closest(".donut-slice");
+    if (slice) showTooltip(slice, event.clientX, event.clientY);
+  });
+
+  document.addEventListener("pointerout", function (event) {
+    if (event.pointerType === "touch" || !active) return;
+    var into = event.relatedTarget;
+    if (event.target.closest && event.target.closest(".donut-slice") &&
+        !(into && into.closest && into.closest(".donut-slice"))) {
+      clear();
+    }
+  });
+
+  document.addEventListener("click", function (event) {
+    var slice = event.target.closest && event.target.closest(".donut-slice");
+    if (!slice) {
+      if (pointerType === "touch") clear();
+      return;
+    }
+    if (pointerType === "touch" && active !== slice) {
+      showTooltip(slice, event.clientX, event.clientY);
+      return;
+    }
+    follow(slice);
+  });
+
+  function fromLegend(event, on) {
+    var item = event.target.closest && event.target.closest(".breakdown-item[data-slice]");
+    var layout = layoutOf(item);
+    if (!item || !layout) return;
+    if (!on) {
+      /* Moving between the label and the count inside one row is not leaving
+         the row. */
+      var into = event.relatedTarget;
+      if (into && into.closest && into.closest(".breakdown-item") === item) return;
+      clear();
+      return;
+    }
+    var slice = sliceIn(layout, item.getAttribute("data-slice"));
+    if (slice) activate(slice);
+  }
+
+  document.addEventListener("mouseover", function (event) { fromLegend(event, true); });
+  document.addEventListener("mouseout", function (event) { fromLegend(event, false); });
+  document.addEventListener("focusin", function (event) { fromLegend(event, true); });
+  document.addEventListener("focusout", function (event) { fromLegend(event, false); });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") clear();
+  });
+
+  /* The Tracking card's Status | Overdue switch. Both views are already on the
+     page; this shows one and hides the other, and keeps the address and the
+     office picker in step so a refresh, a shared link or a change of office
+     keeps the view. The links still work with scripting off, by loading the
+     page with ?ring= set. */
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest && event.target.closest("[data-ring-view]");
+    var card = link && link.closest("[data-ring-card]");
+    if (!card) return;
+    event.preventDefault();
+    clear();
+    var view = link.getAttribute("data-ring-view");
+    var panels = card.querySelectorAll("[data-ring-panel]");
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].hidden = panels[i].getAttribute("data-ring-panel") !== view;
+    }
+    var options = card.querySelectorAll("[data-ring-view]");
+    for (var k = 0; k < options.length; k++) {
+      var on = options[k] === link;
+      options[k].classList.toggle("is-active", on);
+      if (on) options[k].setAttribute("aria-current", "true");
+      else options[k].removeAttribute("aria-current");
+    }
+    var inputs = document.querySelectorAll("[data-ring-view-input]");
+    for (var n = 0; n < inputs.length; n++) inputs[n].disabled = view !== "overdue";
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", link.getAttribute("href"));
+    }
+  });
+})();
+
+/* --------------------------------------------------------------------------
+   Column values: flat when they fit, turned when they do not
+
+   Every bar on a column chart carries its number. Flat numbers read best, but
+   three of them over one month need room the month may not have, and whether
+   it does depends on the chart's width, how many series it draws and how many
+   digits its biggest number runs to. So it is measured: lay the numbers out
+   flat, and if any two touch, turn them all on their side. A turned number is
+   no wider than its bar, so turned numbers cannot touch.
+
+   Re-measured when a chart changes width, and turned for printing, where the
+   page width is not the screen's and there is no second chance to measure.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  var charts = document.querySelectorAll(".column-chart");
+  if (!charts.length) return;
+
+  function touching(chart) {
+    var labels = chart.querySelectorAll(".column-value");
+    var previous = null;
+    for (var i = 0; i < labels.length; i++) {
+      var box = labels[i].getBoundingClientRect();
+      if (!box.width) continue; /* the chart is hidden: nothing to measure */
+      if (previous && box.left < previous.right + 2) return true;
+      previous = box;
+    }
+    return false;
+  }
+
+  function fit(chart) {
+    chart.classList.add("column-chart--measured");
+    chart.classList.remove("column-chart--turned");
+    if (touching(chart)) chart.classList.add("column-chart--turned");
+  }
+
+  function fitAll() {
+    for (var i = 0; i < charts.length; i++) fit(charts[i]);
+  }
+
+  fitAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
+
+  if (window.ResizeObserver) {
+    var widths = new WeakMap();
+    var observer = new ResizeObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var chart = entries[i].target;
+        var width = Math.round(entries[i].contentRect.width);
+        if (widths.get(chart) === width) continue;
+        widths.set(chart, width);
+        fit(chart);
+      }
+    });
+    for (var n = 0; n < charts.length; n++) observer.observe(charts[n]);
+  }
+
+  window.addEventListener("beforeprint", function () {
+    for (var i = 0; i < charts.length; i++) charts[i].classList.add("column-chart--turned");
+  });
+  window.addEventListener("afterprint", fitAll);
+})();
+
+/* --------------------------------------------------------------------------
+   Turnaround chart: a month at a time, by touch and by keyboard
+
+   Pointing at a month is CSS alone (:hover). This adds the two ways a pointer
+   cannot: a tap on a touch screen shows that month (a second tap, or a tap
+   elsewhere, puts it away), and the chart is one tab stop whose left and right
+   arrow keys walk the months, each read out through a polite live region.
+-------------------------------------------------------------------------- */
+(function () {
+  "use strict";
+
+  function monthsOf(box) {
+    return Array.prototype.slice.call(box.querySelectorAll("[data-trend-month]"));
+  }
+
+  function show(box, month) {
+    monthsOf(box).forEach(function (each) {
+      each.classList.toggle("is-active", each === month);
+    });
+    var live = box.querySelector("[data-trend-announce]");
+    if (live) live.textContent = month ? month.getAttribute("aria-label") : "";
+  }
+
+  function clearAll(except) {
+    var boxes = document.querySelectorAll("[data-trend-hover]");
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i] !== except) show(boxes[i], null);
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    var month = event.target.closest && event.target.closest("[data-trend-month]");
+    if (!month) {
+      clearAll(null);
+      return;
+    }
+    var box = month.closest("[data-trend-hover]");
+    clearAll(box);
+    show(box, month.classList.contains("is-active") ? null : month);
+  });
+
+  /* A mouse needs no help from here; drop anything a tap or a key left
+     showing, so two months are never open at once. */
+  document.addEventListener("pointerover", function (event) {
+    if (event.pointerType !== "mouse") return;
+    var box = event.target.closest && event.target.closest("[data-trend-hover]");
+    if (box && box.querySelector(".is-active")) show(box, null);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    var box = event.target.closest && event.target.closest("[data-trend-hover]");
+    if (!box) return;
+    var months = monthsOf(box);
+    if (!months.length) return;
+    var current = months.findIndex(function (month) { return month.classList.contains("is-active"); });
+    var next = null;
+    if (event.key === "ArrowRight") next = current < 0 ? months.length - 1 : Math.min(months.length - 1, current + 1);
+    else if (event.key === "ArrowLeft") next = current < 0 ? months.length - 1 : Math.max(0, current - 1);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = months.length - 1;
+    else if (event.key === "Escape") { show(box, null); return; }
+    if (next === null) return;
+    event.preventDefault();
+    show(box, months[next]);
+  });
+
+  document.addEventListener("focusin", function (event) {
+    var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
+    if (box && !box.querySelector(".is-active")) {
+      var months = monthsOf(box);
+      show(box, months[months.length - 1]);
+    }
+  });
+
+  document.addEventListener("focusout", function (event) {
+    var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
+    if (box && !box.contains(event.relatedTarget)) show(box, null);
+  });
 })();

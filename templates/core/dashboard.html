@@ -26,21 +26,27 @@
       blocks in production — it either failed there or held 'unsafe-inline' open
       for the whole site. The listener is in static/js/doctrack.js beside the
       print trigger, and the Tracking page's picker uses the same one.
-
-      FIXME: templates/core/notifications.html still has the inline version.
     {% endcomment %}
     {% if scope.can_pick %}
       <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office"
                 data-auto-submit>
-          <option value="">All offices</option>
+          {% comment %}
+            System administrators only. For an office administrator an empty
+            office means their own office, so an "All offices" option reloaded
+            the page on the office already selected and claimed a scope the page
+            never showed. The Tracking picker gates its option the same way.
+          {% endcomment %}
+          {% if user.is_system_admin %}<option value="">All offices</option>{% endif %}
           {% for office in scope.offices %}
             <option value="{{ office.pk }}" {% if scope.office.pk == office.pk %}selected{% endif %}>
               {{ office.code }} · {{ office.name }}
             </option>
           {% endfor %}
         </select>
+        {# The ring view survives a change of office; the script keeps it in step. #}
+        <input type="hidden" name="ring" value="overdue" data-ring-view-input{% if tracking_rings.view != 'overdue' %} disabled{% endif %}>
         <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
       </form>
     {% endif %}
@@ -87,6 +93,30 @@
   counted, and it cost a fifth count query on every dashboard load.
 {% endcomment %}
 <div class="row g-3 mb-4">
+  {% comment %}
+    Under every office the two direction cards are shown disabled, as the
+    Tracking page shows its Incoming and Outgoing pills: with no office there is
+    no direction, and both queues return the same records. Kept in place rather
+    than removed, so the row does not rearrange itself when the picker changes,
+    and not a link, because there is no page for them to open that means what
+    the label says.
+  {% endcomment %}
+  {% if scope.all_offices %}
+    <div class="col-6 col-md-4">
+      <div class="stat-card is-disabled" aria-disabled="true">
+        <div class="label">Incoming</div>
+        <div class="value" aria-hidden="true">&mdash;</div>
+        <div class="hint">Pick an office above to count what is addressed to it</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="stat-card gold is-disabled" aria-disabled="true">
+        <div class="label">Outgoing</div>
+        <div class="value" aria-hidden="true">&mdash;</div>
+        <div class="hint">Pick an office above to count what it has sent</div>
+      </div>
+    </div>
+  {% else %}
   <div class="col-6 col-md-4">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
@@ -107,6 +137,7 @@
       <div class="hint">Sent by your office, not yet received</div>
     </a>
   </div>
+  {% endif %}
   <div class="col-6 col-md-4">
     {% comment %}
       Overdue opens the tracking list, like the three cards beside it. It used
@@ -136,22 +167,104 @@
 
 <div class="row g-4 mb-3">
   <div class="col-xl-6">
-    <div class="card-udm h-100">
+    <div class="card-udm h-100" data-ring-card>
       <div class="card-udm-head">
         <div>
           <h2>Tracking</h2>
+          {% comment %}
+            No "N in total". The two rings are not a whole: an office has also
+            touched documents it has passed on, which are in neither, and a
+            total over the pair would invite the reader to add them up and find
+            they do not match the single ring they replaced.
+          {% endcomment %}
           <div class="card-udm-caption">
-            Documents still moving between offices &mdash;
-            {{ tracking_donut.total }} in total.
+            {% if tracking_rings.split %}
+              Documents moving in and out of {{ tracking_rings.office_label }} on their current hop.
+            {% else %}
+              Every office. Pick an office above to see incoming and outgoing separately.
+            {% endif %}
           </div>
         </div>
+        {% comment %}
+          A segmented control, not checkboxes: the two are alternative views of
+          the same rings, and a checkbox says the options combine. Links rather
+          than buttons, so it works with scripting off; the script swaps the
+          views in place and keeps the address in step so a refresh or a shared
+          link opens the same view.
+        {% endcomment %}
+        <nav class="segmented" aria-label="Show the tracking rings by">
+          <a class="segmented-option{% if tracking_rings.view == 'status' %} is-active{% endif %}"
+             href="{{ tracking_rings.view_urls.status }}" data-ring-view="status"
+             {% if tracking_rings.view == 'status' %}aria-current="true"{% endif %}>Status</a>
+          <a class="segmented-option{% if tracking_rings.view == 'overdue' %} is-active{% endif %}"
+             href="{{ tracking_rings.view_urls.overdue }}" data-ring-view="overdue"
+             {% if tracking_rings.view == 'overdue' %}aria-current="true"{% endif %}>Overdue</a>
+        </nav>
       </div>
       <div class="card-udm-body">
-        {% if tracking_donut.total %}
-          {% include "core/_donut.html" with donut=tracking_donut %}
-        {% else %}
-          <div class="report-empty">Nothing is in tracking.</div>
+        <div class="ring-pair{% if tracking_rings.split %} ring-pair--split{% endif %}">
+          <div class="ring-pair-rings">
+          {% for ring in tracking_rings.rings %}
+            <section class="ring-pair-item" aria-labelledby="tracking-ring-{{ ring.key }}">
+              {% if tracking_rings.split %}
+                <h3 class="ring-title" id="tracking-ring-{{ ring.key }}">
+                  {{ ring.title }}
+                  <span>{% if ring.key == "incoming" %}addressed to {{ tracking_rings.office_code }}{% else %}sent by {{ tracking_rings.office_code }}{% endif %}</span>
+                </h3>
+              {% else %}
+                <h3 class="visually-hidden" id="tracking-ring-{{ ring.key }}">{{ ring.title }}</h3>
+              {% endif %}
+              <div data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
+                {% if ring.status.total %}
+                  {% include "core/_donut.html" with donut=ring.status %}
+                {% elif tracking_rings.split %}
+                  <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %}.</div>
+                {% else %}
+                  <div class="report-empty">Nothing is in tracking.</div>
+                {% endif %}
+              </div>
+              <div data-ring-panel="overdue"{% if tracking_rings.view != 'overdue' %} hidden{% endif %}>
+                {% if ring.overdue.total %}
+                  {% include "core/_donut.html" with donut=ring.overdue hole_label="overdue" %}
+                {% elif tracking_rings.split %}
+                  <div class="report-empty">Nothing {% if ring.key == "incoming" %}incoming{% else %}outgoing{% endif %} is overdue.</div>
+                {% else %}
+                  <div class="report-empty">Nothing is overdue.</div>
+                {% endif %}
+              </div>
+            </section>
+          {% endfor %}
+          </div>
+        </div>
+        {% comment %}
+          Completed - pending upload, beside the rings rather than in them:
+          Incoming and Outgoing exclude finished work, so it cannot be a slice
+          of either without opening a page that could never list it. Same count
+          and link it had as the old ring's fourth slice. Status view only:
+          finished work is never overdue.
+        {% endcomment %}
+        {% if tracking_rings.pending_upload.total %}
+          <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
+            <i class="breakdown-swatch" style="background:var(--status-upload)" aria-hidden="true"></i>
+            <span>Completed - pending upload</span>
+            <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
+          </a>
         {% endif %}
+        {% comment %}
+          The overdue rings are not the Overdue card, and the page says so
+          rather than leaving a reader who adds them up to find out. The card
+          counts every overdue document the office has touched on any hop; the
+          rings, only those moving in or out of it now.
+        {% endcomment %}
+        <p class="ring-note" data-ring-panel="overdue"{% if tracking_rings.view != 'overdue' %} hidden{% endif %}>
+          {% if tracking_rings.split %}
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total|pluralize:"is,are" }} moving in or out of {{ tracking_rings.office_code }} on this hop.
+          {% else %}
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total|pluralize:"is,are" }} moving between offices.
+          {% endif %}
+        </p>
       </div>
     </div>
   </div>
@@ -404,7 +517,12 @@
 </div>
 
 <div class="row g-4 mb-4">
-  <div class="col-xl-6">
+  {% comment %}
+    Full width, not half. Three labelled columns a month need about 70px of
+    month to sit in; in a half-width card a month is 34px and the numbers
+    collide. The panel beside it moves under it.
+  {% endcomment %}
+  <div class="col-12">
     {% comment %}
             Monthly volume. The same cumulative three-series chart Reports draws, from
             the same function — running totals rather than monthly resets, because the
@@ -414,30 +532,28 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Monthly volume</h2>
+          <h2>Created, handed over and completed</h2>
           <div class="card-udm-caption">
-            Running totals since records began. The gap between created and
-            completed is what is still open.
+            Running totals. The gap between created and completed is work still in the building.
           </div>
         </div>
         <div class="chart-legend">
-          <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
         </div>
       </div>
       <div class="card-udm-body">
         {% if monthly.total %}
+          <div class="column-chart-frame">
           <div class="column-chart" role="img"
-               aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
-            <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+               aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
+            {% include "core/_column_axis.html" with ticks=monthly.ticks %}
             <div class="column-chart-plot">
               {% for row in monthly.rows %}
-                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed">
+                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} handovers, {{ row.completed }} completed">
                   <div class="column-pair">
-                    {% if row.created %}<span class="column column--one" style="height:{{ row.created_percent }}%"></span>{% endif %}
-                    {% if row.transferred %}<span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>{% endif %}
-                    {% if row.completed %}<span class="column column--two" style="height:{{ row.completed_percent }}%"></span>{% endif %}
+                    {% include "core/_columns.html" %}
                   </div>
                   <div class="column-label">{{ row.month|date:"M" }}</div>
                 </div>
@@ -445,20 +561,35 @@
             </div>
           </div>
           <div class="chart-scale">
-            Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} &middot;
-            {{ monthly.outstanding }} still open
+            Top of the chart = {{ monthly.ceiling }} &middot; {{ monthly.outstanding }} still open &middot;
+            every bar carries its own running total
           </div>
+          <details class="chart-note">
+            <summary>How to read this</summary>
+            <p>
+              Each month is the position at the end of that month, counted from the
+              first document in the system &mdash; not that month on its own. A month
+              with nothing finished still shows every document finished before it.
+            </p>
+            <p>
+              Created and Completed count documents; the gap between them is the work
+              still in the building. Handovers count moves between offices, so one
+              document endorsed four times adds four &mdash; which is why that bar is
+              usually the tallest and why it is not a count of documents. Each bar
+              carries its own number so the three are never mistaken for one another.
+            </p>
+          </details>
           <details class="chart-table">
             <summary>View as table</summary>
             <div class="table-responsive"><table class="table-udm">
               <thead><tr>
                 <th>Month</th><th class="text-end">Created</th>
-                <th class="text-end">Transferred</th><th class="text-end">Completed</th>
+                <th class="text-end">Handovers</th><th class="text-end">Completed</th>
               </tr></thead>
               <tbody>
                 {% for row in monthly.rows %}
                   <tr>
-                    <td>{{ row.month|date:"F Y" }}</td>
+                    <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                     <td class="text-end num">{{ row.created }}</td>
                     <td class="text-end num">{{ row.transferred }}</td>
                     <td class="text-end num">{{ row.completed }}</td>
@@ -467,13 +598,14 @@
               </tbody>
             </table></div>
           </details>
+          </div>
         {% else %}
           <div class="report-empty">No tracking activity recorded yet.</div>
         {% endif %}
       </div>
     </div>
   </div>
-  <div class="col-xl-6">
+  <div class="col-12">
     {% comment %}
             Uploads by office. One combined figure per office — a document uploaded
             directly and a tracked record completed and filed are both an office adding
@@ -485,7 +617,8 @@
         <div>
           <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
           <div class="card-udm-caption">
-            Uploaded directly plus completed and filed, counted together.
+            Uploads, plus documents filed when tracking finished.
+            {% if uploads_by_office.total %}Each bar is an office's share of all {{ uploads_by_office.total }}.{% endif %}
           </div>
         </div>
       </div>
@@ -502,20 +635,32 @@
               <span>
                 <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
                 {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
-                ({{ uploads_by_office.leader.percent }}%)
+                ({% share uploads_by_office.leader.total uploads_by_office.total %})
               </span>
             </div>
           {% endif %}
+          {% comment %}
+            The last row may be "Other (n offices)", carrying what the cap left
+            out so the rows add up to the total above them. It is muted, and its
+            bar is its share like every other row's. `not row.is_remainder` on
+            the leader test because the remainder's code is blank, and so is the
+            leader's when there is none.
+
+            Every bar is a share of the whole, the percentage printed beside it,
+            so the track is 100% and the bars together fill exactly one. They
+            were measured against the busiest office, which always drew a full
+            track: 3 of 15 filled the card beside the words "20%".
+          {% endcomment %}
           {% for row in uploads_by_office.rows %}
-            <div class="report-series-item report-series-item--wide"
+            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}"
                  title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
               <span>{{ row.name }}</span>
               <div class="report-bar">
-                <i class="{% if row.code == uploads_by_office.leader.code %}bar-two{% else %}bar-one{% endif %}"
+                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-completed-strong{% else %}bar-completed{% endif %}"
                    style="width:{{ row.bar_percent }}%"></i>
               </div>
               <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.percent }}%</span>
+              <span class="status-share num">{% share row.total uploads_by_office.total %}</span>
             </div>
           {% endfor %}
         {% else %}
@@ -539,11 +684,17 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>Turnaround by month</h2>
+          <h2>How long documents take</h2>
             <div class="card-udm-caption">
-              Average working days per stage, counted in <strong>office hours</strong>.
-              {{ turnaround_trend.office_hours_caveat }}
+              Average working days at each stage, month by month.
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Counted in office hours, so a document sitting over a weekend is not
+                charged for it. {{ turnaround_trend.office_hours_caveat }}
+              </p>
+            </details>
           </div>
         </div>
         <div class="card-udm-body">
@@ -554,15 +705,32 @@
               which at this column width left three keys fighting a sentence for
               the same few centimetres.
             {% endcomment %}
+            {% comment %}
+              A line key, not a square: the legend mirrors the mark it names.
+              Each says what its line measures, from which moment to which,
+              because "Receipt" alone does not say whether the clock starts when
+              a document is sent or when it is opened.
+            {% endcomment %}
             <div class="chart-legend trend-legend">
               {% for series in turnaround_trend_points %}
-                <span class="chart-key">
-                  <i class="chart-swatch" style="background:{{ series.colour }}" aria-hidden="true"></i>{{ series.label }}
+                <span class="chart-key trend-key">
+                  <i class="trend-key-line" style="background:{{ series.colour }}" aria-hidden="true"></i>
+                  <span><strong>{{ series.label }}</strong> {{ series.measures }}</span>
                 </span>
               {% endfor %}
             </div>
             <div class="trend-layout">
               <div class="trend-chart">
+                {% comment %}
+                  The y-axis, in working days, beside the SVG rather than inside it:
+                  SVG text scales with the chart and would shrink to nothing at the
+                  widths this card is drawn at. Placed by the same geometry as the
+                  rules, so a label is level with its rule.
+                {% endcomment %}
+                <div class="trend-plot">
+                <div class="trend-axis-values num" aria-hidden="true">
+                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent }}%">{{ line.value }}</span>{% endif %}{% endfor %}
+                </div>
                 {% comment %}
                   No preserveAspectRatio="none": it stretches the plot to the column
                   width, which turns every data point from a circle into an oval.
@@ -570,7 +738,7 @@
                   the box by the viewBox's own ratio so nothing is letterboxed.
                 {% endcomment %}
                 <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
-                     aria-label="Line chart of average turnaround in working days per month. The table below lists every value.">
+                     aria-label="Line chart of average turnaround in working days per month. Point at a month for its figures; the table below lists every value.">
                   {% comment %}
                     Rules and baseline from the same constants that place the
                     data. They were literals here while the plot geometry lived in
@@ -584,45 +752,108 @@
                             class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
                     {% endfor %}
                   </g>
+                  {% comment %}
+                    Colours through `style`, not the stroke attribute: they are CSS
+                    custom properties, which not every browser resolves in a
+                    presentation attribute. pathLength="1" lets the stylesheet draw
+                    each line in from its start without knowing how long it is.
+                    Dots are filled with the card's own surface, not white, so they
+                    do not glare on the dark theme.
+                  {% endcomment %}
                   {% for series in turnaround_trend_points %}
-                    <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.colour }}"
-                              stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
-                              vector-effect="non-scaling-stroke"></polyline>
+                    <polyline class="trend-line" points="{{ series.polyline }}" pathLength="1"
+                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
                     {% for dot in series.dots %}
-                      <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" fill="#fff"
-                              stroke="{{ series.colour }}" stroke-width="2"
-                              vector-effect="non-scaling-stroke"></circle>
+                      <circle class="trend-point" cx="{{ dot.x }}" cy="{{ dot.y }}" r="3"
+                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
                     {% endfor %}
                   {% endfor %}
                 </svg>
+                {% comment %}
+                  The hover layer: one target per month, over the plot and aligned
+                  to it by the same geometry. Pointing at a month draws a guide
+                  down to the baseline, enlarges that month's dots, and opens a
+                  card with its three figures in words and what each is averaged
+                  over. CSS does the showing, so it works without script; the
+                  script adds a tap on a touch screen and the arrow keys for a
+                  keyboard, which reach the chart as one tab stop rather than
+                  twelve. The table below still holds every value.
+                {% endcomment %}
+                {% if turnaround_trend_geometry.months %}
+                  <div class="trend-hover" tabindex="0" role="group" data-trend-hover
+                       style="--plot-top:{{ turnaround_trend_geometry.plot_top_percent }}%;--plot-bottom:{{ turnaround_trend_geometry.plot_bottom_percent }}%"
+                       aria-label="Turnaround by month. Use the left and right arrow keys to read each month.">
+                    {% for month in turnaround_trend_geometry.months %}
+                      <div class="trend-hit trend-hit--{{ month.side }}" data-trend-month
+                           style="left:{{ month.left }}%;width:{{ month.width }}%" aria-label="{{ month.summary }}">
+                        <span class="trend-cross" aria-hidden="true"></span>
+                        {% for point in month.points %}<span class="trend-dot" style="top:{{ point.top_percent }}%;--dot:{{ point.colour }}" aria-hidden="true"></span>{% endfor %}
+                        <div class="trend-tip" aria-hidden="true">
+                          <div class="trend-tip-month">{{ month.label }}</div>
+                          {% for point in month.points %}
+                            <div class="trend-tip-row">
+                              <i style="background:{{ point.colour }}"></i>
+                              <strong>{{ point.text }}</strong>
+                              <span>{{ point.label }} &middot; {{ point.samples }} {{ point.unit }}</span>
+                            </div>
+                          {% empty %}
+                            <div class="trend-tip-row trend-tip-empty">Nothing received or completed</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                    <div class="visually-hidden" aria-live="polite" data-trend-announce></div>
+                  </div>
+                {% endif %}
+                </div>
                 <div class="trend-axis-labels" aria-hidden="true">
                   {% for row in turnaround_trend.rows %}
                     <span>{{ row.month|date:"M" }}</span>
                   {% endfor %}
                 </div>
                 <div class="chart-scale">
-                  Top of the chart = {{ turnaround_trend.ceiling }} working day{{ turnaround_trend.ceiling|pluralize }}
-                  &middot; one day is eight office hours
+                  Working days, averaged per month &middot; one working day is
+                  {{ turnaround_trend.working_day_hours|floatformat:"-1" }} office hours
                 </div>
               </div>
               <div class="trend-summary">
-                <div class="trend-summary-head">
-                  {% if turnaround_trend.latest %}{{ turnaround_trend.latest.month|date:"F" }} averages{% endif %}
-                </div>
+                {% comment %}
+                  The month the chart ends on, in words. It printed the all-time
+                  averages under this month's name, so its figures disagreed with
+                  the last point of the line beside it: "In process 3 days 3 hrs"
+                  next to a line reading one day. Each figure now says how many
+                  documents it is taken over, and a stage with none this month
+                  says so rather than printing a dash.
+                {% endcomment %}
+                {% with month=turnaround_trend.latest %}
+                <div class="trend-summary-head">{{ month.month|date:"F" }} so far</div>
                 <div class="trend-summary-figures">
                   <div class="report-metric">
-                    <span>Receipt</span>
-                    <strong>{{ turnaround.receipt }}<small class="text-muted">{{ turnaround.receipt_calendar }} on the calendar</small></strong>
+                    <span>Receipt<small class="text-muted">{{ month.receipt_samples }} handover{{ month.receipt_samples|pluralize }}</small></span>
+                    {% if month.receipt_samples %}
+                      <strong>{{ month.receipt_label }}<small class="text-muted">{{ month.receipt_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None confirmed yet</strong>
+                    {% endif %}
                   </div>
                   <div class="report-metric">
-                    <span>In process</span>
-                    <strong>{{ turnaround.processing }}<small class="text-muted">{{ turnaround.processing_calendar }} on the calendar</small></strong>
+                    <span>In process<small class="text-muted">{{ month.processing_samples }} document{{ month.processing_samples|pluralize }}</small></span>
+                    {% if month.processing_samples %}
+                      <strong>{{ month.processing_label }}<small class="text-muted">{{ month.processing_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None completed yet</strong>
+                    {% endif %}
                   </div>
                   <div class="report-metric">
-                    <span>Total lifetime</span>
-                    <strong>{{ turnaround.lifetime }}<small class="text-muted">{{ turnaround.lifetime_calendar }} on the calendar</small></strong>
+                    <span>Total lifetime<small class="text-muted">{{ month.lifetime_samples }} document{{ month.lifetime_samples|pluralize }}</small></span>
+                    {% if month.lifetime_samples %}
+                      <strong>{{ month.lifetime_label }}<small class="text-muted">{{ month.lifetime_calendar }} on the calendar</small></strong>
+                    {% else %}
+                      <strong class="trend-summary-none">None completed yet</strong>
+                    {% endif %}
                   </div>
                 </div>
+                {% endwith %}
                 {% comment %}
                   Only shown when something actually had a deadline that month. A 0%
                   printed for a month in which nothing was due would read as

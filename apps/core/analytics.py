@@ -20,6 +20,7 @@ Two rules hold throughout:
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+from math import cos, pi, sin
 
 from django.db.models import Avg, Count, DurationField, F, Q
 from django.db.models.functions import TruncMonth
@@ -31,9 +32,11 @@ from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingSte
 
 from .business_time import (
     OFFICE_HOURS_CAVEAT,
+    _two_units,
     average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
+    working_day_seconds,
 )
 from .colors import STATUS_COLOURS
 
@@ -51,10 +54,127 @@ def percent(part: int, whole: int) -> int:
 
 def bar(part: int, whole: int) -> int:
     """Bar width as a percentage. Zero stays zero — a minimum-width stub would
-    paint a value that is not there — but a real value never rounds away."""
+    paint a value that is not there — but a real value never rounds away.
+
+    `whole` is the total the panel states, never the largest row. A bar track
+    is 100% of something, and measured against the busiest row the leader
+    always filled it: 3 documents of 15 drew a full bar beside the words "20%".
+    """
     if not part or not whole:
         return 0
     return max(1, int(round(100 * part / whole)))
+
+
+def share_text(part: int, whole: int) -> str:
+    """A share as printed beside its bar.
+
+    `percent` rounds, so one document in three hundred printed "0%" beside a
+    bar `bar` had floored at 1% so that it shows: the label and the mark
+    disagreeing about whether anything is there. "<1%" says both. ">99%" is
+    the same guard at the other end, because 999 of 1,000 is not all of them.
+    """
+    if not part or not whole:
+        return "0%"
+    value = percent(part, whole)
+    if value == 0:
+        return "<1%"
+    if value == 100 and part < whole:
+        return ">99%"
+    return f"{value}%"
+
+
+def axis_ticks(ceiling: int, steps: int = 4) -> list[dict]:
+    """Labelled y-axis ticks for a column chart scaled to `ceiling`.
+
+    Round numbers — 0, 50, 100, 150 — then the ceiling itself on top. Round
+    steps rather than exact quarters of the ceiling: quarters of 180 are 45, 90
+    and 135, which a reader has to work at, and quarters of 5 round to 0, 1, 3,
+    4, 5 — gridlines at uneven spacing with a value missing. A round step keeps
+    the lines evenly spaced and the labels easy to read against.
+
+    The step is the smallest of 1, 2, 2.5 and 5 times a power of ten that
+    divides the scale into at most `steps` intervals, and never less than 1: a
+    count has no half-documents. The ceiling is always the top tick, so the
+    axis and "Tallest column = N" never disagree, and a round tick within 10% of
+    it is dropped rather than printed on top of it.
+
+    Each tick carries the height of the value it prints, so a label never sits
+    at a height that is not its value. A zero ceiling is an empty chart: one tick
+    at zero, and no division by it.
+    """
+    if ceiling <= 0:
+        return [{"value": 0, "offset_percent": 0.0}]
+
+    magnitude = 1
+    while True:
+        # 2.5 times a power of ten is only a whole number from 10 upward.
+        multiples = (1, 2, 2.5, 5) if magnitude >= 10 else (1, 2, 5)
+        fitting = [int(m * magnitude) for m in multiples if ceiling // int(m * magnitude) <= steps]
+        if fitting:
+            step = fitting[0]
+            break
+        magnitude *= 10
+
+    values = list(range(0, ceiling, step))
+    if values and values[-1] and (ceiling - values[-1]) * 10 < ceiling:
+        values.pop()
+    values.append(ceiling)
+    return [
+        {"value": value, "offset_percent": round(100 * value / ceiling, 2)}
+        for value in values
+    ]
+
+
+#: The ring, in SVG user units. The same geometry the conic-gradient ring had in
+#: pixels: a 190 box, and a hole inset 46 from its edge. The SVG scales with the
+#: box, so the narrower rings CSS draws below 992px keep these proportions.
+RING_SIZE = 190
+RING_OUTER = 95
+RING_INNER = 49
+
+
+def _ring_point(percent: float, radius: float) -> str:
+    """A point on a circle about the ring's centre, `percent` of the way round
+    clockwise from twelve o'clock: where a conic-gradient starts, and the way
+    it runs."""
+    angle = 2 * pi * percent / 100
+    centre = RING_SIZE / 2
+    x = centre + radius * sin(angle)
+    y = centre - radius * cos(angle)
+    return f"{x:.3f} {y:.3f}"
+
+
+def ring_arc(start: float, end: float) -> str:
+    """SVG path `d` for the ring segment from `start`% to `end`%.
+
+    An annular sector: along the outer circle, in, and back along the inner
+    one. Empty for a segment with no width, which would be a zero-area path
+    nobody can see or point at.
+
+    A segment covering the whole ring is two half-circles on each radius. An
+    SVG arc whose start and end points coincide draws nothing at all, so a ring
+    with a single slice (an office whose every document is pending receipt)
+    would otherwise render as an empty box. Painted with `fill-rule: evenodd`
+    so the inner circle cuts the hole.
+    """
+    span = end - start
+    if span <= 0:
+        return ""
+    outer, inner = RING_OUTER, RING_INNER
+    if span >= 100:
+        top_o, bottom_o = _ring_point(0, outer), _ring_point(50, outer)
+        top_i, bottom_i = _ring_point(0, inner), _ring_point(50, inner)
+        return (
+            f"M {top_o} A {outer} {outer} 0 1 1 {bottom_o} A {outer} {outer} 0 1 1 {top_o} Z "
+            f"M {top_i} A {inner} {inner} 0 1 0 {bottom_i} A {inner} {inner} 0 1 0 {top_i} Z"
+        )
+    large = 1 if span > 50 else 0
+    return (
+        f"M {_ring_point(start, outer)} "
+        f"A {outer} {outer} 0 {large} 1 {_ring_point(end, outer)} "
+        f"L {_ring_point(end, inner)} "
+        f"A {inner} {inner} 0 {large} 0 {_ring_point(start, inner)} Z"
+    )
 
 
 def humanise_duration(delta) -> str:
@@ -67,11 +187,7 @@ def humanise_duration(delta) -> str:
     days, remainder = divmod(total, 86400)
     hours, remainder = divmod(remainder, 3600)
     minutes = remainder // 60
-    if days:
-        return f"{days} day{'s' if days != 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
-    if hours:
-        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min{'s' if minutes != 1 else ''}"
-    return f"{minutes} min{'s' if minutes != 1 else ''}"
+    return _two_units(days, "day", hours, "hr", minutes, "min")
 
 
 def month_window(months_back: int = REPORT_MONTHS):
@@ -117,22 +233,55 @@ def _month_of(value):
 # Tracking panels
 # ---------------------------------------------------------------------------
 def by_status(records, total: int) -> list[dict]:
-    """One row per status: share of the whole, plus a bar against the largest
-    status so the shortest bar is still visible."""
+    """One row per status, its bar the share of every document it states.
+
+    Every document is in exactly one stage, so the bars add up to one full
+    track across the rows. `bar_percent` is `percent` with the 1% floor that
+    keeps a single document visible."""
     rows = list(
         records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total")
     )
     labels = dict(Status.choices)
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         row["label"] = labels.get(row["status"], row["status"])
         row["percent"] = percent(row["total"], total)
-        row["bar_percent"] = bar(row["total"], ceiling)
+        row["bar_percent"] = bar(row["total"], total)
         row["colour"] = STATUS_COLOURS.get(row["status"], STATUS_COLOURS["DRAFT"])
     return rows
 
 
-def overdue_offices(records, limit: int = 8) -> list[dict]:
+#: Rows a ranked panel shows before the rest collapse into one "Other" line.
+#:
+#: Twelve, not eight. Eight truncated a nine-office university by exactly one,
+#: which is the worst size a cap can be: the reader loses a single row and the
+#: remainder line reads "Other (1 office)", which looks like a bug. Twelve shows
+#: every office today and still keeps the panel bounded if the university grows.
+TOP_N = 12
+
+
+def cap_with_remainder(rows, limit, noun):
+    """Split a ranked list into the rows shown and a label for the rest.
+
+    Returns `(kept, cut, label)`, where `label` is None when nothing was cut.
+
+    A capped list with no tail cannot add up: the bars a reader sums are a
+    subset of the headline they sit under, and nothing on screen says so. Every
+    ranked panel here had that shape, and `overdue_summary["total"]` is counted
+    over the whole queryset — correctly — which is exactly what made the gap
+    visible to anyone who added the rows.
+
+    The caller builds the remainder row itself, because each panel carries
+    different fields and a row missing the ones its template reads is a worse
+    bug than the one this fixes. What lives here is the part that must not
+    differ: where the cut falls and what the leftover is called.
+    """
+    if len(rows) <= limit:
+        return rows, [], None
+    kept, cut = rows[:limit], rows[limit:]
+    return kept, cut, f"Other ({len(cut)} {noun}{'' if len(cut) == 1 else 's'})"
+
+
+def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
     """Where overdue documents are sitting — a queue to chase, not a total.
 
     Each row carries how long the *oldest* item in that pile has been late, not
@@ -161,6 +310,7 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
     # Plain slicing, so `limit=0` still returns nothing — that is what the
     # dashboard's summary test leans on to prove the total survives the cap.
     rows = grouped[:limit]
+    cut = grouped[limit:]
 
     # The earliest deadline per office, in one pass over the same queryset,
     # rather than a query per row.
@@ -171,24 +321,47 @@ def overdue_offices(records, limit: int = 8) -> list[dict]:
         if code not in earliest or due_at < earliest[code]:
             earliest[code] = due_at
 
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
         code = row["current_office__code"]
         row["code"] = code
         row["name"] = row["current_office__name"] or code
-        row["percent"] = bar(row["total"], ceiling)
-        # The reports template reads `percent`; the dashboard reads
-        # `bar_percent` like every other bar on that page. Same number.
-        row["bar_percent"] = row["percent"]
-        # Distinct from both: `percent` scales the bar against the *longest*
-        # queue so the widest bar fills its track, which is a drawing
-        # instruction. `share` is the reportable figure — this office's portion
-        # of every overdue document there is.
+        # `share` is the reportable figure — this office's portion of every
+        # overdue document there is. `percent` and `bar_percent` are the bar
+        # drawn at that share, floored at 1% so a single document shows.
         row["share"] = percent(row["total"], everywhere)
+        row["percent"] = row["bar_percent"] = bar(row["total"], everywhere)
         due_at = earliest.get(code)
         # Whole days late, floored: "3 days" must mean the deadline is three
         # full days behind, never "some part of a third day".
         row["oldest_days"] = max(0, (now - due_at).days) if due_at else 0
+
+    # The tail, as a row. Without it the office lines never sum to the headline
+    # they sit under, and `overdue_summary["total"]` is counted over the whole
+    # queryset, so the gap is visible to anybody who adds them up. Its bar is
+    # drawn like the others: its share of the whole is as real as theirs.
+    if cut:
+        # Read from `earliest`, because the loop above enriches only the kept
+        # rows — a cut row has no `oldest_days` of its own to take a max over.
+        cut_dues = [
+            earliest[row["current_office__code"]]
+            for row in cut
+            if row["current_office__code"] in earliest
+        ]
+        cut_total = sum(row["total"] for row in cut)
+        rows.append(
+            {
+                "code": "",
+                "name": f"Other ({len(cut)} office{'' if len(cut) == 1 else 's'})",
+                "total": cut_total,
+                "percent": bar(cut_total, everywhere),
+                "bar_percent": bar(cut_total, everywhere),
+                "share": percent(cut_total, everywhere),
+                "oldest_days": max(
+                    (max(0, (now - due).days) for due in cut_dues), default=0
+                ),
+                "is_remainder": True,
+            }
+        )
     return rows
 
 
@@ -211,6 +384,23 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
         "percent_of_all": percent(total, total_documents),
         "office_count": len([row for row in rows if row["total"]]),
     }
+
+
+#: The series the chart draws, in order, with the colour class each is painted
+#: in. Handovers count routing steps where the other two count documents — one
+#: document endorsed four times is four handovers — so that column runs above
+#: the others and usually sets the scale. Every column carries its own number,
+#: and the legend and the note say which unit each counts, because a reader who
+#: can see all three needs to know that one of them is not documents.
+VOLUME_SERIES = (
+    # The colour class suffix, named for the meaning: Completed is the
+    # Completed-status green everywhere, handovers the Pending receipt amber of
+    # a document between offices. Completed was gold on this chart and
+    # handovers green, the reverse of every other page.
+    ("Created", "created", "created"),
+    ("Handovers", "transferred", "handover"),
+    ("Completed", "completed", "completed"),
+)
 
 
 def monthly_volume(records) -> dict:
@@ -265,15 +455,32 @@ def monthly_volume(records) -> dict:
             }
         )
 
-    ceiling = max([row["transferred"] for row in rows] + [row["created"] for row in rows] + [0])
+    # Over every plotted series, so no column can be drawn above the plot.
+    ceiling = max(
+        [max(row[key] for _, key, _ in VOLUME_SERIES) for row in rows] + [0]
+    )
     for row in rows:
-        row["created_percent"] = bar(row["created"], ceiling)
-        row["transferred_percent"] = bar(row["transferred"], ceiling)
-        row["completed_percent"] = bar(row["completed"], ceiling)
+        # Every column carries its own value, above its own bar. One number per
+        # month said nothing about the two columns it did not sit on, and which
+        # column it sat on changed with the data.
+        row["columns"] = [
+            {
+                "label": label,
+                "series": colour,
+                "value": row[key],
+                "percent": bar(row[key], ceiling),
+            }
+            for label, key, colour in VOLUME_SERIES
+        ]
+        # A month with nothing in any series draws nothing and says nothing: the
+        # axis already reads 0. A month with something in it names every series,
+        # a zero included, so a series is never missing without explanation.
+        row["has_values"] = any(column["value"] for column in row["columns"])
 
     return {
         "rows": rows,
         "ceiling": ceiling,
+        "ticks": axis_ticks(ceiling),
         "total": rows[-1]["created"] if rows else 0,
         "outstanding": (rows[-1]["created"] - rows[-1]["completed"]) if rows else 0,
     }
@@ -290,9 +497,11 @@ def turnaround(records) -> dict:
     sit over a weekend; showing only the second charges them for the weekend.
     """
     steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-    receipt = steps.aggregate(
-        value=Avg(F("received_at") - F("sent_at"), output_field=DurationField())
-    )["value"]
+    receipt_row = steps.aggregate(
+        value=Avg(F("received_at") - F("sent_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    receipt = receipt_row["value"]
     receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
 
     # Turnaround measures how long the *work* took, so it ends at completion
@@ -300,15 +509,20 @@ def turnaround(records) -> dict:
     # queue and would otherwise be charged to the office that finished on time.
     done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
     processing_set = done.filter(first_received_at__isnull=False)
-    processing = processing_set.aggregate(
-        value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField())
-    )["value"]
+    # Each average and how many it is taken over, from one query.
+    processing_row = processing_set.aggregate(
+        value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    processing = processing_row["value"]
     processing_office = average_business_seconds(
         processing_set.values_list("first_received_at", "completed_at")
     )
-    lifetime = done.aggregate(
-        value=Avg(F("completed_at") - F("created_at"), output_field=DurationField())
-    )["value"]
+    lifetime_row = done.aggregate(
+        value=Avg(F("completed_at") - F("created_at"), output_field=DurationField()),
+        samples=Count("id"),
+    )
+    lifetime = lifetime_row["value"]
     lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
 
     with_deadline = done.filter(due_at__isnull=False)
@@ -325,21 +539,26 @@ def turnaround(records) -> dict:
         "processing_calendar": humanise_duration(processing),
         "lifetime_calendar": humanise_duration(lifetime),
         "office_hours_caveat": OFFICE_HOURS_CAVEAT,
-        "receipt_samples": steps.count(),
+        # How many each average is taken over, so "4 hrs" from three documents
+        # is not read with the weight of "4 hrs" from three hundred.
+        "receipt_samples": receipt_row["samples"],
+        "processing_samples": processing_row["samples"],
+        "lifetime_samples": lifetime_row["samples"],
         "on_time": on_time,
         "on_time_total": deadline_total,
         "on_time_percent": percent(on_time, deadline_total),
-        "unreceived": RoutingStep.objects.filter(
-            record__in=records, received_at__isnull=True
-        ).count(),
+        # Handovers the receipt average cannot include yet: sent in the batch
+        # the document is on now, not yet confirmed, on a document still in
+        # circulation. It counted every unconfirmed step ever written, which
+        # included siblings on finished documents and hops the document had
+        # already moved past — 83 on the seeded data, beside a Pending receipt
+        # card reading 20. None of those will ever be confirmed.
+        "awaiting_confirmation": RoutingStep.objects.filter(
+            record__in=records,
+            received_at__isnull=True,
+            batch=F("record__current_batch"),
+        ).exclude(record__status__in=COMPLETED_STATUSES).count(),
     }
-
-
-#: A working day, for turning the office-hours averages into a number that fits
-#: on a chart axis. Reports says "4 hrs 20 mins"; a twelve-month trend line
-#: cannot, so it plots working days and labels the axis in days.
-WORKING_HOURS_PER_DAY = 8
-WORKING_SECONDS_PER_DAY = WORKING_HOURS_PER_DAY * 3600
 
 
 def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
@@ -363,24 +582,38 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
         completed_at__gte=since,
     ).values_list("created_at", "first_received_at", "completed_at", "due_at")
 
+    # Office seconds for the chart and the headline, calendar seconds beside
+    # them — the same pair Reports shows for the whole period.
     buckets = {
-        month: {"receipt": [], "processing": [], "lifetime": [], "on_time": 0, "closed": 0}
+        month: {
+            "receipt": [], "processing": [], "lifetime": [],
+            "receipt_calendar": [], "processing_calendar": [], "lifetime_calendar": [],
+            "on_time": 0, "closed": 0,
+        }
         for month in months
     }
+
+    def calendar_seconds(start, end):
+        return max(0.0, (end - start).total_seconds())
 
     for sent_at, received_at in step_rows:
         bucket = buckets.get(_month_of(received_at))
         if bucket is not None:
             bucket["receipt"].append(business_seconds_between(sent_at, received_at))
+            bucket["receipt_calendar"].append(calendar_seconds(sent_at, received_at))
 
     for created_at, first_received_at, completed_at, due_at in done_rows:
         bucket = buckets.get(_month_of(completed_at))
         if bucket is None:
             continue
         bucket["lifetime"].append(business_seconds_between(created_at, completed_at))
+        bucket["lifetime_calendar"].append(calendar_seconds(created_at, completed_at))
         if first_received_at:
             bucket["processing"].append(
                 business_seconds_between(first_received_at, completed_at)
+            )
+            bucket["processing_calendar"].append(
+                calendar_seconds(first_received_at, completed_at)
             )
         if due_at:
             bucket["closed"] += 1
@@ -390,25 +623,36 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     def average_seconds(samples):
         return sum(samples) / len(samples) if samples else None
 
+    day = working_day_seconds()
+
     def average_days(samples):
         seconds = average_seconds(samples)
-        return None if seconds is None else round(seconds / WORKING_SECONDS_PER_DAY, 1)
+        return None if seconds is None else round(seconds / day, 1)
+
+    def calendar_label(samples):
+        seconds = average_seconds(samples)
+        return humanise_duration(None if seconds is None else timedelta(seconds=seconds))
 
     rows = []
     for month in months:
         bucket = buckets[month]
+        row = {
+            "month": month,
+            "receipt": average_days(bucket["receipt"]),
+            "processing": average_days(bucket["processing"]),
+            "lifetime": average_days(bucket["lifetime"]),
+        }
+        # Days for the axis, office language for the prose beside it. A
+        # sentence reading "an average of 0.0 working days" is not something
+        # anybody would write; "under a minute" is. The month's own figures,
+        # so the summary beside the chart can say what its last point says.
+        for key in ("receipt", "processing", "lifetime"):
+            row[f"{key}_label"] = humanise_business_seconds(average_seconds(bucket[key]))
+            row[f"{key}_calendar"] = calendar_label(bucket[f"{key}_calendar"])
+            row[f"{key}_samples"] = len(bucket[key])
         rows.append(
             {
-                "month": month,
-                "receipt": average_days(bucket["receipt"]),
-                "processing": average_days(bucket["processing"]),
-                "lifetime": average_days(bucket["lifetime"]),
-                # Days for the axis, office language for the prose beside it.
-                # A sentence reading "an average of 0.0 working days" is not
-                # something anybody would write; "under a minute" is.
-                "lifetime_label": humanise_business_seconds(
-                    average_seconds(bucket["lifetime"])
-                ),
+                **row,
                 "on_time": bucket["on_time"],
                 "closed": bucket["closed"],
                 "on_time_percent": percent(bucket["on_time"], bucket["closed"]),
@@ -431,13 +675,15 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     return {
         "rows": rows,
         "ceiling": ceiling,
+        "ticks": axis_ticks(ceiling),
         "has_data": bool(measured),
         "office_hours_caveat": OFFICE_HOURS_CAVEAT,
         "latest": rows[-1] if rows else None,
+        "working_day_hours": round(day / 3600, 1),
     }
 
 
-def uploads_by_office(documents, records, limit: int = 8) -> dict:
+def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
     """What each office put into the repository this month.
 
     One combined figure per office, because from the repository's side there is
@@ -456,9 +702,14 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
         datetime.combine(current_month, time.min), timezone.get_current_timezone()
     )
 
+    # `.order_by()` before each grouping: both querysets arrive `.distinct()`
+    # from the dashboard, and a distinct queryset puts its Meta.ordering columns
+    # in the GROUP BY — one row per document, each counting 1, and the dict kept
+    # the last. Every office read 1.
     uploaded = {
         row["office__code"]: row["total"]
         for row in documents.filter(created_at__gte=since)
+        .order_by()
         .values("office__code")
         .annotate(total=Count("id", distinct=True))
         if row["office__code"]
@@ -466,6 +717,7 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
     filed = {
         row["current_office__code"]: row["total"]
         for row in records.filter(status__in=COMPLETED_STATUSES, completed_at__gte=since)
+        .order_by()
         .values("current_office__code")
         .annotate(total=Count("id", distinct=True))
         if row["current_office__code"]
@@ -494,19 +746,51 @@ def uploads_by_office(documents, records, limit: int = 8) -> dict:
     # by name within a descending sort, hence the two-pass ordering.
     rows.sort(key=lambda row: row["name"])
     rows.sort(key=lambda row: row["total"], reverse=True)
-    rows = rows[:limit]
 
+    # Before the slice, like `overdue_offices` forty lines up, and for the
+    # reason its docstring gives: summing the rows that survive a top-N divides
+    # by a truncated total, so the offices shown add to 100% and the ones cut
+    # off have vanished from the denominator. Here it was worse than a wrong
+    # percentage — `grand_total` is returned as `total`, so the panel's own
+    # headline was truncated too and contradicted `total_documents`.
     grand_total = sum(row["total"] for row in rows)
-    ceiling = max([row["total"] for row in rows], default=0)
+    rows, cut, remainder_label = cap_with_remainder(rows, limit, "office")
+
+    # Each bar is the share of `grand_total` printed beside it. Scaled to the
+    # busiest office instead, the leader always drew a full track, so an office
+    # with 3 of 15 filled the card next to the words "20%".
     for row in rows:
-        row["bar_percent"] = bar(row["total"], ceiling)
+        row["bar_percent"] = bar(row["total"], grand_total)
         row["percent"] = percent(row["total"], grand_total)
+
+    # The tail, so the rows add up to `total` rather than to a subset of it,
+    # with its bar drawn at its share like every other row.
+    if cut:
+        cut_total = sum(row["total"] for row in cut)
+        rows.append(
+            {
+                "code": "",
+                "name": remainder_label,
+                "uploaded": sum(row["uploaded"] for row in cut),
+                "filed": sum(row["filed"] for row in cut),
+                "total": cut_total,
+                "bar_percent": bar(cut_total, grand_total),
+                "percent": percent(cut_total, grand_total),
+                "is_remainder": True,
+            }
+        )
 
     # Named only when one office is genuinely ahead. Calling a tie "the top
     # office" hands out a distinction the numbers did not award.
+    #
+    # Over the real offices only. "Other" is several offices added together, so
+    # comparing first place against it would decide the leadership on how many
+    # offices fell outside the cap, and with a cap of zero it would hand the
+    # distinction to the remainder row itself.
+    ranked = [row for row in rows if not row.get("is_remainder")]
     leader = None
-    if rows and (len(rows) == 1 or rows[0]["total"] > rows[1]["total"]):
-        leader = rows[0]
+    if ranked and (len(ranked) == 1 or ranked[0]["total"] > ranked[1]["total"]):
+        leader = ranked[0]
 
     return {
         "rows": rows,

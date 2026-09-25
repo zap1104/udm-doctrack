@@ -1,0 +1,13 @@
+{% comment %}
+  The y-axis and gridlines of a column chart, shared by all three so their
+  scales cannot be drawn two ways. `ticks` comes from analytics.axis_ticks:
+  round steps, then the ceiling on top, each placed at the height of the value
+  it prints. Hidden from assistive technology like the columns themselves; the
+  "View as table" fallback carries every value.
+{% endcomment %}
+<div class="column-chart-axis num" aria-hidden="true">
+  {% for tick in ticks %}<span style="bottom:{{ tick.offset_percent }}%">{{ tick.value }}</span>{% endfor %}
+</div>
+<div class="column-chart-grid" aria-hidden="true">
+  {% for tick in ticks %}<i style="bottom:{{ tick.offset_percent }}%"></i>{% endfor %}
+</div>

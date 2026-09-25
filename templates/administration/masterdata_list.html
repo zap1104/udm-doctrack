@@ -9,12 +9,30 @@
 {% include "administration/_tabs.html" %}
 
 <div class="card-udm mb-3"><div class="card-udm-body">
-  <form method="get" class="row g-2">
+  <form method="get" class="row g-2 align-items-end admin-filters">
     {# Carried so searching does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
-    <div class="col-md-10"><input class="form-control" name="q" value="{{ query }}" placeholder="Search {{ config.label|lower }}…"></div>
+    <div class="col-md-{% if has_status %}7{% else %}10{% endif %}">
+      <label class="form-label" for="masterdata-q">Search</label>
+      <input class="form-control" id="masterdata-q" name="q" value="{{ query }}"
+             placeholder="Any column shown below">
+    </div>
+    {% if has_status %}
+      <div class="col-md-3">
+        <label class="form-label" for="masterdata-status">Status</label>
+        <select class="form-select" id="masterdata-status" name="status" data-auto-submit>
+          <option value="">Active and retired</option>
+          <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active only</option>
+          <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Retired only</option>
+        </select>
+      </div>
+    {% endif %}
     <div class="col-md-2 d-grid"><button class="btn btn-udm-outline">Search</button></div>
   </form>
+  <div class="admin-filter-summary">
+    {{ page_obj.paginator.count }} {% if page_obj.paginator.count == 1 %}{{ config.singular }}{% else %}{{ config.label|lower }}{% endif %}
+    {% if query or selected_status %}· <a href="{% url 'core:masterdata_list' slug %}">Clear filters</a>{% endif %}
+  </div>
 </div></div>
 
 {% comment %}

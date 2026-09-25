@@ -260,3 +260,59 @@ def test_every_overdue_record_has_somebody_accountable(
         confirm_receipt(med_to_sup_and_hr, user=user)
 
     assert overdue_unattributed(TrackingRecord.objects.visible_to(users["admin"])) == 0
+
+
+# --- 8. an office that received it and passed it on is waiting too -----------
+@pytest.fixture
+def sup_forwarded_to_hr(users, offices, memo_type):
+    """MED to SUP, SUP signs, SUP forwards to HR, HR has not signed. Overdue.
+
+    SUP's own step is received and stays on the record from the earlier batch,
+    which is what made the old `.exclude()` drop it: see the test below.
+    """
+    record = create_draft_record(
+        user=users["med"], subject="Passed on", instructions="For action.",
+        document_type=memo_type,
+    )
+    route_record(record, [offices["SUP"]], user=users["med"])
+    confirm_receipt(record, user=users["sup"])
+    record.refresh_from_db()
+    route_record(record, [offices["HR"]], user=users["sup"], action="FORWARD")
+    TrackingRecord.objects.filter(pk=record.pk).update(
+        due_at=timezone.now() - timedelta(days=2)
+    )
+    return record
+
+
+@pytest.mark.django_db
+def test_an_office_that_forwarded_a_document_is_waiting_on_the_next_one(
+    client, sup_forwarded_to_hr, users, offices
+):
+    """Both read 0 for SUP.
+
+    `.exclude(routing_steps__to_office=SUP, routing_steps__received_at__isnull=True,
+    routing_steps__batch=F("current_batch"))` does not bind its three conditions
+    to one step — across a multi-valued relation `exclude()` never does. SUP's
+    received step from the first batch matched the office, HR's step matched the
+    other two, and the record was excluded as though SUP owed its own receipt.
+    """
+    client.force_login(users["admin"])
+
+    context = client.get(f"{REPORTS}?office={offices['SUP'].pk}").context
+
+    assert context["awaiting_split"] == {"ours": 0, "theirs": 1}
+    assert context["overdue_elsewhere"] == 1
+
+
+@pytest.mark.django_db
+def test_the_office_it_was_forwarded_to_still_owes_the_receipt(
+    client, sup_forwarded_to_hr, users, offices
+):
+    """The other side of the same record, so the fix cannot count it twice."""
+    client.force_login(users["admin"])
+
+    context = client.get(f"{REPORTS}?office={offices['HR'].pk}").context
+
+    assert context["awaiting_split"] == {"ours": 1, "theirs": 0}
+    assert context["overdue_elsewhere"] == 0
+

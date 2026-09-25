@@ -74,19 +74,22 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Cumulative tracking volume",
-    "Records by status",
-    "Turnaround",
-    "Overdue documents by accountable office",
-    "Documents handled by office",
-    "Transferred vs received by office",
+    "Created, handed over and completed",
+    "Documents by stage",
+    "How long documents take",
+    "Overdue: who must act next",
+    "Documents received by office",
+    "Handovers by office: sent and confirmed",
 )
 
 #: Document Repository Report, in order.
+#:
+#: "Most used searches" was the third. It moved to Administration, system
+#: administrators only: it reads every office's search terms with no scope, on a
+#: page whose design is that it answers for one office.
 REPOSITORY_PANELS = (
-    "Monthly repository volume",
+    "Documents filed each month",
     "Documents by type",
-    "Most used searches",
 )
 
 
@@ -170,7 +173,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     as the reverse and means the opposite thing about how the office is doing."""
     client.force_login(users["admin"])
     response = client.get(REPORTS)
-    rows = [row for row in response.context["document_months"] if row["total"]]
+    rows = [row for row in response.context["document_months"]["rows"] if row["total"]]
     body = response.content.decode()
 
     assert rows, "the fixture filed six documents this month"
@@ -179,7 +182,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     assert sum(row["completed"] for row in rows) == 3
     assert sum(row["historical"] for row in rows) == 3
 
-    panel = body[body.index("Monthly repository volume"):body.index("Documents by type")]
+    panel = body[body.index("Documents filed each month"):body.index("Documents by type")]
     assert ">Completed</span>" in panel and ">Historical</span>" in panel, "legend"
     assert ">Completed</th>" in panel and ">Historical</th>" in panel, "table view"
 
@@ -204,7 +207,7 @@ def test_a_scan_is_historical_everywhere_it_is_counted(
     assert totals["historical"] == 3, "two uploads and the scan"
 
     client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["document_months"]
+    rows = client.get(REPORTS).context["document_months"]["rows"]
     assert sum(row["historical"] for row in rows) == totals["historical"]
     assert sum(row["completed"] for row in rows) == totals["completed"]
 
@@ -292,12 +295,20 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
     client.force_login(users["admin"])
     rows = client.get(REPORTS).context["office_volume"]["rows"]
 
+    from apps.core import analytics
+
     row = rows[0]
     assert row["cumulative"] >= row["this_month"]
-    assert "cumulative_percent" in row and "this_month_percent" in row
+    # One bar on one scale: the cumulative figure as a share of every receipt,
+    # and this month as a share of that office's own bar, drawn inside it.
+    receipts = client.get(REPORTS).context["office_volume"]["receipts"]
+    assert receipts == sum(entry["cumulative"] for entry in rows)
+    assert row["cumulative_percent"] == analytics.bar(row["cumulative"], receipts)
+    assert row["this_month_share"] == analytics.bar(row["this_month"], row["cumulative"])
+    assert "this_month_percent" not in row, "no second scale"
 
     body = client.get(REPORTS).content.decode()
-    assert "Documents handled by office" in body
+    assert "Documents received by office" in body
 
 
 # --- 3.10 naming -----------------------------------------------------------
@@ -583,3 +594,108 @@ def test_both_panels_are_present_in_the_markup_with_one_active(client, users):
 
     assert body.count('class="report-panel active"') == 1
     assert body.count('class="report-panel"') == 1
+
+
+# --- completion rate over documents in circulation ----------------------------
+@pytest.mark.django_db
+def test_the_completion_rate_leaves_drafts_out_of_its_denominator(
+    client, finished_record, users, memo_type
+):
+    """A draft has never been sent and is visible only to its author, so a
+    denominator including it differs per viewer for the same data — the exact
+    objection `combined_totals` raises when it excludes drafts from the ring."""
+    create_draft_record(
+        user=users["admin"], subject="Unsent", instructions="x", document_type=memo_type,
+    )
+    client.force_login(users["admin"])
+    context = client.get(REPORTS).context
+
+    assert context["total_records"] == 2, "the card still counts the draft"
+    assert context["completion_rate"] == 100, "one finished of one in circulation"
+
+
+# --- extraction state, not empty text ----------------------------------------
+@pytest.mark.django_db
+def test_extraction_is_reported_by_state_and_sums_to_the_repository(
+    client, users, offices, memo_type
+):
+    """`ocr_text=""` put six states in one number: a document queued seconds ago
+    read the same as one whose extraction failed. It also missed the other way —
+    SKIPPED with a title in `ocr_text` counted as having text."""
+    from apps.documents.models import Document, OcrStatus
+
+    for status in OcrStatus:
+        Document.objects.create(
+            title=f"doc {status.value}", office=offices["REC"], document_type=memo_type,
+            source="UPLOAD", uploaded_by=users["admin"], ocr_status=status.value,
+            ocr_text="title only" if status == OcrStatus.SKIPPED else "",
+        )
+    client.force_login(users["admin"])
+    context = client.get(REPORTS).context
+    extraction = context["extraction"]
+
+    assert sum(extraction["by_status"].values()) == context["total_documents"]
+    assert extraction["needs_attention"] == 2, "FAILED and EMPTY"
+    assert extraction["in_progress"] == 2, "PENDING and RUNNING, reported apart"
+    assert extraction["skipped"] == 1, "counted though its ocr_text is not blank"
+    assert (
+        extraction["needs_attention"] + extraction["in_progress"]
+        + extraction["skipped"] + extraction["done"]
+    ) == extraction["total"]
+
+
+
+# --- search activity lives on Administration, for system administrators -------
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["med", "viewer", "med_admin", "admin"])
+def test_no_report_carries_another_offices_search_terms(client, users, who):
+    """Reports answers for one office. The search panel read every office's
+    terms with no scope, so every reader of their own report saw everyone's."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="confidential hr matter")
+    client.force_login(users[who])
+    response = client.get(REPORTS)
+
+    assert "top_searches" not in response.context
+    assert "search_analytics" not in response.context
+    assert "confidential hr matter" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_system_administrator_sees_search_activity_on_administration(client, users):
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
+    client.force_login(users["admin"])
+    response = client.get("/administration/")
+
+    assert "retention schedule" in response.content.decode()
+    assert response.context["search_analytics"]["queries"] == 1
+
+
+@pytest.mark.django_db
+def test_an_office_administrator_is_not_shown_university_wide_search_terms(client, users):
+    """Administration admits office administrators, whose view is still
+    office-scoped. Not computed for them at all, rather than hidden."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
+    client.force_login(users["med_admin"])
+    response = client.get("/administration/")
+
+    assert response.status_code == 200
+    assert "top_searches" not in response.context
+    assert "retention schedule" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_deleted_accounts_searches_still_count(client, users):
+    """Why this is not office-scoped: `user` is SET_NULL, so a removed account's
+    searches survive with no user, and an office filter would drop them."""
+    from apps.documents.models import SearchQueryLog
+
+    SearchQueryLog.objects.create(user=None, query="orphaned search")
+    client.force_login(users["admin"])
+
+    assert client.get("/administration/").context["search_analytics"]["queries"] == 1

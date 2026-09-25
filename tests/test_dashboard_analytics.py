@@ -179,15 +179,25 @@ def test_a_completed_record_is_never_overdue(finished_record, users):
 def test_the_overdue_summary_counts_the_whole_queryset_not_the_listed_rows(
     overdue_record, users
 ):
-    """The per-office list is capped at the longest few queues. Summing it would
-    quietly under-report the total the banner exists to state."""
+    """The summary counts the whole queryset, never the rows it was handed.
+
+    It was asserted by capping the list to nothing and checking the total stood
+    anyway. The cap now leaves a remainder row behind, so "nothing" is no longer
+    reachable — and that is the point of the remainder: the rows a reader can
+    add up now equal the total the banner states, instead of being a subset of
+    it with nothing saying so.
+
+    Both halves are asserted here: the summary is still independent of the rows,
+    and the rows now sum to it.
+    """
     records = TrackingRecord.objects.visible_to(users["admin"])
     rows = analytics.overdue_offices(records, limit=0)
     summary = analytics.overdue_summary(records, rows, total_documents=10)
 
-    assert rows == [], "the cap is doing its job for this test"
-    assert summary["total"] == 1, "the total survives the cap"
+    assert summary["total"] == 1, "the total is counted over the queryset"
     assert summary["percent_of_all"] == 10
+    assert [row["name"] for row in rows] == ["Other (1 office)"]
+    assert sum(row["total"] for row in rows) == summary["total"]
 
 
 # --- monthly turnaround ----------------------------------------------------
@@ -349,10 +359,10 @@ def test_live_by_status_leaves_overdue_out(overdue_record, users):
 # ============================================================== Group B
 # --- context ---------------------------------------------------------------
 NEW_KEYS = [
-    "overdue_offices", "overdue_summary", "tracking_donut", "repository_donut", "monthly",
+    "overdue_offices", "overdue_summary", "tracking_rings", "repository_donut", "monthly",
     "turnaround_trend", "turnaround_trend_points", "turnaround_trend_geometry",
     "turnaround",
-    "uploads_by_office", "live_by_status", "memo", "scope",
+    "uploads_by_office", "memo", "scope",
 ]
 
 
@@ -400,26 +410,44 @@ def test_the_panels_respect_visibility(client, users, finished_record):
     everything = client.get(DASHBOARD).context
 
     assert hr <= everything["overdue_summary"]["total"]
-    assert everything["live_by_status"] is not None
 
 
 # --- the rings -------------------------------------------------------------
 # One ring per domain. The combined ring could show the split between tracking
 # and the repository but not the shape of either, and tracking is the half
-# somebody acts on.
-DONUTS = ["tracking_donut", "repository_donut"]
+# somebody acts on. Tracking is now itself one ring per direction when the page
+# answers for an office, and one ring under every office; `_rings` reads them
+# all, so every property below holds for each.
+DONUTS = ["tracking", "repository_donut"]
+
+
+def _rings(context, key):
+    if key == "tracking":
+        return [ring["status"] for ring in context["tracking_rings"]["rings"]]
+    return [context[key]]
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
-def test_each_ring_closes_at_one_hundred_percent(client, users, filed_record, key):
+@pytest.mark.parametrize("who", ["admin", "sup"])
+def test_each_ring_closes_at_one_hundred_percent(
+    client, users, overdue_record, filed_record, key, who
+):
     """Independently rounded values leave a hairline gap or an overlap, and a
-    ring with a slit in it reads as a rendering fault."""
-    client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
+    ring with a slit in it reads as a rendering fault.
 
-    assert donut["stops"], f"{key} drew nothing"
-    assert donut["stops"].rstrip().endswith("100%")
+    `overdue_record` for a live document: `filed_record` alone is completed,
+    which is the figure beside the tracking rings and not a slice of them."""
+    client.force_login(users[who])
+    drawn = [ring for ring in _rings(client.get(DASHBOARD).context, key) if ring["slices"]]
+
+    assert drawn, f"{key} drew nothing for {who}"
+    for ring in drawn:
+        slices = ring["slices"]
+        assert slices[0]["arc_start"] == 0
+        assert slices[-1]["arc_end"] == 100
+        for before, after in zip(slices, slices[1:], strict=False):
+            assert before["arc_end"] == after["arc_start"], "no slit and no overlap"
 
 
 @pytest.mark.django_db
@@ -430,20 +458,34 @@ def test_each_ring_is_measured_against_its_own_domain(client, users, filed_recor
     100%, so a Repository ring covering a third of all documents would be drawn
     as a third of a circle with two thirds of it blank."""
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
 
-    assert sum(row["percent"] for row in donut["slices"]) == 100
-    assert donut["total"] == sum(row["total"] for row in donut["slices"])
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        if donut["slices"]:
+            assert sum(row["percent"] for row in donut["slices"]) == 100
+        assert donut["total"] == sum(row["total"] for row in donut["slices"])
 
 
 @pytest.mark.django_db
-def test_the_two_rings_together_are_the_whole(client, users, filed_record):
-    """Two rings replace one; between them they still account for everything."""
+def test_every_office_ring_and_the_figure_beside_it_still_account_for_everything(
+    client, users, filed_record
+):
+    """Under every office, the tracking ring, the pending-upload figure beside
+    it and the repository ring are the whole breakdown.
+
+    Rewritten when the tracking ring split by direction. "The two rings
+    together are the whole" cannot survive a split for one office: Incoming and
+    Outgoing leave out what the office has passed on. It still holds where there
+    is one ring, and that is where it is asserted."""
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
+    tracking = context["tracking_rings"]
 
+    assert tracking["split"] is False
+    (ring,) = tracking["rings"]
     assert (
-        context["tracking_donut"]["total"] + context["repository_donut"]["total"]
+        ring["status"]["total"]
+        + tracking["pending_upload"]["total"]
+        + context["repository_donut"]["total"]
         == context["breakdown"]["total"]
     )
 
@@ -461,23 +503,24 @@ def test_splitting_the_ring_did_not_rewrite_the_shared_slices(client, users, fil
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
-def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key):
+@pytest.mark.parametrize("who", ["admin", "sup"])
+def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key, who):
     """Not the mockup's forest-green and gold."""
-    client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
+    client.force_login(users[who])
 
-    for slice_ in donut["slices"]:
-        assert slice_["colour"].startswith("var(--"), slice_["key"]
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        for slice_ in donut["slices"]:
+            assert slice_["colour"].startswith("var(--"), slice_["key"]
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
 def test_an_empty_domain_draws_no_ring(client, users, key):
     client.force_login(users["admin"])
-    donut = client.get(DASHBOARD).context[key]
 
-    assert donut["stops"] == ""
-    assert donut["total"] == 0
+    for donut in _rings(client.get(DASHBOARD).context, key):
+        assert donut["slices"] == []
+        assert donut["total"] == 0
 
 
 @pytest.mark.django_db
@@ -518,7 +561,7 @@ def test_the_write_up_is_gone_from_the_page_and_from_the_context(
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
 
-    assert "What this shows" not in response.content.decode()
+    assert "What this shows" not in response.content.decode(), "the panel's heading"
     assert "dashboard-writeup" not in response.content.decode()
     assert "breakdown_summary" not in response.context
 
@@ -637,7 +680,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
-    assert body.index("trend-legend") > body.index("Turnaround by month")
+    assert body.index("trend-legend") > body.index("How long documents take")
 
 
 @pytest.mark.django_db
@@ -1107,12 +1150,12 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     for heading in ("Action Centre", "Newest in the Document Repository",
-                    "Monthly volume", "Turnaround by month"):
+                    "Created, handed over and completed", "How long documents take"):
         assert f"<h2>{heading}</h2>" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("Turnaround by month") < body.index('id="dashboard-memo"')
+    assert body.index("How long documents take") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Action Centre
@@ -1171,8 +1214,11 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     """Overdue used to open Reports on the argument that "why are these late"
     is a report rather than a list. True of the question, not of the click: a
     card counting documents is opened to see the documents, and one card
-    behaving unlike the three beside it is a surprise every time."""
-    client.force_login(users["admin"])
+    behaving unlike the three beside it is a surprise every time.
+
+    As an office user: under every office the Incoming and Outgoing cards are
+    disabled and open nothing."""
+    client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     for scope in ("incoming", "outgoing"):
@@ -1548,8 +1594,8 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 EXPECTED_ROWS = [
     ("Tracking", "Repository"),
     ("Action Centre", "Newest in the Document Repository"),
-    ("Monthly volume", "Added to the repository"),
-    "Turnaround by month",
+    ("Created, handed over and completed", "Added to the repository"),
+    "How long documents take",
 ]
 
 
@@ -1587,9 +1633,13 @@ def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, fil
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    columns = re.findall(r'<div class="col-xl-6">(.*?)(?=<div class="col-xl-6">|</div>\s*</div>\s*$)', body, re.S)
-    assert any("Newest in the Document Repository" in c and "Office Flow Today" not in c
-               for c in columns), "the two are still sharing one column"
+    # Split on column boundaries rather than pairing one class with the next
+    # one like it: the charts below are full width now, so a regex looking for
+    # the next col-xl-6 runs off the end of the page and matches nothing.
+    columns = re.split(r'<div class="col[ -]', body)
+    holding = [c for c in columns if "Newest in the Document Repository" in c]
+    assert len(holding) == 1, "the panel should open exactly one column"
+    assert "Action Centre" not in holding[0], "the two are still sharing one column"
 
 
 def test_the_turnaround_panel_is_full_width_and_comes_last():
@@ -1604,7 +1654,7 @@ def test_the_turnaround_panel_is_full_width_and_comes_last():
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    head = html.index("<h2>Turnaround by month</h2>")
+    head = html.index("<h2>How long documents take</h2>")
     column = html.rindex('<div class="col-', 0, head)
 
     assert html[column:].startswith('<div class="col-12">'), "not full width"
@@ -1650,13 +1700,32 @@ def test_the_removed_panels_are_gone_from_the_page(client, users, filed_record):
 @pytest.mark.django_db
 def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, overdue_record):
     """Markup only. Reports reads several of the same helpers, and the memo
-    still reads the overdue figures."""
+    still reads the overdue figures.
+
+    `received_today` was in this list. It protected a helper that outlived its
+    panel, and nothing has read it since the redesign; it has now been deleted
+    with its two siblings, so the assertion moves to the other side — see
+    test_the_unrendered_today_counters_are_gone.
+    """
     client.force_login(users["admin"])
     context = client.get(DASHBOARD).context
 
-    for key in ("overdue_offices", "overdue_summary", "live_by_status",
-                "received_today"):
+    # `live_by_status` left this list when it was deleted — nothing rendered
+    # it. The two overdue aggregates stay: the memo reads them.
+    for key in ("overdue_offices", "overdue_summary"):
         assert key in context, key
+
+
+@pytest.mark.django_db
+def test_the_unrendered_today_counters_are_gone(client, users, overdue_record):
+    """Three queries per load for a panel that no longer exists — and each wrong
+    if ever reinstated: two ignored the office picker, the third had no office
+    filter at all."""
+    client.force_login(users["admin"])
+    context = client.get(DASHBOARD).context
+
+    for key in ("received_today", "forwarded_today", "completed_today"):
+        assert key not in context, key
 
 
 @pytest.mark.django_db
@@ -1834,3 +1903,16 @@ def test_the_print_page_needs_a_login(client):
     response = client.get(MEMO_PRINT)
 
     assert response.status_code in (302, 403)
+
+
+@pytest.mark.django_db
+def test_the_dashboard_accepts_the_all_offices_parameter(client, users, finished_record):
+    """`/?office=all` was a 500: `_scope` called `.name` on the ALL_OFFICES
+    sentinel. Reports and Tracking accept it, and Tracking's picker sends it."""
+    client.force_login(users["admin"])
+
+    response = client.get(f"{DASHBOARD}?office=all")
+
+    assert response.status_code == 200
+    assert response.context["scope"]["all_offices"] is True
+    assert response.context["scope"]["office"] is None

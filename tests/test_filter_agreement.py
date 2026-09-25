@@ -341,6 +341,266 @@ def test_the_status_of_a_slice_and_its_page_agree(client, users, traffic):
         assert all(record.status == status for record in listed), key
 
 
+# --- the direction rings ----------------------------------------------------
+# The Tracking card splits into a ring for what is coming in and one for what
+# is going out. Each is counted from the queryset its stat card counts, so the
+# hole must equal the card, and the card must equal the page it opens. Checked
+# through to the page rather than stopping at the card: two numbers that agree
+# with each other and not with the list behind them are two wrong numbers.
+def _ring_totals(context):
+    return {
+        ring["key"]: ring["status"]["total"]
+        for ring in context["tracking_rings"]["rings"]
+    }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("direction", ["incoming", "outgoing"])
+def test_each_direction_ring_is_the_card_above_it_and_the_page_it_opens(
+    client, users, traffic, direction
+):
+    client.force_login(users["sup"])
+    context = client.get(DASHBOARD).context
+
+    ring = _ring_totals(context)[direction]
+    assert ring > 0, "the fixture sends SUP work both ways"
+    assert ring == context[f"{direction}_count"]
+    assert ring == len(page_records(client, f"{TRACKING}?scope={direction}"))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("code", ["MED", "SUP", "HR"])
+def test_the_rings_answer_for_the_picked_office(client, users, offices, traffic, code):
+    client.force_login(users["admin"])
+    pk = offices[code].pk
+    context = client.get(f"{DASHBOARD}?office={pk}").context
+
+    rings = _ring_totals(context)
+    assert set(rings) == {"incoming", "outgoing"}
+    for direction in ("incoming", "outgoing"):
+        assert rings[direction] == context[f"{direction}_count"], (code, direction)
+        assert rings[direction] == len(
+            page_records(client, f"{TRACKING}?scope={direction}&office={pk}")
+        ), (code, direction)
+
+
+def _slice_records(client, context):
+    """Every direction ring slice checked against its page, returning the pks
+    each ring's slices open, per direction."""
+    opened = {}
+    for ring in context["tracking_rings"]["rings"]:
+        seen = set()
+        for row in ring["status"]["slices"]:
+            listed = page_records(client, row["url"])
+            assert row["total"] == len(listed), (ring["key"], row["label"], row["url"])
+            assert not seen & listed, "a record in two slices of one ring"
+            seen |= listed
+        assert len(seen) == ring["status"]["total"], ring["key"]
+        opened[ring["key"]] = seen
+    return opened
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("who", "picked"), [("sup", None), ("admin", "SUP"), ("admin", "HR"), ("med_admin", None)]
+)
+def test_every_direction_slice_opens_exactly_what_it_counted(
+    client, users, offices, traffic, who, picked
+):
+    """Looped over the slices, like the ring test above, so a stage added to
+    the rings later is covered without anybody remembering to cover it."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _slice_records(client, context)
+    assert set(opened) == {"incoming", "outgoing"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), [("sup", None), ("admin", "SUP"), ("admin", "HR")])
+def test_no_record_is_in_both_rings(client, users, offices, traffic, who, picked):
+    """Compared as records, not as counts. Two rings of 3 and 2 could share a
+    record and still add up to five of something."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _slice_records(client, context)
+    assert opened["incoming"] and opened["outgoing"], "both directions have traffic"
+    assert opened["incoming"].isdisjoint(opened["outgoing"])
+
+
+@pytest.mark.django_db
+def test_a_slice_link_names_the_office_only_when_one_was_picked(client, users, offices, traffic):
+    """An ordinary account's own office is implied, and naming it anyway puts
+    "your account may not filter by office" on every slice it clicks."""
+    client.force_login(users["sup"])
+    for ring in client.get(DASHBOARD).context["tracking_rings"]["rings"]:
+        for row in ring["status"]["slices"]:
+            assert "office=" not in row["url"], row["url"]
+
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+    for ring in client.get(f"{DASHBOARD}?office={pk}").context["tracking_rings"]["rings"]:
+        for row in ring["status"]["slices"]:
+            assert f"office={pk}" in row["url"], row["url"]
+
+
+# --- the overdue view of the rings -------------------------------------------
+@pytest.fixture
+def late_traffic(traffic):
+    """Four of the fixture's five documents past their deadline, spread across
+    both directions and all three stages, so the overdue rings have something in
+    every place a mistake could hide."""
+    from django.utils import timezone
+
+    past = timezone.now() - timedelta(days=2)
+    late = [traffic[key].pk for key in ("arriving", "working", "sent", "elsewhere")]
+    TrackingRecord.objects.filter(pk__in=late).update(due_at=past)
+    return traffic
+
+
+VIEWERS = [("sup", None), ("admin", "SUP"), ("admin", "HR"), ("admin", None), ("med_admin", None)]
+
+
+def _opened(client, context, view):
+    """Each ring's slices for one view checked against their pages; the pks each
+    ring's slices open."""
+    opened = {}
+    for ring in context["tracking_rings"]["rings"]:
+        seen = set()
+        for row in ring[view]["slices"]:
+            listed = page_records(client, row["url"])
+            assert row["total"] == len(listed), (ring["key"], view, row["label"], row["url"])
+            seen |= listed
+        assert len(seen) == ring[view]["total"], (ring["key"], view)
+        opened[ring["key"]] = seen
+    return opened
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_every_overdue_slice_opens_exactly_what_it_counted(
+    client, users, offices, late_traffic, who, picked
+):
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    opened = _opened(client, context, "overdue")
+    rings = context["tracking_rings"]
+    assert rings["overdue_total"] == sum(len(pks) for pks in opened.values())
+    assert rings["overdue_total"] > 0, "the fixture is late in every direction"
+    for row in (s for ring in rings["rings"] for s in ring["overdue"]["slices"]):
+        assert "overdue=yes" in row["url"], row["url"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_the_overdue_rings_are_a_subset_of_the_status_rings(
+    client, users, offices, late_traffic, who, picked
+):
+    """Same slices, overdue documents only: the switch changes which documents
+    are counted and nothing else, so every overdue slice is inside the status
+    slice of the same stage."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    context = client.get(DASHBOARD + query).context
+
+    status, overdue = _opened(client, context, "status"), _opened(client, context, "overdue")
+    for key in status:
+        assert overdue[key] <= status[key], key
+    for ring in context["tracking_rings"]["rings"]:
+        by_stage = {row["key"]: row["total"] for row in ring["status"]["slices"]}
+        for row in ring["overdue"]["slices"]:
+            assert row["total"] <= by_stage[row["key"]], (ring["key"], row["key"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("who", "picked"), VIEWERS)
+def test_the_overdue_note_says_how_the_rings_relate_to_the_card(
+    client, users, offices, late_traffic, who, picked
+):
+    """The rings count what is moving in or out now; the card, every overdue
+    document the office has touched. Never more in the rings than on the card,
+    and the page says which is which rather than leaving the reader to add."""
+    client.force_login(users[who])
+    query = f"?office={offices[picked].pk}" if picked else ""
+    response = client.get(DASHBOARD + query)
+    context = response.context
+
+    rings, card = context["tracking_rings"]["overdue_total"], context["overdue_count"]
+    assert rings <= card
+    body = " ".join(response.content.decode().split())
+    assert f"{rings} of the {card} overdue document" in body
+
+
+@pytest.mark.django_db
+def test_the_view_is_in_the_address_and_survives_a_change_of_office(
+    client, users, offices, late_traffic
+):
+    client.force_login(users["admin"])
+    pk = offices["SUP"].pk
+
+    default = client.get(f"{DASHBOARD}?office={pk}")
+    assert default.context["tracking_rings"]["view"] == "status"
+    body = default.content.decode()
+    assert 'name="ring" value="overdue" data-ring-view-input disabled' in body
+
+    chosen = client.get(f"{DASHBOARD}?office={pk}&ring=overdue")
+    rings = chosen.context["tracking_rings"]
+    assert rings["view"] == "overdue"
+    assert f"office={pk}" in rings["view_urls"]["status"]
+    assert "ring=" not in rings["view_urls"]["status"]
+    assert f"office={pk}" in rings["view_urls"]["overdue"] and "ring=overdue" in rings["view_urls"]["overdue"]
+    body = chosen.content.decode()
+    assert 'data-ring-view-input disabled' not in body
+    assert '<div data-ring-panel="overdue">' in body
+    assert '<div data-ring-panel="status" hidden>' in body
+
+    assert client.get(f"{DASHBOARD}?ring=nonsense").context["tracking_rings"]["view"] == "status"
+
+
+@pytest.mark.django_db
+def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffic):
+    """Under every office Incoming and Outgoing are the same records, so two
+    rings would be two identical rings. One ring for the university, a caption
+    saying how to get the split, and the two direction cards disabled."""
+    client.force_login(users["admin"])
+    response = client.get(DASHBOARD)
+    rings = response.context["tracking_rings"]
+    body = " ".join(response.content.decode().split())
+
+    assert rings["split"] is False
+    assert [ring["key"] for ring in rings["rings"]] == ["all"]
+    assert "Pick an office above to see incoming and outgoing separately." in body
+    assert body.count('stat-card is-disabled') == 1 and body.count('stat-card gold is-disabled') == 1
+    assert response.context["incoming_count"] is None
+    assert response.context["outgoing_count"] is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("who", ["sup", "med_admin"])
+def test_an_office_is_never_shown_the_every_office_view(client, users, traffic, who):
+    client.force_login(users[who])
+    response = client.get(DASHBOARD)
+
+    assert response.context["tracking_rings"]["split"] is True
+    assert "is-disabled" not in response.content.decode().split('<div class="row g-4 mb-1"')[0]
+
+
+@pytest.mark.django_db
+def test_only_a_system_administrator_is_offered_all_offices(client, users, offices, traffic):
+    """For an office administrator the empty choice means their own office, so
+    an "All offices" option claimed a scope the page never showed."""
+    client.force_login(users["med_admin"])
+    assert '<option value="">All offices</option>' not in client.get(DASHBOARD).content.decode()
+
+    client.force_login(users["admin"])
+    assert '<option value="">All offices</option>' in client.get(DASHBOARD).content.decode()
+
+
 # --- the office picker -----------------------------------------------------
 @pytest.mark.django_db
 def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traffic):
@@ -355,12 +615,19 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     own = client.get(DASHBOARD).context
     picked = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context
 
-    assert picked["incoming_count"] != own["incoming_count"], "the picker did nothing"
+    # Every office has no direction to count, so the cards are not counted
+    # there at all (see test_every_office_shows_one_ring_and_no_direction).
+    assert own["incoming_count"] is None and own["outgoing_count"] is None
+    assert picked["incoming_count"] is not None, "the picker did nothing"
     # SUP's desk, as SUP sees it.
     client.force_login(users["sup"])
     theirs = client.get(DASHBOARD).context
     assert picked["incoming_count"] == theirs["incoming_count"]
     assert picked["outgoing_count"] == theirs["outgoing_count"]
+    # And the rings under the cards moved with them.
+    assert _ring_totals(picked) == _ring_totals(theirs) == {
+        "incoming": theirs["incoming_count"], "outgoing": theirs["outgoing_count"],
+    }
 
 
 @pytest.mark.django_db
@@ -459,9 +726,13 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         # condition across the stages and not a queue. Its query is named here
         # rather than assumed, so a card that stops carrying the office is still
         # caught — a missing match raises on .group() rather than passing.
-        for key, filter_query in (("incoming_count", "scope=incoming"),
-                                  ("outgoing_count", "scope=outgoing"),
-                                  ("overdue_count", "overdue=yes")):
+        cards = [("overdue_count", "overdue=yes")]
+        if query:
+            cards += [("incoming_count", "scope=incoming"), ("outgoing_count", "scope=outgoing")]
+        else:
+            # Disabled under every office: no link to follow.
+            assert not re.search(r'class="stat-card[^"]*" href="/tracking/\?scope=(in|out)going', body)
+        for key, filter_query in cards:
             match = re.search(rf'href="(/tracking/\?{filter_query}[^"]*)"', body)
             assert match, (filter_query, query)
             href = match.group(1)
@@ -470,6 +741,13 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         for row in response.context["breakdown"]["slices"]:
             if row["url"].startswith(TRACKING):
                 assert row["total"] == len(page_records(client, row["url"])), (row["label"], query)
+
+        rings = response.context["tracking_rings"]
+        for ring in rings["rings"]:
+            for row in ring["status"]["slices"]:
+                assert row["total"] == len(page_records(client, row["url"])), (ring["key"], row["label"], query)
+        figure = rings["pending_upload"]
+        assert figure["total"] == len(page_records(client, figure["url"])), query
 
 
 @pytest.mark.django_db
@@ -1084,6 +1362,12 @@ def test_the_scope_label_matches_what_the_cards_count(client, users, traffic, wh
     client.force_login(users[who])
     context = client.get(DASHBOARD).context
 
+    if context["scope"]["all_offices"]:
+        # Every office has no direction to count. The card is disabled rather
+        # than showing the degenerate number, which read every routed record
+        # over a page that also listed drafts and pending uploads.
+        assert context["incoming_count"] is None
+        return
     assert context["incoming_count"] == len(page_records(client, f"{TRACKING}?scope=incoming"))
 
 

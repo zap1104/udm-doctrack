@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.db.models import Q
 from django.http import QueryDict
 
 from apps.accounts.models import Office
@@ -120,6 +121,36 @@ class ResolvedFilters:
         in the singular.
         """
         return self.statuses[0] if len(self.statuses) == 1 else ""
+
+
+def office_touches_record_q(office) -> Q:
+    """Every way an office is involved in a record, as one named condition.
+
+    Four relationships, not two. `recalculate_status()` sets `current_office` to
+    the *sending* office while a batch is unreceived — correctly, because that
+    is the last office with confirmed custody. So for MED → SUP with SUP yet to
+    confirm, both `originating_office` and `current_office` read MED, and an
+    office asking for its own records by name could not see the documents
+    sitting unreceived in its own inbox.
+
+    Unscoped by batch on purpose: this answers "everything this office touched",
+    including hops it has since passed on. That is a different question from
+    `tracking.services.apply_scope`, which answers "what is on this office's
+    desk *now*", and the two must not be collapsed into each other.
+
+    Named here because two pages ask this question and each had its own answer.
+    The dashboard matched two relationships and carried a comment claiming it
+    was "the same pairing Reports filters on"; that was true when written and
+    false fifty commits later, and nothing compared the two pages, so the drift
+    went unnoticed. A shared definition is a thing with a name, and this module
+    is where the one filter language lives.
+    """
+    return (
+        Q(originating_office=office)
+        | Q(current_office=office)
+        | Q(routing_steps__to_office=office)
+        | Q(routing_steps__from_office=office)
+    )
 
 
 def _office_by_pk_or_code(raw: str) -> Office | None:

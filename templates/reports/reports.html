@@ -53,8 +53,8 @@
         <h2 id="report-filters-title">Report scope</h2>
         <div class="report-caption">Applied to every figure and chart on this page.</div>
       </div>
-      {% if filters.office %}
-        <a class="small" href="{% url 'core:reports' %}">Clear</a>
+      {% if filters.office and not filters.defaulted %}
+        <a class="small" href="{% url 'core:reports' %}">{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
       {% endif %}
     </div>
     <div class="card-udm-body">
@@ -73,7 +73,12 @@
         <div class="col-sm-6 col-lg-6">
           <label class="form-label" for="report-office">Office</label>
           <select class="form-select" id="report-office" name="office" data-auto-submit>
-            <option value="">All offices you can see</option>
+            {% comment %}
+              System administrators only. For an office administrator an empty
+              choice is their own office, so this option reloaded the page on the
+              office already shown under a label promising more.
+            {% endcomment %}
+            {% if user.is_system_admin %}<option value="">All offices</option>{% endif %}
             {% for office in filter_offices %}
               <option value="{{ office.pk }}" {% if filters.office.pk == office.pk %}selected{% endif %}>
                 {{ office.code }} — {{ office.name }}
@@ -140,6 +145,17 @@
         {% else %}
           <div class="hint">Sent but not yet acknowledged</div>
         {% endif %}
+        {% comment %}
+          Named rather than dropped. These are unconfirmed steps from batches the
+          record has already moved past — a receipt nobody will ever give. They
+          used to be inside the headline, which is why it never matched the split
+          beneath it; counting them as live work was wrong, and removing them
+          without a word would take a number a reader had been watching and give
+          no account of where it went.
+        {% endcomment %}
+        {% if stale_receipts %}
+          <div class="hint">{{ stale_receipts }} earlier hop{{ stale_receipts|pluralize }} never confirmed</div>
+        {% endif %}
       </a>
     </div>
     <div class="col-6 col-lg-3">
@@ -160,7 +176,7 @@
       <div class="stat-card green">
         <div class="label">Completed</div>
         <div class="value">{{ completed_records }}</div>
-        <div class="hint">{{ completion_rate }}% of all tracked documents</div>
+        <div class="hint">{{ completion_rate }}% of documents in circulation</div>
       </div>
     </div>
   </div>
@@ -175,27 +191,27 @@
       reset that gap cannot be seen at all. Created is the tracking side and
       Completed is the repository side, which is what the pairing is for.
     {% endcomment %}
-    <div class="col-xl-7">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Cumulative tracking volume</h2>
+            <h2>Created, handed over and completed</h2>
             <div class="report-caption">
-              Running totals since records began — created, transferred or endorsed,
-              and completed. The gap between created and completed is what is still open.
+              Running totals. The gap between created and completed is work still in the building.
             </div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Created</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Transferred</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Completed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
           </div>
         </div>
         <div class="card-udm-body">
           {% if monthly.total %}
+            <div class="column-chart-frame">
             <div class="column-chart" role="img"
-                 aria-label="Grouped column chart of cumulative documents created, transferred and completed per month. The table below lists every value.">
-              <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                 aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
+              {% include "core/_column_axis.html" with ticks=monthly.ticks %}
               <div class="column-chart-plot">
                 {% for row in monthly.rows %}
                   {% comment %}
@@ -203,17 +219,9 @@
                     paint a value that is not there. On a cumulative series this
                     only happens before the first record exists.
                   {% endcomment %}
-                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.transferred }} transferred, {{ row.completed }} completed (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
+                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
                     <div class="column-pair">
-                      {% if row.created %}
-                        <span class="column column--one" style="height:{{ row.created_percent }}%"></span>
-                      {% endif %}
-                      {% if row.transferred %}
-                        <span class="column column--three" style="height:{{ row.transferred_percent }}%"></span>
-                      {% endif %}
-                      {% if row.completed %}
-                        <span class="column column--two" style="height:{{ row.completed_percent }}%"></span>
-                      {% endif %}
+                      {% include "core/_columns.html" %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>
@@ -221,23 +229,37 @@
               </div>
             </div>
             <div class="chart-scale">
-              Tallest column = {{ monthly.ceiling }} document{{ monthly.ceiling|pluralize }} ·
-              {{ monthly.outstanding }} still open
+              Top of the chart = {{ monthly.ceiling }} · {{ monthly.outstanding }} still open ·
+              every bar carries its own running total
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Each month is the position at the end of that month, counted from the
+                first document in the system — not that month on its own.
+              </p>
+              <p>
+                Created and Completed count documents; the gap between them is the work
+                still in the building. Handovers count moves between offices, so one
+                document endorsed four times adds four — which is why that bar is
+                usually the tallest and why it is not a count of documents. Each bar
+                carries its own number so the three are never mistaken for one another.
+              </p>
+            </details>
             <details class="chart-table">
               <summary>View as table</summary>
               <div class="table-responsive"><table class="table-udm">
                 <thead><tr>
                   <th>Month</th>
                   <th class="text-end">Created</th>
-                  <th class="text-end">Transferred</th>
+                  <th class="text-end">Handovers</th>
                   <th class="text-end">Completed</th>
                   <th class="text-end">Added this month</th>
                 </tr></thead>
                 <tbody>
                   {% for row in monthly.rows %}
                     <tr>
-                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                       <td class="text-end num">{{ row.created }}</td>
                       <td class="text-end num">{{ row.transferred }}</td>
                       <td class="text-end num">{{ row.completed }}</td>
@@ -247,6 +269,7 @@
                 </tbody>
               </table></div>
             </details>
+            </div>
           {% else %}
             <div class="report-empty">No tracking activity recorded yet.</div>
           {% endif %}
@@ -255,19 +278,28 @@
     </div>
 
     <!-- status mix -->
-    <div class="col-xl-5">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Records by status</h2>
+            <h2>Documents by stage</h2>
             <div class="report-caption">
-              Where the {{ total_records }} record{{ total_records|pluralize }} stand right now.
-              Overdue is a deadline condition on top of these, counted separately above.
+              Where the {{ total_records }} document{{ total_records|pluralize }} stand right now.
+              {% if total_records %}Each bar is a stage's share of all of them.{% endif %}
               {% if scope_office %}
                 Incoming and outgoing are measured from
                 <strong>{{ scope_office.code }} — {{ scope_office.name }}</strong>.
               {% endif %}
             </div>
+            <details class="chart-note">
+              <summary>How to read this</summary>
+              <p>
+                Every document is in exactly one stage, so these add up to the total
+                above. Overdue is not a stage: a document is late or on time whatever
+                stage it is at, so it is counted separately on its own card and in
+                <em>Overdue: who must act next</em> below.
+              </p>
+            </details>
           </div>
         </div>
         <div class="card-udm-body">
@@ -296,7 +328,7 @@
               <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
               <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
               <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{{ row.percent }}%</span>
+              <span class="status-share num">{% share row.total total_records %}</span>
             </div>
             {% if scope_office %}
               <div class="status-direction">
@@ -319,10 +351,9 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Turnaround</h2>
+            <h2>How long documents take</h2>
             <div class="report-caption">
-              Averages from the sent, received and completed timestamps, counted in
-              <strong>office hours</strong>. Calendar time is shown beneath each one.
+              Averages since records began, in working hours. Calendar time is beneath each one.
             </div>
           </div>
         </div>
@@ -335,20 +366,25 @@
             actually waited, which is the fair way to answer them. Either one
             alone misleads, in opposite directions.
           {% endcomment %}
+          {% comment %}
+            Each average says how many it is taken over, so "4 hrs" from three
+            documents is not read with the weight of "4 hrs" from three hundred.
+            A stage with nothing to average says so rather than printing a dash.
+          {% endcomment %}
           <div class="report-metric">
-            <span>Average time to confirm receipt</span>
+            <span>Average time to confirm receipt<br><small class="text-muted">sent → confirmed · {{ turnaround.receipt_samples }} handover{{ turnaround.receipt_samples|pluralize }}</small></span>
             <strong>{{ turnaround.receipt }}
               <small class="d-block text-muted fw-normal">{{ turnaround.receipt_calendar }} on the calendar</small>
             </strong>
           </div>
           <div class="report-metric">
-            <span>Average time in process<br><small class="text-muted">first receipt → completion</small></span>
+            <span>Average time in process<br><small class="text-muted">first receipt → completion · {{ turnaround.processing_samples }} document{{ turnaround.processing_samples|pluralize }}</small></span>
             <strong>{{ turnaround.processing }}
               <small class="d-block text-muted fw-normal">{{ turnaround.processing_calendar }} on the calendar</small>
             </strong>
           </div>
           <div class="report-metric">
-            <span>Average total lifetime<br><small class="text-muted">created → completed</small></span>
+            <span>Average total lifetime<br><small class="text-muted">created → completed · {{ turnaround.lifetime_samples }} document{{ turnaround.lifetime_samples|pluralize }}</small></span>
             <strong>{{ turnaround.lifetime }}
               <small class="d-block text-muted fw-normal">{{ turnaround.lifetime_calendar }} on the calendar</small>
             </strong>
@@ -364,14 +400,22 @@
               <span class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></span>
             </div>
             <div class="meter-foot">
-              {{ turnaround.on_time }} of {{ turnaround.on_time_total }} completed record{{ turnaround.on_time_total|pluralize }} that had a deadline
+              {{ turnaround.on_time }} of {{ turnaround.on_time_total }} completed document{{ turnaround.on_time_total|pluralize }} that had a deadline
             </div>
           </div>
 
-          <p class="form-text mt-3 mb-0">
-            {{ turnaround.unreceived }} routing step{{ turnaround.unreceived|pluralize }}
-            {{ turnaround.unreceived|pluralize:"is,are" }} still waiting for a receipt confirmation.
-          </p>
+          {% comment %}
+            Why the receipt average cannot be complete yet: handovers still
+            waiting to be confirmed, in the batch each document is on now. It
+            counted every unconfirmed step ever written, finished documents and
+            superseded hops included, which will never be confirmed.
+          {% endcomment %}
+          {% if turnaround.awaiting_confirmation %}
+            <p class="form-text mt-3 mb-0">
+              Not yet in the receipt average: {{ turnaround.awaiting_confirmation }}
+              handover{{ turnaround.awaiting_confirmation|pluralize }} still waiting for the receiving office to confirm.
+            </p>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -381,12 +425,19 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Overdue documents by accountable office</h2>
+            <h2>Overdue: who must act next</h2>
+            {% comment %}
+              Says which question it answers, on screen. The dashboard memo groups
+              the same overdue documents by custody — where each one sits — and
+              the two give different per-office figures. Both are right; a reader
+              flipping between them had nothing telling them why they differ.
+            {% endcomment %}
             <div class="report-caption">
-              Who owes the next move. An office waiting to <em>receive</em> a document is
-              listed here, not the office that already sent it. A document waiting on two
-              offices appears under both, so these can total more than the
-              {{ overdue_all }} overdue above.
+              The office that owes the next move on each overdue document.
+              {% if overdue_accountability.whole %}
+                Each bar is a share of all {{ overdue_accountability.whole }} overdue document{{ overdue_accountability.whole|pluralize }}.
+                {% if overdue_accountability.overlaps %}A document waiting on two offices counts for both, so these add up to more than 100%.{% endif %}
+              {% endif %}
             </div>
           </div>
           <div class="chart-legend">
@@ -408,15 +459,17 @@
             <div class="report-office-row">
               <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
               <div class="report-series">
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>Awaiting receipt</span>
                   <div class="report-bar"><i class="bar-alert" style="width:{{ row.awaiting_percent }}%"></i></div>
                   <strong class="num">{{ row.awaiting }}</strong>
+                  <span class="status-share num">{% share row.awaiting overdue_accountability.whole %}</span>
                 </div>
-                <div class="report-series-item">
+                <div class="report-series-item report-series-item--share">
                   <span>In their hands</span>
                   <div class="report-bar"><i class="bar-alert-soft" style="width:{{ row.holding_percent }}%"></i></div>
                   <strong class="num">{{ row.holding }}</strong>
+                  <span class="status-share num">{% share row.holding overdue_accountability.whole %}</span>
                 </div>
               </div>
             </div>
@@ -442,6 +495,7 @@
       </div>
     </div>
 
+    {% if university_wide %}
     {% comment %}
       Which office handled the most documents. "Handled" means received: an
       office that confirms receipt has taken the document on. Counting what an
@@ -454,30 +508,38 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Documents handled by office</h2>
-            <div class="report-caption">Confirmed receipts. Cumulative since records began, and this month.</div>
+            <h2>Documents received by office</h2>
+            <div class="report-caption">
+              Receipts an office has confirmed, since records began.
+              {% if office_volume.receipts %}Each bar is an office's share of all {{ office_volume.receipts }}.{% endif %}
+            </div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Cumulative</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>This month</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received" aria-hidden="true"></i>Since records began</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received-part" aria-hidden="true"></i>This month (+)</span>
           </div>
         </div>
         <div class="card-udm-body">
+          {% comment %}
+            One line per office: one bar on one scale, with the part received
+            this month drawn at its end. Two bars against two ceilings (the
+            busiest office's total, and the busiest office's month) made 1 this
+            month look half as big as 42 since records began. The office name
+            carries the row, so no series label repeats the panel's title.
+
+            The scale is every receipt, not the busiest office: the bar is the
+            share printed beside it. The last row may be "Other (n offices)".
+          {% endcomment %}
           {% for row in office_volume.rows %}
-            <div class="report-office-row">
-              <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
-              <div class="report-series">
-                <div class="report-series-item">
-                  <span>Cumulative</span>
-                  <div class="report-bar"><i class="bar-one" style="width:{{ row.cumulative_percent }}%"></i></div>
-                  <strong class="num">{{ row.cumulative }}</strong>
-                </div>
-                <div class="report-series-item">
-                  <span>This month</span>
-                  <div class="report-bar"><i class="bar-two" style="width:{{ row.this_month_percent }}%"></i></div>
-                  <strong class="num">{{ row.this_month }}</strong>
-                </div>
+            <div class="report-series-item report-series-item--wide report-series-item--share report-series-item--month{% if row.is_remainder %} report-series-item--remainder{% endif %}"
+                 title="{{ row.name }} &mdash; {{ row.cumulative }} received, {{ row.this_month }} this month">
+              <span>{% if row.is_remainder %}{{ row.name }}{% else %}{{ row.code }} · {{ row.name|truncatechars:38 }}{% endif %}</span>
+              <div class="report-bar">
+                <i class="bar-received" style="width:{{ row.cumulative_percent }}%"><b class="bar-part" style="width:{{ row.this_month_share }}%"></b></i>
               </div>
+              <strong class="num">{{ row.cumulative }}</strong>
+              <span class="status-share num">{% share row.cumulative office_volume.receipts %}</span>
+              <span class="status-share num" title="Received this month">+{{ row.this_month }}</span>
             </div>
           {% empty %}
             <div class="report-empty">No office has confirmed receipt of a document yet.</div>
@@ -491,28 +553,33 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Transferred vs received by office</h2>
-            <div class="report-caption">Counted from routing steps, so every forward is included — not only first sends.</div>
+            <h2>Handovers by office: sent and confirmed</h2>
+            <div class="report-caption">
+              Every forward counted, not only the first send.
+              {% if office_flow.handovers %}Each bar is a share of all {{ office_flow.handovers }} handovers.{% endif %}
+            </div>
           </div>
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Transferred</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--two" aria-hidden="true"></i>Received</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Sent</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--received" aria-hidden="true"></i>Confirmed</span>
           </div>
         </div>
         <div class="card-udm-body">
-          {% for row in office_flow %}
-            <div class="report-office-row">
-              <div class="report-office-label" title="{{ row.name }}">{{ row.code }} · {{ row.name|truncatechars:38 }}</div>
+          {% for row in office_flow.rows %}
+            <div class="report-office-row{% if row.is_remainder %} report-office-row--remainder{% endif %}">
+              <div class="report-office-label" title="{{ row.name }}">{% if row.is_remainder %}{{ row.name }}{% else %}{{ row.code }} · {{ row.name|truncatechars:38 }}{% endif %}</div>
               <div class="report-series">
-                <div class="report-series-item">
-                  <span>Transferred</span>
-                  <div class="report-bar"><i class="bar-one" style="width:{{ row.sent_percent }}%"></i></div>
+                <div class="report-series-item report-series-item--share">
+                  <span>Sent</span>
+                  <div class="report-bar"><i class="bar-pending" style="width:{{ row.sent_percent }}%"></i></div>
                   <strong class="num">{{ row.sent }}</strong>
+                  <span class="status-share num">{% share row.sent office_flow.handovers %}</span>
                 </div>
-                <div class="report-series-item">
-                  <span>Received</span>
-                  <div class="report-bar"><i class="bar-two" style="width:{{ row.received_percent }}%"></i></div>
+                <div class="report-series-item report-series-item--share">
+                  <span>Confirmed</span>
+                  <div class="report-bar"><i class="bar-received" style="width:{{ row.received_percent }}%"></i></div>
                   <strong class="num">{{ row.received }}</strong>
+                  <span class="status-share num">{% share row.received office_flow.handovers %}</span>
                 </div>
               </div>
             </div>
@@ -522,6 +589,48 @@
         </div>
       </div>
     </div>
+    {% elif office_activity %}
+      {% comment %}
+        One office's own handovers, where the two rankings would otherwise sit.
+        Ranked beside other offices, those rows counted only the documents this
+        office touched and read as the other offices' whole figures. This row is
+        complete: every handover to or from an office is on a document it touched.
+      {% endcomment %}
+      <div class="col-12">
+        <div class="card-udm">
+          <div class="card-udm-head">
+            <div>
+              <h2>What {{ scope_office.code }} received and sent</h2>
+              <div class="report-caption">Counted in handovers: a document forwarded twice is two.</div>
+            </div>
+          </div>
+          <div class="card-udm-body">
+            <div class="office-activity">
+              <div class="office-activity-figure">
+                <span>Received and confirmed</span>
+                <strong class="num">{{ office_activity.received }}</strong>
+                <small>since records began</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Received in {{ office_activity.month|date:"F" }}</span>
+                <strong class="num">{{ office_activity.received_this_month }}</strong>
+                <small>confirmed this month</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Sent</span>
+                <strong class="num">{{ office_activity.sent }}</strong>
+                <small>{{ office_activity.sent_confirmed }} confirmed by the receiving office</small>
+              </div>
+              <div class="office-activity-figure">
+                <span>Sent, not yet confirmed</span>
+                <strong class="num">{{ office_activity.sent_waiting }}</strong>
+                <small>waiting on the receiving office</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 </section>
 
@@ -530,47 +639,90 @@
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>
-      <p>Repository volume, document types, and search activity.</p>
+      <p>How much is kept, what kind, and where it stands against its retention schedule.</p>
     </div>
   </div>
 
+  {% comment %}
+    What every reader of the repository report needs: how much is kept, and
+    where it stands against its retention schedule. Each card opens the
+    repository filtered the same way, so the number is the list.
+
+    "Document types in use" was here, and counted the rows of the type panel —
+    which include "Unclassified" and an "Other (n types)" line — so it was
+    neither the number of types nor anything a reader acted on.
+  {% endcomment %}
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-      <div class="stat-card green">
+      <a class="stat-card green" href="{{ retention.all_url }}">
         <div class="label">Repository documents</div>
         <div class="value">{{ total_documents }}</div>
-        <div class="hint">Completed, archived and historical records</div>
-      </div>
+        <div class="hint">Filed from tracking, and historical files and scans</div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="stat-card gold">
-        <div class="label">Without tags</div>
-        <div class="value">{{ untagged_documents }}</div>
-        <div class="hint">Metadata cleanup required</div>
-      </div>
+      <a class="stat-card red" href="{{ retention.due_url }}">
+        <div class="label">Due for retention review</div>
+        <div class="value">{{ retention.due }}</div>
+        <div class="hint">Past their retention date</div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="stat-card navy">
-        <div class="label">Without extracted text</div>
-        <div class="value">{{ documents_without_text }}</div>
-        <div class="hint">Searchable by metadata only</div>
-      </div>
+      <a class="stat-card gold" href="{{ retention.soon_url }}">
+        <div class="label">Due in the next 90 days</div>
+        <div class="value">{{ retention.soon }}</div>
+        <div class="hint">Retention date coming up</div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="stat-card">
-        <div class="label">Document types in use</div>
-        <div class="value">{{ document_types|length }}</div>
-        <div class="hint">Distinct types across the repository</div>
-      </div>
+      <a class="stat-card" href="{{ retention.unscheduled_url }}">
+        <div class="label">No retention date</div>
+        <div class="value">{{ retention.unscheduled }}</div>
+        <div class="hint">Never scheduled for review</div>
+      </a>
     </div>
   </div>
 
+  {% if extraction %}
+    {% comment %}
+      Upkeep, for administrators: tagging and text extraction are theirs to fix,
+      and an office clerk shown "12 failed extractions" has nothing to do with it.
+    {% endcomment %}
+    <div class="report-section-subhead">Repository upkeep · administrators</div>
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="stat-card">
+          <div class="label">Without tags</div>
+          <div class="value">{{ untagged_documents }}</div>
+          <div class="hint">Harder to find by tag</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        {% comment %}
+          Failed and empty only — the documents with no text and none coming
+          unless somebody acts. It counted every blank `ocr_text`, so a document
+          queued for extraction seconds ago read the same as one whose extraction
+          failed. In-progress and skipped are named underneath, not folded in.
+        {% endcomment %}
+        <div class="stat-card navy">
+          <div class="label">Without extracted text</div>
+          <div class="value">{{ extraction.needs_attention }}</div>
+          <div class="hint">
+            {{ extraction.failed }} failed · {{ extraction.empty }} found no text
+            {% if extraction.in_progress %}<br>{{ extraction.in_progress }} still extracting{% endif %}
+            {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped, searchable by metadata only{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="row g-4">
-    <div class="col-xl-7">
+    <div class="col-12">
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Monthly repository volume</h2>
+            <h2>Documents filed each month</h2>
             <div class="report-caption">
               Documents added to the repository, last 12 months. <strong>Completed</strong>
               came out of tracking — work the offices finished and an administrator
@@ -585,36 +737,34 @@
             office is doing.
           {% endcomment %}
           <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--one" aria-hidden="true"></i>Completed</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--three" aria-hidden="true"></i>Historical</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
+            <span class="chart-key"><i class="chart-swatch chart-swatch--historical" aria-hidden="true"></i>Historical</span>
           </div>
         </div>
         <div class="card-udm-body">
           {% if total_documents %}
+            <div class="column-chart-frame">
             <div class="column-chart" role="img"
                  aria-label="Grouped column chart of documents added per month, split into completed records filed from tracking and historical uploads. The table below lists every value.">
-              <div class="column-chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              {% include "core/_column_axis.html" with ticks=document_months.ticks %}
               <div class="column-chart-plot">
-                {% for row in document_months %}
+                {% for row in document_months.rows %}
                   <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.completed }} completed, {{ row.historical }} historical">
                     <div class="column-pair">
                       {% comment %}
-                        A zero draws nothing: a minimum-height stub would paint a
-                        value that is not there, and on this chart it would read
-                        as "a few were filed" in a month when none were.
+                        A zero draws nothing, and gets no label: a minimum-height
+                        stub would paint a value that is not there, and on this
+                        chart it would read as "a few were filed" in a month when
+                        none were.
                       {% endcomment %}
-                      {% if row.completed %}
-                        <span class="column column--one" style="height:{{ row.completed_percent }}%"></span>
-                      {% endif %}
-                      {% if row.historical %}
-                        <span class="column column--three" style="height:{{ row.historical_percent }}%"></span>
-                      {% endif %}
+                      {% include "core/_columns.html" %}
                     </div>
                     <div class="column-label">{{ row.month|date:"M" }}</div>
                   </div>
                 {% endfor %}
               </div>
             </div>
+            <div class="chart-scale">Top of the chart = {{ document_months.ceiling }} · every bar carries its own count.</div>
             <details class="chart-table">
               <summary>View as table</summary>
               <div class="table-responsive"><table class="table-udm">
@@ -625,9 +775,9 @@
                   <th class="text-end">Total added</th>
                 </tr></thead>
                 <tbody>
-                  {% for row in document_months %}
+                  {% for row in document_months.rows %}
                     <tr>
-                      <td>{{ row.month|date:"F Y" }}</td>
+                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                       <td class="text-end num">{{ row.completed }}</td>
                       <td class="text-end num">{{ row.historical }}</td>
                       <td class="text-end num">{{ row.total }}</td>
@@ -636,6 +786,7 @@
                 </tbody>
               </table></div>
             </details>
+            </div>
           {% else %}
             <div class="report-empty">The repository is empty for these filters.</div>
           {% endif %}
@@ -643,15 +794,26 @@
       </div>
     </div>
 
-    <div class="col-xl-5">
+    <div class="col-12">
       <div class="card-udm h-100">
-        <div class="card-udm-head"><h2>Documents by type</h2></div>
+        <div class="card-udm-head">
+          <div>
+            <h2>Documents by type</h2>
+            {% if total_documents %}<div class="report-caption">Each bar is a type's share of all {{ total_documents }} document{{ total_documents|pluralize }}.</div>{% endif %}
+          </div>
+        </div>
         <div class="card-udm-body">
+          {% comment %}
+            The last row may be "Other (n types)", so the rows add up to every
+            document in the repository. "Unclassified" is a row of its own and
+            never folded into it — not knowing a document's type is a finding.
+          {% endcomment %}
           {% for row in document_types %}
-            <div class="report-series-item report-series-item--wide">
+            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}">
               <span>{{ row.label|truncatechars:30 }}</span>
-              <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
+              <div class="report-bar"><i class="bar-neutral" style="width:{{ row.bar_percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{% share row.total total_documents %}</span>
             </div>
           {% empty %}
             <div class="report-empty">No documents are classified yet.</div>
@@ -660,26 +822,6 @@
       </div>
     </div>
 
-    <div class="col-12">
-      <div class="card-udm h-100">
-        <div class="card-udm-head"><h2>Most used searches</h2></div>
-        <div class="card-udm-body">
-          <div class="row g-2 mb-3">
-            <div class="col-6"><div class="report-quality-row"><span>Queries</span><strong class="num">{{ search_analytics.queries }}</strong></div></div>
-            <div class="col-6"><div class="report-quality-row"><span>Result clicks</span><strong class="num">{{ search_analytics.clicks }}</strong></div></div>
-          </div>
-          {% for row in top_searches %}
-            <div class="report-series-item report-series-item--wide">
-              <span>{{ row.query|truncatechars:30 }} <small class="text-muted">· {{ row.clicks }} click{{ row.clicks|pluralize }}</small></span>
-              <div class="report-bar"><i class="bar-one" style="width:{{ row.percent }}%"></i></div>
-              <strong class="num">{{ row.total }}</strong>
-            </div>
-          {% empty %}
-            <div class="report-empty">No searches have been recorded.</div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 

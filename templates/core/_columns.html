@@ -1,0 +1,13 @@
+{% comment %}
+  One month's columns, each with its value above it. Shared by the three
+  column charts so the labelling rule is written once.
+
+  Every series in a month that has anything in it gets a number, a zero
+  included: a zero draws no bar (a stub would paint a value that is not there),
+  so without its "0" a series would simply be missing. A month with nothing in
+  any series draws nothing, because the axis already says 0.
+
+  Each column carries a title naming its series, month and value, for a reader
+  hovering on a desktop. The number above it is the same fact for everyone else.
+{% endcomment %}
+{% if row.has_values %}{% for column in row.columns %}<span class="column-item" title="{{ column.label }} · {{ row.month|date:'F Y' }}: {{ column.value }}"><span class="column-value{% if not column.value %} column-value--zero{% endif %}" style="bottom:{{ column.percent }}%">{{ column.value }}</span>{% if column.value %}<span class="column column--{{ column.series }}" style="height:{{ column.percent }}%"></span>{% endif %}</span>{% endfor %}{% endif %}

@@ -1009,7 +1009,7 @@ def _current_batch_steps(**extra):
     )
 
 
-def overdue_accountability(records):
+def overdue_accountability(records, whole=None):
     """Overdue work grouped by the office that owes the next move.
 
     Deliberately not `current_office`. `recalculate_status()` sets that to the
@@ -1032,8 +1032,16 @@ def overdue_accountability(records):
     some confirmed, and one awaiting record can raise rows against two offices.
     The counts are therefore per office, not a partition of the overdue total —
     the caller must label them that way.
+
+    Each bar is a share of `whole`, the number of overdue documents, which is
+    the question the panel answers: how much of the late work is this office's
+    to move. Pass it when the caller has already counted it; otherwise it is
+    counted here. Because of the overlap above the bars can add up to more than
+    one full track, and the caller says so when they do.
     """
     overdue = _overdue_scope(records)
+    if whole is None:
+        whole = overdue.count()
 
     awaiting = {
         (row["to_office__code"], row["to_office__name"]): row["total"]
@@ -1042,16 +1050,22 @@ def overdue_accountability(records):
             received_at__isnull=True,
             batch=F("record__current_batch"),
         )
+        .order_by()
         .values("to_office__code", "to_office__name")
         .annotate(total=Count("record", distinct=True))
     }
 
     holding = {
         (row["current_office__code"], row["current_office__name"]): row["total"]
-        for row in overdue.annotate(
-            _held=Exists(_current_batch_steps(received_at__isnull=False))
+        # Filtered on the `Exists` directly, not annotated and then filtered: an
+        # annotation made before `.values()` joins the GROUP BY by the columns it
+        # references from outside, which here is the record's primary key — one
+        # row per record, and the dict kept the last. Every holder read 1.
+        for row in overdue.filter(
+            Exists(_current_batch_steps(received_at__isnull=False)),
+            current_office__isnull=False,
         )
-        .filter(_held=True, current_office__isnull=False)
+        .order_by()
         .values("current_office__code", "current_office__name")
         .annotate(total=Count("id", distinct=True))
     }
@@ -1070,10 +1084,9 @@ def overdue_accountability(records):
         )
     rows.sort(key=lambda row: row["total"], reverse=True)
 
-    ceiling = max([row["total"] for row in rows], default=0)
     for row in rows:
-        row["awaiting_percent"] = _bar(row["awaiting"], ceiling)
-        row["holding_percent"] = _bar(row["holding"], ceiling)
+        row["awaiting_percent"] = _bar(row["awaiting"], whole)
+        row["holding_percent"] = _bar(row["holding"], whole)
     return rows
 
 
@@ -1109,10 +1122,15 @@ def _overdue_scope(records):
 
 
 def _bar(part: int, whole: int) -> int:
-    """Bar width as a percentage of the longest row, floored so a 1 is visible."""
+    """Bar width as a share of `whole`, floored so a 1 is visible.
+
+    Floored at 1%, as `core.analytics.bar` is. It was 4% while bars were drawn
+    against the longest row, where it only lifted the stubs; against the whole,
+    4% would draw one document in a hundred four times its size.
+    """
     if not whole:
         return 0
-    return max(4, round(part * 100 / whole)) if part else 0
+    return max(1, round(part * 100 / whole)) if part else 0
 
 
 # ---------------------------------------------------------------------------
@@ -1170,6 +1188,7 @@ def direction_totals(records, office) -> dict:
         return counts
     rows = (
         records.annotate(_direction=annotation)
+        .order_by()
         .values("_direction")
         .annotate(total=Count("id", distinct=True))
     )
@@ -1194,7 +1213,11 @@ def by_status_direction(records, office) -> list[dict]:
 
     tally: dict[str, dict] = {}
     if annotation is None:
-        rows = live.values("status").annotate(total=Count("id", distinct=True))
+        # `.order_by()` because Reports hands this a `.distinct()` queryset, and
+        # distinct puts Meta.ordering in the GROUP BY: a row per record, and the
+        # assignment below kept the last. Every status read 1 for a system
+        # administrator viewing every office.
+        rows = live.order_by().values("status").annotate(total=Count("id", distinct=True))
         for row in rows:
             tally[row["status"]] = {
                 "incoming": 0, "outgoing": 0, "other": 0, "total": row["total"],
@@ -1202,6 +1225,7 @@ def by_status_direction(records, office) -> list[dict]:
     else:
         rows = (
             live.annotate(_direction=annotation)
+            .order_by()
             .values("status", "_direction")
             .annotate(total=Count("id", distinct=True))
         )

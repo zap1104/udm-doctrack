@@ -83,6 +83,30 @@
   --chart-alert-soft: #cf6a5e;
   --chart-track: #e8edf3;
   --chart-grid: #eef1f6;
+  /* One colour per status, and the same colour wherever that status is drawn:
+     pill, ring slice, stage bar, trend line. The lifecycle reads left to right
+     as slate, amber, blue, mauve, teal, green; red is overdue, a condition on
+     top of any stage rather than a stage. Chosen so the statuses that touch in
+     a chart (ring slices, trend lines, the monthly columns) stay apart for
+     protanopia, deuteranopia and tritanopia, not only for full colour vision;
+     every status is also always drawn with its label. Each has a mark colour
+     (at least 3:1 on the surface), a soft fill and an ink (at least 7:1 on the
+     soft fill) for pills.
+
+     The --chart-* series below are not statuses and do not borrow one:
+     "created" is the brand navy, "historical" a neutral slate, "neutral" the
+     bars that count things with no status (document types, searches). */
+  --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
+  --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
+  --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
+  --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
+  --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
+  --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
+  --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
+  --chart-created: #0b315a;
+  --chart-historical: #7d889a;
+  --chart-received-part: #8fb3d6;
+  --chart-neutral: #55637a;
   --sidebar-width: 236px;
   --radius: 10px;
   --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
@@ -254,6 +278,10 @@ a:hover { text-decoration: underline; }
   height: 100%;
 }
 .stat-card:hover { text-decoration: none; border-color: var(--udm-teal); }
+/* Inert, like .pill-toggle.is-disabled: there is no count to show, and the
+   hint says what would give it one. */
+.stat-card.is-disabled { border-style:dashed; border-left-style:solid; box-shadow:none; opacity:.75; }
+.stat-card.is-disabled:hover { border-color:var(--udm-line); }
 .stat-card .label { color: var(--udm-muted); font-size: 13px; }
 .stat-card .value {
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
@@ -272,9 +300,17 @@ a:hover { text-decoration: underline; }
   font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap;
 }
-.pill-received  { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-completed { background: var(--udm-green-soft); color: var(--udm-green-ink); }
-.pill-pending   { background: var(--udm-gold-soft);  color: var(--udm-gold-ink); }
+/* Status pills: one per status, from the --status-* tokens, so a pill and the
+   chart slice for the same status are the same colour. Received and Completed
+   were both green here, and In process and Completed - pending upload both
+   teal: six statuses in four colours. */
+.pill-received  { background: var(--status-received-soft);  color: var(--status-received-ink); }
+.pill-completed { background: var(--status-completed-soft); color: var(--status-completed-ink); }
+.pill-pending   { background: var(--status-pending-soft);   color: var(--status-pending-ink); }
+.pill-upload    { background: var(--status-upload-soft);    color: var(--status-upload-ink); }
+/* Not a status: a plain "this is fine" badge (an active account, text
+   extracted), so those stop borrowing a status's colour. */
+.pill-ok        { background: var(--udm-green-soft); color: var(--udm-green-ink); }
 /* Approaching, not yet late. Gold rather than red, because red is the claim
    that something has already gone wrong and this one is still actionable — and
    the dark ink, not the plain: gold-ink on gold-soft is 4.34:1 and a pill runs
@@ -288,8 +324,8 @@ a:hover { text-decoration: underline; }
 /* The date under the pills. Muted and small: it is the evidence for the tag
    above it, not a column in its own right. */
 .deadline-when-cell { margin-top:4px; color:var(--udm-muted); font-size:12px; white-space:nowrap; }
-.pill-process   { background: var(--udm-teal-soft);  color: var(--udm-teal-ink); }
-.pill-overdue   { background: var(--udm-red-soft);   color: var(--udm-red-ink); }
+.pill-process   { background: var(--status-process-soft);   color: var(--status-process-ink); }
+.pill-overdue   { background: var(--status-overdue-soft);   color: var(--status-overdue-ink); }
 /* Overdue is not a stage — it is a condition sitting on top of one, and it is
    rendered *beside* the status pill rather than instead of it. Soft-fill like
    its neighbour, it read as a second status and disappeared into the row; a
@@ -342,7 +378,7 @@ a:hover { text-decoration: underline; }
    between "a stage this document is at" and "a document that has not started".
    It also stops Draft reading as another solid chip alongside Pending receipt,
    which is the one it was being confused with. */
-.pill-draft     { background: transparent; color: var(--udm-slate-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
+.pill-draft     { background: transparent; color: var(--status-draft-ink); box-shadow: inset 0 0 0 1px var(--udm-line); }
 .pill-muted     { background: var(--udm-slate-soft); color: var(--udm-slate-ink); }
 
 /* ----------------------------------------------------------------- tables */
@@ -905,52 +941,220 @@ a:hover { text-decoration: underline; }
 .chart-legend { display:flex; flex-wrap:wrap; gap:14px; }
 .chart-key { display:inline-flex; align-items:center; gap:6px; color:var(--udm-muted); font-size:12px; font-weight:600; }
 .chart-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 10px; }
-.chart-swatch--one { background:var(--chart-one); }
-.chart-swatch--two { background:var(--chart-two); }
-.chart-swatch--three { background:var(--chart-three); }
+/* Named for what they mean, not for their position in a palette: a legend
+   swatch, a bar and a column for the same thing take the same class suffix. */
+.chart-swatch--draft { background:var(--status-draft); }
+.chart-swatch--pending { background:var(--status-pending); }
+.chart-swatch--received { background:var(--status-received); }
+.chart-swatch--process { background:var(--status-process); }
+.chart-swatch--upload { background:var(--status-upload); }
+.chart-swatch--completed { background:var(--status-completed); }
+.chart-swatch--created { background:var(--chart-created); }
+.chart-swatch--historical { background:var(--chart-historical); }
+.chart-swatch--received-part { background:var(--chart-received-part); }
+.chart-swatch--neutral { background:var(--chart-neutral); }
 
 /* ------------------------------------------------------- horizontal bars */
 .report-office-row { padding:12px 0; border-bottom:1px solid var(--chart-grid); }
 .report-office-row:last-child { border-bottom:0; }
 .report-office-label { margin-bottom:7px; color:var(--udm-navy-text); font-size:13px; font-weight:700; }
 .report-series { display:grid; gap:6px; }
-.report-series-item { display:grid; grid-template-columns:82px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
+/* The label column fits the longest series label the panels use, "Awaiting
+   receipt"; at 82px it was cut to "Awaiting recei…". Fixed rather than sized to
+   content: every row is its own grid, and a content-sized column would start
+   each row's bar at a different x. */
+.report-series-item { display:grid; grid-template-columns:100px minmax(0,1fr) 44px; align-items:center; gap:9px; font-size:11.5px; }
 .report-series-item--wide { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px; padding:7px 0; font-size:12.5px; }
+/* A fourth column for rows that carry a share beside the count. Without it the
+   share was a fourth child in a three-column grid and wrapped onto a line of
+   its own under the label. Every bar is drawn at that share: the track is the
+   whole the panel states, never its largest row. */
+.report-series-item--share { grid-template-columns:100px minmax(0,1fr) 44px 40px; }
+.report-series-item--wide.report-series-item--share { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px; }
+/* And a fifth for "+n this month" beside the share, on Documents received by
+   office. */
+.report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 40px 40px; }
 .report-series-item--wide + .report-series-item--wide { border-top:1px solid var(--chart-grid); }
+/* "Other (n offices)": what a top-N cap left out, as one row, so the rows add up
+   to the total above them. Secondary ink, because it is an aggregate and not a
+   peer of the ranked rows beside it. Its bar is drawn at its share like every
+   other row's, faded for the same reason: with bars measured against the
+   whole, a long "everything else" is a true finding, not one row's scale
+   flattening the others. */
+.report-series-item--remainder,.report-office-row--remainder .report-office-label { color:var(--udm-muted); font-style:italic; }
+.report-series-item--remainder strong { color:var(--udm-muted); }
+.report-series-item--remainder .report-bar i,.report-office-row--remainder .report-bar i { opacity:.55; }
 .report-series-item > span { color:var(--udm-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .report-series-item strong { text-align:right; color:var(--udm-navy-text); }
 .report-bar { height:10px; border-radius:2px; background:var(--chart-track); }
 /* Square at the baseline, 4px rounded at the data end. No min-width: a zero
    value must paint nothing (the view floors real values at 1% instead). */
 .report-bar i { display:block; height:100%; border-radius:0 4px 4px 0; }
-.bar-one { background:var(--chart-one); }
-.bar-two { background:var(--chart-two); }
-.bar-three { background:var(--chart-three); }
+.bar-pending { background:var(--status-pending); }
+.bar-received { background:var(--status-received); }
+.bar-completed { background:var(--status-completed); }
+.bar-completed-strong { background:var(--status-completed-ink); }
+.bar-neutral { background:var(--chart-neutral); }
+/* The end of a bar, in the second series' colour: a figure that is part of the
+   bar it sits in, rather than a second bar on a scale of its own. */
+.bar-part { display:block; height:100%; margin-left:auto; border-radius:0 4px 4px 0; background:var(--chart-received-part); }
 .bar-alert { background:var(--chart-alert); }
 .bar-alert-soft { background:var(--chart-alert-soft); }
 .chart-swatch--alert { background:var(--chart-alert); }
 .chart-swatch--alert-soft { background:var(--chart-alert-soft); }
 
 /* -------------------------------------------------------- column charts */
-.column-chart { position:relative; padding-top:6px; }
+/* --column-value-band is the strip above the tallest column that holds its
+   value label, so a label at 100% sits inside the plot rather than over the
+   card head. The grid starts below it: the band is not part of the scale. */
+/* --column-gutter holds the y-axis labels. The column charts only: the trend
+   chart states its scale in words and dropped its gutter as dead space, which
+   was right for it. Here four unlabelled hairlines could not say what the
+   second one meant. */
+.column-chart { --column-value-band:18px; --column-gutter:38px; --column-slot:22px; position:relative; padding:6px 0 0 var(--column-gutter); }
+/* The axis and the grid cover exactly the columns' own area: below the value
+   band, above the month labels. Ticks are placed by the value they print. */
+.column-chart-axis,.column-chart-grid { position:absolute; top:calc(6px + var(--column-value-band)); bottom:22px; pointer-events:none; }
+.column-chart-axis { left:0; width:calc(var(--column-gutter) - 8px); }
+.column-chart-axis span { position:absolute; right:0; transform:translateY(50%); color:var(--udm-muted); font-size:10.5px; line-height:1; white-space:nowrap; }
 /* Hairline, solid, one shade off the surface — never dashed. */
-.column-chart-grid { position:absolute; inset:6px 0 22px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
-.column-chart-grid i { display:block; height:1px; background:var(--chart-grid); }
+.column-chart-grid { left:var(--column-gutter); right:0; }
+.column-chart-grid i { position:absolute; left:0; right:0; height:1px; transform:translateY(50%); background:var(--chart-grid); }
 .column-chart-plot { position:relative; display:flex; align-items:flex-end; gap:6px; height:190px; }
 /* Heights are percentages, so every box between the plot and the mark keeps a
    definite height — flex-grow here would leave the percentage unresolvable. */
 .column-group { flex:1 1 0; min-width:0; height:100%; }
 /* The 2px gap is the surface doing the separating — no stroke around a mark. */
-.column-pair { display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px); }
+.column-pair { position:relative; display:flex; align-items:flex-end; justify-content:center; gap:2px; height:calc(100% - 22px - var(--column-value-band)); margin-top:var(--column-value-band); }
+/* ------------------------------------------------ the number on each bar
+
+   Every column is a slot as wide as the number it carries, with the bar centred
+   in it. The slot, not the 12px bar, is what the month is divided between, so
+   two neighbouring numbers cannot overlap while the month has room for them.
+
+   When it has not, the numbers turn on their side (.column-chart--turned):
+   still one per bar, still on its cap, and no wider than the bar. Whether they
+   fit is measured in the browser (static/js/doctrack.js) rather than guessed
+   from the viewport, because it depends on the chart's width, how many series
+   it has, and how many digits the biggest number runs to. Without script, the
+   container query further down turns them wherever three three-digit numbers
+   would not fit.
+
+   Text ink, never the series colour: a light series hue is illegible as text,
+   and the legend and the bar beside the number already say which series it is.
+   The current month is set in the heading ink, because it is the one read. */
+.column-item { position:relative; display:flex; align-items:flex-end; justify-content:center; flex:0 1 var(--column-slot); min-width:0; height:100%; }
+.column-value { position:absolute; left:50%; margin-bottom:3px; transform:translateX(-50%); color:var(--udm-slate-text); font-size:10.5px; font-weight:600; line-height:1; letter-spacing:-.01em; font-variant-numeric:tabular-nums; text-align:center; white-space:nowrap; pointer-events:none; }
+/* A zero has no bar to sit on, so it sits on the baseline, lighter, saying the
+   series is there and empty rather than leaving a gap nobody can read. */
+.column-value--zero { color:var(--udm-muted); font-weight:500; }
+.column-group:last-child .column-value { color:var(--udm-navy-text); font-weight:700; }
+.column-group:last-child .column-value--zero { color:var(--udm-muted); font-weight:500; }
+.column-chart--turned { --column-value-band:34px; --column-slot:12px; }
+.column-chart--turned .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
-.column--one { background:var(--chart-one); }
-.column--two { background:var(--chart-two); }
-.column--three { background:var(--chart-three); }
+.column--created { background:var(--chart-created); }
+.column--handover { background:var(--status-pending); }
+.column--completed { background:var(--status-completed); }
+.column--historical { background:var(--chart-historical); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
 .chart-scale { margin-top:10px; color:var(--udm-muted); font-size:11.5px; }
+/* Administration filter bars: a labelled row, then one line saying how many
+   rows the filters left and how to undo them. */
+.admin-filters .form-label { margin-bottom:4px; color:var(--udm-muted); font-size:12px; font-weight:600; }
+.admin-filter-summary { margin-top:10px; color:var(--udm-muted); font-size:12.5px; }
+/* A date input's native width is wider than a narrow column; let it fit. */
+.admin-filter-date .form-control { min-width:0; padding-inline:8px; }
+
+/* One office's own handover figures, where the rankings sit for every office. */
+.office-activity { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; }
+.office-activity-figure { display:flex; flex-direction:column; gap:2px; padding:12px 14px; border:1px solid var(--chart-grid); border-radius:8px; }
+.office-activity-figure span { color:var(--udm-muted); font-size:12.5px; font-weight:600; }
+.office-activity-figure strong { color:var(--udm-navy-text); font-size:26px; font-weight:800; line-height:1.15; }
+.office-activity-figure small { color:var(--udm-muted); font-size:12px; }
+.report-section-subhead { margin:-6px 0 10px; color:var(--udm-muted); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+
+/* The reasoning a reader needs once and not on every visit: why a series is
+   cumulative, what "historical" means, why office hours. One plain line stays
+   under every title; this holds the rest. */
+.chart-note { margin-top:10px; }
+.chart-note summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
+.chart-note p { margin:8px 0 0; color:var(--udm-muted); font-size:12.5px; line-height:1.5; max-width:70ch; }
 .chart-table { margin-top:12px; }
 .chart-table summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
 .chart-table table { margin-top:8px; }
+/* The site-wide `.table-responsive > .table-udm { min-width:720px }` is for the
+   record lists. A chart's table has three to five short columns, and under that
+   minimum it scrolled sideways inside a 435px dashboard card, hiding the
+   Completed column behind a scroll nobody could see. */
+.chart-table .table-responsive > .table-udm { min-width:0; }
+
+/* ------------------------------------------- column charts, by their width */
+/* Sized by the chart's own width, not the viewport's. The dashboard chart sits
+   in a half-width column beside the sidebar from 1200px up, so it is at its
+   narrowest on a desktop: 395px at a 1200px viewport and 435px on a 1280px
+   laptop (a 1920px panel at 150%), against 679px on a 768px tablet. Viewport
+   breakpoints would have shrunk the chart where it had room and left it full
+   size where it had none. Measured widths, 320px to 1920px viewports:
+   dashboard 245-755px, Reports 245-891px.
+
+   Pitch per month is (width - gutter - 11 gaps) / 12. A three-digit value label
+   is about 20px at 11px type.
+     >= 420px  full: 190px plot, 38px gutter, every label.
+     360-419px compact: 170px plot, 10px type, narrower columns. Every label
+               still fits: the pitch never drops below 27px.
+     < 360px   the grouped plot stops pretending. Twelve months of three
+               columns come to under 5px a column, so the plot is hidden and
+               the "View as table" fallback is shown open instead. Every phone
+               held upright lands here (300px at 375, 339px at 414). */
+.column-chart-frame { container:column-chart / inline-size; }
+.chart-month-short { display:none; }
+/* Without script there is no measurement, so turn the numbers wherever three
+   three-digit numbers would not fit side by side: twelve months of three 22px
+   slots need about 900px of chart. Script marks each chart it has measured, and
+   from then on the measurement decides. */
+@container column-chart (max-width:939.98px) {
+  .column-chart:not(.column-chart--measured) { --column-value-band:34px; --column-slot:12px; }
+  .column-chart:not(.column-chart--measured) .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
+}
+@container column-chart (max-width:419.98px) {
+  .column-chart { --column-gutter:30px; }
+  .column-chart-plot { height:170px; gap:4px; }
+  .column { max-width:10px; }
+  .column-chart--turned,.column-chart:not(.column-chart--measured) { --column-slot:10px; }
+  .column-label,.column-chart-axis span { font-size:10px; }
+}
+@container column-chart (max-width:359.98px) {
+  .column-chart,.chart-scale { display:none; }
+  .chart-table { margin-top:0; }
+  /* The table is the chart now, so it has to fit: up to five columns in 245px.
+     Short month names, and headers that may wrap onto two lines. */
+  .chart-table .table-udm th,.chart-table .table-udm td { padding:9px 4px; font-size:12px; }
+  .chart-table .table-udm th { font-size:9.5px; letter-spacing:0; white-space:normal; vertical-align:bottom; }
+  .chart-month-long { display:none; }
+  .chart-month-short { display:inline; white-space:nowrap; }
+}
+/* Open by default at that width. `open` is an attribute, not something a query
+   can set, so the closed content is made visible instead and the summary that
+   would toggle nothing is hidden. Browsers without ::details-content keep the
+   summary, so the table is one tap away rather than gone. */
+@supports selector(::details-content) {
+  @container column-chart (max-width:359.98px) {
+    .chart-table::details-content { content-visibility:visible; }
+    .chart-table > summary { display:none; }
+    .chart-table table { margin-top:0; }
+  }
+}
+
+/* A chart's legend is its identity channel, so it must never be clipped. The
+   card head is one flex row inside a card that hides overflow: a long caption
+   squeezed the legend into a single column at 1280px and cut it off at 375px
+   ("Awaitin"). The caption keeps at least 260px and the legend drops below it
+   when the two do not fit on one line. */
+.card-udm .card-udm-head:has(> .chart-legend),.card-udm .card-udm-head:has(> .segmented) { flex-wrap:wrap; align-items:flex-start; }
+.card-udm .card-udm-head:has(> .chart-legend) > div:first-child,
+.card-udm .card-udm-head:has(> .segmented) > div:first-child { flex:1 1 260px; }
+.card-udm .card-udm-head > .chart-legend { flex:0 1 auto; }
 
 /* ---------------------------------------------------------- status by row */
 /* The label column is a fixed width rather than sized to its own content
@@ -1013,13 +1217,21 @@ a:hover { text-decoration: underline; }
 @media (max-width:767.98px) {
   .reports-tabs { display:flex; overflow-x:auto; }
   .reports-tab { flex:0 0 auto; }
-  .report-series-item { grid-template-columns:72px minmax(0,1fr) 38px; }
+  .report-series-item { grid-template-columns:96px minmax(0,1fr) 38px; }
   .report-series-item--wide { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px; }
+  .report-series-item--share { grid-template-columns:96px minmax(0,1fr) 38px 36px; }
+  .report-series-item--wide.report-series-item--share { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px 36px; }
+  .report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px 36px 36px; }
   /* Same label width as the desktop rule — the content that has to fit does
      not shrink on a narrow screen, only the bar column does. */
   .status-row { grid-template-columns:152px minmax(0,1fr) 30px 36px; gap:8px; }
-  .column-chart-plot { height:150px; }
-  .column-label { font-size:10px; }
+}
+/* Phones: three figures beside the office name left the bar about 40px wide.
+   The bar takes a full line under the name and its figures instead; placed
+   explicitly, so the other four children auto-place along the first line. */
+@media (max-width:575.98px) {
+  .report-series-item--wide.report-series-item--month { grid-template-columns:minmax(0,1fr) 38px 36px 36px; row-gap:5px; }
+  .report-series-item--month > .report-bar { grid-column:1 / -1; grid-row:2; }
 }
 @media print {
   .reports-page-head .no-print,.reports-tabs,.card-udm.no-print { display:none !important; }
@@ -1059,10 +1271,11 @@ a:hover { text-decoration: underline; }
   .h-100 { height:auto !important; }
   .row > [class*="col-"] { width:100% !important; max-width:100% !important; }
   /* Bars and columns are background paint; without this they print blank. */
-  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill {
+  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill,.column-chart-grid i {
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .chart-table { display:none; }
+  .donut-tooltip { display:none !important; }
 }
 
 /* ================================================================
@@ -1757,12 +1970,12 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* Keyed to the slice names in views.BREAKDOWN_COLOURS. There is no --overdue
    segment any more: overdue lies across the live stages instead of beside them,
    so it is a stat card rather than a slice. */
-.breakdown-seg--pending_receipt { background:var(--udm-gold); }
-.breakdown-seg--received { background:var(--udm-green); }
-.breakdown-seg--in_process { background:var(--udm-teal); }
-.breakdown-seg--pending_upload { background:var(--chart-one); }
-.breakdown-seg--historical { background:var(--udm-muted); }
-.breakdown-seg--completed { background:var(--chart-three); }
+.breakdown-seg--pending_receipt { background:var(--status-pending); }
+.breakdown-seg--received { background:var(--status-received); }
+.breakdown-seg--in_process { background:var(--status-process); }
+.breakdown-seg--pending_upload { background:var(--status-upload); }
+.breakdown-seg--historical { background:var(--chart-historical); }
+.breakdown-seg--completed { background:var(--status-completed); }
 
 .breakdown-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:2px 18px; }
 .breakdown-item { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:7px 4px; border-radius:6px; color:var(--udm-navy-text); font-size:13px; text-decoration:none; }
@@ -1931,15 +2144,68 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .overdue-office-list .report-series-item--wide { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) 44px 116px; }
 
 /* ------------------------------------------------------------------ ring */
-.donut-layout { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
-/* One conic-gradient, stops computed server-side so the ring always closes at
-   100%. The hole is a disc rather than a mask so it prints: a mask would leave
-   a filled circle on paper. */
+.donut-layout { position:relative; display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+/* Inline SVG, one path per slice, geometry computed server-side so the ring
+   always closes at 100%. The paths are annular sectors, so the hole is really
+   empty; the disc behind the figure stays for the figure's legibility. */
 .donut { position:relative; flex:0 0 190px; width:190px; height:190px; border-radius:50%; }
+.donut-ring { position:absolute; inset:0; display:block; width:100%; height:100%; overflow:visible; }
+/* Pointing at a slice brings it forward by setting the others back, rather than
+   by moving it: the ring's geometry stays exactly the numbers it encodes. The
+   legend row for the same slice lights up with it, so the reader sees which
+   line of figures the slice is. */
+.donut-slice { cursor:pointer; transition:opacity 120ms ease; }
+.donut-layout.has-active-slice .donut-slice:not(.is-active) { opacity:.4; }
+.donut-layout .breakdown-item.is-active { background:var(--udm-canvas); }
+/* The value leads and the label follows; the key is a short stroke of the
+   slice's colour, and the text stays in text ink. */
+.donut-tooltip { position:absolute; z-index:5; display:flex; align-items:baseline; gap:7px; max-width:240px; padding:6px 10px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); box-shadow:0 6px 18px rgba(6,28,52,.16); color:var(--udm-muted); font-size:12px; line-height:1.3; pointer-events:none; }
+.donut-tooltip[hidden] { display:none; }
+.donut-tooltip-key { flex:0 0 12px; align-self:center; height:3px; border-radius:2px; }
+.donut-tooltip strong { color:var(--udm-navy-text); font-size:14px; }
 .donut-hole { position:absolute; inset:46px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:var(--udm-surface); text-align:center; }
 .donut-hole-value { color:var(--udm-navy-text); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
-.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+/* .06em, not .1em: "DOCUMENTS" at .1em is 76px, which touched the rim of the
+   78px hole a 150px ring has. */
+.donut-hole-label { color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 .donut-legend { flex:1 1 260px; min-width:0; display:grid; gap:1px; }
+
+/* Incoming and Outgoing side by side, sized by the card rather than the
+   viewport for the reason the column charts are (the card is half-width, and
+   narrowest, on a desktop: 395px inside the card at 1200px, 435px at 1280px).
+   Each ring stacks its legend beneath it, and the two stack on each other only
+   when the card cannot hold two 150px rings with their legends, below 360px.
+   Stacked on a desktop, the Tracking card ran twice the height of the
+   Repository card it shares a row with. */
+/* The grid is on .ring-pair-rings, inside the container: a container query
+   styles what is in a container, never the container itself. */
+.ring-pair { container:ring-pair / inline-size; }
+.ring-pair--split .ring-pair-rings { display:grid; grid-template-columns:1fr; gap:22px; }
+@container ring-pair (min-width:360px) {
+  .ring-pair--split .ring-pair-rings { grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
+  .ring-pair--split .breakdown-item { gap:6px; font-size:12.5px; }
+  .ring-pair--split .breakdown-percent { min-width:34px; }
+}
+.ring-pair-item { min-width:0; }
+.ring-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin:0 0 12px; color:var(--udm-navy-text); font-size:13px; font-weight:800; letter-spacing:.02em; }
+.ring-title span { color:var(--udm-muted); font-size:12px; font-weight:500; letter-spacing:0; }
+.ring-pair--split .donut-layout { flex-direction:column; align-items:stretch; gap:14px; }
+.ring-pair--split .donut { flex:0 0 auto; width:150px; height:150px; margin:0 auto; }
+.ring-pair--split .donut-hole { inset:36px; }
+.ring-pair--split .donut-hole-value { font-size:21px; }
+.ring-pair--split .donut-hole-label { font-size:9.5px; }
+.ring-pair--split .donut-legend { flex:0 0 auto; }
+/* Two options, one pressed. The pressed one is filled rather than merely
+   underlined so it reads at a glance which view the rings are in. */
+.segmented { display:inline-flex; flex:0 0 auto; padding:2px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-canvas); }
+.segmented-option { padding:4px 12px; border-radius:6px; color:var(--udm-muted); font-size:12.5px; font-weight:700; text-decoration:none; }
+.segmented-option:hover,.segmented-option:focus-visible { color:var(--udm-navy-text); }
+.segmented-option.is-active { background:var(--udm-surface); box-shadow:0 1px 2px rgba(6,28,52,.12); color:var(--udm-navy-text); }
+.ring-note { margin:16px 0 0; padding-top:9px; border-top:1px solid var(--chart-grid); color:var(--udm-muted); font-size:12.5px; }
+.ring-note[hidden],.ring-aside[hidden] { display:none; }
+.ring-aside { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:9px; margin-top:16px; padding:9px 4px 0; border-top:1px solid var(--chart-grid); color:var(--udm-muted); font-size:13px; text-decoration:none; }
+.ring-aside strong { color:var(--udm-navy-text); }
+.ring-aside:hover,.ring-aside:focus { color:var(--udm-navy-text); }
 
 /* ------------------------------------------------------------ trend line */
 /* Chart and summary side by side. They stacked while this panel sat in a
@@ -1961,6 +2227,73 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    letterboxes the plot inside its own card without erroring anywhere, which is
    why a test asserts the two agree. */
 .trend-svg { display:block; width:100%; height:auto; aspect-ratio:640/170; }
+/* The plot and its y-axis. The SVG keeps the whole width it is given (it has no
+   gutter of its own); the gutter is here, and the month labels under it are
+   padded by the same amount so each stays under its point. */
+.trend-plot { --trend-gutter:26px; position:relative; padding-left:var(--trend-gutter); }
+.trend-axis-values { position:absolute; top:0; bottom:0; left:0; width:calc(var(--trend-gutter) - 6px); }
+.trend-axis-values span { position:absolute; right:0; transform:translateY(-50%); color:var(--udm-muted); font-size:10.5px; line-height:1; }
+.trend-plot + .trend-axis-labels { padding-left:var(--trend-gutter); }
+.trend-summary-none { color:var(--udm-muted) !important; font-weight:600 !important; font-size:13px !important; }
+
+/* ---------------------------------------------------- the line, and its hover
+
+   The lines draw in from their start once (pathLength="1" makes the dash one
+   line long whatever its real length), then the dots arrive. Readers who ask
+   for less motion get the finished chart at once. */
+.trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round;
+  stroke-dasharray:1; stroke-dashoffset:1; animation:trend-draw 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
+.trend-point { fill:var(--udm-surface); stroke-width:2; opacity:0; animation:trend-fade 280ms ease-out 650ms forwards; }
+@keyframes trend-draw { to { stroke-dashoffset:0; } }
+@keyframes trend-fade { to { opacity:1; } }
+
+.trend-key { gap:8px; font-weight:500; }
+.trend-key strong { color:var(--udm-navy-text); font-weight:700; }
+.trend-key-line { flex:0 0 16px; width:16px; height:3px; border-radius:2px; }
+
+/* The hover layer sits exactly over the SVG: past the axis gutter, the same
+   height. Each month's target is a full-height column, so a reader aims at a
+   month, not at a 6px dot. */
+.trend-hover { position:absolute; top:0; bottom:0; left:var(--trend-gutter); right:0; outline:none; border-radius:6px; }
+.trend-hover:focus-visible { box-shadow:0 0 0 2px var(--udm-teal); }
+.trend-hit { position:absolute; top:0; bottom:0; cursor:crosshair; }
+.trend-cross { position:absolute; top:var(--plot-top); bottom:var(--plot-bottom); left:50%; width:0;
+  border-left:1px solid var(--udm-line-strong); opacity:0; transition:opacity 140ms ease; }
+.trend-dot { position:absolute; left:50%; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; border-radius:50%;
+  background:var(--udm-surface); border:3px solid var(--dot); box-shadow:0 0 0 2px var(--udm-surface);
+  opacity:0; transform:scale(.35); transition:transform 180ms cubic-bezier(.2,.9,.3,1.35), opacity 120ms ease; }
+.trend-tip { position:absolute; top:var(--plot-top); z-index:6; min-width:200px; max-width:260px; padding:9px 11px 10px;
+  border:1px solid var(--udm-line); border-radius:9px; background:var(--udm-surface);
+  box-shadow:0 10px 24px rgba(6,28,52,.16); pointer-events:none;
+  opacity:0; visibility:hidden; transform:translateY(6px);
+  transition:opacity 150ms ease, transform 170ms cubic-bezier(.2,.8,.2,1), visibility 0s linear 170ms; }
+.trend-hit--right .trend-tip { left:calc(50% + 12px); }
+.trend-hit--left .trend-tip { right:calc(50% + 12px); }
+.trend-tip-month { margin-bottom:6px; color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
+.trend-tip-row { display:grid; grid-template-columns:14px auto; column-gap:8px; align-items:baseline; padding:2px 0; }
+.trend-tip-row i { grid-row:span 2; align-self:center; width:14px; height:3px; border-radius:2px; }
+.trend-tip-row strong { color:var(--udm-navy-text); font-size:13.5px; font-weight:800; line-height:1.2; }
+.trend-tip-row span { grid-column:2; color:var(--udm-muted); font-size:11.5px; line-height:1.3; }
+.trend-tip-empty { display:block; color:var(--udm-muted); font-size:12.5px; }
+
+.trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
+.trend-hit:hover .trend-dot,.trend-hit.is-active .trend-dot { opacity:1; transform:scale(1); }
+.trend-hit:hover .trend-tip,.trend-hit.is-active .trend-tip {
+  opacity:1; visibility:visible; transform:translateY(0); transition-delay:0s; }
+/* While one month is shown, the lines step back so its dots read first. */
+.trend-plot:has(.trend-hit:hover) .trend-line,.trend-plot:has(.trend-hit.is-active) .trend-line { opacity:.55; transition:opacity 150ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trend-line { animation:none; stroke-dashoffset:0; }
+  .trend-point { animation:none; opacity:1; }
+  .trend-dot,.trend-tip,.trend-cross { transition:none; }
+}
+@media print {
+  .trend-line { animation:none; stroke-dashoffset:0; opacity:1 !important; }
+  .trend-point { animation:none; opacity:1; }
+  .trend-hover { display:none; }
+}
+.trend-summary-figures .report-metric > span small { display:block; font-size:11px; font-weight:500; }
 .trend-grid { stroke:var(--chart-grid); stroke-width:1; }
 .trend-axis { stroke:var(--udm-line); stroke-width:1; }
 /* The month labels sit outside the SVG so they are real text at a real size —
@@ -2150,6 +2483,21 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --chart-three: #5cb37e;
   --chart-track: #212d3a;
   --chart-grid: #202b36;
+  /* The status palette for the dark surface: the same hues, stepped so each
+     mark still clears 3:1 on #17212c and each ink 7:1 on its soft fill, and
+     re-checked for colour-blind separation on this surface rather than
+     assumed from the light one. */
+  --status-draft: #8e9bb0; --status-draft-soft: #2c3136; --status-draft-ink: #c7d6e8;
+  --status-pending: #e3ad4b; --status-pending-soft: #3d2d14; --status-pending-ink: #f0cf9d;
+  --status-received: #7fb6ee; --status-received-soft: #1e3246; --status-received-ink: #b7d8fb;
+  --status-process: #c876c1; --status-process-soft: #3d283b; --status-process-ink: #f1c3ec;
+  --status-upload: #9cd7da; --status-upload-soft: #0d3739; --status-upload-ink: #98e4e8;
+  --status-completed: #62946c; --status-completed-soft: #1f3724; --status-completed-ink: #b2e3bb;
+  --status-overdue: #ff8a7a; --status-overdue-soft: #442724; --status-overdue-ink: #fac6bf;
+  --chart-created: #d0dae6;
+  --chart-historical: #b3bfd0;
+  --chart-received-part: #c9e2fb;
+  --chart-neutral: #a8b6c8;
 
   --shadow-card: 0 1px 2px rgba(0,0,0,.5);
 }
@@ -2277,7 +2625,18 @@ textarea.form-control { resize: vertical; min-height: 64px; }
     --chart-two: #b58c24;
     --chart-three: #2f7d4f;
     --chart-track: #e8edf3;
-    --chart-grid: #eef1f6;
+      --chart-grid: #eef1f6;
+    --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
+    --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
+    --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
+    --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
+    --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
+    --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
+    --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
+    --chart-created: #0b315a;
+    --chart-historical: #7d889a;
+    --chart-received-part: #8fb3d6;
+    --chart-neutral: #55637a;
   }
 }
 
