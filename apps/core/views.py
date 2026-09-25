@@ -18,6 +18,7 @@ from django.views.generic import TemplateView, View
 from apps.accounts.models import Office
 from apps.documents.models import (
     COMPLETED_SOURCE,
+    HISTORICAL_FILTER,
     Document,
     SearchQueryLog,
     SearchResultClick,
@@ -378,6 +379,14 @@ class DashboardMemoMixin:
             if office is not None:
                 overrides["office"] = office.pk
             return core_filters.link(tracking_url, **overrides)
+        def repository_link(**overrides):
+            """The same for the repository's two segments, which linked with
+            their origin only: with an office picked, the segment opened every
+            office's documents under a count of one office's."""
+            if office is not None:
+                overrides["office"] = office.pk
+            return core_filters.link(reverse("documents:repository"), **overrides)
+
         slices = [
             # Every slice links through to the list behind it, and the count is
             # taken from that same query — see analytics.combined_totals. A
@@ -398,10 +407,13 @@ class DashboardMemoMixin:
              "url": tracking_link(status=Status.COMPLETED_PENDING_UPLOAD),
              "group": "tracking"},
             {"key": "historical", "label": "Repository - historical", "total": historical,
-             "url": f"{reverse('documents:repository')}?source={Source.UPLOAD}",
+             # Every origin but tracking, as the figure is counted: it linked
+             # to uploads only, which left scanned documents out of the page
+             # the segment opened.
+             "url": repository_link(source=HISTORICAL_FILTER),
              "group": "repository"},
             {"key": "completed", "label": "Repository - completed", "total": completed,
-             "url": f"{reverse('documents:repository')}?source={Source.DTS}",
+             "url": repository_link(source=Source.DTS),
              "group": "repository"},
         ]
 
