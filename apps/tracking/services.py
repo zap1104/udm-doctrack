@@ -1312,6 +1312,26 @@ def scope_office(user, requested):
     return Office.objects.filter(pk=raw).first()
 
 
+def office_queue(records, scope, user, office=None):
+    """A queue exactly as the Tracking page lists it, for `office`.
+
+    `office` is an Office, `ALL_OFFICES`, or None for the viewer's own. For a
+    queue that answers *for* an office (OFFICE_SCOPED) the office named
+    replaces the viewer's inside `apply_scope`. For one that does not, Overdue
+    and Pending upload, there is no such office to replace, so a named office
+    narrows by everything it touched (`office_touches_record_q`).
+
+    The one place that rule is written. The Tracking page and Search each wrote
+    it out, and the dashboard's Action Centre, which did not, counted every
+    overdue document for an office whose Tracking page listed none.
+    """
+    from apps.core.filters import office_touches_record_q
+
+    if office is not None and office is not ALL_OFFICES and scope not in OFFICE_SCOPED:
+        records = records.filter(office_touches_record_q(office))
+    return apply_scope(records, scope, user, office=office)
+
+
 def apply_scope(records, scope, user, office=None):
     """Narrow a record queryset to one of the Tracking page's queues.
 

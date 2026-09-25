@@ -554,7 +554,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             disabled = needs_office and all_offices
             queue = None
             if not disabled:
-                queue = tracking_services.apply_scope(desk, slug, user, office=scope_office).distinct()
+                # As the Tracking page builds it, so the count is its row count.
+                queue = tracking_services.office_queue(desk, slug, user, office=scope_office).distinct()
             count = None if disabled else counts.get(slug)
             if count is None and queue is not None:
                 count = queue.count()

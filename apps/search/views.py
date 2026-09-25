@@ -157,14 +157,9 @@ class SearchView(AppLoginRequiredMixin, View):
         queue_office = (
             tracking_services.ALL_OFFICES if resolved.all_offices else narrow_office
         )
-        # The fourth and last copy of this condition, now the one named function
-        # — see core_filters.office_touches_record_q. This page and the Tracking
-        # workspace share every other filter through `filter_records` and
-        # `apply_scope`, so a querystring means the same thing on both; this was
-        # the one narrowing each had written out for itself.
-        if narrow_office and resolved.scope not in tracking_services.OFFICE_SCOPED:
-            records = records.filter(core_filters.office_touches_record_q(narrow_office))
-        records = tracking_services.apply_scope(
+        # Through `office_queue`, like the Tracking page and the Action Centre, so
+        # a querystring means the same thing on all three.
+        records = tracking_services.office_queue(
             records, resolved.scope, request.user, office=queue_office
         )
         if data.get("owner"):

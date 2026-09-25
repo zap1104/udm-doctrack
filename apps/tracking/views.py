@@ -118,23 +118,10 @@ class RecordListView(AppLoginRequiredMixin, View):
         narrow_office = resolved.as_office
         queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
 
-        # "Every office" narrows nothing: it is the absence of an office filter,
-        # not a filter naming one.
-        #
-        # The third copy of this condition, now the same named function the
-        # dashboard and Reports call — see core_filters.office_touches_record_q.
-        # It matched originating-or-current, which is a narrower set than the
-        # dashboard ring counts, and the ring's slices link *here*: "Pending
-        # receipt 2" opened a page listing 1. Whichever way that gap is closed
-        # the two must be closed together, because a count that disagrees with
-        # the page behind it is the fault this whole branch exists to remove.
-        #
-        # `apply_scope` below is untouched and still answers its own question —
-        # what is on this office's desk right now. This only widens the picker's
-        # *narrowing* fallback, which applies to the views that are not a queue.
-        if narrow_office and scope not in services.OFFICE_SCOPED:
-            records = records.filter(core_filters.office_touches_record_q(narrow_office))
-        records = services.apply_scope(records, scope, request.user, office=queue_office)
+        # The queue as `services.office_queue` builds it: the one place the
+        # office rule is written, shared with Search and the dashboard's Action
+        # Centre, so a count there is the number of rows here.
+        records = services.office_queue(records, scope, request.user, office=queue_office)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while
         # on Overdue means overdue records in your office, not one or the other.
