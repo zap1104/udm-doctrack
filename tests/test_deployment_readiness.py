@@ -73,7 +73,9 @@ def test_report_export_applies_office_filter(client, users, offices):
     response = client.get(f"/reports/export/?office={offices['MED'].pk}")
     rows = list(csv.reader(io.StringIO(response.content.decode())))
     body = "\n".join(",".join(row) for row in rows)
-    assert med_record.tracking_number in body
+    # A draft exports without its placeholder, which is not a number.
+    assert "MED only" in body
+    assert med_record.tracking_number not in body
     assert "SUP only" not in body
     assert f"{offices['MED'].code}" in response["Content-Disposition"]
 

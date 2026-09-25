@@ -697,13 +697,19 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
+        # A slip documents movement and quotes the tracking number, and a draft
+        # has neither: its number is issued when it is sent. Refused before
+        # anything is logged, so no print of a placeholder reaches the audit log.
+        if not record.has_tracking_number:
+            messages.info(request, "A draft has no routing slip. Send it first; it gets its number then.")
+            return redirect(record.get_absolute_url())
         # A paper slip leaves the system entirely, so both trails record who
         # generated one before the browser ever opens the print dialog: the
         # audit log for the administrator's view, and the record's own timeline
         # so the print shows up beside the movements it documents.
         entry = log_action(
             AuditLog.Action.PRINT,
-            f"Generated the routing slip for {record.tracking_number}",
+            f"Generated the routing slip for {record.display_tracking_number}",
             actor=request.user,
             target=record,
             request=request,
@@ -728,7 +734,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 "qr_svg": qr_svg(
                     f"{settings.SITE_BASE_URL}{record.get_absolute_url()}" if settings.SITE_BASE_URL
                     else request.build_absolute_uri(record.get_absolute_url()),
-                    label=f"QR code for {record.tracking_number}",
+                    label=f"QR code for {record.display_tracking_number}",
                 ),
             },
         )

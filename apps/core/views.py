@@ -2278,7 +2278,9 @@ class ReportExportView(AppLoginRequiredMixin, View):
             writer.writerow(
                 _csv_cell(value)
                 for value in (
-                    record.tracking_number,
+                    # "Not yet assigned" for a draft its author exports: the
+                    # placeholder is not a number and must not be quoted as one.
+                    record.display_tracking_number,
                     record.subject,
                     record.document_type.name if record.document_type_id else "",
                     record.originating_office.code,

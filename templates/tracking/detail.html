@@ -15,7 +15,9 @@
     </p>
   </div>
   <div class="d-flex gap-2 no-print">
-    <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    {% if record.has_tracking_number %}
+      <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    {% endif %}
     {% if archived_document %}
       <a class="btn btn-udm-teal" href="{{ archived_document.get_absolute_url }}">Open archived record</a>
     {% endif %}

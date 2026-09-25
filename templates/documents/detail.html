@@ -128,7 +128,7 @@
         <div class="card-udm-head"><h2>Origin</h2></div>
         <div class="card-udm-body">
           <p style="font-size:14px;">Archived from tracking record</p>
-          <a class="mono" href="{{ document.tracking_record.get_absolute_url }}">{{ document.tracking_record.tracking_number }}</a>
+          <a class="mono" href="{{ document.tracking_record.get_absolute_url }}">{{ document.tracking_record.display_tracking_number }}</a>
           <div class="text-muted" style="font-size:12.5px;">
             Completed {{ document.tracking_record.completed_at|date:"d M Y, g:i A" }}
           </div>

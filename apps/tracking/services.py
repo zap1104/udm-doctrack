@@ -250,7 +250,15 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         due_at=due_at,
     )
     add_activity(record, RecordActivity.Event.CREATED, f"Record created by {user.display_name}", actor=user)
-    log_action(AuditLog.Action.CREATE, f"Created {record.tracking_number}", actor=user, target=record)
+    # Named by its subject: a draft has no number yet, and the placeholder it
+    # carries until it is sent is not one — written into the append-only audit
+    # log it would be quoted as a reference that never existed.
+    log_action(
+        AuditLog.Action.CREATE,
+        f"Created draft “{truncate(record.subject, 80)}”",
+        actor=user,
+        target=record,
+    )
     return record
 
 

@@ -364,7 +364,7 @@ class TrackingRecord(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.tracking_number} — {self.subject}"
+        return f"{self.display_tracking_number} — {self.subject}"
 
     def get_absolute_url(self) -> str:
         return reverse("tracking:detail", args=[self.pk])
