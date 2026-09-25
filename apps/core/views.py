@@ -305,6 +305,16 @@ class DashboardMemoMixin:
                     ),
                 )
             )
+        # Lifetime only, of the three stages: the memo is a page of headlines,
+        # and "how long did a document take, start to finish" is the one a
+        # reader outside the office asks. Named, so it can be looked up.
+        if lifetime["samples"] > 1:
+            for kind in ("fastest", "slowest"):
+                if lifetime[kind]:
+                    timing.append(line(
+                        f"{kind.capitalize()} lifetime, {period}",
+                        "{} ({})".format(lifetime[kind]["office_label"], lifetime[kind]["tracking_number"]),
+                    ))
         if turnaround["has_on_time"]:
             timing.append(
                 line("Completed on time", "{} of {} ({}%)".format(

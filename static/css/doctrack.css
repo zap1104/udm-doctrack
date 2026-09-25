@@ -1162,6 +1162,19 @@ a:hover { text-decoration: underline; }
 .month-picker { display:flex; align-items:center; gap:8px; flex:0 0 auto; margin:0; }
 .month-picker .form-select { width:auto; min-width:11.5rem; }
 .month-picker-label { color:var(--udm-muted); font-size:12.5px; font-weight:600; }
+/* A turnaround stage: its average on one line, then the fastest and slowest
+   documents under it. The rule sits under the whole stage, not between the
+   average and its extremes. */
+.turnaround-stage { padding-bottom:6px; border-bottom:1px solid var(--chart-grid); }
+.turnaround-stage:last-child { border-bottom:0; }
+.turnaround-stage .report-metric { border-bottom:0; padding-bottom:4px; }
+.turnaround-extremes { display:flex; flex-wrap:wrap; gap:2px 16px; margin:0 0 4px; font-size:12px; }
+.turnaround-extremes > div { display:flex; align-items:baseline; gap:4px; min-width:0; }
+.turnaround-extremes dt { margin:0; }
+.turnaround-extremes dd { margin:0; min-width:0; overflow-wrap:anywhere; color:var(--udm-navy-text); }
+.turnaround-outside { margin:0 0 4px; color:var(--udm-muted); font-size:11.5px; }
+/* Beside the trend the stages are columns, not rows: no rule between them. */
+.trend-summary-figures .turnaround-stage { border-bottom:0; }
 /* "Average", "Fastest", "Slowest": which kind of figure this is, said in words
    beside the figure rather than left to the heading. */
 .metric-kind { margin-right:4px; color:var(--udm-muted); font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }

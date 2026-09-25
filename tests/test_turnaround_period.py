@@ -8,7 +8,7 @@ with a note, never an error.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from django.contrib.messages import get_messages
@@ -126,3 +126,60 @@ def test_the_memo_print_link_carries_the_month(client, users, two_months):
     body = client.get(f"/?month={_param(two_months['month'])}").content.decode()
 
     assert f"/memo/print/?month={_param(two_months['month'])}" in body
+
+
+# --- fastest and slowest, named ---------------------------------------------------
+@pytest.fixture
+def three_in_a_past_month(users, offices, memo_type):
+    """Three documents of one, two and three working days, two months back."""
+    first = (timezone.localdate().replace(day=1) - timedelta(days=40)).replace(day=1)
+    monday = first + timedelta(days=(7 - first.weekday()) % 7)
+    made = []
+    for index, days in enumerate((2, 1, 3)):
+        start = monday + timedelta(days=7 * index)
+        record = create_draft_record(
+            user=users["med"], subject=f"{days} days", instructions="x", document_type=memo_type,
+        )
+        route_record(record, [offices["SUP"]], user=users["med"])
+        confirm_receipt(record, user=users["sup"])
+        record.refresh_from_db()
+        complete_record(record, user=users["sup"])
+        began = timezone.make_aware(datetime.combine(start, time(8)))
+        TrackingRecord.objects.filter(pk=record.pk).update(
+            created_at=began, first_received_at=began,
+            completed_at=began + timedelta(days=days - 1, hours=9),
+        )
+        made.append(record)
+    return {"month": first, "one_day": made[1], "three_days": made[2]}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", ["/", "/reports/"])
+def test_the_page_names_the_fastest_and_slowest_document(client, users, three_in_a_past_month, path):
+    client.force_login(users["admin"])
+    body = client.get(f"{path}?month={_param(three_in_a_past_month['month'])}").content.decode()
+
+    fastest, slowest = three_in_a_past_month["one_day"], three_in_a_past_month["three_days"]
+    assert "Fastest" in body and "Slowest" in body
+    assert f'href="{fastest.get_absolute_url()}">{fastest.tracking_number}</a>' in body
+    assert f'href="{slowest.get_absolute_url()}">{slowest.tracking_number}</a>' in body
+
+
+@pytest.mark.django_db
+def test_the_memo_names_the_fastest_and_slowest_lifetime(client, users, three_in_a_past_month):
+    client.force_login(users["admin"])
+    month = three_in_a_past_month["month"]
+    memo = client.get(f"/memo/print/?month={_param(month)}").context["memo"]
+    lines = {line["label"]: line["value"] for section in memo for line in section["lines"]}
+
+    assert lines[f"Fastest lifetime, {month:%B %Y}"] == f'1 day ({three_in_a_past_month["one_day"].tracking_number})'
+    assert lines[f"Slowest lifetime, {month:%B %Y}"] == f'3 days ({three_in_a_past_month["three_days"].tracking_number})'
+
+
+@pytest.mark.django_db
+def test_one_document_has_no_fastest_to_name(client, users, two_months):
+    """With one, fastest and slowest would both repeat the average."""
+    client.force_login(users["admin"])
+    body = client.get(f"/reports/?month={_param(two_months['month'])}").content.decode()
+
+    assert "Slowest" not in body
