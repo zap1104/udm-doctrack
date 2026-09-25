@@ -77,6 +77,16 @@ AWAITING_RECEIPT_STATUSES = {Status.PENDING_RECEIPT}
 #: that mean the narrower thing test Status.COMPLETED directly.
 COMPLETED_STATUSES = {Status.COMPLETED_PENDING_UPLOAD, Status.COMPLETED}
 
+
+def overdue_q():
+    """Records past their deadline with work still owed on them.
+
+    The one definition of overdue in the query layer. Every queue, filter,
+    count and reminder reads it, so no two of them can disagree about which
+    documents are late.
+    """
+    return Q(due_at__lt=timezone.now()) & ~Q(status__in=COMPLETED_STATUSES)
+
 #: Statuses that belong in the Document Tracking module. COMPLETED_PENDING_UPLOAD
 #: is here on purpose: a finished record stays visible in Tracking until an
 #: administrator approves it into the repository, which is the act that files it.
@@ -236,7 +246,7 @@ class TrackingRecordQuerySet(models.QuerySet):
         return self.filter(status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True)
 
     def overdue(self):
-        return self.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+        return self.filter(overdue_q())
 
     def with_related(self):
         return self.select_related(

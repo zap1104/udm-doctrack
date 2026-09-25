@@ -28,7 +28,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Office
 from apps.documents.models import COMPLETED_SOURCE
-from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status
+from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status, overdue_q
 
 from .business_time import (
     _two_units,
@@ -298,11 +298,7 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
     documents for its own headline figure.
     """
     now = timezone.now()
-    late = (
-        records.filter(due_at__lt=now)
-        .exclude(status__in=COMPLETED_STATUSES)
-        .exclude(current_office__isnull=True)
-    )
+    late = records.filter(overdue_q()).exclude(current_office__isnull=True)
     grouped = list(
         late.values("current_office__code", "current_office__name")
         .annotate(total=Count("id", distinct=True))
@@ -375,8 +371,7 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
     quietly under-report the thing the banner exists to state.
     """
     total = (
-        records.filter(due_at__lt=timezone.now())
-        .exclude(status__in=COMPLETED_STATUSES)
+        records.filter(overdue_q())
         .distinct()
         .count()
     )
@@ -855,12 +850,7 @@ def combined_totals(records, documents) -> dict:
         "in_process": by_status(Status.IN_PROCESS),
         "pending_upload": by_status(Status.COMPLETED_PENDING_UPLOAD),
         # Not a slice; the stat card and the memo both read it from here.
-        "overdue": (
-            records.filter(due_at__lt=timezone.now())
-            .exclude(status__in=COMPLETED_STATUSES)
-            .distinct()
-            .count()
-        ),
+        "overdue": records.filter(overdue_q()).distinct().count(),
         "historical": historical,
         "completed": repository_total - historical,
     }

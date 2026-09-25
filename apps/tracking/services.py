@@ -46,6 +46,7 @@ from .models import (
     Status,
     TrackingNumberSequence,
     TrackingRecord,
+    overdue_q,
 )
 
 logger = logging.getLogger("doctrack")
@@ -854,11 +855,9 @@ SCOPE_MINE = "mine"
 PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 
-#: One definition of "past its deadline" in the query layer. Both the queue and
-#: the filter read it, so the pill and the checkbox cannot drift apart.
-def overdue_q():
-    """Records past their deadline with work still owed on them."""
-    return Q(due_at__lt=timezone.now()) & ~Q(status__in=COMPLETED_STATUSES)
+#: `overdue_q` — the one definition of "past its deadline" — is imported from
+#: .models above, where the queryset's `.overdue()` can use it too, and is used
+#: from here by the queues, the filters and the reports.
 
 
 def on_time_q():

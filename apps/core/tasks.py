@@ -37,7 +37,7 @@ def chase_unreceived_and_overdue():
     condition, not once per run. A queue that re-notifies every night trains
     people to ignore it, which costs more than the notice is worth.
     """
-    from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, TrackingRecord
+    from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, TrackingRecord, overdue_q
 
     from .notifications import notify_office
 
@@ -80,8 +80,7 @@ def chase_unreceived_and_overdue():
 
     # --- past the deadline: told to whoever is holding it -------------------
     overdue = (
-        TrackingRecord.objects.filter(due_at__lt=now, current_office__isnull=False)
-        .exclude(status__in=COMPLETED_STATUSES)
+        TrackingRecord.objects.filter(overdue_q(), current_office__isnull=False)
         .select_related("current_office")
     )
     for record in overdue:
