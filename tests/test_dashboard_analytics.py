@@ -680,7 +680,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
-    assert body.index("trend-legend") > body.index("How long documents take")
+    assert body.index("trend-legend") > body.index("Turnaround Time for the Month of")
 
 
 @pytest.mark.django_db
@@ -715,8 +715,10 @@ def test_the_memo_is_composed_server_side(client, users, finished_record):
     client.force_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
 
+    month = f"{timezone.localdate():%B %Y}"
     assert memo_headings(memo) == [
-        "Overview", "Needs attention", "Turnaround", "Repository activity this month",
+        "Overview", "Needs attention", f"Turnaround Time for the Month of {month}",
+        "Repository activity this month",
     ]
     for section in memo:
         assert section["lines"], section["heading"]
@@ -1150,12 +1152,13 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     for heading in ("Action Centre", "Newest in the Document Repository",
-                    "Created, handed over and completed", "How long documents take"):
-        assert f"<h2>{heading}</h2>" in body, heading
+                    "Created, handed over and completed &mdash; running totals",
+                    "Turnaround Time for the Month of"):
+        assert f"<h2>{heading}" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("How long documents take") < body.index('id="dashboard-memo"')
+    assert body.index("Turnaround Time for the Month of") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Action Centre
@@ -1595,7 +1598,7 @@ EXPECTED_ROWS = [
     ("Tracking", "Repository"),
     ("Action Centre", "Newest in the Document Repository"),
     ("Created, handed over and completed", "Added to the repository"),
-    "How long documents take",
+    "Turnaround Time",
 ]
 
 
@@ -1618,8 +1621,9 @@ def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_r
         expected.extend(row if isinstance(row, tuple) else [row])
 
     # "Added to the repository &mdash; September" carries the month, as the
-    # HTML entity rather than the character.
-    normalised = [re.split(r"&mdash;| — ", h)[0].strip() for h in headings]
+    # HTML entity rather than the character, and "Turnaround Time for the
+    # Month of September 2026" carries the month picked.
+    normalised = [re.split(r"&mdash;| — | for the Month of ", h)[0].strip() for h in headings]
     assert normalised == expected
 
 
@@ -1654,7 +1658,7 @@ def test_the_turnaround_panel_is_full_width_and_comes_last():
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    head = html.index("<h2>How long documents take</h2>")
+    head = html.index("<h2>Turnaround Time for the Month of")
     column = html.rindex('<div class="col-', 0, head)
 
     assert html[column:].startswith('<div class="col-12">'), "not full width"

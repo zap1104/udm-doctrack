@@ -532,7 +532,7 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Created, handed over and completed</h2>
+          <h2>Created, handed over and completed &mdash; running totals</h2>
           <div class="card-udm-caption">
             Running totals. The gap between created and completed is work still in the building.
           </div>
@@ -684,9 +684,11 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>How long documents take</h2>
+          <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="card-udm-caption">
-              Average working days at each stage, month by month.
+              The month's average, fastest and slowest for each stage, beside the line
+              of monthly averages from {{ turnaround_trend.rows.0.month|date:"F Y" }}
+              to {{ turnaround_trend.latest.month|date:"F Y" }}.
             </div>
             <details class="chart-note">
               <summary>How to read this</summary>

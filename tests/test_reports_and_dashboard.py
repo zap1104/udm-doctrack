@@ -13,6 +13,7 @@ TRACKING_PANELS and REPOSITORY_PANELS.
 from __future__ import annotations
 
 import pytest
+from django.utils import timezone
 
 from apps.tracking.services import (
     complete_record,
@@ -74,9 +75,9 @@ def test_the_page_says_the_figure_excludes_weekends_and_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Created, handed over and completed",
+    "Created, handed over and completed &mdash; running totals",
     "Documents by stage",
-    "How long documents take",
+    "Turnaround Time for the Month of {month}",
     "Overdue: who must act next",
     "Documents received by office",
     "Handovers by office: sent and confirmed",
@@ -104,7 +105,9 @@ def test_the_report_carries_exactly_the_specified_panels(client, finished_record
         if "<h2>" in line and "</h2>" in line
     ]
 
-    assert headings == list(TRACKING_PANELS) + list(REPOSITORY_PANELS)
+    month = f"{timezone.localdate():%B %Y}"
+    expected = [panel.format(month=month) for panel in TRACKING_PANELS] + list(REPOSITORY_PANELS)
+    assert headings == expected
 
 
 @pytest.mark.django_db

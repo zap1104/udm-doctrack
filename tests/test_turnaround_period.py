@@ -183,3 +183,31 @@ def test_one_document_has_no_fastest_to_name(client, users, two_months):
     body = client.get(f"/reports/?month={_param(two_months['month'])}").content.decode()
 
     assert "Slowest" not in body
+
+
+# --- the title says which month ------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", ["/", "/reports/"])
+def test_the_turnaround_title_names_the_month_picked(client, users, two_months, path):
+    client.force_login(users["admin"])
+    month = two_months["month"]
+    body = client.get(f"{path}?month={_param(month)}").content.decode()
+
+    assert f"<h2>Turnaround Time for the Month of {month:%B %Y}</h2>" in body
+
+
+@pytest.mark.django_db
+def test_the_memo_heads_its_turnaround_with_the_month(client, users, two_months):
+    client.force_login(users["admin"])
+    month = two_months["month"]
+    memo = client.get(f"/memo/print/?month={_param(month)}").context["memo"]
+
+    assert f"Turnaround Time for the Month of {month:%B %Y}" in [section["heading"] for section in memo]
+
+
+@pytest.mark.django_db
+def test_the_cumulative_chart_says_it_is_a_running_total(client, users):
+    client.force_login(users["admin"])
+    body = client.get("/").content.decode()
+
+    assert "<h2>Created, handed over and completed &mdash; running totals</h2>" in body

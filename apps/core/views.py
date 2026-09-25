@@ -339,7 +339,7 @@ class DashboardMemoMixin:
         return [
             {"heading": "Overview", "lines": overview},
             {"heading": "Needs attention", "lines": attention},
-            {"heading": "Turnaround", "lines": timing},
+            {"heading": f"Turnaround Time for the Month of {period}", "lines": timing},
             {"heading": "Repository activity this month", "lines": activity},
         ]
 

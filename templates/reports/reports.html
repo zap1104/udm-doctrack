@@ -195,7 +195,7 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Created, handed over and completed</h2>
+            <h2>Created, handed over and completed &mdash; running totals</h2>
             <div class="report-caption">
               Running totals. The gap between created and completed is work still in the building.
             </div>
@@ -351,9 +351,10 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>How long documents take</h2>
+            <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="report-caption">
-              {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}, in office hours. Calendar time is beneath each one.
+              {% if turnaround.is_current %}The month so far. {% endif %}Each stage's average,
+              fastest and slowest, in office hours; calendar time is beneath each average.
             </div>
           </div>
           {% include "core/_month_picker.html" with picker=month_picker picker_id="report-turnaround-month" %}
