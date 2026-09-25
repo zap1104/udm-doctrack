@@ -39,6 +39,7 @@ from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
+from .business_time import load_holidays, office_hours_caveat
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
@@ -2155,6 +2156,9 @@ class ReportExportView(AppLoginRequiredMixin, View):
             ["Direction measured from", scope_office.name if scope_office else "no office — Direction not available"]
         )
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
+        # The basis of the three duration columns, which are plain numbers of
+        # office hours so a spreadsheet can sort and add them.
+        writer.writerow(["Durations", office_hours_caveat()])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
             # "Overdue" in place of the stage, so an exported sheet had no
@@ -2163,9 +2167,15 @@ class ReportExportView(AppLoginRequiredMixin, View):
             # re-run the query. This is the one place the old behaviour
             # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
-             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed"]
+             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed",
+             "Waiting for receipt (office hrs)", "In process (office hrs)", "Lifetime (office hrs)"]
         )
-        for record in records[:cap]:
+        # One holiday read and one routing-step read for the whole sheet; each
+        # row's durations come from `analytics.record_durations`, the per-record
+        # twin of the figures on the page, by the same definitions.
+        holidays = load_holidays()
+        for record in records.prefetch_related("routing_steps")[:cap]:
+            durations = analytics.record_durations(record, record.routing_steps.all(), holidays)
             writer.writerow(
                 _csv_cell(value)
                 for value in (
@@ -2180,9 +2190,18 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",
+                    *(_office_hours(durations[key]) for key in ("receipt", "processing", "lifetime")),
                 )
             )
         return response
+
+
+def _office_hours(seconds) -> str:
+    """Office seconds as hours to two places, blank for a stage not reached.
+
+    Blank rather than 0: a document not yet completed has no lifetime, and a
+    zero would be averaged in by whoever opens the sheet."""
+    return "" if seconds is None else f"{seconds / 3600:.2f}"
 
 
 # ---------------------------------------------------------------------------
