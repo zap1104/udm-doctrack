@@ -669,6 +669,90 @@ def turnaround(records, month=None) -> dict:
     return result
 
 
+def _duration(start, end, holidays, live=False) -> dict:
+    """One interval as the timeline and export state it: office time first."""
+    office = business_seconds_between(start, end, holidays)
+    return {
+        "office_seconds": office,
+        "office": humanise_business_seconds(office),
+        "calendar": humanise_duration(end - start),
+        # Still running: measured up to now, and said to be "so far".
+        "live": live,
+    }
+
+
+def record_waits(record, steps, holidays=None, now=None) -> dict:
+    """Office time at each hop of one record, keyed by routing step.
+
+    `receipt` is sent to confirmed — or sent to now, "so far", while nobody
+    has confirmed. `held` is how long the receiving office kept it: confirmed
+    to the next time that office sent it on, or to completion when that office
+    finished it, or to now while it still has it. None when the office did
+    neither, such as a copy one recipient of a batch confirmed while another
+    carried the work on.
+
+    Counted by the same engine, holidays and lunch as every turnaround figure,
+    so a hop's wait on this page adds up the same way the averages do.
+    """
+    if holidays is None:
+        holidays = load_holidays()
+    now = now or timezone.now()
+    finished = record.status in COMPLETED_STATUSES and record.completed_at
+    waits = {}
+    for step in steps:
+        entry = {"receipt": None, "held": None, "held_until": None}
+        if step.received_at:
+            entry["receipt"] = _duration(step.sent_at, step.received_at, holidays)
+            passed_on = min(
+                (
+                    later.sent_at for later in steps
+                    if later.from_office_id == step.to_office_id and later.sent_at >= step.received_at
+                ),
+                default=None,
+            )
+            if passed_on:
+                entry["held"] = _duration(step.received_at, passed_on, holidays)
+                entry["held_until"] = "sending it on"
+            elif record.current_office_id == step.to_office_id:
+                if finished and record.completed_at >= step.received_at:
+                    entry["held"] = _duration(step.received_at, record.completed_at, holidays)
+                    entry["held_until"] = "completing it"
+                elif not finished and step.batch == record.current_batch:
+                    entry["held"] = _duration(step.received_at, now, holidays, live=True)
+        elif not finished and step.batch == record.current_batch:
+            entry["receipt"] = _duration(step.sent_at, now, holidays, live=True)
+        waits[step.pk] = entry
+    return waits
+
+
+def record_durations(record, steps, holidays=None) -> dict:
+    """The three stages for one record, in office seconds, None where the
+    stage has not happened: the per-record twin of `turnaround()`, by the same
+    definitions, for the export.
+
+    Receipt is every confirmed hop's wait added together — the time the record
+    spent waiting for somebody to sign for it.
+    """
+    if holidays is None:
+        holidays = load_holidays()
+    finished = record.status in COMPLETED_STATUSES and record.completed_at
+    received = [step for step in steps if step.received_at]
+    return {
+        "receipt": (
+            sum(business_seconds_between(s.sent_at, s.received_at, holidays) for s in received)
+            if received else None
+        ),
+        "processing": (
+            business_seconds_between(record.first_received_at, record.completed_at, holidays)
+            if finished and record.first_received_at else None
+        ),
+        "lifetime": (
+            business_seconds_between(record.created_at, record.completed_at, holidays)
+            if finished else None
+        ),
+    }
+
+
 def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     """The three turnaround averages, one point per month.
 

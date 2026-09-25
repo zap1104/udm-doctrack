@@ -414,6 +414,11 @@ a:hover { text-decoration: underline; }
   background:var(--udm-surface); border: 3px solid var(--udm-teal);
 }
 .timeline li.is-pending::before { border-color: var(--udm-gold); }
+/* Office time at a hop, under its receipt line. The basis sentence sits once
+   under the card head rather than on every hop. */
+.t-wait { color:var(--udm-muted); }
+.t-wait span[title],.t-awaiting span[title] { text-decoration:underline dotted; text-underline-offset:3px; cursor:help; }
+.timeline-basis { margin:0; padding:10px 20px 0; color:var(--udm-muted); font-size:12px; }
 .timeline li.is-done::before { border-color: var(--udm-green); }
 .timeline li.is-muted::before { border-color: var(--udm-line); }
 .timeline .t-title { font-weight: 600; color: var(--udm-navy-text); }

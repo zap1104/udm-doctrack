@@ -13,7 +13,9 @@ from django.utils import timezone
 from django.views.generic import View
 
 from apps.accounts.models import Office
+from apps.core import analytics
 from apps.core import filters as core_filters
+from apps.core.business_time import office_hours_caveat
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
@@ -415,6 +417,11 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "from_office", "to_office", "sent_by", "received_by"
             ).order_by("sequence")
         )
+        # Office time at each hop, from the engine every turnaround figure uses.
+        # Attached to the step for the template; nothing is saved.
+        waits = analytics.record_waits(record, steps)
+        for step in steps:
+            step.waits = waits[step.pk]
         activities = list(
             record.activities.select_related("actor", "actor_office")
             .exclude(event__in=QUIET_EVENTS)
@@ -456,6 +463,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "show_filing_panel": can_archive_now or can_reopen,
                 "reopen_form": ReopenForm(),
                 "archived_document": archived_document,
+                "office_hours_caveat": office_hours_caveat(),
             },
         )
 

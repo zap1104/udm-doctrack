@@ -21,7 +21,20 @@
       · {{ step.received_at|date:"d M Y, g:i A" }}
     </div>
     {% if step.receipt_note %}<div class="t-detail">{{ step.receipt_note }}</div>{% endif %}
+    {% comment %}
+      Office time, from analytics.record_waits — the engine and holidays every
+      turnaround figure uses. Calendar time in the tooltip.
+    {% endcomment %}
+    <div class="t-meta t-wait">
+      <span title="{{ step.waits.receipt.calendar }} on the calendar">Confirmed after {{ step.waits.receipt.office }} of office time</span>
+      {% if step.waits.held %}
+        · <span title="{{ step.waits.held.calendar }} on the calendar">{{ step.to_office.code }} held it {{ step.waits.held.office }}{% if step.waits.held.live %} so far{% else %} before {{ step.waits.held_until }}{% endif %}</span>
+      {% endif %}
+    </div>
   {% else %}
-    <div class="t-meta mt-1 t-awaiting">Awaiting receipt from {{ step.to_office.code }}</div>
+    <div class="t-meta mt-1 t-awaiting">
+      Awaiting receipt from {{ step.to_office.code }}{% if step.waits.receipt %}
+        · <span title="{{ step.waits.receipt.calendar }} on the calendar">{{ step.waits.receipt.office }} of office time so far</span>{% endif %}
+    </div>
   {% endif %}
 </li>
