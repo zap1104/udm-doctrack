@@ -21,3 +21,21 @@ def deployment_configuration(app_configs, **kwargs):
     if not getattr(settings, "SECURE_SSL_REDIRECT", False):
         errors.append(Error("HTTPS redirect is disabled.", hint="Set SECURE_SSL_REDIRECT=True in the production environment.", id="doctrack.E006"))
     return errors
+
+
+@register()
+def office_hours_configuration(app_configs, **kwargs):
+    """Refuse an office day that cannot be counted.
+
+    `business_time` clips a stray lunch to the window rather than counting a
+    negative day, so a typo in these settings would not crash anything — it
+    would quietly change every turnaround figure. That is worth failing on.
+    """
+    opens, closes = settings.OFFICE_DAY_START, settings.OFFICE_DAY_END
+    lunch_from, lunch_to = settings.OFFICE_LUNCH_START, settings.OFFICE_LUNCH_END
+    errors = []
+    if closes <= opens:
+        errors.append(Error("OFFICE_DAY_END is not after OFFICE_DAY_START.", hint="Set the office window, e.g. 08:00 to 17:00.", id="doctrack.E007"))
+    if lunch_to < lunch_from or lunch_from < opens or lunch_to > closes:
+        errors.append(Error("The lunch break is not inside the office day.", hint="Set OFFICE_LUNCH_START and OFFICE_LUNCH_END within the window, or both to the same time for no break.", id="doctrack.E008"))
+    return errors

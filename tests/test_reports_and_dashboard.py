@@ -63,8 +63,8 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
     client.force_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
-    assert "Office hours only" in body
-    assert "holidays not" in body
+    assert "Turnaround is counted in office hours (8 hours = 1 working day" in body
+    assert "Holidays are not excluded" in body
 
 
 # --- the panels the report is specified to carry ----------------------------

@@ -31,11 +31,12 @@ from apps.documents.models import COMPLETED_SOURCE
 from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status
 
 from .business_time import (
-    OFFICE_HOURS_CAVEAT,
     _two_units,
     average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
+    office_hours_caveat,
+    working_day_hours,
     working_day_seconds,
 )
 from .colors import STATUS_COLOURS
@@ -538,7 +539,7 @@ def turnaround(records) -> dict:
         "receipt_calendar": humanise_duration(receipt),
         "processing_calendar": humanise_duration(processing),
         "lifetime_calendar": humanise_duration(lifetime),
-        "office_hours_caveat": OFFICE_HOURS_CAVEAT,
+        "office_hours_caveat": office_hours_caveat(),
         # How many each average is taken over, so "4 hrs" from three documents
         # is not read with the weight of "4 hrs" from three hundred.
         "receipt_samples": receipt_row["samples"],
@@ -677,9 +678,9 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
         "ceiling": ceiling,
         "ticks": axis_ticks(ceiling),
         "has_data": bool(measured),
-        "office_hours_caveat": OFFICE_HOURS_CAVEAT,
+        "office_hours_caveat": office_hours_caveat(),
         "latest": rows[-1] if rows else None,
-        "working_day_hours": round(day / 3600, 1),
+        "working_day_hours": working_day_hours(),
     }
 
 

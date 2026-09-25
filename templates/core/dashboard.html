@@ -691,8 +691,8 @@
             <details class="chart-note">
               <summary>How to read this</summary>
               <p>
-                Counted in office hours, so a document sitting over a weekend is not
-                charged for it. {{ turnaround_trend.office_hours_caveat }}
+                {{ turnaround_trend.office_hours_caveat }} A document sitting over a
+                weekend is not charged for it.
               </p>
             </details>
           </div>
@@ -813,7 +813,8 @@
                 </div>
                 <div class="chart-scale">
                   Working days, averaged per month &middot; one working day is
-                  {{ turnaround_trend.working_day_hours|floatformat:"-1" }} office hours
+                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours,
+                  weekends excluded
                 </div>
               </div>
               <div class="trend-summary">
@@ -960,7 +961,7 @@
       </div>
       <div class="modal-footer">
         <span class="memo-footnote">
-          Durations are counted in office hours. {{ turnaround.office_hours_caveat }}
+          {{ turnaround.office_hours_caveat }}
         </span>
         <button class="btn btn-udm-outline" type="button" data-bs-dismiss="modal">Close</button>
         {% comment %}
