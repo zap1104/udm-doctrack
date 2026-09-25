@@ -202,7 +202,7 @@ def _axis_values(body):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page, charts", [("/", 1), ("/tracking/reports/", 2)])
+@pytest.mark.parametrize("page, charts", [("/", 1), ("/tracking/reports/", 1)])
 def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     client, users, charted, page, charts
 ):
@@ -213,9 +213,12 @@ def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     axes = _axis_values(body)
     assert len(axes) == charts == body.count('class="column-chart"')
     context = response.context
-    ceilings = [context["monthly"]["ceiling"]]
-    if page == "/tracking/reports/":
-        ceilings.append(context["document_months"]["ceiling"])
+    # Reports draws only its repository chart: the running totals are the
+    # dashboard's, and Reports no longer repeats them.
+    ceilings = (
+        [context["document_months"]["ceiling"]] if page == "/tracking/reports/"
+        else [context["monthly"]["ceiling"]]
+    )
     for values, ceiling in zip(axes, ceilings, strict=True):
         assert values[0] == 0
         assert values[-1] == ceiling
@@ -309,7 +312,8 @@ def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted)
     client.force_login(users["admin"])
     body = client.get("/tracking/reports/").content.decode()
 
-    assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 24
+    # One monthly table since Reports stopped repeating the dashboard's chart.
+    assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 12
 
 
 def test_a_legend_or_a_switch_in_a_card_head_wraps_rather_than_clips():
@@ -595,14 +599,15 @@ def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
     assert month.count('class="column column--') == 1, "the zero has no bar"
 
 
-def test_the_three_column_charts_share_one_labelling_rule():
+def test_the_column_charts_share_one_labelling_rule():
+    """Two now: Reports stopped repeating the dashboard's running totals."""
     import pathlib
 
     dashboard = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
     reports = pathlib.Path("templates/reports/reports.html").read_text(encoding="utf-8")
 
     assert dashboard.count('{% include "core/_columns.html" %}') == 1
-    assert reports.count('{% include "core/_columns.html" %}') == 2
+    assert reports.count('{% include "core/_columns.html" %}') == 1
     assert "column-value" not in dashboard + reports, "the rule lives in the partial only"
 
 

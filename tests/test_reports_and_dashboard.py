@@ -75,7 +75,6 @@ def test_the_page_says_the_figure_excludes_weekends_and_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Created, handed over and completed &mdash; running totals",
     "Documents by stage",
     "Turnaround Time for the Month of {month}",
     "Overdue: who must act next",
@@ -243,7 +242,7 @@ def test_overdue_offices_report_a_share_of_the_whole_backlog(
 @pytest.mark.django_db
 def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, users):
     client.force_login(users["admin"])
-    monthly = client.get(REPORTS).context["monthly"]
+    monthly = client.get("/").context["monthly"]
 
     row = monthly["rows"][-1]
     for key in ("created", "transferred", "completed"):
@@ -254,7 +253,7 @@ def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, 
 def test_the_series_never_decrease(client, finished_record, users):
     """A running total that falls is not a running total."""
     client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["monthly"]["rows"]
+    rows = client.get("/").context["monthly"]["rows"]
 
     for key in ("created", "transferred", "completed"):
         values = [row[key] for row in rows]
@@ -271,7 +270,7 @@ def test_the_gap_between_created_and_completed_is_what_is_still_open(
     route_record(open_one, [offices["SUP"]], user=users["med"])
 
     client.force_login(users["admin"])
-    monthly = client.get(REPORTS).context["monthly"]
+    monthly = client.get("/").context["monthly"]
     last = monthly["rows"][-1]
 
     assert monthly["outstanding"] == last["created"] - last["completed"]

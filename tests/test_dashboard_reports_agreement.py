@@ -425,7 +425,8 @@ DASHBOARD_QUERIES = 47
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
 #: 45: the same six, on the same service.
-REPORTS_QUERIES = 45
+#: 39: the running-totals chart left Reports, which repeated the dashboard's.
+REPORTS_QUERIES = 39
 
 
 @pytest.mark.django_db
@@ -463,7 +464,7 @@ DASHBOARD_OFFICE_QUERIES = 49
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 46
+REPORTS_OFFICE_QUERIES = 40
 
 
 @pytest.mark.django_db

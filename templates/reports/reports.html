@@ -184,100 +184,11 @@
 
   <div class="row g-4">
     {% comment %}
-      Three cumulative series. Each runs as a running total from the start of
-      records rather than resetting monthly: the reset version answered "how
-      busy was March", which is a staffing question, while the running total
-      answers "is the backlog growing" — the gap between the Created and
-      Completed curves is the work still in the building, and on a monthly
-      reset that gap cannot be seen at all. Created is the tracking side and
-      Completed is the repository side, which is what the pairing is for.
+      "Created, handed over and completed" was the first panel here, and the
+      dashboard draws the same chart from the same function for the same scope.
+      The consultation asked Reports to stop repeating the dashboard; it keeps
+      the panels only it has.
     {% endcomment %}
-    <div class="col-12">
-      <div class="card-udm h-100">
-        <div class="card-udm-head">
-          <div>
-            <h2>Created, handed over and completed &mdash; running totals</h2>
-            <div class="report-caption">
-              Running totals. The gap between created and completed is work still in the building.
-            </div>
-          </div>
-          <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
-          </div>
-        </div>
-        <div class="card-udm-body">
-          {% if monthly.total %}
-            <div class="column-chart-frame">
-            <div class="column-chart" role="img"
-                 aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
-              {% include "core/_column_axis.html" with ticks=monthly.ticks %}
-              <div class="column-chart-plot">
-                {% for row in monthly.rows %}
-                  {% comment %}
-                    A zero column draws nothing — a minimum-height stub would
-                    paint a value that is not there. On a cumulative series this
-                    only happens before the first record exists.
-                  {% endcomment %}
-                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
-                    <div class="column-pair">
-                      {% include "core/_columns.html" %}
-                    </div>
-                    <div class="column-label">{{ row.month|date:"M" }}</div>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="chart-scale">
-              Top of the chart = {{ monthly.ceiling }} · {{ monthly.outstanding }} still open ·
-              every bar carries its own running total
-            </div>
-            <details class="chart-note">
-              <summary>How to read this</summary>
-              <p>
-                Each month is the position at the end of that month, counted from the
-                first document in the system — not that month on its own.
-              </p>
-              <p>
-                Created and Completed count documents; the gap between them is the work
-                still in the building. Handovers count moves between offices, so one
-                document endorsed four times adds four — which is why that bar is
-                usually the tallest and why it is not a count of documents. Each bar
-                carries its own number so the three are never mistaken for one another.
-              </p>
-            </details>
-            <details class="chart-table">
-              <summary>View as table</summary>
-              <div class="table-responsive"><table class="table-udm">
-                <thead><tr>
-                  <th>Month</th>
-                  <th class="text-end">Created</th>
-                  <th class="text-end">Handovers</th>
-                  <th class="text-end">Completed</th>
-                  <th class="text-end">Added this month</th>
-                </tr></thead>
-                <tbody>
-                  {% for row in monthly.rows %}
-                    <tr>
-                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
-                      <td class="text-end num">{{ row.created }}</td>
-                      <td class="text-end num">{{ row.transferred }}</td>
-                      <td class="text-end num">{{ row.completed }}</td>
-                      <td class="text-end num text-muted">+{{ row.created_delta }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table></div>
-            </details>
-            </div>
-          {% else %}
-            <div class="report-empty">No tracking activity recorded yet.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
     <!-- status mix -->
     <div class="col-12">
       <div class="card-udm h-100">

@@ -1451,7 +1451,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "awaiting_split": awaiting_split,
                 "stale_receipts": stale_receipts,
                 "by_status": self._by_status(records, total_records, scope_office),
-                "monthly": self._monthly(records),
                 "turnaround": self._turnaround(records, month),
                 "month_picker": core_filters.month_picker(self.request, months, month),
                 "overdue_accountability": self._overdue_accountability(records, overdue_all),
@@ -1617,9 +1616,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             row["sent_percent"] = _bar(row["sent"], handovers)
             row["received_percent"] = _bar(row["received"], handovers)
         return {"rows": rows, "handovers": handovers}
-
-    def _monthly(self, records):
-        return analytics.monthly_volume(records)
 
     def _office_volume(self, records):
         """Which office handled the most documents, per month and cumulatively.

@@ -116,21 +116,23 @@ def test_reports_delegates_rather_than_keeping_its_own_copy(client, users, finis
     implementations wearing one name."""
     import apps.core.views as views
 
+    # turnaround(), the aggregation both pages still share: monthly_volume was
+    # the one watched here, until Reports stopped drawing the running totals.
     calls = []
-    original = analytics.monthly_volume
+    original = analytics.turnaround
 
-    def spy(records):
+    def spy(records, *args, **kwargs):
         calls.append(records)
-        return original(records)
+        return original(records, *args, **kwargs)
 
-    views.analytics.monthly_volume = spy
+    views.analytics.turnaround = spy
     try:
         client.force_login(users["admin"])
         client.get(REPORTS)
     finally:
-        views.analytics.monthly_volume = original
+        views.analytics.turnaround = original
 
-    assert calls, "ReportsView did not call analytics.monthly_volume"
+    assert calls, "ReportsView did not call analytics.turnaround"
 
 
 # --- oldest days -----------------------------------------------------------
