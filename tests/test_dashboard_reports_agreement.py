@@ -411,11 +411,14 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: "moved today", for a direction that does not exist there.
 #: 49: holidays. Each turnaround calculation reads the holiday table once,
 #: and the dashboard makes two, the monthly trend and the memo's averages.
-DASHBOARD_QUERIES = 49
+#: 43: turnaround became one service over two queries of intervals, where it
+#: was eight — an aggregate and a value list per stage, and two deadline counts.
+DASHBOARD_QUERIES = 43
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
-REPORTS_QUERIES = 51
+#: 45: the same six, on the same service.
+REPORTS_QUERIES = 45
 
 
 @pytest.mark.django_db
@@ -448,12 +451,12 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 50
+DASHBOARD_OFFICE_QUERIES = 44
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 52
+REPORTS_OFFICE_QUERIES = 46
 
 
 @pytest.mark.django_db
