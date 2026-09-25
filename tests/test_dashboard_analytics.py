@@ -1151,7 +1151,8 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    for heading in ("Action Centre", "Newest in the Document Repository",
+    assert "Newest in the Document Repository" not in body, "removed in the consultation"
+    for heading in ("Action Centre",
                     "Created, handed over and completed &mdash; running totals",
                     "Turnaround Time for the Month of"):
         assert f"<h2>{heading}" in body, heading
@@ -1338,7 +1339,6 @@ def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, office
 
     assert len(context["attention_records"]) == DASHBOARD_ROWS
     assert len(context["recent_records"]) == DASHBOARD_ROWS
-    assert len(context["recent_documents"]) <= DASHBOARD_ROWS
 
 
 @pytest.mark.django_db
@@ -1603,7 +1603,7 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: Left is tracking, right is the repository, wherever a row is split.
 EXPECTED_ROWS = [
     ("Tracking", "Repository"),
-    ("Action Centre", "Newest in the Document Repository"),
+    "Action Centre",
     ("Created, handed over and completed", "Added to the repository"),
     "Turnaround Time",
 ]
@@ -1635,22 +1635,18 @@ def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_r
 
 
 @pytest.mark.django_db
-def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, filed_record):
-    """Newest in the Document Repository used to be stacked inside the same
-    column as Office Flow Today, which is why the repository side of the page
-    simply stopped after the donut."""
+def test_the_action_centre_has_its_row_to_itself(client, users, filed_record):
+    """It shared a row with "Newest in the Document Repository", which repeated
+    what the Repository ring and page already show and was removed."""
     import re
 
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    # Split on column boundaries rather than pairing one class with the next
-    # one like it: the charts below are full width now, so a regex looking for
-    # the next col-xl-6 runs off the end of the page and matches nothing.
     columns = re.split(r'<div class="col[ -]', body)
-    holding = [c for c in columns if "Newest in the Document Repository" in c]
-    assert len(holding) == 1, "the panel should open exactly one column"
-    assert "Action Centre" not in holding[0], "the two are still sharing one column"
+    holding = [c for c in columns if "<h2>Action Centre</h2>" in c]
+    assert len(holding) == 1
+    assert holding[0].startswith('12">'), "full width"
 
 
 def test_the_turnaround_panel_is_full_width_and_comes_last():

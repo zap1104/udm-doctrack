@@ -328,7 +328,7 @@ DASHBOARD_CONTEXT = {
     "desk_queue", "desk_queues", "desk_target", "greeting",
     "incoming_count", "incoming_new_today", "memo", "month_picker", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
-    "recent_documents", "recent_records", "repository_donut", "scope",
+    "recent_records", "repository_donut", "scope",
     "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
 }
@@ -378,7 +378,6 @@ def test_the_recent_panels_list_only_the_picked_office(client, users, offices, a
 
     scoped = set(_dashboard_records(users["admin"], office).values_list("pk", flat=True))
     assert {record.pk for record in dashboard["recent_records"]} <= scoped
-    assert all(document.office_id == office.pk for document in dashboard["recent_documents"])
 
 
 # --- 12: an office with nothing ----------------------------------------------
@@ -419,7 +418,9 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: the rings' counts, and are disabled under every office anyway), and the
 #: office badges looked up for the queue's rows and for Recently moved
 #: separately, since the queue is now also rendered on its own.
-DASHBOARD_QUERIES = 49
+#: 47: "Newest in the Document Repository" left the dashboard, and its
+#: document list and the office badges it drew went with it.
+DASHBOARD_QUERIES = 47
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -457,7 +458,7 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 50
+DASHBOARD_OFFICE_QUERIES = 49
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three

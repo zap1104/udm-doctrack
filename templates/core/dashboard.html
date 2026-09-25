@@ -291,8 +291,12 @@
 </div>
 
 <div class="row g-4 mb-4">
-  <div class="col-xl-6">
+  <div class="col-12">
     {% comment %}
+          The Action Centre has the row to itself. "Newest in the Document
+          Repository" shared it, repeating what the Repository ring above and the
+          Repository page already show: the dashboard is for what needs doing.
+
           Action Centre. Two questions that were two panels: what needs doing, and what
           moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
           sitting in different rows and answering versions of the same question, so the
@@ -353,35 +357,6 @@
         </div>
       </div>
     </div>
-  </div>
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <h2>Newest in the Document Repository</h2>
-            <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}">
-      <span>Open repository</span>
-              <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
-            </a>
-          </div>
-          <div class="card-udm-body">
-            {% comment %}
-              Five rows, each one a fixed two lines of title over one line of
-              detail. A repository title runs to a sentence often enough that
-              letting it set its own height made this card a different height on
-              every load, and it shares a row with the Action Centre.
-            {% endcomment %}
-            {% for document in recent_documents %}
-              <div class="newest-row py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                <a class="newest-title" href="{{ document.get_absolute_url }}" title="{{ document.title }}">{{ document.title|truncatechars:120 }}</a>
-                <div class="newest-meta text-muted">
-                  {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
-                </div>
-              </div>
-            {% empty %}
-              <p class="text-muted mb-0">No completed or archived records are available yet.</p>
-            {% endfor %}
-          </div>
-            </div>
   </div>
 </div>
 
