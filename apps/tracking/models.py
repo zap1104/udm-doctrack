@@ -42,13 +42,13 @@ class Status(models.TextChoices):
     #: distinction that does matter — how it got here — is kept where it belongs
     #: and cannot be lost: RoutingStep.Action and RecordActivity.Event both still
     #: carry FORWARD/FORWARDED and RETURN/RETURNED.
-    PENDING_RECEIPT = "PENDING_RECEIPT", "Pending receipt"
+    PENDING_RECEIPT = "PENDING_RECEIPT", "Pending Receipt"
     RECEIVED = "RECEIVED", "Received"
-    IN_PROCESS = "IN_PROCESS", "In process"
+    IN_PROCESS = "IN_PROCESS", "In Process"
     #: The office has finished its work, but an administrator has not yet
     #: approved the record into the Document Repository. The record stays in
     #: Tracking for this stage — see ACTIVE_STATUSES.
-    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - pending upload"
+    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - Pending Upload"
     #: Approved into the repository. A record only reaches this once a Document
     #: exists for it, so COMPLETED now means "filed", not merely "finished".
     COMPLETED = "COMPLETED", "Completed"

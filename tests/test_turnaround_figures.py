@@ -292,7 +292,7 @@ def test_the_legend_says_what_each_line_measures(client, users, slow_then_fast):
     body = " ".join(_dashboard(client, users).content.decode().split())
 
     for words in ("Receipt</strong> sent until confirmed",
-                  "In process</strong> confirmed until completed",
+                  "In Process</strong> confirmed until completed",
                   "Total lifetime</strong> created until completed"):
         assert words in body
 

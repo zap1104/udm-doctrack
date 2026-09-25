@@ -9,6 +9,7 @@ from django.utils.safestring import mark_safe
 from apps.core.analytics import share_text
 from apps.core.colors import STATUS_PILLS
 from apps.core.utils import human_size as _human_size
+from apps.tracking.models import Status
 
 register = template.Library()
 
@@ -161,15 +162,11 @@ def filter_url(context, param, value, multi=False) -> str:
 #: disagree with the chart slice for the same status.
 STATUS_PILL = STATUS_PILLS
 
-STATUS_LABEL = {
-    "DRAFT": "Draft",
-    "PENDING_RECEIPT": "Pending receipt",
-    "RECEIVED": "Received",
-    "IN_PROCESS": "In process",
-    "COMPLETED_PENDING_UPLOAD": "Completed - pending upload",
-    "COMPLETED": "Completed",
-    "OVERDUE": "Overdue",
-}
+#: Derived from `Status.choices`, the one place a status is named, so a pill
+#: cannot call a status something the filters, the CSV and the memo do not.
+#: Overdue is not a status — it is a tag laid over one — but it is coloured and
+#: labelled through the same filter, so it is added here.
+STATUS_LABEL = {**dict(Status.choices), "OVERDUE": "Overdue"}
 
 
 @register.filter

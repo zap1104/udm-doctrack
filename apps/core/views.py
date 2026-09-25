@@ -386,14 +386,14 @@ class DashboardMemoMixin:
             #
             # Overdue is not here. It lies across all three live stages, so as a
             # slice it counted the same records twice; it has its own stat card.
-            {"key": "pending_receipt", "label": "Pending receipt",
+            {"key": "pending_receipt", "label": Status.PENDING_RECEIPT.label,
              "total": totals["pending_receipt"],
              "url": tracking_link(status=Status.PENDING_RECEIPT), "group": "tracking"},
             {"key": "received", "label": "Received", "total": totals["received"],
              "url": tracking_link(status=Status.RECEIVED), "group": "tracking"},
-            {"key": "in_process", "label": "In process", "total": totals["in_process"],
+            {"key": "in_process", "label": Status.IN_PROCESS.label, "total": totals["in_process"],
              "url": tracking_link(status=Status.IN_PROCESS), "group": "tracking"},
-            {"key": "pending_upload", "label": "Completed - pending upload",
+            {"key": "pending_upload", "label": Status.COMPLETED_PENDING_UPLOAD.label,
              "total": totals["pending_upload"],
              "url": tracking_link(status=Status.COMPLETED_PENDING_UPLOAD),
              "group": "tracking"},
@@ -639,9 +639,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: ring it would always be empty, and counted any other way it would open a
     #: page that can never list it. It is a figure beside the rings instead.
     RING_STAGES = (
-        ("pending_receipt", Status.PENDING_RECEIPT, "Pending receipt"),
+        ("pending_receipt", Status.PENDING_RECEIPT, Status.PENDING_RECEIPT.label),
         ("received", Status.RECEIVED, "Received"),
-        ("in_process", Status.IN_PROCESS, "In process"),
+        ("in_process", Status.IN_PROCESS, Status.IN_PROCESS.label),
     )
 
     #: The two views the Tracking card can show, read from `?ring=`. Anything else
@@ -839,7 +839,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: it measures are one colour across the page.
     TREND_SERIES = (
         ("receipt", "Receipt", Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
-        ("processing", "In process", Status.IN_PROCESS, "confirmed until completed", "document"),
+        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "confirmed until completed", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
 
@@ -2168,7 +2168,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
             # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
              "Status", "Overdue", "Direction", "Created", "Last movement", "Completed",
-             "Waiting for receipt (office hrs)", "In process (office hrs)", "Lifetime (office hrs)"]
+             "Waiting for receipt (office hrs)", f"{Status.IN_PROCESS.label} (office hrs)", "Lifetime (office hrs)"]
         )
         # One holiday read and one routing-step read for the whole sheet; each
         # row's durations come from `analytics.record_durations`, the per-record

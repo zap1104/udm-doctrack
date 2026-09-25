@@ -246,7 +246,7 @@
         {% if tracking_rings.pending_upload.total %}
           <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
             <i class="breakdown-swatch" style="background:var(--status-upload)" aria-hidden="true"></i>
-            <span>Completed - pending upload</span>
+            <span>{{ "COMPLETED_PENDING_UPLOAD"|status_label }}</span>
             <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
           </a>
         {% endif %}
@@ -424,7 +424,7 @@
             <div class="empty-state">
               <h3>No incoming documents are waiting</h3>
               <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">Open Pending receipt</a>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">Open {{ "PENDING_RECEIPT"|status_label }}</a>
             </div>
           {% endif %}
         </div>

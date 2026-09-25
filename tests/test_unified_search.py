@@ -295,8 +295,8 @@ def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup
 
     for label in ("All active", "Incoming", "Outgoing"):
         assert f">{label}</a>" in queue_nav, label
-    for elsewhere in ("Pending receipt", "Received", "In process",
-                      "Completed - pending upload"):
+    for elsewhere in ("Pending Receipt", "Received", "In Process",
+                      "Completed - Pending Upload"):
         assert elsewhere not in queue_nav, f"{elsewhere} belongs in the Stage row"
         assert elsewhere in body, elsewhere
     for dropped in ("Waiting for my receipt", "Awaiting anyone", "In my office",

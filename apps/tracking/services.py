@@ -83,7 +83,7 @@ def ensure_received(record) -> None:
     if not record.current_step_queryset.filter(received_at__isnull=False).exists():
         raise ValidationError(
             "This document has not been received yet. Confirm receipt before "
-            "marking it In process."
+            f"marking it {Status.IN_PROCESS.label}."
         )
 
 
@@ -549,7 +549,7 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     if record.status in COMPLETED_STATUSES:
         raise ValidationError("This record is completed and its status can no longer change.")
     if record.status == Status.DRAFT:
-        raise ValidationError("A draft has not been sent yet, so it cannot be In process.")
+        raise ValidationError(f"A draft has not been sent yet, so it cannot be {Status.IN_PROCESS.label}.")
     ensure_received(record)
 
     if record.status == Status.IN_PROCESS:
@@ -559,14 +559,14 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     add_activity(
         record,
         RecordActivity.Event.REMARK,
-        f"{user.display_name} marked the document In process",
+        f"{user.display_name} marked the document {Status.IN_PROCESS.label}",
         actor=user,
         detail=note or "",
     )
     record.touch_movement()
     log_action(
         AuditLog.Action.UPDATE,
-        f"{record.tracking_number} marked In process",
+        f"{record.tracking_number} marked {Status.IN_PROCESS.label}",
         actor=user,
         target=record,
     )

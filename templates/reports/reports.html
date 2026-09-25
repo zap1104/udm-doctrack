@@ -135,7 +135,7 @@
     {% endcomment %}
     <div class="col-6 col-lg-3">
       <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
-        <div class="label">Pending receipt</div>
+        <div class="label">{{ "PENDING_RECEIPT"|status_label }}</div>
         <div class="value">{% if scope_office %}{{ awaiting_split.ours }}{% else %}{{ awaiting_receipt }}{% endif %}</div>
         {% if scope_office %}
           <div class="hint">

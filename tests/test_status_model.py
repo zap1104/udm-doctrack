@@ -177,3 +177,35 @@ def test_a_viewer_cannot_change_the_status(sent_record, users):
 
     with pytest.raises(PermissionDenied):
         mark_in_process(sent_record, user=users["viewer"])
+
+
+# --- one vocabulary ------------------------------------------------------------------
+def test_the_labels_are_the_consultation_wording():
+    assert [label for _value, label in Status.choices] == [
+        "Draft", "Pending Receipt", "Received", "In Process",
+        "Completed - Pending Upload", "Completed",
+    ]
+
+
+def test_every_pill_label_comes_from_the_status_enum():
+    """The tag's map was a hand-written copy of the enum; now it is the enum."""
+    from apps.core.templatetags.doctrack import STATUS_LABEL
+
+    assert set(STATUS_LABEL) == set(Status.values) | {"OVERDUE"}
+    for value, label in Status.choices:
+        assert STATUS_LABEL[value] == label
+
+
+def test_no_template_or_script_spells_a_status_the_old_way():
+    """Outside comments, a status is named through `status_label` or `Status`,
+    so the sentence-case spellings the consultation replaced cannot linger."""
+    import pathlib
+    import re
+
+    old = ("Pending receipt", "In process", "Completed - pending upload")
+    comment = re.compile(r"{% comment %}.*?{% endcomment %}|{#.*?#}|/\*.*?\*/", re.S)
+    for path in [*pathlib.Path("templates").rglob("*.html"), pathlib.Path("static/js/doctrack.js")]:
+        text = comment.sub("", path.read_text(encoding="utf-8"))
+        text = "\n".join(line for line in text.splitlines() if not line.strip().startswith("//"))
+        for spelling in old:
+            assert spelling not in text, (str(path), spelling)

@@ -905,8 +905,8 @@ def deadlines(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("key", "label"),
-    [("pending_late", "Pending receipt"), ("received_late", "Received"),
-     ("process_late", "In process")],
+    [("pending_late", "Pending Receipt"), ("received_late", "Received"),
+     ("process_late", "In Process")],
 )
 def test_a_late_record_shows_its_stage_and_its_lateness(client, users, deadlines, key, label):
     """The pill replaced the stage: `display_status` returned "OVERDUE", so a
@@ -1001,7 +1001,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
 
     late = deadlines["pending_late"]
     line = next(r for r in rows if late.tracking_number in r)
-    assert "Pending receipt" in line, "the stage survives the export"
+    assert "Pending Receipt" in line, "the stage survives the export"
     assert "Yes" in line.split(",")[columns.index("Overdue")]
 
 

@@ -489,7 +489,7 @@ def monthly_volume(records) -> dict:
 #: what the stage is called, what it measures, and the thing it is counted in.
 TURNAROUND_STAGES = (
     ("receipt", "Receipt", "sent → confirmed", "handover"),
-    ("processing", "In process", "first receipt → completed", "document"),
+    ("processing", Status.IN_PROCESS.label, "first receipt → completed", "document"),
     ("lifetime", "Total lifetime", "created → completed", "document"),
 )
 

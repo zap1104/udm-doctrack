@@ -51,13 +51,13 @@ def test_overdue_is_not_offered_as_a_status():
 def test_the_status_filter_uses_the_new_name():
     labels = dict(TrackingFilterForm().fields["status"].choices)
 
-    assert labels["PENDING_RECEIPT"] == "Pending receipt"
+    assert labels["PENDING_RECEIPT"] == "Pending Receipt"
     assert "IN_TRANSIT" not in labels
 
 
 def test_routing_leaves_the_record_pending_receipt():
     assert Status.PENDING_RECEIPT.value == "PENDING_RECEIPT"
-    assert Status.PENDING_RECEIPT.label == "Pending receipt"
+    assert Status.PENDING_RECEIPT.label == "Pending Receipt"
     assert not hasattr(Status, "IN_TRANSIT")
 
 
@@ -354,8 +354,8 @@ def test_the_page_has_no_search_box(client, users):
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
     for label in ("All Active", "Incoming", "Outgoing"):
         assert label in queue_nav, label
-    for label in ("Pending receipt", "Received", "In process",
-                  "Completed - pending upload", "Overdue"):
+    for label in ("Pending Receipt", "Received", "In Process",
+                  "Completed - Pending Upload", "Overdue"):
         assert label in body, label
         assert label not in queue_nav, f"{label} belongs in its own row"
 

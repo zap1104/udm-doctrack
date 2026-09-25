@@ -20,7 +20,7 @@ from apps.tracking.models import RoutingStep, TrackingRecord
 from apps.tracking.services import complete_record, confirm_receipt, create_draft_record, route_record
 
 EXPORT = "/reports/export/?office=all"
-COLUMNS = ("Waiting for receipt (office hrs)", "In process (office hrs)", "Lifetime (office hrs)")
+COLUMNS = ("Waiting for receipt (office hrs)", "In Process (office hrs)", "Lifetime (office hrs)")
 MONDAY, TUESDAY = date(2026, 8, 24), date(2026, 8, 25)
 
 

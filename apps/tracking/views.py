@@ -386,7 +386,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
         request.session.pop(DRAFT_DEADLINE_KEY.format(pk=record.pk), None)
         messages.success(
             request,
-            f"{record.tracking_number} was routed. It stays “Pending receipt” until the "
+            f"{record.tracking_number} was routed. It stays “{Status.PENDING_RECEIPT.label}” until the "
             "receiving office confirms it.",
         )
         return redirect(record.get_absolute_url())
