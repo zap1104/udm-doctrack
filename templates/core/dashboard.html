@@ -763,6 +763,7 @@
             <span><strong>Scope</strong> · {{ scope.display }}</span>
             <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
             <span><strong>By</strong> · {{ user.display_name }}</span>
+            <span><strong>Turnaround period</strong> · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %}, to {{ printed_at|date:"j F" }}{% endif %}</span>
           </div>
           {% comment %}
             Sections, not one block of prose. The memo carries a per-office
@@ -811,4 +812,17 @@
     </div>
   </div>
 </div>
+{% comment %}
+  Ctrl+P on the dashboard. A browser cannot be stopped from printing a page, so
+  this one is audited like Reports and the memo — one PRINT entry per print
+  dialog, never deduplicated — and the paper itself says what it is and where
+  the formal record comes from.
+{% endcomment %}
+<p class="dashboard-print-note d-none d-print-block">
+  A print of the dashboard as {{ user.display_name }} saw it on {{ printed_at|date:"d F Y, g:i A" }}
+  ({{ scope.display }}). For a formal record, use <strong>Generate memo</strong> and print that.
+</p>
+<span hidden data-print-log="the dashboard"
+      data-print-log-url="{% url 'core:log_print' %}"
+      data-print-log-csrf="{{ csrf_token }}"></span>
 {% endblock %}

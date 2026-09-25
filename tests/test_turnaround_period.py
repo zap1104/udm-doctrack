@@ -211,3 +211,27 @@ def test_the_cumulative_chart_says_it_is_a_running_total(client, users):
     body = client.get("/").content.decode()
 
     assert "<h2>Created, handed over and completed &mdash; running totals</h2>" in body
+
+
+# --- the memo states its period -------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", ["/", "/memo/print/"])
+def test_the_memo_states_the_period_its_turnaround_covers(client, users, two_months, path):
+    client.force_login(users["admin"])
+    month = two_months["month"]
+    body = client.get(f"{path}?month={_param(month)}").content.decode()
+
+    assert f"<strong>Turnaround period</strong> · {month:%B %Y}</span>" in body
+
+
+# --- every print dialog is one audit row -------------------------------------------------
+@pytest.mark.django_db
+def test_every_print_dialog_is_its_own_audit_row(client, users):
+    """Never deduplicated: two prints are two pieces of paper."""
+    from apps.core.models import AuditLog
+
+    client.force_login(users["admin"])
+    for _ in range(2):
+        client.post("/print-log/", {"label": "the dashboard"})
+
+    assert AuditLog.objects.filter(action=AuditLog.Action.PRINT, summary="Printed the dashboard").count() == 2

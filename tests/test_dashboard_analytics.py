@@ -1770,18 +1770,20 @@ def test_the_dashboard_has_no_print_letterhead(client, users, finished_record):
 
 
 @pytest.mark.django_db
-def test_ctrl_p_on_the_dashboard_is_not_recorded(client, users, finished_record):
-    """An accepted gap, asserted so it stays a decision rather than a surprise.
-
-    Nothing can stop the browser's own print dialog. What the app controls is
-    whether that printout is entered in the audit log, and it is not: the
-    marker that logs one belongs to a document, and this page is not one. The
-    memo's print page carries the marker instead.
-    """
+def test_ctrl_p_on_the_dashboard_is_recorded_and_says_what_it_is(client, users, finished_record):
+    """It was an accepted gap: nothing can stop the browser's own print
+    dialog, and the dashboard carried no marker, so its paper left no trace.
+    The consultation asked for it to be audited like Reports and the memo, and
+    the printout now says it is a view of the screen and where the formal
+    record comes from."""
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "data-print-log" not in body
+    assert 'data-print-log="the dashboard"' in body
+    assert "data-print-log-url" in body and "data-print-log-csrf" in body
+    note = body[body.index('class="dashboard-print-note'):]
+    assert note.startswith('class="dashboard-print-note d-none d-print-block">'), "on paper only"
+    assert "Generate memo" in note[:400]
 
 
 @pytest.mark.django_db
