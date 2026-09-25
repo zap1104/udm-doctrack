@@ -324,7 +324,8 @@ def test_extraction_states_sum_to_the_repository(client, users, offices, agreeme
 #: `live_by_status`, each computed on every load for a panel that no longer
 #: existed.
 DASHBOARD_CONTEXT = {
-    "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "greeting",
+    "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "desk_clear_href",
+    "desk_queue", "desk_queues", "desk_target", "greeting",
     "incoming_count", "incoming_new_today", "memo", "month_picker", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
     "recent_documents", "recent_records", "repository_donut", "scope",
@@ -413,7 +414,12 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: and the dashboard makes two, the monthly trend and the memo's averages.
 #: 43: turnaround became one service over two queries of intervals, where it
 #: was eight — an aggregate and a value list per stage, and two deadline counts.
-DASHBOARD_QUERIES = 43
+#: 49: the Action Centre's chips. Five queue counts (Pending Receipt, Received,
+#: In Process, Completed - Pending Upload, Overdue; Incoming and Outgoing read
+#: the rings' counts, and are disabled under every office anyway), and the
+#: office badges looked up for the queue's rows and for Recently moved
+#: separately, since the queue is now also rendered on its own.
+DASHBOARD_QUERIES = 49
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -451,7 +457,7 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 44
+DASHBOARD_OFFICE_QUERIES = 50
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three

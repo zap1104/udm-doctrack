@@ -2066,6 +2066,17 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    stronger line would divide the card more loudly without saying which side to
    read first, which is the only thing the reader actually needs to know here. */
 .desk-block--secondary { margin-top:10px; }
+/* The Action Centre's queue chips: the Tracking page's pills, so a queue looks
+   the same wherever it can be picked, each with its count. They wrap rather than
+   scroll: seven pills and a Clear fit two rows on a phone, and a scrolling row
+   hides the queues nobody sees. */
+.desk-chips { display:flex; flex-wrap:wrap; gap:8px; padding:14px 20px 12px; }
+.desk-chip-count { margin-left:6px; padding:1px 7px; border-radius:999px; background:var(--udm-canvas); color:var(--udm-navy-text); font-size:11.5px; }
+/* Opaque, so its contrast is what it looks like: white on the next navy up. */
+.pill-toggle.is-active .desk-chip-count { background:var(--udm-navy-600); color:#fff; }
+.desk-chip-clear { font-weight:500; }
+.desk-block-count { margin-left:6px; font-weight:600; letter-spacing:0; text-transform:none; }
+.desk-queue-foot { display:flex; justify-content:flex-end; padding:10px 20px 14px; }
 /* Sits at the same weight as the card heading it lives under rather than at
    browser-default h3 size, which next to a 16px h2 would read as the larger of
    the two. Uppercase and tracked so it reads as a divider, not a second title
@@ -2576,6 +2587,16 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    follow --udm-surface and needs a value of its own. */
 :root[data-theme="dark"] .help-note { background: #241f12; color: var(--udm-ink); }
 
+/* A selected pill was navy, and in the dark palette --udm-navy is a surface
+   colour, so the queue picked on the Tracking page and in the Action Centre
+   vanished into the card. Teal, the dark theme's accent, with the canvas as its
+   text (6.7:1). Overdue keeps its red. */
+:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert),
+:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert):hover,
+:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert):focus {
+  border-color:var(--udm-teal); background:var(--udm-teal); color:var(--udm-canvas);
+}
+:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert) .desk-chip-count { background:var(--udm-canvas); color:var(--udm-teal); }
 /* The sign-in and lockout screens stay light in both themes: they are their own
    full-bleed composition on fixed navy, and they are shown before there is a
    person to have a preference. Pinning the tokens back is enough — every rule

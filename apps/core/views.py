@@ -471,9 +471,112 @@ class DashboardMemoMixin:
 #: and none of these lists is a queue you work down from the dashboard.
 DASHBOARD_ROWS = 5
 
+#: The Action Centre's queues, in the order its chips run: the scope each one
+#: counts and opens on the Tracking page, its label, and whether it needs an
+#: office. Incoming and Outgoing describe a document relative to one office, so
+#: across every office they are shown disabled, exactly as the Tracking page
+#: shows its own pills. Every one is an `apply_scope` queue: the Action Centre
+#: invents no queue of its own, so a chip's count is the list it opens.
+DESK_QUEUES = (
+    (tracking_services.SCOPE_INCOMING, "Incoming", True),
+    (tracking_services.SCOPE_PENDING_RECEIPT, Status.PENDING_RECEIPT.label, False),
+    (tracking_services.SCOPE_RECEIVED, Status.RECEIVED.label, False),
+    (tracking_services.SCOPE_IN_PROCESS, Status.IN_PROCESS.label, False),
+    (tracking_services.SCOPE_PENDING_UPLOAD, Status.COMPLETED_PENDING_UPLOAD.label, False),
+    (tracking_services.SCOPE_OVERDUE, "Overdue", False),
+    (tracking_services.SCOPE_OUTGOING, "Outgoing", True),
+)
+DESK_PARAM = "desk"
+#: What the Action Centre shows until a chip is picked, and what Clear returns
+#: to: the documents somebody has to sign for.
+DESK_DEFAULT = tracking_services.SCOPE_PENDING_RECEIPT
+#: The element a chip swaps with HTMX, and the header that asks for it alone.
+DESK_TARGET = "action-centre-queue"
+
 
 class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     template_name = "core/dashboard.html"
+
+    def get(self, request, *args, **kwargs):
+        # A chip clicked with HTMX asks for the queue alone, so it does not pay
+        # for every chart on the page. Without script the chip is an ordinary
+        # link and the whole page reloads with the same content.
+        if request.headers.get("HX-Request") and request.headers.get("HX-Target") == DESK_TARGET:
+            scope = self._scope()
+            return render(
+                request,
+                "core/_action_centre_queue.html",
+                {"scope": scope, **self._action_centre(request.user, scope)},
+            )
+        return super().get(request, *args, **kwargs)
+
+    def _action_centre(self, user, scope, counts=None):
+        """The Action Centre's chips, the queue picked, and its first rows.
+
+        `counts` carries figures the caller already has (the Incoming and
+        Outgoing cards'), so a chip and the card above it are one count rather
+        than two queries that happen to agree.
+        """
+        counts = counts or {}
+        all_offices = scope["all_offices"]
+        scope_office = tracking_services.ALL_OFFICES if all_offices else scope["office"]
+        desk = tracking_services.active_for(user)
+        known = {slug for slug, _label, _needs in DESK_QUEUES}
+        usable = [slug for slug, _label, needs_office in DESK_QUEUES if not (needs_office and all_offices)]
+        raw = (self.request.GET.get(DESK_PARAM) or "").strip()
+        chosen = raw if raw in usable else DESK_DEFAULT
+        if raw and raw != chosen:
+            reason = (
+                "needs an office; pick one to use it"
+                if raw in known else "is not one of the Action Centre's queues"
+            )
+            messages.warning(
+                self.request, f"Showing {Status.PENDING_RECEIPT.label}: “{raw[:30]}” {reason}."
+            )
+
+        dashboard = reverse("core:dashboard")
+        tracking_list = reverse("tracking:list")
+        office_param = "all" if all_offices else (scope["office"].pk if scope["office"] else None)
+        queues, selected_rows = [], []
+        for slug, label, needs_office in DESK_QUEUES:
+            disabled = needs_office and all_offices
+            queue = None
+            if not disabled:
+                queue = tracking_services.apply_scope(desk, slug, user, office=scope_office).distinct()
+            count = None if disabled else counts.get(slug)
+            if count is None and queue is not None:
+                count = queue.count()
+            if slug == chosen:
+                selected_rows = list(queue[:DASHBOARD_ROWS])
+            queues.append(
+                {
+                    "slug": slug,
+                    "label": label,
+                    "disabled": disabled,
+                    "count": count,
+                    "active": slug == chosen,
+                    "href": core_filters.link(
+                        dashboard, self.request, **{DESK_PARAM: None if slug == DESK_DEFAULT else slug}
+                    ),
+                    "tracking_url": core_filters.link(tracking_list, scope=slug, office=office_param),
+                }
+            )
+
+        tracking_services.annotate_can_confirm(selected_rows, user)
+        if user.is_records_staff:
+            _annotate_destinations(selected_rows)
+        return {
+            "desk_queues": queues,
+            "desk_queue": next(queue for queue in queues if queue["active"]),
+            "desk_clear_href": core_filters.link(dashboard, self.request, **{DESK_PARAM: None}),
+            "desk_target": DESK_TARGET,
+            "attention_records": selected_rows,
+            # Same test the tracking list uses: the bulk footer appears only
+            # when a row on show could actually be received, so nobody is shown
+            # an attestation they cannot satisfy.
+            "can_bulk_receive": any(record.can_confirm_now for record in selected_rows),
+            "show_office_columns": user.is_records_staff,
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -523,11 +626,18 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # figure the ring and the memo already use, over the scoped queryset.
         overdue_count = memo_context["overdue_summary"]["total"]
 
-        # One queue, not three. It was pending-receipt padded with overdue and
-        # then received, so the panel could not have an honest link: it showed
-        # five rows and its button opened five, two of them different. Short
-        # when it is short, which is what "Needs action" means.
-        attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:DASHBOARD_ROWS])
+        # The Action Centre: one queue at a time, picked by chip, each an
+        # `apply_scope` queue so its count is the list its link opens. The
+        # Incoming and Outgoing chips reuse the rings' counts, which the cards
+        # also read.
+        action_centre = self._action_centre(
+            user,
+            scope,
+            counts={
+                tracking_services.SCOPE_INCOMING: tracking_rings["counts"].get("incoming"),
+                tracking_services.SCOPE_OUTGOING: tracking_rings["counts"].get("outgoing"),
+            },
+        )
         # `today` is read by `incoming_new_today` below.
         #
         # `received_today`, `forwarded_today` and `completed_today` were computed
@@ -538,12 +648,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # the page obeys, and `completed_today` had no office filter at all, so it
         # would have shown a university-wide number inside an office panel.
         today = timezone.localdate()
-
-        tracking_services.annotate_can_confirm(attention, user)
-        # Same test the tracking list uses (apps/tracking/views.py): the bulk
-        # footer only appears when at least one row on this page could actually
-        # be received, so nobody is shown an attestation they cannot satisfy.
-        can_bulk_receive = any(record.can_confirm_now for record in attention)
 
         # Five, like Needs action above it and like Newest in the Repository
         # beside it. Eight made the card taller than the one it shares a row
@@ -567,11 +671,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             ).distinct()
             recent_documents_qs = recent_documents_qs.filter(office=scope["office"])
         recent = list(recent_records_qs[:DASHBOARD_ROWS])
-        show_office_columns = user.is_records_staff
-        if show_office_columns:
-            # Both panels in one pass — the helper groups by record, so a
-            # second call would only repeat the same query.
-            _annotate_destinations(attention + recent)
+        if user.is_records_staff:
+            _annotate_destinations(recent)
 
         breakdown = memo_context["breakdown"]
         context.update(memo_context)
@@ -595,12 +696,10 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "outgoing_count": tracking_rings["counts"].get("outgoing"),
                 "tracking_rings": tracking_rings,
                 "overdue_count": overdue_count,
-                "attention_records": attention,
+                **action_centre,
                 "recent_records": recent,
-                "show_office_columns": show_office_columns,
                 "recent_documents": recent_documents_qs.with_related().order_by("-created_at")[:DASHBOARD_ROWS],
                 "greeting": _greeting(),
-                "can_bulk_receive": can_bulk_receive,
                 "can_start_work": user.can_start_work,
                 "breakdown": breakdown,
             }

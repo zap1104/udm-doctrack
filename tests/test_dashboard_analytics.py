@@ -1196,9 +1196,14 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "Needs action" in body
+    # The queue block is titled by the queue picked, Pending Receipt until
+    # another chip is chosen, and it still comes first.
+    import re
+
+    queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
+    assert queue
     assert "Recently moved" in body
-    assert body.index("Needs action") < body.index("Recently moved")
+    assert queue.start() < body.index("Recently moved")
 
 
 @pytest.mark.django_db
@@ -1208,7 +1213,9 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert '<h3 class="desk-block-title">Needs action</h3>' in body
+    import re
+
+    assert re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
     assert '<h3 class="desk-block-title">Recently moved</h3>' in body
 
 
@@ -1512,7 +1519,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
 
     form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
     assert form, "no bulk receipt form rendered"
-    assert "Needs action" in form.group(0)
+    assert 'class="desk-block desk-block--primary"' in form.group(0)
     assert "Recently moved" not in form.group(0)
     assert "csrfmiddlewaretoken" in form.group(0)
 
