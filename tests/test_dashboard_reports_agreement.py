@@ -351,10 +351,13 @@ def test_the_dashboard_context_is_exactly_the_named_keys(client, users, agreemen
 def test_every_dashboard_context_key_is_read(client, users, agreement):
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
+    # str(): a template name can arrive as a SafeString, and Python 3.11's
+    # pathlib interns path parts, which refuses a str subclass.
+    names = [str(template.name) for template in response.templates if template.name]
     source = "".join(
-        pathlib.Path("templates", template.name).read_text(encoding="utf-8")
-        for template in response.templates
-        if template.name and pathlib.Path("templates", template.name).exists()
+        pathlib.Path("templates", name).read_text(encoding="utf-8")
+        for name in names
+        if pathlib.Path("templates", name).exists()
     )
 
     unread = {
