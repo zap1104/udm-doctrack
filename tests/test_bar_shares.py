@@ -25,7 +25,7 @@ from tests.test_dashboard_reports_agreement import agreement  # noqa: F401 — f
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 DASHBOARD = "/"
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 ADMINISTRATION = "/administration/"
 
 #: A bar and the share printed after it in the same row. The tempered dot stops

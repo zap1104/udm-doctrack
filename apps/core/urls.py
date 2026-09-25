@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -12,8 +13,17 @@ urlpatterns = [
     path("notifications/<int:pk>/read/", views.NotificationReadView.as_view(), name="notification_read"),
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("memo/print/", views.DashboardMemoPrintView.as_view(), name="dashboard_memo_print"),
-    path("reports/", views.ReportsView.as_view(), name="reports"),
-    path("reports/export/", views.ReportExportView.as_view(), name="report_export"),
+    # Reports is a part of Document Tracking, so it lives under its path and the
+    # sidebar highlights Document Tracking there. The names are unchanged, and
+    # the old addresses redirect permanently, query string and all, so a
+    # bookmarked or printed link to a report still opens that report.
+    path("tracking/reports/", views.ReportsView.as_view(), name="reports"),
+    path("tracking/reports/export/", views.ReportExportView.as_view(), name="report_export"),
+    path("reports/", RedirectView.as_view(pattern_name="core:reports", permanent=True, query_string=True)),
+    path(
+        "reports/export/",
+        RedirectView.as_view(pattern_name="core:report_export", permanent=True, query_string=True),
+    ),
     path("print-log/", views.PrintLogView.as_view(), name="log_print"),
     path("administration/", views.AdministrationHomeView.as_view(), name="administration"),
     path("administration/audit-log/", views.AuditLogView.as_view(), name="audit_log"),

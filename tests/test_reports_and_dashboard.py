@@ -22,7 +22,7 @@ from apps.tracking.services import (
     route_record,
 )
 
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 DASHBOARD = "/"
 
 
@@ -408,7 +408,7 @@ def test_the_export_button_carries_the_office_it_was_pressed_under(
     client.force_login(users["admin"])
     body = client.get(f"{REPORTS}?office={offices['SUP'].pk}").content.decode()
 
-    assert f"/reports/export/?office={offices['SUP'].pk}" in body
+    assert f"/tracking/reports/export/?office={offices['SUP'].pk}" in body
 
 
 @pytest.mark.django_db
@@ -417,7 +417,7 @@ def test_the_export_names_the_office_it_covers(client, finished_record, users, o
     query, so the scope travels with it."""
     client.force_login(users["admin"])
 
-    body = client.get(f"/reports/export/?office={offices['SUP'].pk}").content.decode()
+    body = client.get(f"/tracking/reports/export/?office={offices['SUP'].pk}").content.decode()
 
     assert offices["SUP"].name in body.splitlines()[0]
 

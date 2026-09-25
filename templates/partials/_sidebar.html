@@ -7,21 +7,21 @@
     <button class="sidebar-close" type="button" data-sidebar-close aria-label="Close navigation">×</button>
   </div>
   {% comment %}
-    Order: Dashboard, Search, Document Tracking, Document Repository, Reports.
+    Order: Dashboard, Search, Document Tracking, Document Repository.
     Search sits second and is its own top-level tab — it is the thing people
     open the system to do, and it was previously buried below both modules.
 
-    Neither module has sub-tabs. The tracking queues used to be repeated here as
-    a sub-nav *and* as a tab strip on the page itself, so the same six links
-    appeared twice on screen with two different active states to keep in step;
-    they now live on the page only.
+    Neither module has sub-tabs here. The tracking queues used to be repeated
+    here as a sub-nav *and* as a tab strip on the page itself, so the same six
+    links appeared twice on screen with two different active states to keep in
+    step; they now live on the page only. Reports is the same: a tab on the
+    Document Tracking pages (tracking/_subtabs.html), not an item of its own.
   {% endcomment %}
   <nav aria-label="Main navigation">
     <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}><span class="dot"></span> Dashboard</a>
     <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}><span class="dot"></span> Search</a>
     <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="dot"></span> Document Tracking</a>
     <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="dot"></span> Document Repository</a>
-    <a class="nav-item {% if nav_active == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}" {% if nav_active == 'reports' %}aria-current="page"{% endif %}><span class="dot"></span> Reports</a>
     {# Office administrators reach the administration area too, scoped to their own office. #}
     {% if user.is_office_admin %}<a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="dot"></span> Administration</a>{% endif %}
   </nav>

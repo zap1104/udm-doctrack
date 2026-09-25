@@ -1,0 +1,10 @@
+{% comment %}
+  Document Tracking's two pages, Tracking and its Reports. Reports used to be a
+  sidebar item of its own; it describes the same records, so it is a tab of the
+  module instead, and the sidebar keeps Document Tracking highlighted on both.
+  Expects `active`: "tracking" or "reports".
+{% endcomment %}
+<nav class="subtabs no-print" aria-label="Document Tracking">
+  <a class="subtab{% if active == 'tracking' %} is-active{% endif %}" href="{% url 'tracking:list' %}"{% if active == 'tracking' %} aria-current="page"{% endif %}>Tracking</a>
+  <a class="subtab{% if active == 'reports' %} is-active{% endif %}" href="{% url 'core:reports' %}"{% if active == 'reports' %} aria-current="page"{% endif %}>Reports</a>
+</nav>

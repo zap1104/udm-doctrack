@@ -189,7 +189,7 @@ def test_every_chart_draws_a_status_in_its_own_colour(client, users, offices, me
     assert series.get("receipt", STATUS_COLOURS["PENDING_RECEIPT"]) == STATUS_COLOURS["PENDING_RECEIPT"]
 
     client.force_login(users["admin"])
-    for row in client.get("/reports/").context["by_status"]:
+    for row in client.get("/tracking/reports/").context["by_status"]:
         assert row["colour"] == STATUS_COLOURS[row["status"]]
 
 

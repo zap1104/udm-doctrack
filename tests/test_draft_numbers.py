@@ -45,7 +45,7 @@ def test_the_audit_log_names_a_draft_without_its_placeholder(client, users, draf
 @pytest.mark.django_db
 def test_a_draft_exports_without_its_placeholder(client, users, draft):
     client.force_login(users["med"])
-    body = client.get("/reports/export/").content.decode()
+    body = client.get("/tracking/reports/export/").content.decode()
 
     assert "Still a draft" in body
     assert PLACEHOLDER not in body

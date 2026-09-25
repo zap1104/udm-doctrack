@@ -111,7 +111,7 @@ def _column_groups(body):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/reports/"])
+@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
 def test_every_column_carries_its_own_value(client, users, charted, page):
     """One number per bar, not one per month. A single number said nothing
     about the two columns it did not sit on, and on a phone there is no hover,
@@ -129,7 +129,7 @@ def test_every_column_carries_its_own_value(client, users, charted, page):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/reports/"])
+@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
 def test_an_empty_month_has_no_columns_and_no_labels(client, users, charted, page):
     client.force_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
@@ -182,7 +182,7 @@ def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
 def test_the_repository_chart_labels_both_of_its_bars(client, users, charted):
     client.force_login(users["admin"])
 
-    rows = client.get("/reports/").context["document_months"]["rows"]
+    rows = client.get("/tracking/reports/").context["document_months"]["rows"]
 
     for row in rows:
         assert [column["label"] for column in row["columns"]] == ["Completed", "Historical"]
@@ -202,7 +202,7 @@ def _axis_values(body):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page, charts", [("/", 1), ("/reports/", 2)])
+@pytest.mark.parametrize("page, charts", [("/", 1), ("/tracking/reports/", 2)])
 def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     client, users, charted, page, charts
 ):
@@ -214,7 +214,7 @@ def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     assert len(axes) == charts == body.count('class="column-chart"')
     context = response.context
     ceilings = [context["monthly"]["ceiling"]]
-    if page == "/reports/":
+    if page == "/tracking/reports/":
         ceilings.append(context["document_months"]["ceiling"])
     for values, ceiling in zip(axes, ceilings, strict=True):
         assert values[0] == 0
@@ -262,7 +262,7 @@ def test_the_series_label_column_fits_awaiting_receipt():
 
 # --- legible at every width ---------------------------------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/reports/"])
+@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
 def test_every_column_chart_is_sized_by_its_own_width(client, users, charted, page):
     """Each chart, its scale line and its table sit inside one frame, because
     the frame is what the width queries measure and what the narrow tier opens
@@ -307,7 +307,7 @@ def test_a_chart_table_is_not_held_to_the_record_list_minimum_width():
 @pytest.mark.django_db
 def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted):
     client.force_login(users["admin"])
-    body = client.get("/reports/").content.decode()
+    body = client.get("/tracking/reports/").content.decode()
 
     assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 24
 
@@ -401,7 +401,7 @@ def test_one_record_is_one_slice_that_closes_the_ring(client, users, offices, me
 
 # --- nothing the Content-Security-Policy would refuse -------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/reports/", "/notifications/"])
+@pytest.mark.parametrize("page", ["/", "/tracking/reports/", "/notifications/"])
 def test_no_page_carries_an_inline_event_handler(client, users, charted, page):
     """CSP allows no inline script, so an onclick= is not slow behaviour but
     none: the browser refuses it and the control does nothing."""
@@ -509,7 +509,7 @@ def test_the_ring_listener_is_delegated_and_writes_text_not_markup():
 # --- nothing to draw ----------------------------------------------------------
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
-@pytest.mark.parametrize("page", ["/", "/reports/", "/?ring=overdue"])
+@pytest.mark.parametrize("page", ["/", "/tracking/reports/", "/?ring=overdue"])
 def test_an_empty_database_draws_every_chart_as_empty(client, users, who, page):
     """No records and no documents: no ZeroDivisionError, no max() of nothing,
     and the rings say they are empty rather than drawing a blank circle."""
@@ -519,7 +519,7 @@ def test_an_empty_database_draws_every_chart_as_empty(client, users, who, page):
     assert response.status_code == 200
     body = response.content.decode()
     assert '<path class="donut-slice"' not in body
-    if page != "/reports/":
+    if page != "/tracking/reports/":
         for ring in response.context["tracking_rings"]["rings"]:
             assert ring["status"] == {"slices": [], "total": 0}
             assert ring["overdue"] == {"slices": [], "total": 0}
@@ -587,7 +587,7 @@ def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
     simply be missing from the month. The fixture's month has a scan and no
     document filed from tracking."""
     client.force_login(users["admin"])
-    body = client.get("/reports/").content.decode()
+    body = client.get("/tracking/reports/").content.decode()
 
     repository = body[body.index("Documents filed each month"):body.index("Documents by type")]
     month = _column_groups(repository)[-1]
@@ -607,7 +607,7 @@ def test_the_three_column_charts_share_one_labelling_rule():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page, template", [("/", "core/dashboard.html"), ("/reports/", "reports/reports.html")])
+@pytest.mark.parametrize("page, template", [("/", "core/dashboard.html"), ("/tracking/reports/", "reports/reports.html")])
 def test_a_column_chart_has_the_page_to_itself(client, users, charted, page, template):
     """Half a row is 34px a month, which three numbers cannot sit in."""
     import pathlib

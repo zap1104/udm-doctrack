@@ -783,7 +783,7 @@ def test_the_ring_total_is_the_tracking_page_minus_drafts(client, users, traffic
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/tracking/", "/documents/", "/reports/"])
+@pytest.mark.parametrize("path", ["/tracking/", "/documents/", "/tracking/reports/"])
 def test_no_office_filter_fails_open(client, users, path):
     """A filter that fails open is worse than one that errors: the reader
     believes the page is narrowed to one office and it is the whole
@@ -993,7 +993,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
     no record of what stage the late documents were at — and a spreadsheet
     attached to a memo is read by somebody who cannot re-run the query."""
     client.force_login(users["admin"])
-    rows = client.get("/reports/export/").content.decode().splitlines()
+    rows = client.get("/tracking/reports/export/").content.decode().splitlines()
 
     header = next(r for r in rows if r.startswith("Tracking number"))
     columns = header.split(",")

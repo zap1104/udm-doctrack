@@ -70,7 +70,7 @@ def test_report_export_applies_office_filter(client, users, offices):
         user=users["admin"], originating_office=offices["SUP"], subject="SUP only", instructions="work"
     )
     client.force_login(users["admin"])
-    response = client.get(f"/reports/export/?office={offices['MED'].pk}")
+    response = client.get(f"/tracking/reports/export/?office={offices['MED'].pk}")
     rows = list(csv.reader(io.StringIO(response.content.decode())))
     body = "\n".join(",".join(row) for row in rows)
     # A draft exports without its placeholder, which is not a number.

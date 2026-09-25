@@ -14,7 +14,6 @@ NAV_MAP = (
     ("/tracking", "tracking"),
     ("/documents", "documents"),
     ("/search", "search"),
-    ("/reports", "reports"),
     ("/administration", "administration"),
     ("/accounts/users", "administration"),
     ("/accounts/offices", "administration"),

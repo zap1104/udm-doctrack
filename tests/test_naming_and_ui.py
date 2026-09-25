@@ -37,7 +37,7 @@ def test_the_old_module_name_is_gone_from_every_page(client, users, settings):
     rather than being allowed to fail this.
     """
     client.force_login(users["admin"])
-    for path in ("/", "/tracking/", "/documents/", "/reports/", "/search/"):
+    for path in ("/", "/tracking/", "/documents/", "/tracking/reports/", "/search/"):
         body = client.get(path).content.decode().replace(settings.SITE_LONG_NAME, "")
         assert "Document Management" not in body, path
 
@@ -53,7 +53,8 @@ def test_the_sidebar_order_puts_search_second(client, users):
         for label in ("Dashboard", "Search", "Document Tracking", "Document Repository", "Reports")
         if label in nav
     ]
-    assert order == ["Dashboard", "Search", "Document Tracking", "Document Repository", "Reports"]
+    # Reports is a tab of Document Tracking now, not a sidebar item.
+    assert order == ["Dashboard", "Search", "Document Tracking", "Document Repository"]
 
 
 @pytest.mark.django_db

@@ -22,6 +22,7 @@
     <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
   {% endif %}
 </div>
+{% include "tracking/_subtabs.html" with active="tracking" %}
 {% with scope=request.GET.scope status=request.GET.status %}
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">

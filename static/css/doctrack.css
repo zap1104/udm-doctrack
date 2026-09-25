@@ -931,6 +931,13 @@ a:hover { text-decoration: underline; }
 .report-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .card-udm-caption { margin-top:2px; color:var(--udm-muted); font-size:12.5px; }
 .report-print-header,.report-print-footer { display:none; }
+/* Document Tracking's own pages, Tracking and Reports: an underlined strip
+   under the page head. The module's tabs, so it looks nothing like the queue
+   pills and filters under it, which narrow a list rather than change page. */
+.subtabs { display:flex; gap:4px; margin:-4px 0 18px; border-bottom:1px solid var(--udm-line); }
+.subtab { margin-bottom:-1px; padding:9px 14px; border-bottom:3px solid transparent; color:var(--udm-muted); font-size:14px; font-weight:600; text-decoration:none; }
+.subtab:hover,.subtab:focus { color:var(--udm-navy-text); text-decoration:none; }
+.subtab.is-active { border-bottom-color:var(--udm-teal); color:var(--udm-navy-text); }
 .reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }

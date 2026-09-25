@@ -149,7 +149,7 @@ def test_extraction_states_are_one_row_each(three_uploads_by_med, users, shape):
 def test_reports_counts_every_status_for_every_office(client, three_held_by_sup, users):
     client.force_login(users["admin"])
 
-    rows = client.get("/reports/").context["by_status"]
+    rows = client.get("/tracking/reports/").context["by_status"]
 
     assert [(row["status"], row["total"]) for row in rows] == [(Status.RECEIVED, 3)]
 
@@ -160,7 +160,7 @@ def test_reports_charges_the_holder_for_every_record_it_holds(
 ):
     client.force_login(users["admin"])
 
-    rows = client.get("/reports/").context["overdue_accountability"]["rows"]
+    rows = client.get("/tracking/reports/").context["overdue_accountability"]["rows"]
 
     assert [(row["code"], row["holding"]) for row in rows] == [(offices["SUP"].code, 3)]
 

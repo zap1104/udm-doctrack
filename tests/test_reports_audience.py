@@ -26,7 +26,7 @@ from apps.documents.models import Document, Source
 from apps.tracking.models import RoutingStep
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 REPOSITORY = "/documents/"
 
 

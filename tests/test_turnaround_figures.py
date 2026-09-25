@@ -187,7 +187,7 @@ def test_only_handovers_that_can_still_be_confirmed_are_waiting(users, offices, 
 @pytest.mark.django_db
 def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_fast):
     client.force_login(users["admin"])
-    response = client.get("/reports/")
+    response = client.get("/tracking/reports/")
     figures = response.context["turnaround"]
     body = " ".join(response.content.decode().split())
     this_month = timezone.localtime().replace(day=1, hour=0, minute=0, second=0, microsecond=0)

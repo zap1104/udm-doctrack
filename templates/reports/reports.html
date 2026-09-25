@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head reports-page-head">
   <div>
-    <div class="eyebrow">Reports and Analytics</div>
+    <div class="eyebrow">Document Tracking</div>
     <h1>Records Overview</h1>
     {% comment %}
       What this report describes, said in the heading rather than left to be
@@ -29,6 +29,7 @@
        href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>
   </div>
 </div>
+{% include "tracking/_subtabs.html" with active="reports" %}
 
 {% comment %}
   One control, and only for the accounts it is for.

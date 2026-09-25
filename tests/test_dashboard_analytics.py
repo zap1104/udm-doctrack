@@ -30,7 +30,7 @@ from apps.tracking.services import (
 )
 
 DASHBOARD = "/"
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 
 
 # ---------------------------------------------------------------- fixtures
@@ -1240,7 +1240,7 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     # Deadline row, where it composes with a queue instead of replacing one.
     assert "/tracking/?overdue=yes" in body
     assert "/tracking/?scope=overdue" not in body
-    assert "/reports/?status=OVERDUE" not in body
+    assert "/tracking/reports/?status=OVERDUE" not in body
     # `custody` is every record whose current_office is this office, completed
     # ones included, so a card counting it read 1 over a page of 9.
     assert "?scope=custody" not in body

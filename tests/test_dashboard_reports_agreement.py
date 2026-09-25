@@ -54,7 +54,7 @@ from apps.tracking.services import (
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 DASHBOARD = "/"
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 
 
 @pytest.fixture

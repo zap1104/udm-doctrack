@@ -75,7 +75,7 @@ def test_no_month_is_the_current_month(client, users, two_months):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/", "/reports/", "/memo/print/"])
+@pytest.mark.parametrize("path", ["/", "/tracking/reports/", "/memo/print/"])
 @pytest.mark.parametrize("value", ["not-a-month", "2026-13", "1999-01", "2026-9-1"])
 def test_a_month_that_is_not_charted_is_refused_with_a_note(client, users, path, value):
     client.force_login(users["admin"])
@@ -92,7 +92,7 @@ def test_dashboard_reports_and_memo_print_one_figure_for_one_month(client, users
     client.force_login(users["admin"])
     query = f"?office=all&month={_param(two_months['month'])}"
     dashboard = client.get(f"/{query}").context["turnaround"]
-    reports = client.get(f"/reports/{query}").context["turnaround"]
+    reports = client.get(f"/tracking/reports/{query}").context["turnaround"]
     memo = client.get(f"/memo/print/{query}")
 
     for key in ("receipt", "processing", "lifetime"):
@@ -154,7 +154,7 @@ def three_in_a_past_month(users, offices, memo_type):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/", "/reports/"])
+@pytest.mark.parametrize("path", ["/", "/tracking/reports/"])
 def test_the_page_names_the_fastest_and_slowest_document(client, users, three_in_a_past_month, path):
     client.force_login(users["admin"])
     body = client.get(f"{path}?month={_param(three_in_a_past_month['month'])}").content.decode()
@@ -180,14 +180,14 @@ def test_the_memo_names_the_fastest_and_slowest_lifetime(client, users, three_in
 def test_one_document_has_no_fastest_to_name(client, users, two_months):
     """With one, fastest and slowest would both repeat the average."""
     client.force_login(users["admin"])
-    body = client.get(f"/reports/?month={_param(two_months['month'])}").content.decode()
+    body = client.get(f"/tracking/reports/?month={_param(two_months['month'])}").content.decode()
 
     assert "Slowest" not in body
 
 
 # --- the title says which month ------------------------------------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/", "/reports/"])
+@pytest.mark.parametrize("path", ["/", "/tracking/reports/"])
 def test_the_turnaround_title_names_the_month_picked(client, users, two_months, path):
     client.force_login(users["admin"])
     month = two_months["month"]
