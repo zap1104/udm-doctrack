@@ -760,10 +760,13 @@ a:hover { text-decoration: underline; }
 
 /* A row of pills: scrolls sideways rather than stacking into a tall column,
    which is what a wrapped checkbox list did on a phone. */
-.pill-row { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+/* position:relative for the reason .table-responsive has it: the pills carry
+   .visually-hidden labels, which are absolute and escaped an unpositioned
+   scroller, so the Tracking page scrolled sideways on a phone. */
+.pill-row { position:relative; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .pill-row-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
 
-.tracking-queue-nav { overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+.tracking-queue-nav { position:relative; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
 .tracking-queue-list { display:flex; align-items:center; gap:8px; min-width:max-content; }
 
 /* ------------------------------------------------- tracking filter rows */
@@ -1262,7 +1265,7 @@ a:hover { text-decoration: underline; }
 .meter-foot { margin-top:6px; color:var(--udm-muted); font-size:11.5px; }
 
 @media (max-width:767.98px) {
-  .reports-tabs { display:flex; overflow-x:auto; }
+  .reports-tabs { position:relative; display:flex; overflow-x:auto; }
   .reports-tab { flex:0 0 auto; }
   .report-series-item { grid-template-columns:96px minmax(0,1fr) 38px; }
   .report-series-item--wide { grid-template-columns:minmax(0,110px) minmax(0,1fr) 38px; }
@@ -1358,6 +1361,15 @@ a:hover { text-decoration: underline; }
 .memo-print-lines { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 1.5mm 8mm; margin: 0; }
 .memo-print-lines dt { color: var(--udm-slate-text); }
 .memo-print-lines dd { margin: 0; font-weight: 600; }
+/* The memo is laid out for paper; opened on a phone, its label column and the
+   paper margins left no room, and the page scrolled sideways. On a narrow
+   screen the labels sit above their figures. Screen only: print is untouched. */
+@media screen and (max-width: 575.98px) {
+  .memo-print { padding: 16px; }
+  .memo-print-head { flex-wrap: wrap; gap: 4px 16px; }
+  .memo-print-lines { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .memo-print-lines dd { margin-bottom: 6px; }
+}
 .memo-print-statement { grid-column: 1 / -1; font-weight: 400 !important; }
 .memo-print-foot { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid #8793a3; font-size: 8.5pt; color: var(--udm-slate-ink); }
 
@@ -1461,7 +1473,12 @@ body.sidebar-open { overflow:hidden; }
 .error-code { color:var(--udm-gold); font-family:"Aptos Display","Segoe UI",sans-serif; font-size:54px; font-weight:800; line-height:1; }
 .error-page h1 { margin:10px 0 6px; font-size:26px; }
 .error-page p { max-width:560px; margin:0 auto 12px; }
-.table-responsive { max-width: 100%; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+/* position:relative makes the scroller the containing block of anything
+   absolutely positioned inside it. Without it a .visually-hidden header label
+   (absolute) escaped the scroller at its static position, far right in a wide
+   table, and on a phone the whole Tracking page scrolled sideways by the
+   table's width. */
+.table-responsive { position: relative; max-width: 100%; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 .table-responsive > .table-udm { min-width: 720px; }
 .search-filters-card .card-udm-body { min-width: 0; }
 .search-query-card .form-control { min-width: 0; }
@@ -1507,7 +1524,11 @@ body.sidebar-open { overflow:hidden; }
   .app-footer { padding:16px; }
 }
 @media (max-width:575.98px) {
-  .app-topbar { gap:8px; }
+  /* The search box kept its 180px desktop minimum (.app-topbar .topbar-search,
+     which outranks the input rule below), so at 360px the account menu, the
+     only way to sign out, sat past the right edge of the screen. */
+  .app-topbar { gap:8px; padding:10px 12px; }
+  .app-topbar .topbar-search { min-width:0; }
   .topbar-search input { min-width:0; }
   .app-content { padding:14px; }
   .card-udm .card-udm-head,.card-udm .card-udm-body { padding-left:15px; padding-right:15px; }
