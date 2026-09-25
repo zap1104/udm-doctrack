@@ -303,6 +303,17 @@
   under a full page they are a scroll away.
 {% endcomment %}
 {% pager section="size" %}
+{% comment %}
+  Three offices appear on every row and they are three different facts, so
+  they are defined once, here, above the table that uses them — and each
+  column's heading repeats its own definition on hover. The note under the
+  table defined one of the three, a scroll away from the rows it explained.
+{% endcomment %}
+<dl class="office-terms">
+  <div><dt>Originating office</dt><dd>raised the document. It never changes; it is under each subject.</dd></div>
+  <div><dt>Current office</dt><dd>holds it now: the last office to confirm receipt. While a handover waits to be confirmed, that is still the sender.</dd></div>
+  <div><dt>Receiving office</dt><dd>where it was last sent. The document is theirs once they confirm receipt; until then it is {{ "PENDING_RECEIPT"|status_label }}.</dd></div>
+</dl>
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
   <div class="card-udm-head">
@@ -314,7 +325,7 @@
       <thead>
         <tr>
           {# Current and receiving both: where it is, and who owes the next act. #}
-          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th>Tracking number</th><th>Subject</th><th>Current office</th><th>Receiving office</th><th>Updated</th><th>Status</th><th></th>
+          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col" title="Holds it now: the last office to confirm receipt.">Current office</th><th scope="col" title="Where it was last sent; it must confirm receipt.">Receiving office</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
         </tr>
       </thead>
       <tbody>
@@ -420,8 +431,4 @@
 {% if can_bulk_receive %}</form>{% endif %}
 {% pager section="steps" %}
 
-<div class="help-note mt-3">
-  <strong>Where is the document?</strong> Current Office shows the office that most recently confirmed custody.
-  A document remains <em>{{ "PENDING_RECEIPT"|status_label }}</em> until the destination confirms it.
-</div>
 {% endblock %}
