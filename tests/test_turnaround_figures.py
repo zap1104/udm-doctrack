@@ -284,7 +284,27 @@ def test_lines_take_their_colour_in_a_way_every_browser_reads(client, users, slo
     assert 'stroke="var(' not in svg
     assert 'fill="#fff"' not in svg
     assert 'style="stroke:var(--status-pending)"' in svg
-    assert 'pathLength="1"' in svg, "drawn in from its start"
+
+
+@pytest.mark.django_db
+def test_every_line_is_drawn_to_its_last_month(client, users, slow_then_fast):
+    """The lines were drawn in with a dash one pathLength long. With
+    non-scaling-stroke the browser laid that dash out in screen pixels, so on
+    a stretched chart it covered only part of each line: every line stopped
+    around May and the later months were loose dots. No line may be cut by a
+    dash; the draw-in is a clip on the group of lines, which ends at the
+    plot's edge whatever each line's length."""
+    import pathlib
+
+    body = _dashboard(client, users).content.decode()
+    svg = body[body.index('class="trend-svg"'):body.index("</svg>", body.index('class="trend-svg"'))]
+    css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
+
+    assert "pathLength" not in svg
+    assert '<g class="trend-lines">' in svg
+    line_rule = css[css.index(".trend-line {"):css.index("}", css.index(".trend-line {"))]
+    assert "dash" not in line_rule, line_rule
+    assert "@keyframes trend-reveal { to { clip-path:inset(0 0 0 0); } }" in css
 
 
 @pytest.mark.django_db
@@ -303,9 +323,9 @@ def test_the_motion_is_skipped_for_readers_who_ask_and_never_printed():
 
     css = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
     reduced = [block for block in re.split(r"@media \(prefers-reduced-motion: reduce\)", css)[1:]
-               if ".trend-line" in block[:400]]
+               if ".trend-lines" in block[:400]]
     assert reduced, "a reduced-motion rule for the chart"
-    assert ".trend-line { animation:none; stroke-dashoffset:0; }" in reduced[0][:400]
+    assert ".trend-lines { animation:none; clip-path:none; }" in reduced[0][:400]
     assert ".trend-hover { display:none; }" in css
 
 

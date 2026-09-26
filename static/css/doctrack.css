@@ -2317,13 +2317,15 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 
 /* ---------------------------------------------------- the line, and its hover
 
-   The lines draw in from their start once (pathLength="1" makes the dash one
-   line long whatever its real length), then the dots arrive. Readers who ask
-   for less motion get the finished chart at once. */
-.trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round;
-  stroke-dasharray:1; stroke-dashoffset:1; animation:trend-draw 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
+   The lines are revealed from the left once, by a clip on their group that
+   opens to the plot's full width, then the dots arrive. Not a stroke dash: with
+   non-scaling-stroke the browser lays a dash out in screen pixels, so a dash one
+   "pathLength" long stopped short on a stretched chart and left each line cut
+   off part way. Readers who ask for less motion get the finished chart at once. */
+.trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round; }
+.trend-lines { clip-path:inset(0 100% 0 0); animation:trend-reveal 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
 .trend-point { fill:var(--udm-surface); stroke-width:2; opacity:0; animation:trend-fade 280ms ease-out 650ms forwards; }
-@keyframes trend-draw { to { stroke-dashoffset:0; } }
+@keyframes trend-reveal { to { clip-path:inset(0 0 0 0); } }
 @keyframes trend-fade { to { opacity:1; } }
 
 .trend-key { gap:8px; font-weight:500; }
@@ -2363,12 +2365,13 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-plot:has(.trend-hit:hover) .trend-line,.trend-plot:has(.trend-hit.is-active) .trend-line { opacity:.55; transition:opacity 150ms ease; }
 
 @media (prefers-reduced-motion: reduce) {
-  .trend-line { animation:none; stroke-dashoffset:0; }
+  .trend-lines { animation:none; clip-path:none; }
   .trend-point { animation:none; opacity:1; }
   .trend-dot,.trend-tip,.trend-cross { transition:none; }
 }
 @media print {
-  .trend-line { animation:none; stroke-dashoffset:0; opacity:1 !important; }
+  .trend-lines { animation:none; clip-path:none; }
+  .trend-line { opacity:1 !important; }
   .trend-point { animation:none; opacity:1; }
   .trend-hover { display:none; }
 }

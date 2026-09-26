@@ -602,14 +602,25 @@
                   {% comment %}
                     Colours through `style`, not the stroke attribute: they are CSS
                     custom properties, which not every browser resolves in a
-                    presentation attribute. pathLength="1" lets the stylesheet draw
-                    each line in from its start without knowing how long it is.
-                    Dots are filled with the card's own surface, not white, so they
-                    do not glare on the dark theme.
+                    presentation attribute. Dots are filled with the card's own
+                    surface, not white, so they do not glare on the dark theme.
+
+                    The lines are revealed left to right by a clip on their group,
+                    not drawn in with a dash. The dash (pathLength="1" and
+                    stroke-dasharray:1) was measured in SVG units while
+                    non-scaling-stroke made the browser lay it out in screen
+                    pixels, so on a stretched chart it covered only part of each
+                    line: every line stopped around May and the later months
+                    were left as loose dots. A clip cannot come up short: it ends
+                    at the edge of the plot whatever the line's length.
                   {% endcomment %}
+                  <g class="trend-lines">
+                    {% for series in turnaround_trend_points %}
+                      <polyline class="trend-line" points="{{ series.polyline }}"
+                                style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
+                    {% endfor %}
+                  </g>
                   {% for series in turnaround_trend_points %}
-                    <polyline class="trend-line" points="{{ series.polyline }}" pathLength="1"
-                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
                     {% for dot in series.dots %}
                       <circle class="trend-point" cx="{{ dot.x }}" cy="{{ dot.y }}" r="3"
                               style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
