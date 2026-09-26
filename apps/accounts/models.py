@@ -112,10 +112,14 @@ class Office(TimeStampedModel):
         whatever colour an administrator picks — including the pale ones. See
         apps.core.utils.badge_palette.
         """
-        from apps.core.utils import badge_palette, normalise_hex
+        from apps.core.utils import badge_palette, badge_palette_dark, normalise_hex
 
         tint, ink = badge_palette(self.colour)
-        return {"base": normalise_hex(self.colour), "tint": tint, "ink": ink}
+        tint_dark, ink_dark = badge_palette_dark(self.colour)
+        return {
+            "base": normalise_hex(self.colour), "tint": tint, "ink": ink,
+            "tint_dark": tint_dark, "ink_dark": ink_dark,
+        }
 
 
 class UserQuerySet(models.QuerySet):
