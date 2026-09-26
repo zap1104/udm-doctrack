@@ -21,7 +21,7 @@
         {% include "partials/_form_errors.html" %}
         <div class="mb-3">
           <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark">*</span></label>
-          <div style="border:2px dashed var(--udm-line-soft);border-radius:10px;padding:22px;background:#fff;text-align:center;">
+          <div style="border:2px dashed var(--udm-line-soft);border-radius:10px;padding:22px;background:var(--udm-surface-sunk);text-align:center;">
             {{ form.file }}
             <div class="form-text mt-2">{{ form.file.help_text }}</div>
           </div>

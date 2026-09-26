@@ -3,7 +3,12 @@
             Success Green #2E7D5B · Canvas #F5F7FA
    Type:    Aptos (ships with Microsoft 365) with a system fallback stack. */
 
-:root {
+/* The light palette. Declared on the root, and again on the three things that
+   are paper whatever the screen is (the sign-in screen, the printed memo, the
+   routing slip), so in the dark theme they get every light value from this one
+   list rather than from a partial copy that falls behind it. */
+:root,
+:root[data-theme="dark"] :is(.login-wrap, .memo-print, .routing-slip) {
   --udm-navy: #0b315a;
   /* Navy doing its *text* job, split from navy doing its background job. The
      two want opposite things once the page goes dark: the background darkens
@@ -19,11 +24,11 @@
   --udm-green: #2e7d5b;
   --udm-green-soft: #e4f2ea;
   --udm-red: #b4342b;
-  /* The hovered fill, the counterpart of --udm-navy-600. Darker than --udm-red
-     in both themes, so white keeps its contrast going *up* on hover rather than
-     down. Not --udm-red-ink: that is the text colour for --udm-red-soft, and it
-     inverts between themes — used as a ground it is #f3ada6 in dark mode, which
-     is white-on-pink at 1.85:1. The contrast test caught exactly that. */
+  /* The hovered fill, the counterpart of --udm-navy-600. Further from the text
+     on it than --udm-red is, so that text's contrast goes *up* on hover rather
+     than down: darker here, under white, and lighter in the dark theme, where
+     the text on a solid red is the dark canvas. Not --udm-red-ink: that is the
+     text colour for --udm-red-soft, and it inverts between themes. */
   --udm-red-600: #93291f;
   --udm-red-soft: #fbe7e5;
   --udm-canvas: #f5f7fa;
@@ -54,6 +59,33 @@
   --udm-teal-ink: #10505d;
   --udm-teal-ink-dark: #0f5260;
   --udm-red-ink: #8f2a22;
+  /* Role tokens: each names a job, not a hue, so the dark block can give the
+     job its own colour without re-theming every component that does it. The
+     light values are what those rules painted before they were tokens. */
+  --udm-navy-soft: #e6edf5;
+  --udm-primary: var(--udm-navy);
+  --udm-primary-hover: var(--udm-navy-600);
+  --udm-primary-ink: #ffffff;
+  /* "This is the one picked": a queue pill, a tab, a page size, a filter. */
+  --udm-selected-bg: var(--udm-navy);
+  --udm-selected-bg-hover: var(--udm-navy-600);
+  --udm-selected-ink: #ffffff;
+  /* Text on a solid red, teal or green fill; and on gold, which is too light
+     for white in either theme. */
+  --udm-on-accent: #ffffff;
+  --udm-on-gold: #21252c;
+  --udm-row-line: #eef1f6;
+  --udm-surface-sunk: #fafbfd;
+  --udm-track: #e7ecf3;
+  --udm-highlight: #fdf3d4;
+  --udm-note-bg: #fffdf6;
+  --udm-note-ink: #5a4a20;
+  /* Bootstrap's own link colour, for its tabs and link buttons: the brand teal
+     rather than Bootstrap's blue, which was 4.2:1 on this canvas. */
+  --bs-link-color: var(--udm-teal);
+  --bs-link-color-rgb: 22, 105, 122;
+  --bs-link-hover-color: var(--udm-teal-ink);
+  --bs-link-hover-color-rgb: 16, 80, 93;
   /* Chart colours: two validated categorical slots plus the reserved status
      scale. --chart-one / --chart-two clear the lightness band, chroma floor,
      protan/deutan separation and 3:1 contrast on white; they are
@@ -211,7 +243,7 @@ a:hover { text-decoration: underline; }
 .nav-item.active .dot { background: var(--udm-gold); }
 .nav-section {
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: rgba(205, 217, 232, 0.55); padding: 18px 12px 8px;
+  color: rgba(205, 217, 232, 0.72); padding: 18px 12px 8px;
 }
 
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-x: clip; }
@@ -238,7 +270,7 @@ a:hover { text-decoration: underline; }
 }
 .avatar {
   width: 34px; height: 34px; border-radius: 50%;
-  background: var(--udm-navy); color: #fff;
+  background: var(--udm-primary); color: var(--udm-primary-ink);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
 }
@@ -249,7 +281,7 @@ a:hover { text-decoration: underline; }
 .page-head .sub { color: var(--udm-muted); font-size: 14px; margin: 0; }
 .eyebrow {
   font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--udm-gold); font-weight: 700; margin-bottom: 6px;
+  color: var(--udm-gold-ink); font-weight: 700; margin-bottom: 6px;
 }
 
 /* ------------------------------------------------------------------ cards */
@@ -336,7 +368,7 @@ a:hover { text-decoration: underline; }
    "Suspended" on the users screen and "Urgent" on a record — neither of which
    was asked to change. */
 .pill-alert {
-  background: var(--udm-red); color: #fff;
+  background: var(--udm-red); color: var(--udm-on-accent);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 /* On paper it is ink on white, not white on a fill.
@@ -388,8 +420,8 @@ a:hover { text-decoration: underline; }
   color: var(--udm-muted); font-weight: 700;
   padding: 10px 14px; border-bottom: 1px solid var(--udm-line); white-space: nowrap;
 }
-.table-udm td { padding: 13px 14px; border-bottom: 1px solid #eef1f6; vertical-align: middle; }
-.table-udm tbody tr:hover { background: #fafbfd; }
+.table-udm td { padding: 13px 14px; border-bottom: 1px solid var(--udm-row-line); vertical-align: middle; }
+.table-udm tbody tr:hover { background: var(--udm-surface-sunk); }
 .table-udm .mono {
   font-family: "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px; color: var(--udm-navy-text); font-weight: 600; white-space: nowrap;
@@ -436,16 +468,16 @@ a:hover { text-decoration: underline; }
   font-family: "Aptos Display", "Segoe UI", system-ui, sans-serif;
   font-weight: 700; font-size: 19px; color: var(--udm-navy-text);
 }
-.relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: #e7ecf3; overflow: hidden; }
+.relevance-bar { width: 78px; height: 5px; border-radius: 999px; background: var(--udm-track); overflow: hidden; }
 .relevance-bar span { display: block; height: 100%; background: var(--udm-teal); border-radius: 999px; }
 .relevance-bar.high span { background: var(--udm-green); }
 .relevance-bar.low span { background: var(--udm-gold); }
 
-.result-item { padding: 16px 20px; border-bottom: 1px solid #eef1f6; display: flex; gap: 18px; }
+.result-item { padding: 16px 20px; border-bottom: 1px solid var(--udm-row-line); display: flex; gap: 18px; }
 .result-item:last-child { border-bottom: 0; }
 .result-item h3 { font-size: 16px; margin: 0 0 3px; }
 .result-item .meta { color: var(--udm-muted); font-size: 13px; }
-.result-item mark { background: #fdf3d4; padding: 0 2px; border-radius: 3px; }
+.result-item mark { background: var(--udm-highlight); color: inherit; padding: 0 2px; border-radius: 3px; }
 
 /* ------------------------------------------------------------------ misc */
 .tag-chip {
@@ -467,7 +499,7 @@ a:hover { text-decoration: underline; }
 }
 .file-chip .ext {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-  background: var(--udm-navy); color: #fff; border-radius: 5px; padding: 3px 6px;
+  background: var(--udm-primary); color: var(--udm-primary-ink); border-radius: 5px; padding: 3px 6px;
 }
 
 .smart-folder {
@@ -495,35 +527,35 @@ a:hover { text-decoration: underline; }
 .step-indicator { display: flex; gap: 10px; align-items: center; color: var(--udm-muted); font-size: 13px; }
 .step-indicator .step { display: inline-flex; align-items: center; gap: 7px; }
 .step-indicator .num {
-  width: 22px; height: 22px; border-radius: 50%; background: #e7ecf3; color: var(--udm-muted);
+  width: 22px; height: 22px; border-radius: 50%; background: var(--udm-track); color: var(--udm-slate-ink);
   display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
 }
-.step-indicator .step.active .num { background: var(--udm-navy); color: #fff; }
+.step-indicator .step.active .num { background: var(--udm-selected-bg); color: var(--udm-selected-ink); }
 .step-indicator .step.active { color: var(--udm-navy-text); font-weight: 600; }
 
 .text-preview {
   background:var(--udm-surface); border: 1px solid var(--udm-line); border-radius: 8px;
   padding: 16px; max-height: 430px; overflow: auto;
-  font-size: 13.5px; white-space: pre-wrap; color: #384456;
+  font-size: 13.5px; white-space: pre-wrap; color: var(--udm-slate-text);
 }
 
 .btn-udm {
-  background: var(--udm-navy); border: 1px solid var(--udm-navy); color: #fff;
+  background: var(--udm-primary); border: 1px solid var(--udm-primary); color: var(--udm-primary-ink);
   border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px;
 }
-.btn-udm:hover { background: var(--udm-navy-600); border-color: var(--udm-navy-600); color: #fff; }
-.btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: #21252c; }
-.btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: #21252c; }
+.btn-udm:hover { background: var(--udm-primary-hover); border-color: var(--udm-primary-hover); color: var(--udm-primary-ink); }
+.btn-udm-gold { background: var(--udm-gold); border-color: var(--udm-gold); color: var(--udm-on-gold); }
+.btn-udm-gold:hover { background: var(--udm-gold); border-color: var(--udm-gold); filter: brightness(0.95); color: var(--udm-on-gold); }
 .btn-udm-outline { background:var(--udm-surface); border: 1px solid var(--udm-line); color: var(--udm-navy-text); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px; }
-.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-navy); color: var(--udm-navy-text); }
-.btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: #fff; }
-.btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: #fff; }
-.btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: #fff; }
-.btn-udm-green:hover { background: var(--udm-green); border-color: var(--udm-green); filter: brightness(0.94); color: #fff; }
+.btn-udm-outline:hover { background:var(--udm-surface); border-color: var(--udm-primary); color: var(--udm-navy-text); }
+.btn-udm-teal { background: var(--udm-teal); border-color: var(--udm-teal); color: var(--udm-on-accent); }
+.btn-udm-teal:hover { background: var(--udm-teal); border-color: var(--udm-teal); filter: brightness(0.94); color: var(--udm-on-accent); }
+.btn-udm-green { background: var(--udm-green); border-color: var(--udm-green); color: var(--udm-on-accent); }
+.btn-udm-green:hover { background: var(--udm-green); border-color: var(--udm-green); filter: brightness(0.94); color: var(--udm-on-accent); }
 
 .form-label { font-size: 13px; font-weight: 600; color: var(--udm-label-ink); margin-bottom: 4px; }
 .form-control, .form-select { border-radius: 8px; border-color: var(--udm-line); font-size: 14.5px; padding: 8px 12px; }
-.form-control:focus, .form-select:focus { border-color: var(--udm-teal); box-shadow: 0 0 0 3px rgba(22, 105, 122, 0.12); }
+.form-control:focus, .form-select:focus { border-color: var(--udm-teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--udm-teal) 12%, transparent); }
 .form-text { font-size: 12.5px; color: var(--udm-muted); }
 .required-mark { color: var(--udm-red); }
 
@@ -533,8 +565,8 @@ a:hover { text-decoration: underline; }
 .office-terms dt { display:inline; margin-right:4px; color:var(--udm-navy-text); font-weight:700; }
 .office-terms dd { display:inline; margin:0; }
 .help-note {
-  border-left: 3px solid var(--udm-gold); background: #fffdf6;
-  padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; color: #5a4a20;
+  border-left: 3px solid var(--udm-gold); background: var(--udm-note-bg);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; color: var(--udm-note-ink);
 }
 
 /* --------------------------------------------------------------- deadline */
@@ -574,7 +606,7 @@ a:hover { text-decoration: underline; }
 }
 .phase2-upload-box {
   border: 1px dashed var(--udm-line-soft); border-radius: var(--radius);
-  background: #fafbfd; padding: 16px;
+  background: var(--udm-surface-sunk); padding: 16px;
 }
 .phase2-sticky-card { position: sticky; top: 84px; }
 .phase2-checklist { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--udm-muted); }
@@ -662,7 +694,7 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-brand-icon { display:block !important; width:36px !important; height:36px !important; min-width:36px !important; max-width:36px !important; min-height:36px !important; max-height:36px !important; flex:0 0 36px !important; border-radius:9px; object-fit:contain; }
 .app-topbar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:13px; white-space:nowrap; }
 .app-topbar .topbar-search { flex:1 1 auto; min-width:180px; max-width:460px; }
-.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:var(--udm-surface); outline:none; box-shadow:0 0 0 3px rgba(22,105,122,.12); }
+.app-topbar .topbar-search input:focus { border-color:var(--udm-teal); background:var(--udm-surface); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--udm-teal) 12%, transparent); }
 .app-topbar .topbar-account-button { display:inline-flex; align-items:center; gap:9px; width:auto; min-width:0; max-width:280px; padding:4px 6px; border:0 !important; border-radius:8px; background:transparent !important; color:var(--udm-ink); text-align:left; box-shadow:none !important; }
 .app-topbar .topbar-account-button:hover,.app-topbar .topbar-account-button:focus { background:var(--udm-canvas) !important; color:var(--udm-ink); }
 .app-topbar .topbar-account-copy { flex-direction:column; align-items:flex-start; width:auto; min-width:0; max-width:190px; }
@@ -672,18 +704,18 @@ a:hover { text-decoration: underline; }
 .app-topbar .topbar-account-arrow { flex:0 0 auto; color:var(--udm-muted); font-size:12px; }
 	.topbar-notifications { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; color:var(--udm-navy-text); text-decoration:none; }
 	.topbar-notifications:hover { background:var(--udm-canvas); color:var(--udm-teal-ink); }
-	.topbar-notifications:focus-visible { outline:3px solid rgba(22,105,122,.35); outline-offset:2px; }
+	.topbar-notifications:focus-visible { outline:3px solid color-mix(in srgb, var(--udm-teal) 35%, transparent); outline-offset:2px; }
 	.notification-bell { width:21px; height:21px; }
-	.notification-count { position:absolute; top:-4px; right:-6px; display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border:2px solid #fff; border-radius:999px; background:var(--udm-red); color:#fff; font-size:10px; font-weight:700; line-height:1; }
+	.notification-count { position:absolute; top:-4px; right:-6px; display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border:2px solid var(--udm-surface); border-radius:999px; background:var(--udm-red); color:var(--udm-on-accent); font-size:10px; font-weight:700; line-height:1; }
 	.notification-page-head { align-items:flex-start; }
 	.notification-toolbar { border-radius:var(--radius); }
 	.notification-filters { display:flex; flex-wrap:wrap; gap:6px; }
 	.notification-filter { display:inline-flex; align-items:center; min-height:34px; padding:6px 13px; border:1px solid var(--udm-line); border-radius:999px; color:var(--udm-navy-text); font-size:13px; font-weight:600; text-decoration:none; }
 	.notification-filter:hover,.notification-filter:focus-visible { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); }
-	.notification-filter:focus-visible { outline:3px solid rgba(22,105,122,.2); outline-offset:2px; }
-	.notification-filter.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+	.notification-filter:focus-visible { outline:3px solid color-mix(in srgb, var(--udm-teal) 20%, transparent); outline-offset:2px; }
+	.notification-filter.is-active { border-color:var(--udm-selected-bg); background:var(--udm-selected-bg); color:var(--udm-selected-ink); }
 	.notification-filter.is-active:hover,.notification-filter.is-active:focus-visible {
-	  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+	  border-color:var(--udm-selected-bg-hover); background:var(--udm-selected-bg-hover); color:var(--udm-selected-ink);
 	}
 	.notification-list { display:flex; flex-direction:column; gap:8px; }
 	.notification-day-heading { margin:19px 0 3px; color:var(--udm-muted); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -731,16 +763,16 @@ a:hover { text-decoration: underline; }
   white-space:nowrap; text-decoration:none;
 }
 .pill-toggle:hover,.pill-toggle:focus { border-color:var(--udm-teal); background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
-.pill-toggle.is-active { border-color:var(--udm-navy); background:var(--udm-navy); color:#fff; }
+.pill-toggle.is-active { border-color:var(--udm-selected-bg); background:var(--udm-selected-bg); color:var(--udm-selected-ink); }
 /* Selected *and* hovered, said out loud rather than left to the cascade.
    Written down, the pair cannot come apart: whatever later rule sets the
    background here also sets the text, so there is no arrangement of these rules
    that paints navy on navy. It also gives the state some feedback — without it
    a selected pill was the one control on the page that did not respond to the
-   pointer at all. Same lightening .btn-udm uses on hover, so the whole app
-   answers a hover the same way. */
+   pointer at all. The same hover every selected control uses
+   (--udm-selected-bg-hover), so the whole app answers a hover the same way. */
 .pill-toggle.is-active:hover,.pill-toggle.is-active:focus {
-  border-color:var(--udm-navy-600); background:var(--udm-navy-600); color:#fff;
+  border-color:var(--udm-selected-bg-hover); background:var(--udm-selected-bg-hover); color:var(--udm-selected-ink);
 }
 /* A queue that cannot be asked from where the reader is standing. Dimmed and
    inert rather than removed: a row that loses two pills when the office picker
@@ -753,9 +785,9 @@ a:hover { text-decoration: underline; }
 }
 .pill-toggle--alert { color:var(--udm-red-ink); }
 .pill-toggle--alert:hover,.pill-toggle--alert:focus { border-color:var(--udm-red); background:var(--udm-red-soft); color:var(--udm-red-ink); }
-.pill-toggle--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:#fff; }
+.pill-toggle--alert.is-active { border-color:var(--udm-red); background:var(--udm-red); color:var(--udm-on-accent); }
 .pill-toggle--alert.is-active:hover,.pill-toggle--alert.is-active:focus {
-  border-color:var(--udm-red-600); background:var(--udm-red-600); color:#fff;
+  border-color:var(--udm-red-600); background:var(--udm-red-600); color:var(--udm-on-accent);
 }
 
 /* A row of pills: scrolls sideways rather than stacking into a tall column,
@@ -944,8 +976,8 @@ a:hover { text-decoration: underline; }
 .reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }
-.reports-tab.active { background:var(--udm-navy); color:#fff; }
-.reports-tab.active:hover,.reports-tab.active:focus { background:var(--udm-navy-600); color:#fff; }
+.reports-tab.active { background:var(--udm-selected-bg); color:var(--udm-selected-ink); }
+.reports-tab.active:hover,.reports-tab.active:focus { background:var(--udm-selected-bg-hover); color:var(--udm-selected-ink); }
 .report-panel { display:none; }
 .report-panel.active { display:block; }
 .report-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 14px; }
@@ -1398,6 +1430,14 @@ body.sidebar-open { overflow:hidden; }
 .form-field--error .form-control,.form-field--error .form-select { border-color:var(--udm-red); }
 .field-errors { margin-top:5px; color:var(--udm-red); font-size:12.5px; font-weight:600; }
 .message-stack { display:grid; gap:9px; margin-bottom:16px; }
+/* Django tags an error message "error", which Bootstrap has no class for: the
+   banner came out uncoloured in both themes. It takes the danger colours. */
+.alert-error {
+  --bs-alert-color: var(--bs-danger-text-emphasis);
+  --bs-alert-bg: var(--bs-danger-bg-subtle);
+  --bs-alert-border-color: var(--bs-danger-border-subtle);
+  --bs-alert-link-color: var(--bs-danger-text-emphasis);
+}
 .app-alert { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; margin:0; border-radius:10px; }
 .app-alert-icon { width:9px; height:9px; margin-top:7px; border-radius:50%; background:currentColor; opacity:.75; }
 .app-pagination .page-link { border-color:var(--udm-line); color:var(--udm-navy-text); font-weight:700; text-decoration:none; }
@@ -1443,13 +1483,12 @@ body.sidebar-open { overflow:hidden; }
 }
 .page-size-option:first-child { border-left:0; }
 .page-size-option:hover,.page-size-option:focus-visible { background:var(--udm-teal-soft); color:var(--udm-teal-ink); text-decoration:none; }
-/* The same navy-on-white the filter pills and the notification filters use for
-   "this is the state you are in", rather than a colour of its own: navy is dark
-   in both themes, so white stays legible on it without a second rule below. */
-.page-size-option.is-active { background:var(--udm-navy); color:#fff; cursor:default; }
-/* It renders as a <span>, so it takes no pointer — stated anyway, because the
-   day it becomes a link again is the day it would otherwise go dark-on-dark. */
-.page-size-option.is-active:hover { background:var(--udm-navy); color:#fff; }
+/* The selected state the filter pills and the notification filters use for
+   "this is the state you are in", rather than a colour of its own. */
+.page-size-option.is-active { background:var(--udm-selected-bg); color:var(--udm-selected-ink); cursor:default; }
+/* It renders as a <span>, so it takes no pointer; stated anyway, so the day it
+   becomes a link again it cannot go dark-on-dark. */
+.page-size-option.is-active:hover { background:var(--udm-selected-bg); color:var(--udm-selected-ink); }
 .page-size-count { color:var(--udm-muted); font-size:12.5px; }
 
 @media (max-width: 575.98px) {
@@ -1576,7 +1615,7 @@ body.sidebar-open { overflow:hidden; }
   background: var(--udm-gold-soft);
   color: var(--udm-gold-ink-hover);
   text-decoration: none !important;
-  box-shadow: 0 3px 8px rgba(196, 154, 46, 0.16);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--udm-gold) 16%, transparent);
   transform: translateY(-1px);
 }
 
@@ -1587,7 +1626,7 @@ body.sidebar-open { overflow:hidden; }
 
 .btn-receipt:focus-visible {
   border-color: var(--udm-gold);
-  outline: 3px solid rgba(196, 154, 46, 0.25);
+  outline: 3px solid color-mix(in srgb, var(--udm-gold) 25%, transparent);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -1601,7 +1640,7 @@ body.sidebar-open { overflow:hidden; }
   flex: 0 0 18px;
   border-radius: 50%;
   background: var(--udm-gold);
-  color: #ffffff;
+  color: var(--udm-on-gold);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -1664,7 +1703,7 @@ body.sidebar-open { overflow:hidden; }
   background: var(--udm-teal-soft);
   color: var(--udm-teal-ink-dark);
   text-decoration: none !important;
-  box-shadow: 0 3px 8px rgba(22, 105, 122, 0.12);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--udm-teal) 12%, transparent);
   transform: translateY(-1px);
 }
 
@@ -1674,7 +1713,7 @@ body.sidebar-open { overflow:hidden; }
 
 .btn-dashboard-action:focus-visible {
   border-color: var(--udm-teal);
-  outline: 3px solid rgba(22, 105, 122, 0.2);
+  outline: 3px solid color-mix(in srgb, var(--udm-teal) 20%, transparent);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -1729,7 +1768,7 @@ body.sidebar-open { overflow:hidden; }
    control reads as one field rather than a box of loose checkboxes. */
 .multiselect:focus-within {
   border-color: var(--udm-teal);
-  box-shadow: 0 0 0 3px rgba(22, 105, 122, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--udm-teal) 12%, transparent);
 }
 
 .multiselect-search {
@@ -1760,7 +1799,7 @@ body.sidebar-open { overflow:hidden; }
   gap: 10px;
   margin: 0;
   padding: 9px 12px;
-  border-bottom: 1px solid #eef1f6;
+  border-bottom: 1px solid var(--udm-row-line);
   color: var(--udm-ink);
   font-size: 14px;
   cursor: pointer;
@@ -1768,7 +1807,7 @@ body.sidebar-open { overflow:hidden; }
 }
 
 .multiselect-option:last-child { border-bottom: 0; }
-.multiselect-option:hover { background: #f7f9fc; }
+.multiselect-option:hover { background: var(--udm-surface-sunk); }
 
 .multiselect-option input {
   flex: 0 0 15px;
@@ -2106,7 +2145,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .desk-chips { display:flex; flex-wrap:wrap; gap:8px; padding:14px 20px 12px; }
 .desk-chip-count { margin-left:6px; padding:1px 7px; border-radius:999px; background:var(--udm-canvas); color:var(--udm-navy-text); font-size:11.5px; }
 /* Opaque, so its contrast is what it looks like: white on the next navy up. */
-.pill-toggle.is-active .desk-chip-count { background:var(--udm-navy-600); color:#fff; }
+.pill-toggle.is-active .desk-chip-count { background:var(--udm-selected-ink); color:var(--udm-selected-bg); }
 .desk-chip-clear { font-weight:500; }
 .desk-block-count { margin-left:6px; font-weight:600; letter-spacing:0; text-transform:none; }
 .desk-queue-foot { display:flex; justify-content:flex-end; padding:10px 20px 14px; }
@@ -2202,7 +2241,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-scope { display:flex; align-items:center; gap:8px; }
 .dashboard-scope-label { color:var(--udm-muted); font-size:12.5px; font-weight:700; white-space:nowrap; }
 .dashboard-scope .form-select { min-width:210px; border-color:var(--udm-line); color:var(--udm-navy-text); font-size:13px; font-weight:600; }
-.dashboard-scope .form-select:focus { border-color:var(--udm-teal); box-shadow:0 0 0 .18rem rgba(22,105,122,.18); }
+.dashboard-scope .form-select:focus { border-color:var(--udm-teal); box-shadow:0 0 0 .18rem color-mix(in srgb, var(--udm-teal) 18%, transparent); }
 
 /* -------------------------------------------------------- overdue banner */
 /* The left rule is the same device .stat-card.red uses, at the width a full
@@ -2441,7 +2480,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 
 /* ------------------------------------------------------------- uploads */
 .uploads-leader { display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:10px 13px; margin-bottom:12px; border:1px solid var(--udm-gold-tint-strong); border-radius:10px; background:var(--udm-gold-tint); color:var(--udm-gold-ink-dark); font-size:13px; }
-.uploads-leader-tag { padding:2px 9px; border-radius:999px; background:var(--udm-gold); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.uploads-leader-tag { padding:2px 9px; border-radius:999px; background:var(--udm-gold); color:var(--udm-on-gold); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
 
 /* ---------------------------------------------------------------- memo */
 .memo-sheet { padding:22px 24px; border:1px solid var(--udm-line); border-radius:8px; }
@@ -2556,7 +2595,8 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --udm-teal: #4aa9bd;
   --udm-green: #56b287;
   --udm-red: #e2695f;
-  --udm-red-600: #cf5348;
+  /* Lighter than the red, not darker: the text on it is dark here (7.4:1). */
+  --udm-red-600: #ee8a80;
   /* Re-picked, not reused: on the dark card the light-theme pair would sit at
      2.4:1 and 1.6:1. 7.11:1 and 3.60:1 here, separating by the same lightness
      step the light pair uses. */
@@ -2616,6 +2656,26 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --chart-received-part: #c9e2fb;
   --chart-neutral: #a8b6c8;
 
+  /* Roles. Navy is a surface here, so nothing that has to stand out may be
+     navy: a primary button is a lifted navy blue with white on it (6.3:1), a
+     selected state is the theme's teal with the canvas as its text (6.7:1), and
+     text on the lightened brand hues goes dark rather than white. */
+  --udm-navy-soft: #1b2a3a;
+  --udm-primary: #2f6399;
+  --udm-primary-hover: #3a73ad;
+  --udm-primary-ink: #ffffff;
+  --udm-selected-bg: var(--udm-teal);
+  --udm-selected-bg-hover: #6cc0d1;
+  --udm-selected-ink: var(--udm-canvas);
+  --udm-on-accent: var(--udm-canvas);
+  --udm-on-gold: var(--udm-canvas);
+  --udm-row-line: #232e3a;
+  --udm-surface-sunk: #131c26;
+  --udm-track: #212d3a;
+  --udm-highlight: #4a3c19;
+  --udm-note-bg: #241f12;
+  --udm-note-ink: #f0e2c0;
+
   --shadow-card: 0 1px 2px rgba(0,0,0,.5);
 }
 
@@ -2626,22 +2686,51 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   --bs-body-bg: var(--udm-canvas);
   --bs-body-color: var(--udm-ink);
   --bs-border-color: var(--udm-line);
+  --bs-border-color-translucent: var(--udm-line);
   --bs-secondary-color: var(--udm-muted);
+  --bs-secondary-bg: var(--udm-surface);
+  --bs-tertiary-bg: var(--udm-slate-soft);
   --bs-emphasis-color: var(--udm-ink);
+  --bs-heading-color: var(--udm-ink);
+  /* Bootstrap's link blue was #0d6efd, 3.6:1 on the card: tabs and link
+     buttons read in it. Links take the theme's teal instead. */
+  --bs-link-color: var(--udm-teal);
+  --bs-link-color-rgb: 74, 169, 189;
+  --bs-link-hover-color: var(--udm-teal-ink);
+  --bs-link-hover-color-rgb: 143, 212, 226;
+  /* The message banners, in the palette's own washes and inks. */
+  --bs-success-bg-subtle: var(--udm-green-soft);
+  --bs-success-border-subtle: #2c5a45;
+  --bs-success-text-emphasis: var(--udm-green-ink);
+  --bs-info-bg-subtle: var(--udm-teal-soft);
+  --bs-info-border-subtle: #22535d;
+  --bs-info-text-emphasis: var(--udm-teal-ink);
+  --bs-warning-bg-subtle: var(--udm-gold-soft);
+  --bs-warning-border-subtle: var(--udm-gold-border);
+  --bs-warning-text-emphasis: var(--udm-gold-ink);
+  --bs-danger-bg-subtle: var(--udm-red-soft);
+  --bs-danger-border-subtle: #6b2f29;
+  --bs-danger-text-emphasis: var(--udm-red-ink);
+  --bs-light-bg-subtle: var(--udm-surface);
+  --bs-light-border-subtle: var(--udm-line);
+  --bs-light-text-emphasis: var(--udm-ink);
   background: var(--udm-canvas);
   color: var(--udm-ink);
 }
+/* background-color, not the background shorthand: the shorthand also reset
+   background-image, which is where a select draws its arrow, so every dropdown
+   in the dark theme had lost its arrow and read as a text box. */
 :root[data-theme="dark"] .form-control,
 :root[data-theme="dark"] .form-select,
 :root[data-theme="dark"] textarea {
-  background: var(--udm-canvas);
+  background-color: var(--udm-canvas);
   border-color: var(--udm-line);
   color: var(--udm-ink);
 }
 :root[data-theme="dark"] .form-control::placeholder { color: var(--udm-muted); }
 :root[data-theme="dark"] .form-control:focus,
 :root[data-theme="dark"] .form-select:focus {
-  background: var(--udm-canvas);
+  background-color: var(--udm-canvas);
   color: var(--udm-ink);
 }
 :root[data-theme="dark"] .dropdown-menu {
@@ -2654,81 +2743,23 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 :root[data-theme="dark"] .dropdown-item:focus { background: var(--udm-canvas); color: var(--udm-ink); }
 :root[data-theme="dark"] .table-udm th { color: var(--udm-muted); }
 :root[data-theme="dark"] .table-udm tbody tr:hover { background: var(--udm-canvas); }
-/* .help-note is a warm off-white rather than the plain surface, so it does not
-   follow --udm-surface and needs a value of its own. */
-:root[data-theme="dark"] .help-note { background: #241f12; color: var(--udm-ink); }
 
-/* A selected pill was navy, and in the dark palette --udm-navy is a surface
-   colour, so the queue picked on the Tracking page and in the Action Centre
-   vanished into the card. Teal, the dark theme's accent, with the canvas as its
-   text (6.7:1). Overdue keeps its red. */
-:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert),
-:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert):hover,
-:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert):focus {
-  border-color:var(--udm-teal); background:var(--udm-teal); color:var(--udm-canvas);
-}
-:root[data-theme="dark"] .pill-toggle.is-active:not(.pill-toggle--alert) .desk-chip-count { background:var(--udm-canvas); color:var(--udm-teal); }
-/* The sign-in and lockout screens stay light in both themes: they are their own
-   full-bleed composition on fixed navy, and they are shown before there is a
-   person to have a preference. Pinning the tokens back is enough — every rule
-   inside reads them. */
-/* The printed memo is a document, and a document is white. Same treatment as
-   the sign-in screen: pin the tokens back and every rule inside reads them. */
-:root[data-theme="dark"] .memo-print {
-  --udm-surface: #ffffff;
-  --udm-ink: #16202c;
-  --udm-slate-text: #41506a;
-  --udm-slate-ink: #55637a;
-  --udm-muted: #63718a;
-  --udm-line: #dfe5ec;
-  color-scheme: light;
-}
-
-:root[data-theme="dark"] .login-wrap {
-  --udm-canvas: #f5f7fa;
-  --udm-surface: #ffffff;
-  --udm-ink: #16202c;
-  --udm-muted: #63718a;
-  --udm-label-ink: #33415a;
-  --udm-slate-text: #41506a;
-  --udm-line: #dfe5ec;
-  --udm-line-strong: #b9c9da;
-  --udm-navy: #0b315a;
-  --udm-navy-text: var(--udm-navy);
-  --udm-gold: #c49a2e;
-  --udm-teal: #16697a;
-  color-scheme: light;
-}
-
-/* ---------------------------------------------- dark theme: contrast repairs
-   What --udm-navy-text cannot reach: a hard-coded colour, and white-on-brand
-   pairings that stopped working when the brand hues were lightened to clear the
-   dark ground. Every rule here is behind the dark selector, so light is untouched. */
-
-/* A slate that reads as body text on white and as background on the dark card. */
-:root[data-theme="dark"] .text-preview { color: var(--udm-slate-text); }
-
-/* White fell to 1.9:1 on gold, 2.6 on green, 2.7 on teal. The hues have to stay
-   light to clear the dark ground, so the label goes dark instead — 6.6:1 and up,
-   and each button still reads as its own colour. */
-:root[data-theme="dark"] .btn-udm-green,
-:root[data-theme="dark"] .btn-udm-green:hover,
-:root[data-theme="dark"] .btn-udm-teal,
-:root[data-theme="dark"] .btn-udm-teal:hover,
-:root[data-theme="dark"] .btn-receipt-icon,
-:root[data-theme="dark"] .uploads-leader-tag { color: var(--udm-canvas); }
-
-/* The step number sat on a hard-coded pale disc, which stayed pale when nothing
-   else did. The active disc is restored on the second line: it is navy with
-   white on it, already legible, and would otherwise lose to the first. */
-:root[data-theme="dark"] .step-indicator .num { background: var(--udm-slate-soft); }
-:root[data-theme="dark"] .step-indicator .step.active .num { background: var(--udm-navy); }
+/* Paper stays paper. The sign-in and lockout screens (their own full-bleed
+   composition, shown before anybody has a preference), the printed memo and the
+   routing slip take the whole light palette from the :root rule at the top of
+   this file, which also names them; here they only say so to the browser, for
+   scrollbars and form controls. Bootstrap is told in the templates, with
+   data-bs-theme="light" on the same elements. */
+:root[data-theme="dark"] :is(.login-wrap, .memo-print, .routing-slip) { color-scheme: light; }
 
 /* Paper is white whatever the screen is. Printing a dark theme wastes toner and
    comes out unreadable on the panels that rely on tinted fills, so print always
-   uses the light palette — the tokens are simply reset for the print context. */
+   uses the light palette — the tokens are simply reset for the print context.
+   Every token the dark block sets is reset here (tests/test_dark_mode.py holds
+   the two lists together), or print gets the lightened brand hues on white. */
 @media print {
   :root[data-theme="dark"] {
+    color-scheme: light;
     --udm-canvas: #ffffff;
     --udm-surface: #ffffff;
     --udm-ink: #16202c;
@@ -2752,7 +2783,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
     --chart-two: #b58c24;
     --chart-three: #2f7d4f;
     --chart-track: #e8edf3;
-      --chart-grid: #eef1f6;
+    --chart-grid: #eef1f6;
     --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
     --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
     --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
@@ -2764,6 +2795,53 @@ textarea.form-control { resize: vertical; min-height: 64px; }
     --chart-historical: #7d889a;
     --chart-received-part: #8fb3d6;
     --chart-neutral: #55637a;
+    --udm-navy: #0b315a;
+    --udm-navy-text: #0b315a;
+    --udm-navy-700: #0e3c6d;
+    --udm-navy-600: #14477e;
+    --udm-navy-soft: #e6edf5;
+    --udm-gold: #c49a2e;
+    --udm-teal: #16697a;
+    --udm-green: #2e7d5b;
+    --udm-red: #b4342b;
+    --udm-red-600: #93291f;
+    --chart-alert: #b4342b;
+    --chart-alert-soft: #cf6a5e;
+    --udm-gold-ink-dark: #624907;
+    --udm-gold-ink-hover: #4f3a05;
+    --udm-gold-border: #bf9323;
+    --udm-gold-tint: #fffaf0;
+    --udm-gold-tint-strong: #eedcae;
+    --udm-teal-ink-dark: #0f5260;
+    --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
+    --udm-primary: #0b315a;
+    --udm-primary-hover: #14477e;
+    --udm-primary-ink: #ffffff;
+    --udm-selected-bg: #0b315a;
+    --udm-selected-bg-hover: #14477e;
+    --udm-selected-ink: #ffffff;
+    --udm-on-accent: #ffffff;
+    --udm-on-gold: #21252c;
+    --udm-row-line: #eef1f6;
+    --udm-surface-sunk: #fafbfd;
+    --udm-track: #e7ecf3;
+    --udm-highlight: #fdf3d4;
+    --udm-note-bg: #fffdf6;
+    --udm-note-ink: #5a4a20;
+  }
+}
+
+/* Office badges: each office's own pair for the dark card, computed server-side
+   like the light one (apps.core.utils.badge_palette_dark), so an office colour
+   an administrator picks is legible here too rather than a pale chip on a dark
+   page. Screen only: the pair arrives inline on each badge rather than through
+   the tokens, so the print reset above cannot reach it, and on paper the dark
+   wash is dropped while its lightened ink is kept — pale text on white. */
+@media screen {
+  :root[data-theme="dark"] .office-badge {
+    border-color: color-mix(in srgb, var(--office-ink-dark, #a8b6c8) 28%, transparent);
+    background: var(--office-tint-dark, var(--udm-slate-soft));
+    color: var(--office-ink-dark, var(--udm-slate-ink));
   }
 }
 
