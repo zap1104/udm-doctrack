@@ -269,7 +269,8 @@ def test_the_theme_is_applied_before_the_stylesheets(client):
     body = client.get("/accounts/login/").content.decode()
     head = body[:body.index("</head>")]
 
-    tag = re.search(r"<script[^>]*theme-init\.js[^>]*>", head)
+    # theme-init.js, or theme-init.<hash>.js once the manifest storage names it.
+    tag = re.search(r"<script[^>]*/theme-init(?:\.[0-9a-f]+)?\.js[^>]*>", head)
     assert tag, "theme-init.js is not in <head>"
     assert not re.search(r"\b(?:async|defer)\b", tag.group(0))
     assert tag.start() < head.index('rel="stylesheet"')
