@@ -45,6 +45,7 @@ def _a_monday():
 
 
 # --- one working day ------------------------------------------------------------
+@pytest.mark.django_db  # the interval reads the holiday table
 def test_a_full_office_day_is_one_working_day_in_every_figure():
     monday = _a_monday()
     seconds = business_seconds_between(_local(monday, 8), _local(monday, 17))
@@ -57,7 +58,7 @@ def test_a_full_office_day_is_one_working_day_in_every_figure():
 @pytest.mark.django_db
 def test_the_trend_chart_counts_days_the_way_the_text_does(users, offices, memo_type):
     """A document that took exactly one office day plots at 1.0 and reads
-    "1 day"; with an eight-hour chart day it plotted at 0.9."""
+    "1 day"; when the chart used a day of its own length it plotted at 0.9."""
     record = create_draft_record(
         user=users["med"], subject="One day", instructions="x", document_type=memo_type,
     )
@@ -121,17 +122,20 @@ def test_the_summary_shows_the_month_it_is_headed_with(client, users, slow_then_
     response = client.get("/")
     context = response.context
     latest = context["turnaround_trend"]["latest"]
+    month = context["turnaround"]
     body = " ".join(response.content.decode().split())
 
-    assert latest["lifetime_samples"] == 1, "only this month's completion"
-    assert f'{latest["month"]:%B} so far' in body
-    assert latest["lifetime_label"] in body
-    assert context["turnaround"]["lifetime"] != latest["lifetime_label"], (
-        "the all-time figure differs, and it is not the one printed under this month"
-    )
-    summary = body[body.index(f'{latest["month"]:%B} so far'):]
+    assert month["month"] == latest["month"], "the current month unless another is picked"
+    assert month["lifetime_samples"] == latest["lifetime_samples"] == 1, "only this month's completion"
+    assert month["lifetime"] == latest["lifetime_label"], "the summary is the chart's last point"
+    heading = f'{latest["month"]:%B %Y} so far'
+    assert heading in body
+    all_time = analytics.turnaround(TrackingRecord.objects.all())["lifetime"]
+    assert all_time != month["lifetime"], "the all-time figure differs"
+    summary = body[body.index(heading):]
     summary = summary[: summary.index("Completed on time") if "Completed on time" in summary else 800]
-    assert context["turnaround"]["lifetime"] not in summary
+    assert month["lifetime"] in summary
+    assert all_time not in summary
 
 
 @pytest.mark.django_db
@@ -183,16 +187,18 @@ def test_only_handovers_that_can_still_be_confirmed_are_waiting(users, offices, 
 @pytest.mark.django_db
 def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_fast):
     client.force_login(users["admin"])
-    response = client.get("/reports/")
+    response = client.get("/tracking/reports/")
     figures = response.context["turnaround"]
     body = " ".join(response.content.decode().split())
+    this_month = timezone.localtime().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    assert figures["receipt_samples"] == RoutingStep.objects.filter(received_at__isnull=False).count()
-    assert figures["processing_samples"] == 2
-    assert figures["lifetime_samples"] == 2
+    assert figures["month"] == this_month.date(), "Reports answers for the current month too"
+    assert figures["receipt_samples"] == RoutingStep.objects.filter(received_at__gte=this_month).count()
+    assert figures["processing_samples"] == 1, "only the document finished this month"
+    assert figures["lifetime_samples"] == 1
     assert f'{figures["receipt_samples"]} handovers' in body
-    assert "2 documents" in body
-    assert "completed documents that had a deadline" in body or figures["on_time_total"] == 0
+    assert "created → completed &middot; 1 document" in body
+    assert "that had a deadline" in body or figures["on_time_total"] == 0
 
 
 # --- the axis --------------------------------------------------------------------
@@ -286,7 +292,7 @@ def test_the_legend_says_what_each_line_measures(client, users, slow_then_fast):
     body = " ".join(_dashboard(client, users).content.decode().split())
 
     for words in ("Receipt</strong> sent until confirmed",
-                  "In process</strong> confirmed until completed",
+                  "In Process</strong> confirmed until completed",
                   "Total lifetime</strong> created until completed"):
         assert words in body
 

@@ -19,7 +19,7 @@ from apps.core.utils import log_action
 
 from . import services
 from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
-from .models import Document, DocumentFile
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document, DocumentFile
 from .suggestions import Suggestion
 
 #: Documents per page when the reader has not asked for another size. The
@@ -126,7 +126,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
             documents = documents.filter(document_type=data["document_type"])
         if data.get("tag"):
             documents = documents.filter(tags=data["tag"])
-        if data.get("source"):
+        if data.get("source") == HISTORICAL_FILTER:
+            documents = documents.exclude(source=COMPLETED_SOURCE)
+        elif data.get("source"):
             documents = documents.filter(source=data["source"])
         retention = data.get("retention")
         today = timezone.localdate()

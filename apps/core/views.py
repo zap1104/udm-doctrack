@@ -18,6 +18,7 @@ from django.views.generic import TemplateView, View
 from apps.accounts.models import Office
 from apps.documents.models import (
     COMPLETED_SOURCE,
+    HISTORICAL_FILTER,
     Document,
     SearchQueryLog,
     SearchResultClick,
@@ -39,10 +40,20 @@ from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
+from .business_time import load_holidays, office_hours_caveat
 from .colors import STATUS_COLOURS
 from .forms import BootstrapFormMixin
 from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
-from .models import AuditLog, DocumentType, MetadataFieldDefinition, Notification, NotificationRead, Tag, TagRule
+from .models import (
+    AuditLog,
+    DocumentType,
+    Holiday,
+    MetadataFieldDefinition,
+    Notification,
+    NotificationRead,
+    Tag,
+    TagRule,
+)
 from .pagination import DEFAULT_PAGE_SIZE, paginate
 from .utils import log_action
 
@@ -208,7 +219,7 @@ class DashboardMemoMixin:
     def _plural(count, noun):
         return "{} {}{}".format(count, noun, "" if count == 1 else "s")
 
-    def _memo(self, scope, breakdown, overdue, overdue_rows, trend, uploads):
+    def _memo(self, scope, breakdown, overdue, overdue_rows, turnaround, uploads):
         """The dashboard's own numbers, as labelled sections.
 
         Assembled here rather than in the template: a memo is a statement
@@ -280,22 +291,40 @@ class DashboardMemoMixin:
         else:
             attention = [line("", "Nothing is past its deadline.")]
 
-        turnaround = []
-        latest = trend["latest"]
-        if latest and latest["lifetime"] is not None:
-            turnaround.append(
+        # The month the reader picked, from the same service the dashboard's
+        # summary and Reports read, so the memo cannot print a different figure
+        # for the month it names.
+        lifetime = next(stage for stage in turnaround["stages"] if stage["key"] == "lifetime")
+        period = "{:%B %Y}".format(turnaround["month"])
+        timing = []
+        if lifetime["samples"]:
+            timing.append(
                 line(
-                    "Average lifetime, {:%B}".format(latest["month"]),
-                    "{}, counted in office hours".format(latest["lifetime_label"]),
+                    f"Average lifetime, {period}",
+                    "{}, counted in office hours ({})".format(
+                        lifetime["average_label"],
+                        self._plural(lifetime["samples"], "document"),
+                    ),
                 )
             )
-        if latest and latest["has_on_time"]:
-            turnaround.append(
+        # Lifetime only, of the three stages: the memo is a page of headlines,
+        # and "how long did a document take, start to finish" is the one a
+        # reader outside the office asks. Named, so it can be looked up.
+        if lifetime["samples"] > 1:
+            for kind in ("fastest", "slowest"):
+                if lifetime[kind]:
+                    timing.append(line(
+                        f"{kind.capitalize()} lifetime, {period}",
+                        "{} ({})".format(lifetime[kind]["office_label"], lifetime[kind]["tracking_number"]),
+                    ))
+        if turnaround["has_on_time"]:
+            timing.append(
                 line("Completed on time", "{} of {} ({}%)".format(
-                    latest["on_time"], latest["closed"], latest["on_time_percent"]))
+                    turnaround["on_time"], turnaround["on_time_total"],
+                    turnaround["on_time_percent"]))
             )
-        if not turnaround:
-            turnaround = [line("", "Nothing has been completed yet.")]
+        if not timing:
+            timing = [line("", f"Nothing was completed in {period}.")]
 
         if uploads["rows"]:
             # Every office that added something, not only the leader. Naming one
@@ -311,7 +340,7 @@ class DashboardMemoMixin:
         return [
             {"heading": "Overview", "lines": overview},
             {"heading": "Needs attention", "lines": attention},
-            {"heading": "Turnaround", "lines": turnaround},
+            {"heading": f"Turnaround Time for the Month of {period}", "lines": timing},
             {"heading": "Repository activity this month", "lines": activity},
         ]
 
@@ -350,6 +379,14 @@ class DashboardMemoMixin:
             if office is not None:
                 overrides["office"] = office.pk
             return core_filters.link(tracking_url, **overrides)
+        def repository_link(**overrides):
+            """The same for the repository's two segments, which linked with
+            their origin only: with an office picked, the segment opened every
+            office's documents under a count of one office's."""
+            if office is not None:
+                overrides["office"] = office.pk
+            return core_filters.link(reverse("documents:repository"), **overrides)
+
         slices = [
             # Every slice links through to the list behind it, and the count is
             # taken from that same query — see analytics.combined_totals. A
@@ -358,22 +395,25 @@ class DashboardMemoMixin:
             #
             # Overdue is not here. It lies across all three live stages, so as a
             # slice it counted the same records twice; it has its own stat card.
-            {"key": "pending_receipt", "label": "Pending receipt",
+            {"key": "pending_receipt", "label": Status.PENDING_RECEIPT.label,
              "total": totals["pending_receipt"],
              "url": tracking_link(status=Status.PENDING_RECEIPT), "group": "tracking"},
             {"key": "received", "label": "Received", "total": totals["received"],
              "url": tracking_link(status=Status.RECEIVED), "group": "tracking"},
-            {"key": "in_process", "label": "In process", "total": totals["in_process"],
+            {"key": "in_process", "label": Status.IN_PROCESS.label, "total": totals["in_process"],
              "url": tracking_link(status=Status.IN_PROCESS), "group": "tracking"},
-            {"key": "pending_upload", "label": "Completed - pending upload",
+            {"key": "pending_upload", "label": Status.COMPLETED_PENDING_UPLOAD.label,
              "total": totals["pending_upload"],
              "url": tracking_link(status=Status.COMPLETED_PENDING_UPLOAD),
              "group": "tracking"},
             {"key": "historical", "label": "Repository - historical", "total": historical,
-             "url": f"{reverse('documents:repository')}?source={Source.UPLOAD}",
+             # Every origin but tracking, as the figure is counted: it linked
+             # to uploads only, which left scanned documents out of the page
+             # the segment opened.
+             "url": repository_link(source=HISTORICAL_FILTER),
              "group": "repository"},
             {"key": "completed", "label": "Repository - completed", "total": completed,
-             "url": f"{reverse('documents:repository')}?source={Source.DTS}",
+             "url": repository_link(source=Source.DTS),
              "group": "repository"},
         ]
 
@@ -411,6 +451,13 @@ class DashboardMemoMixin:
         overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
         uploads = analytics.uploads_by_office(documents, records)
         trend = analytics.turnaround_by_month(records)
+        # The month the turnaround figures are for: one of the months the trend
+        # charts, the current one unless the reader picked another.
+        months = [row["month"] for row in trend["rows"]]
+        month, refused = core_filters.picked_month(self.request, months)
+        if refused:
+            messages.warning(self.request, refused)
+        turnaround = analytics.turnaround(records, month=month)
 
         return {
             "scope": scope,
@@ -419,8 +466,9 @@ class DashboardMemoMixin:
             "overdue_summary": overdue,
             "uploads_by_office": uploads,
             "turnaround_trend": trend,
-            "turnaround": analytics.turnaround(records),
-            "memo": self._memo(scope, breakdown, overdue, overdue_rows, trend, uploads),
+            "turnaround": turnaround,
+            "month_picker": core_filters.month_picker(self.request, months, month),
+            "memo": self._memo(scope, breakdown, overdue, overdue_rows, turnaround, uploads),
             "printed_at": timezone.localtime(),
         }
 
@@ -435,9 +483,113 @@ class DashboardMemoMixin:
 #: and none of these lists is a queue you work down from the dashboard.
 DASHBOARD_ROWS = 5
 
+#: The Action Centre's queues, in the order its chips run: the scope each one
+#: counts and opens on the Tracking page, its label, and whether it needs an
+#: office. Incoming and Outgoing describe a document relative to one office, so
+#: across every office they are shown disabled, exactly as the Tracking page
+#: shows its own pills. Every one is an `apply_scope` queue: the Action Centre
+#: invents no queue of its own, so a chip's count is the list it opens.
+DESK_QUEUES = (
+    (tracking_services.SCOPE_INCOMING, "Incoming", True),
+    (tracking_services.SCOPE_PENDING_RECEIPT, Status.PENDING_RECEIPT.label, False),
+    (tracking_services.SCOPE_RECEIVED, Status.RECEIVED.label, False),
+    (tracking_services.SCOPE_IN_PROCESS, Status.IN_PROCESS.label, False),
+    (tracking_services.SCOPE_PENDING_UPLOAD, Status.COMPLETED_PENDING_UPLOAD.label, False),
+    (tracking_services.SCOPE_OVERDUE, "Overdue", False),
+    (tracking_services.SCOPE_OUTGOING, "Outgoing", True),
+)
+DESK_PARAM = "desk"
+#: What the Action Centre shows until a chip is picked, and what Clear returns
+#: to: the documents somebody has to sign for.
+DESK_DEFAULT = tracking_services.SCOPE_PENDING_RECEIPT
+#: The element a chip swaps with HTMX, and the header that asks for it alone.
+DESK_TARGET = "action-centre-queue"
+
 
 class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     template_name = "core/dashboard.html"
+
+    def get(self, request, *args, **kwargs):
+        # A chip clicked with HTMX asks for the queue alone, so it does not pay
+        # for every chart on the page. Without script the chip is an ordinary
+        # link and the whole page reloads with the same content.
+        if request.headers.get("HX-Request") and request.headers.get("HX-Target") == DESK_TARGET:
+            scope = self._scope()
+            return render(
+                request,
+                "core/_action_centre_queue.html",
+                {"scope": scope, **self._action_centre(request.user, scope)},
+            )
+        return super().get(request, *args, **kwargs)
+
+    def _action_centre(self, user, scope, counts=None):
+        """The Action Centre's chips, the queue picked, and its first rows.
+
+        `counts` carries figures the caller already has (the Incoming and
+        Outgoing cards'), so a chip and the card above it are one count rather
+        than two queries that happen to agree.
+        """
+        counts = counts or {}
+        all_offices = scope["all_offices"]
+        scope_office = tracking_services.ALL_OFFICES if all_offices else scope["office"]
+        desk = tracking_services.active_for(user)
+        known = {slug for slug, _label, _needs in DESK_QUEUES}
+        usable = [slug for slug, _label, needs_office in DESK_QUEUES if not (needs_office and all_offices)]
+        raw = (self.request.GET.get(DESK_PARAM) or "").strip()
+        chosen = raw if raw in usable else DESK_DEFAULT
+        if raw and raw != chosen:
+            reason = (
+                "needs an office; pick one to use it"
+                if raw in known else "is not one of the Action Centre's queues"
+            )
+            messages.warning(
+                self.request, f"Showing {Status.PENDING_RECEIPT.label}: “{raw[:30]}” {reason}."
+            )
+
+        dashboard = reverse("core:dashboard")
+        tracking_list = reverse("tracking:list")
+        office_param = "all" if all_offices else (scope["office"].pk if scope["office"] else None)
+        queues, selected_rows = [], []
+        for slug, label, needs_office in DESK_QUEUES:
+            disabled = needs_office and all_offices
+            queue = None
+            if not disabled:
+                # As the Tracking page builds it, so the count is its row count.
+                queue = tracking_services.office_queue(desk, slug, user, office=scope_office).distinct()
+            count = None if disabled else counts.get(slug)
+            if count is None and queue is not None:
+                count = queue.count()
+            if slug == chosen:
+                selected_rows = list(queue[:DASHBOARD_ROWS])
+            queues.append(
+                {
+                    "slug": slug,
+                    "label": label,
+                    "disabled": disabled,
+                    "count": count,
+                    "active": slug == chosen,
+                    "href": core_filters.link(
+                        dashboard, self.request, **{DESK_PARAM: None if slug == DESK_DEFAULT else slug}
+                    ),
+                    "tracking_url": core_filters.link(tracking_list, scope=slug, office=office_param),
+                }
+            )
+
+        tracking_services.annotate_can_confirm(selected_rows, user)
+        if user.is_records_staff:
+            _annotate_destinations(selected_rows)
+        return {
+            "desk_queues": queues,
+            "desk_queue": next(queue for queue in queues if queue["active"]),
+            "desk_clear_href": core_filters.link(dashboard, self.request, **{DESK_PARAM: None}),
+            "desk_target": DESK_TARGET,
+            "attention_records": selected_rows,
+            # Same test the tracking list uses: the bulk footer appears only
+            # when a row on show could actually be received, so nobody is shown
+            # an attestation they cannot satisfy.
+            "can_bulk_receive": any(record.can_confirm_now for record in selected_rows),
+            "show_office_columns": user.is_records_staff,
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -487,11 +639,18 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # figure the ring and the memo already use, over the scoped queryset.
         overdue_count = memo_context["overdue_summary"]["total"]
 
-        # One queue, not three. It was pending-receipt padded with overdue and
-        # then received, so the panel could not have an honest link: it showed
-        # five rows and its button opened five, two of them different. Short
-        # when it is short, which is what "Needs action" means.
-        attention = list(queue(tracking_services.SCOPE_PENDING_RECEIPT)[:DASHBOARD_ROWS])
+        # The Action Centre: one queue at a time, picked by chip, each an
+        # `apply_scope` queue so its count is the list its link opens. The
+        # Incoming and Outgoing chips reuse the rings' counts, which the cards
+        # also read.
+        action_centre = self._action_centre(
+            user,
+            scope,
+            counts={
+                tracking_services.SCOPE_INCOMING: tracking_rings["counts"].get("incoming"),
+                tracking_services.SCOPE_OUTGOING: tracking_rings["counts"].get("outgoing"),
+            },
+        )
         # `today` is read by `incoming_new_today` below.
         #
         # `received_today`, `forwarded_today` and `completed_today` were computed
@@ -503,39 +662,24 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # would have shown a university-wide number inside an office panel.
         today = timezone.localdate()
 
-        tracking_services.annotate_can_confirm(attention, user)
-        # Same test the tracking list uses (apps/tracking/views.py): the bulk
-        # footer only appears when at least one row on this page could actually
-        # be received, so nobody is shown an attestation they cannot satisfy.
-        can_bulk_receive = any(record.can_confirm_now for record in attention)
-
-        # Five, like Needs action above it and like Newest in the Repository
-        # beside it. Eight made the card taller than the one it shares a row
-        # with, and a dashboard panel is a glance with a link to the full list
-        # underneath — the reader who wants row six wants the Tracking page.
-        # Scoped by the same office, through the same named condition, as every
-        # other figure on this page — `get_memo_context` promises that "every
-        # figure on the dashboard comes from the same scoped querysets", and
-        # these two panels were the exception. An administrator viewing MED saw
-        # "Recently moved" and "Newest in the Document Repository" listing HR's
-        # and Supply's documents under a heading naming MED.
+        # Five, like the Action Centre's queue above it: a dashboard panel is a
+        # glance with a link to the full list underneath — the reader who wants
+        # row six wants the Tracking page. Scoped by the same office, through
+        # the same named condition, as every other figure on this page: an
+        # administrator viewing MED once saw "Recently moved" listing HR's and
+        # Supply's documents under a heading naming MED.
         #
         # `scope["office"]` is None when nothing narrows the page — an account
         # without the picker, whose `visible_to` is already its bound, or a
         # system administrator viewing every office — and then nothing is added.
         recent_records_qs = tracking_services.active_for(user)
-        recent_documents_qs = Document.objects.visible_to(user).filter(is_active=True)
         if scope["office"]:
             recent_records_qs = recent_records_qs.filter(
                 core_filters.office_touches_record_q(scope["office"])
             ).distinct()
-            recent_documents_qs = recent_documents_qs.filter(office=scope["office"])
         recent = list(recent_records_qs[:DASHBOARD_ROWS])
-        show_office_columns = user.is_records_staff
-        if show_office_columns:
-            # Both panels in one pass — the helper groups by record, so a
-            # second call would only repeat the same query.
-            _annotate_destinations(attention + recent)
+        if user.is_records_staff:
+            _annotate_destinations(recent)
 
         breakdown = memo_context["breakdown"]
         context.update(memo_context)
@@ -559,12 +703,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "outgoing_count": tracking_rings["counts"].get("outgoing"),
                 "tracking_rings": tracking_rings,
                 "overdue_count": overdue_count,
-                "attention_records": attention,
+                **action_centre,
                 "recent_records": recent,
-                "show_office_columns": show_office_columns,
-                "recent_documents": recent_documents_qs.with_related().order_by("-created_at")[:DASHBOARD_ROWS],
                 "greeting": _greeting(),
-                "can_bulk_receive": can_bulk_receive,
                 "can_start_work": user.can_start_work,
                 "breakdown": breakdown,
             }
@@ -603,9 +744,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: ring it would always be empty, and counted any other way it would open a
     #: page that can never list it. It is a figure beside the rings instead.
     RING_STAGES = (
-        ("pending_receipt", Status.PENDING_RECEIPT, "Pending receipt"),
+        ("pending_receipt", Status.PENDING_RECEIPT, Status.PENDING_RECEIPT.label),
         ("received", Status.RECEIVED, "Received"),
-        ("in_process", Status.IN_PROCESS, "In process"),
+        ("in_process", Status.IN_PROCESS, Status.IN_PROCESS.label),
     )
 
     #: The two views the Tracking card can show, read from `?ring=`. Anything else
@@ -803,7 +944,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: it measures are one colour across the page.
     TREND_SERIES = (
         ("receipt", "Receipt", Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
-        ("processing", "In process", Status.IN_PROCESS, "confirmed until completed", "document"),
+        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "confirmed until completed", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
 
@@ -1236,6 +1377,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         total_records = records.count()
         total_documents = documents.count()
         overdue_all = records.filter(tracking_services.overdue_q()).distinct().count()
+        # The month the turnaround panel answers for: the dashboard's twelve
+        # months and the same parameter, so a link carries its month between
+        # the two pages and both print one figure for it.
+        months, _since = _month_window()
+        month, refused = core_filters.picked_month(self.request, months)
+        if refused:
+            messages.warning(self.request, refused)
         # GATE A, option (a): the headline counts what *this* office owes, and
         # the hint names what it is waiting on somebody else to receive.
         # Grouping the chase-list by custody is the bug this branch exists for,
@@ -1304,8 +1452,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "awaiting_split": awaiting_split,
                 "stale_receipts": stale_receipts,
                 "by_status": self._by_status(records, total_records, scope_office),
-                "monthly": self._monthly(records),
-                "turnaround": self._turnaround(records),
+                "turnaround": self._turnaround(records, month),
+                "month_picker": core_filters.month_picker(self.request, months, month),
                 "overdue_accountability": self._overdue_accountability(records, overdue_all),
                 "document_types": self._document_types(documents),
                 "document_months": self._document_months(documents),
@@ -1470,9 +1618,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             row["received_percent"] = _bar(row["received"], handovers)
         return {"rows": rows, "handovers": handovers}
 
-    def _monthly(self, records):
-        return analytics.monthly_volume(records)
-
     def _office_volume(self, records):
         """Which office handled the most documents, per month and cumulatively.
 
@@ -1577,8 +1722,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             "current_month": current_month,
         }
 
-    def _turnaround(self, records):
-        return analytics.turnaround(records)
+    def _turnaround(self, records, month):
+        return analytics.turnaround(records, month=month)
 
     def _overdue_for_scope(self, records, office):
         """Overdue work this office owes, and overdue work it is waiting on.
@@ -2112,6 +2257,9 @@ class ReportExportView(AppLoginRequiredMixin, View):
             ["Direction measured from", scope_office.name if scope_office else "no office — Direction not available"]
         )
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
+        # The basis of the three duration columns, which are plain numbers of
+        # office hours so a spreadsheet can sort and add them.
+        writer.writerow(["Durations", office_hours_caveat()])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
             # "Overdue" in place of the stage, so an exported sheet had no
@@ -2120,13 +2268,21 @@ class ReportExportView(AppLoginRequiredMixin, View):
             # re-run the query. This is the one place the old behaviour
             # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
-             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed"]
+             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed",
+             "Waiting for receipt (office hrs)", f"{Status.IN_PROCESS.label} (office hrs)", "Lifetime (office hrs)"]
         )
-        for record in records[:cap]:
+        # One holiday read and one routing-step read for the whole sheet; each
+        # row's durations come from `analytics.record_durations`, the per-record
+        # twin of the figures on the page, by the same definitions.
+        holidays = load_holidays()
+        for record in records.prefetch_related("routing_steps")[:cap]:
+            durations = analytics.record_durations(record, record.routing_steps.all(), holidays)
             writer.writerow(
                 _csv_cell(value)
                 for value in (
-                    record.tracking_number,
+                    # "Not yet assigned" for a draft its author exports: the
+                    # placeholder is not a number and must not be quoted as one.
+                    record.display_tracking_number,
                     record.subject,
                     record.document_type.name if record.document_type_id else "",
                     record.originating_office.code,
@@ -2137,21 +2293,39 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",
+                    *(_office_hours(durations[key]) for key in ("receipt", "processing", "lifetime")),
                 )
             )
         return response
 
 
+def _office_hours(seconds) -> str:
+    """Office seconds as hours to two places, blank for a stage not reached.
+
+    Blank rather than 0: a document not yet completed has no lifetime, and a
+    zero would be averaged in by whoever opens the sheet."""
+    return "" if seconds is None else f"{seconds / 3600:.2f}"
+
+
 # ---------------------------------------------------------------------------
 # Administration — master data
 # ---------------------------------------------------------------------------
-def _model_form(model_class, field_names):
+def _model_form(model_class, field_names, widgets=None):
     from django import forms
 
+    # A config names a widget kind rather than building one, so MASTER_DATA
+    # stays plain data. "date" is the browser's own picker, in the ISO format
+    # it requires; the default text box took any spelling of a date.
+    built = {
+        name: forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+        for name, kind in (widgets or {}).items()
+        if kind == "date"
+    }
+    meta = {"model": model_class, "fields": field_names, "widgets": built}
     return type(
         f"{model_class.__name__}Form",
         (BootstrapFormMixin, forms.ModelForm),
-        {"Meta": type("Meta", (), {"model": model_class, "fields": field_names})},
+        {"Meta": type("Meta", (), meta)},
     )
 
 
@@ -2210,6 +2384,19 @@ MASTER_DATA = {
         ],
         "columns": [("label", "Field"), ("key", "Key"), ("field_type", "Type"), ("is_required", "Required"), ("is_searchable", "Searchable")],
         "help": "Add a field here and it appears on every metadata review screen — no code change needed.",
+    },
+    "holidays": {
+        "model": Holiday,
+        "label": "Holidays",
+        "singular": "holiday",
+        "fields": ["date", "name", "recurring", "is_active"],
+        "widgets": {"date": "date"},
+        "columns": [("name", "Holiday"), ("date", "Date"), ("recurring", "Every year"), ("is_active", "Active")],
+        "help": "Days the offices are closed. A holiday counts no office time, so turnaround "
+                "figures do not charge an office for it. Enter a work suspension as a one-off "
+                "holiday on the day it happened.",
+        # Every office's turnaround figures move when this changes.
+        "system_admin_only": True,
     },
 }
 
@@ -2378,7 +2565,7 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         return get_object_or_404(self.config["model"], pk=pk) if pk else None
 
     def get(self, request, slug, pk=None):
-        form_class = _model_form(self.config["model"], self.config["fields"])
+        form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(instance=self._instance(pk))
         return render(
             request,
@@ -2389,7 +2576,7 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
 
     def post(self, request, slug, pk=None):
         instance = self._instance(pk)
-        form_class = _model_form(self.config["model"], self.config["fields"])
+        form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(request.POST, instance=instance)
         if form.is_valid():
             obj = form.save()

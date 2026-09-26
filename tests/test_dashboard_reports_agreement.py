@@ -54,7 +54,7 @@ from apps.tracking.services import (
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 DASHBOARD = "/"
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 
 
 @pytest.fixture
@@ -324,10 +324,11 @@ def test_extraction_states_sum_to_the_repository(client, users, offices, agreeme
 #: `live_by_status`, each computed on every load for a panel that no longer
 #: existed.
 DASHBOARD_CONTEXT = {
-    "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "greeting",
-    "incoming_count", "incoming_new_today", "memo", "monthly", "outgoing_count",
+    "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "desk_clear_href",
+    "desk_queue", "desk_queues", "desk_target", "greeting",
+    "incoming_count", "incoming_new_today", "memo", "month_picker", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
-    "recent_documents", "recent_records", "repository_donut", "scope",
+    "recent_records", "repository_donut", "scope",
     "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
 }
@@ -351,10 +352,13 @@ def test_the_dashboard_context_is_exactly_the_named_keys(client, users, agreemen
 def test_every_dashboard_context_key_is_read(client, users, agreement):
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
+    # str(): a template name can arrive as a SafeString, and Python 3.11's
+    # pathlib interns path parts, which refuses a str subclass.
+    names = [str(template.name) for template in response.templates if template.name]
     source = "".join(
-        pathlib.Path("templates", template.name).read_text(encoding="utf-8")
-        for template in response.templates
-        if template.name and pathlib.Path("templates", template.name).exists()
+        pathlib.Path("templates", name).read_text(encoding="utf-8")
+        for name in names
+        if pathlib.Path("templates", name).exists()
     )
 
     unread = {
@@ -374,7 +378,6 @@ def test_the_recent_panels_list_only_the_picked_office(client, users, offices, a
 
     scoped = set(_dashboard_records(users["admin"], office).values_list("pk", flat=True))
     assert {record.pk for record in dashboard["recent_records"]} <= scoped
-    assert all(document.office_id == office.pk for document in dashboard["recent_documents"])
 
 
 # --- 12: an office with nothing ----------------------------------------------
@@ -406,10 +409,24 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: off the breakdown, which had no overdue counts. Disabling the Incoming and
 #: Outgoing cards under every office took three away: their two counts and
 #: "moved today", for a direction that does not exist there.
+#: 49: holidays. Each turnaround calculation reads the holiday table once,
+#: and the dashboard makes two, the monthly trend and the memo's averages.
+#: 43: turnaround became one service over two queries of intervals, where it
+#: was eight — an aggregate and a value list per stage, and two deadline counts.
+#: 49: the Action Centre's chips. Five queue counts (Pending Receipt, Received,
+#: In Process, Completed - Pending Upload, Overdue; Incoming and Outgoing read
+#: the rings' counts, and are disabled under every office anyway), and the
+#: office badges looked up for the queue's rows and for Recently moved
+#: separately, since the queue is now also rendered on its own.
+#: 47: "Newest in the Document Repository" left the dashboard, and its
+#: document list and the office badges it drew went with it.
 DASHBOARD_QUERIES = 47
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
-REPORTS_QUERIES = 50
+#: 51: holidays, one read for the page's one turnaround calculation.
+#: 45: the same six, on the same service.
+#: 39: the running-totals chart left Reports, which repeated the dashboard's.
+REPORTS_QUERIES = 39
 
 
 @pytest.mark.django_db
@@ -441,12 +458,13 @@ def test_the_reports_query_count_is_pinned(
 #: two direction rings instead of one. Pinned separately because the pin under
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
-DASHBOARD_OFFICE_QUERIES = 48
+#: Both up with holidays, by the same reads as the two pins above.
+DASHBOARD_OFFICE_QUERIES = 49
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 51
+REPORTS_OFFICE_QUERIES = 40
 
 
 @pytest.mark.django_db

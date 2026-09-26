@@ -35,7 +35,7 @@ from apps.tracking.services import (
     route_record,
 )
 
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 
 
 @pytest.fixture

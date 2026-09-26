@@ -15,7 +15,9 @@
     </p>
   </div>
   <div class="d-flex gap-2 no-print">
-    <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    {% if record.has_tracking_number %}
+      <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
+    {% endif %}
     {% if archived_document %}
       <a class="btn btn-udm-teal" href="{{ archived_document.get_absolute_url }}">Open archived record</a>
     {% endif %}
@@ -92,6 +94,7 @@
         <h2>Routing timeline</h2>
         <span class="text-muted small">Append-only — nothing is ever overwritten</span>
       </div>
+      <p class="timeline-basis">{{ office_hours_caveat }}</p>
       <div class="card-udm-body">
         {% comment %}
           The history is append-only and grows for the life of the record, so a
@@ -205,7 +208,7 @@
             </div>
 
             <div class="tab-pane fade" id="tab-complete" role="tabpanel">
-              <form method="post" action="{% url 'tracking:complete' record.pk %}">
+              <form method="post" action="{% url 'tracking:complete' record.pk %}" data-completed-status="{{ "COMPLETED_PENDING_UPLOAD"|status_label }}">
                 {% csrf_token %}
                 {% include "partials/_field.html" with field=complete_form.note %}
                 {% comment %}
@@ -245,7 +248,7 @@
         <div class="card-udm-body">
           <p class="text-muted" style="font-size:14px;">
             The work is finished. Until an administrator approves it, the record stays in
-            the <strong>Completed - pending upload</strong> queue on the Document Tracking
+            the <strong>{{ "COMPLETED_PENDING_UPLOAD"|status_label }}</strong> queue on the Document Tracking
             page — still tracked, not yet searchable as a repository document.
           </p>
           {% if can_archive_now %}

@@ -7,7 +7,7 @@ from apps.accounts.models import Office
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
 
-from .models import AccessLevel, Document, OcrLanguage, Source
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, Document, OcrLanguage, Source
 
 
 class UploadForm(BootstrapFormMixin, forms.Form):
@@ -231,8 +231,21 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
         self.fields["month"].choices = [("", "All months")] + [
             (value, label) for value, label in MONTH_NAMES if int(value) in present
         ]
-        self.fields["source"].choices = [("", "Any origin")] + [
-            (value, label) for value, label in Source.choices if value in set(sources or [])
+        present_sources = set(sources or [])
+        # An origin asked for by a link is always accepted, even with nothing
+        # in it. Offered only when present, a zero count's link failed the
+        # choice check, the filter was dropped, and the page listed every
+        # document under a segment reading 0.
+        asked = self.data.get("source") if self.is_bound else None
+        if asked in Source.values:
+            present_sources.add(asked)
+        self.fields["source"].choices = [("", "Any origin")] + (
+            # Offered when there is anything historical to show, whichever
+            # non-tracking origins it came from, or when a link asks for it.
+            [(HISTORICAL_FILTER, "Historical (not from tracking)")]
+            if present_sources - {COMPLETED_SOURCE} or asked == HISTORICAL_FILTER else []
+        ) + [
+            (value, label) for value, label in Source.choices if value in present_sources
         ]
         if document_types is not None:
             self.fields["document_type"].queryset = document_types

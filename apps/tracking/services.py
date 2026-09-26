@@ -46,6 +46,7 @@ from .models import (
     Status,
     TrackingNumberSequence,
     TrackingRecord,
+    overdue_q,
 )
 
 logger = logging.getLogger("doctrack")
@@ -82,7 +83,7 @@ def ensure_received(record) -> None:
     if not record.current_step_queryset.filter(received_at__isnull=False).exists():
         raise ValidationError(
             "This document has not been received yet. Confirm receipt before "
-            "marking it In process."
+            f"marking it {Status.IN_PROCESS.label}."
         )
 
 
@@ -249,7 +250,15 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         due_at=due_at,
     )
     add_activity(record, RecordActivity.Event.CREATED, f"Record created by {user.display_name}", actor=user)
-    log_action(AuditLog.Action.CREATE, f"Created {record.tracking_number}", actor=user, target=record)
+    # Named by its subject: a draft has no number yet, and the placeholder it
+    # carries until it is sent is not one — written into the append-only audit
+    # log it would be quoted as a reference that never existed.
+    log_action(
+        AuditLog.Action.CREATE,
+        f"Created draft “{truncate(record.subject, 80)}”",
+        actor=user,
+        target=record,
+    )
     return record
 
 
@@ -548,7 +557,7 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     if record.status in COMPLETED_STATUSES:
         raise ValidationError("This record is completed and its status can no longer change.")
     if record.status == Status.DRAFT:
-        raise ValidationError("A draft has not been sent yet, so it cannot be In process.")
+        raise ValidationError(f"A draft has not been sent yet, so it cannot be {Status.IN_PROCESS.label}.")
     ensure_received(record)
 
     if record.status == Status.IN_PROCESS:
@@ -558,14 +567,14 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     add_activity(
         record,
         RecordActivity.Event.REMARK,
-        f"{user.display_name} marked the document In process",
+        f"{user.display_name} marked the document {Status.IN_PROCESS.label}",
         actor=user,
         detail=note or "",
     )
     record.touch_movement()
     log_action(
         AuditLog.Action.UPDATE,
-        f"{record.tracking_number} marked In process",
+        f"{record.tracking_number} marked {Status.IN_PROCESS.label}",
         actor=user,
         target=record,
     )
@@ -854,11 +863,9 @@ SCOPE_MINE = "mine"
 PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 
-#: One definition of "past its deadline" in the query layer. Both the queue and
-#: the filter read it, so the pill and the checkbox cannot drift apart.
-def overdue_q():
-    """Records past their deadline with work still owed on them."""
-    return Q(due_at__lt=timezone.now()) & ~Q(status__in=COMPLETED_STATUSES)
+#: `overdue_q` — the one definition of "past its deadline" — is imported from
+#: .models above, where the queryset's `.overdue()` can use it too, and is used
+#: from here by the queues, the filters and the reports.
 
 
 def on_time_q():
@@ -1303,6 +1310,26 @@ def scope_office(user, requested):
     from apps.accounts.models import Office
 
     return Office.objects.filter(pk=raw).first()
+
+
+def office_queue(records, scope, user, office=None):
+    """A queue exactly as the Tracking page lists it, for `office`.
+
+    `office` is an Office, `ALL_OFFICES`, or None for the viewer's own. For a
+    queue that answers *for* an office (OFFICE_SCOPED) the office named
+    replaces the viewer's inside `apply_scope`. For one that does not, Overdue
+    and Pending upload, there is no such office to replace, so a named office
+    narrows by everything it touched (`office_touches_record_q`).
+
+    The one place that rule is written. The Tracking page and Search each wrote
+    it out, and the dashboard's Action Centre, which did not, counted every
+    overdue document for an office whose Tracking page listed none.
+    """
+    from apps.core.filters import office_touches_record_q
+
+    if office is not None and office is not ALL_OFFICES and scope not in OFFICE_SCOPED:
+        records = records.filter(office_touches_record_q(office))
+    return apply_scope(records, scope, user, office=office)
 
 
 def apply_scope(records, scope, user, office=None):

@@ -33,6 +33,12 @@
     <span><strong>Scope</strong> · {{ scope.display }}</span>
     <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
     <span><strong>By</strong> · {{ user.display_name }}</span>
+    {% comment %}
+      Which month the turnaround lines answer for, as a field of its own. It
+      was only inside one line's label, so a reader skimming the fields at the
+      top could not tell what period the figures under them covered.
+    {% endcomment %}
+    <span><strong>Turnaround period</strong> · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %}, to {{ printed_at|date:"j F" }}{% endif %}</span>
   </div>
 
   {% for section in memo %}
@@ -52,7 +58,7 @@
   {% endfor %}
 
   <footer class="memo-print-foot">
-    Durations are counted in office hours. {{ turnaround.office_hours_caveat }}
+    {{ turnaround.office_hours_caveat }}
   </footer>
 </div>
 

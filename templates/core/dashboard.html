@@ -246,7 +246,7 @@
         {% if tracking_rings.pending_upload.total %}
           <a class="ring-aside" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
             <i class="breakdown-swatch" style="background:var(--status-upload)" aria-hidden="true"></i>
-            <span>Completed - pending upload</span>
+            <span>{{ "COMPLETED_PENDING_UPLOAD"|status_label }}</span>
             <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
           </a>
         {% endif %}
@@ -291,8 +291,12 @@
 </div>
 
 <div class="row g-4 mb-4">
-  <div class="col-xl-6">
+  <div class="col-12">
     {% comment %}
+          The Action Centre has the row to itself. "Newest in the Document
+          Repository" shared it, repeating what the Repository ring above and the
+          Repository page already show: the dashboard is for what needs doing.
+
           Action Centre. Two questions that were two panels: what needs doing, and what
           moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
           sitting in different rows and answering versions of the same question, so the
@@ -315,140 +319,9 @@
             </div>
           {% endif %}
         </div>
-        <a class="btn btn-dashboard-action btn-sm"
-           href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
-          <span>Open Tracking</span>
-          <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
-        </a>
       </div>
 
-      {% comment %}
-        The form wraps the Needs-action block only. Recently moved is read-only, and
-        a form spanning both would put rows nobody can act on inside the thing that
-        submits.
-
-        Bulk receipt keeps its custody attestation here rather than trading it for a
-        one-click button: `BulkConfirmReceiptForm.confirm_custody` is required, and
-        it is required because somebody is asserting the documents are physically in
-        their office. That assertion lands in an append-only audit trail, so the
-        dashboard asks for it in the same words the tracking list does.
-      {% endcomment %}
-      {% comment %}
-        FIXME: submitting this lands the user on /tracking/?scope=inbox, not back
-        here. BulkConfirmReceiptView redirects there on success *and* on failure
-        (apps/tracking/views.py), which is right for the tracking list that owns it
-        and wrong for a panel on the dashboard — a validation error is reported on
-        a page the user did not submit from. Give the view a `next` parameter, or
-        have it redirect to the referrer when it is a known internal page.
-      {% endcomment %}
-      {% if can_bulk_receive %}
-        <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
-          {# Back here, on success and on failure — not to a page nobody submitted from. #}
-          <input type="hidden" name="next" value="dashboard">
-      {% endif %}
-
-      <div class="desk-block desk-block--primary">
-        <h3 class="desk-block-title">Needs action</h3>
-        <div class="card-udm-body p-0">
-          {% if attention_records %}
-            <div class="table-responsive"><table class="table-udm">
-              {% if show_office_columns %}
-                <thead>
-                  <tr>
-                    {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
-                    <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
-                  </tr>
-                </thead>
-              {% endif %}
-              <tbody>
-              {% for record in attention_records %}
-                <tr>
-                  {% if can_bulk_receive %}
-                    <td>
-                      {% if record.can_confirm_now %}
-                        <input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}"
-                               aria-label="Select {{ record.display_tracking_number }} for receipt">
-                      {% endif %}
-                    </td>
-                  {% endif %}
-                  {% if show_office_columns %}
-                    <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-                    <td class="desk-cell">
-                      {% comment %}
-                        The subject decides the width of this whole panel if it
-                        is allowed to. .desk-cell-title caps it and wraps to a
-                        second line, so a long subject makes a row slightly
-                        taller instead of pushing the card sideways and leaving
-                        the panel beside it half as wide. The full text is on
-                        the title attribute and on the record page.
-                      {% endcomment %}
-                      <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
-                      <div class="text-muted" style="font-size:12.5px;">
-                        updated {{ record.last_movement_at|timesince }} ago
-                      </div>
-                    </td>
-                    <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                    <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
-                  {% else %}
-                    <td class="desk-cell desk-cell--wide">
-                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
-                      {# Same cap as the records-staff view above, one column wider. #}
-                      <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
-                      <div class="text-muted" style="font-size:12.5px;">
-                        From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
-                      </div>
-                    </td>
-                  {% endif %}
-                  <td class="text-end">
-                    {% if record.can_confirm_now %}
-                      <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
-                        <span class="btn-receipt-icon" aria-hidden="true">✓</span>
-                        <span>Confirm Receipt</span>
-                      </a>
-                    {% else %}
-                      {% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
-                    {% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-              </tbody>
-            </table></div>
-          {% else %}
-            {% comment %}
-              This linked to `?scope=inbox` while the panel head linked to
-              `?scope=incoming`, under a comment claiming both resolved to the
-              same queue. They do not: `inbox` is unconfirmed steps only, and
-              on the demo data one office saw 9 against incoming's 5. Two links
-              in one panel, labelled the same, opening different queues.
-            {% endcomment %}
-            <div class="empty-state">
-              <h3>No incoming documents are waiting</h3>
-              <p>Documents routed to {{ user.office.code|default:"your office" }} appear here until someone confirms receipt.</p>
-              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">Open Pending receipt</a>
-            </div>
-          {% endif %}
-        </div>
-
-        {% comment %}
-          Same three controls as the tracking list, in the same order and the same
-          words: an optional shared note, the custody attestation, then the submit.
-          Receipt is one act with one wording wherever it is offered.
-        {% endcomment %}
-        {% if can_bulk_receive %}
-          <div class="card-udm-body border-top">
-            <label class="form-label" for="desk-receipt-note">Receipt note for all selected records (optional)</label>
-            <textarea class="form-control" id="desk-receipt-note" name="note" maxlength="2000" rows="2"
-                      placeholder="Add the same custody note to each selected record"></textarea>
-            <div class="form-check mt-3">
-              <input class="form-check-input" type="checkbox" name="confirm_custody" id="desk-confirm-custody" required>
-              <label class="form-check-label" for="desk-confirm-custody">I confirm the selected physical or digital documents are present in my office's custody.</label>
-            </div>
-            <button class="btn btn-receipt mt-3" type="submit">Confirm Receipt for Selected</button>
-          </div>
-        {% endif %}
-      </div>
-
-      {% if can_bulk_receive %}</form>{% endif %}
+      {% include "core/_action_centre_queue.html" %}
 
       <div class="desk-block desk-block--secondary">
         <h3 class="desk-block-title">Recently moved</h3>
@@ -485,35 +358,6 @@
       </div>
     </div>
   </div>
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <h2>Newest in the Document Repository</h2>
-            <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}">
-      <span>Open repository</span>
-              <span class="btn-dashboard-action-arrow" aria-hidden="true">→</span>
-            </a>
-          </div>
-          <div class="card-udm-body">
-            {% comment %}
-              Five rows, each one a fixed two lines of title over one line of
-              detail. A repository title runs to a sentence often enough that
-              letting it set its own height made this card a different height on
-              every load, and it shares a row with the Action Centre.
-            {% endcomment %}
-            {% for document in recent_documents %}
-              <div class="newest-row py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                <a class="newest-title" href="{{ document.get_absolute_url }}" title="{{ document.title }}">{{ document.title|truncatechars:120 }}</a>
-                <div class="newest-meta text-muted">
-                  {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_type.name|default:"Unclassified" }} · {{ document.document_date|default:document.created_at|date:"d M Y" }}
-                </div>
-              </div>
-            {% empty %}
-              <p class="text-muted mb-0">No completed or archived records are available yet.</p>
-            {% endfor %}
-          </div>
-            </div>
-  </div>
 </div>
 
 <div class="row g-4 mb-4">
@@ -532,7 +376,7 @@
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>
-          <h2>Created, handed over and completed</h2>
+          <h2>Created, handed over and completed &mdash; running totals</h2>
           <div class="card-udm-caption">
             Running totals. The gap between created and completed is work still in the building.
           </div>
@@ -684,18 +528,21 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>How long documents take</h2>
+          <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="card-udm-caption">
-              Average working days at each stage, month by month.
+              The month's average, fastest and slowest for each stage, beside the line
+              of monthly averages from {{ turnaround_trend.rows.0.month|date:"F Y" }}
+              to {{ turnaround_trend.latest.month|date:"F Y" }}.
             </div>
             <details class="chart-note">
               <summary>How to read this</summary>
               <p>
-                Counted in office hours, so a document sitting over a weekend is not
-                charged for it. {{ turnaround_trend.office_hours_caveat }}
+                {{ turnaround_trend.office_hours_caveat }} A document sitting over a
+                weekend is not charged for it.
               </p>
             </details>
           </div>
+          {% include "core/_month_picker.html" with picker=month_picker picker_id="turnaround-month" %}
         </div>
         <div class="card-udm-body">
           {% if turnaround_trend.has_data %}
@@ -813,7 +660,8 @@
                 </div>
                 <div class="chart-scale">
                   Working days, averaged per month &middot; one working day is
-                  {{ turnaround_trend.working_day_hours|floatformat:"-1" }} office hours
+                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours,
+                  weekends excluded
                 </div>
               </div>
               <div class="trend-summary">
@@ -825,51 +673,32 @@
                   documents it is taken over, and a stage with none this month
                   says so rather than printing a dash.
                 {% endcomment %}
-                {% with month=turnaround_trend.latest %}
-                <div class="trend-summary-head">{{ month.month|date:"F" }} so far</div>
+                {% comment %}
+                  The month picked above, from analytics.turnaround — the service
+                  Reports and the memo read — so a figure here is the figure they
+                  print for the same month. "So far" and "yet" only for the month
+                  still running.
+                {% endcomment %}
+                <div class="trend-summary-head">{{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}</div>
                 <div class="trend-summary-figures">
-                  <div class="report-metric">
-                    <span>Receipt<small class="text-muted">{{ month.receipt_samples }} handover{{ month.receipt_samples|pluralize }}</small></span>
-                    {% if month.receipt_samples %}
-                      <strong>{{ month.receipt_label }}<small class="text-muted">{{ month.receipt_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None confirmed yet</strong>
-                    {% endif %}
-                  </div>
-                  <div class="report-metric">
-                    <span>In process<small class="text-muted">{{ month.processing_samples }} document{{ month.processing_samples|pluralize }}</small></span>
-                    {% if month.processing_samples %}
-                      <strong>{{ month.processing_label }}<small class="text-muted">{{ month.processing_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None completed yet</strong>
-                    {% endif %}
-                  </div>
-                  <div class="report-metric">
-                    <span>Total lifetime<small class="text-muted">{{ month.lifetime_samples }} document{{ month.lifetime_samples|pluralize }}</small></span>
-                    {% if month.lifetime_samples %}
-                      <strong>{{ month.lifetime_label }}<small class="text-muted">{{ month.lifetime_calendar }} on the calendar</small></strong>
-                    {% else %}
-                      <strong class="trend-summary-none">None completed yet</strong>
-                    {% endif %}
-                  </div>
+                  {% include "core/_turnaround_stages.html" %}
                 </div>
-                {% endwith %}
                 {% comment %}
                   Only shown when something actually had a deadline that month. A 0%
                   printed for a month in which nothing was due would read as
                   "everything was late", which is the opposite of the truth.
                 {% endcomment %}
-                {% if turnaround_trend.latest.has_on_time %}
+                {% if turnaround.has_on_time %}
                   <div class="meter-head">
                     <span>Completed on time</span>
-                    <strong class="num">{{ turnaround_trend.latest.on_time_percent }}%</strong>
+                    <strong class="num">{{ turnaround.on_time_percent }}%</strong>
                   </div>
                   <div class="meter-track">
-                    <i class="meter-fill" style="width:{{ turnaround_trend.latest.on_time_percent }}%"></i>
+                    <i class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></i>
                   </div>
                   <div class="meter-foot">
-                    {{ turnaround_trend.latest.on_time }} of {{ turnaround_trend.latest.closed }}
-                    document{{ turnaround_trend.latest.closed|pluralize }} with a deadline
+                    {{ turnaround.on_time }} of {{ turnaround.on_time_total }}
+                    document{{ turnaround.on_time_total|pluralize }} with a deadline
                   </div>
                 {% endif %}
               </div>
@@ -934,6 +763,7 @@
             <span><strong>Scope</strong> · {{ scope.display }}</span>
             <span><strong>Generated</strong> · {{ printed_at|date:"d F Y, g:i A" }}</span>
             <span><strong>By</strong> · {{ user.display_name }}</span>
+            <span><strong>Turnaround period</strong> · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %}, to {{ printed_at|date:"j F" }}{% endif %}</span>
           </div>
           {% comment %}
             Sections, not one block of prose. The memo carries a per-office
@@ -960,7 +790,7 @@
       </div>
       <div class="modal-footer">
         <span class="memo-footnote">
-          Durations are counted in office hours. {{ turnaround.office_hours_caveat }}
+          {{ turnaround.office_hours_caveat }}
         </span>
         <button class="btn btn-udm-outline" type="button" data-bs-dismiss="modal">Close</button>
         {% comment %}
@@ -975,11 +805,24 @@
           so carrying it here grants nothing.
         {% endcomment %}
         <a class="btn btn-udm" target="_blank" rel="noopener"
-           href="{% url 'core:dashboard_memo_print' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+           href="{% url 'core:dashboard_memo_print' %}?{% if scope.office %}office={{ scope.office.pk }}&amp;{% endif %}month={{ turnaround.month|date:'Y-m' }}">
           Print
         </a>
       </div>
     </div>
   </div>
 </div>
+{% comment %}
+  Ctrl+P on the dashboard. A browser cannot be stopped from printing a page, so
+  this one is audited like Reports and the memo — one PRINT entry per print
+  dialog, never deduplicated — and the paper itself says what it is and where
+  the formal record comes from.
+{% endcomment %}
+<p class="dashboard-print-note d-none d-print-block">
+  A print of the dashboard as {{ user.display_name }} saw it on {{ printed_at|date:"d F Y, g:i A" }}
+  ({{ scope.display }}). For a formal record, use <strong>Generate memo</strong> and print that.
+</p>
+<span hidden data-print-log="the dashboard"
+      data-print-log-url="{% url 'core:log_print' %}"
+      data-print-log-csrf="{{ csrf_token }}"></span>
 {% endblock %}

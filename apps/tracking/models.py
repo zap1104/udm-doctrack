@@ -42,13 +42,13 @@ class Status(models.TextChoices):
     #: distinction that does matter — how it got here — is kept where it belongs
     #: and cannot be lost: RoutingStep.Action and RecordActivity.Event both still
     #: carry FORWARD/FORWARDED and RETURN/RETURNED.
-    PENDING_RECEIPT = "PENDING_RECEIPT", "Pending receipt"
+    PENDING_RECEIPT = "PENDING_RECEIPT", "Pending Receipt"
     RECEIVED = "RECEIVED", "Received"
-    IN_PROCESS = "IN_PROCESS", "In process"
+    IN_PROCESS = "IN_PROCESS", "In Process"
     #: The office has finished its work, but an administrator has not yet
     #: approved the record into the Document Repository. The record stays in
     #: Tracking for this stage — see ACTIVE_STATUSES.
-    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - pending upload"
+    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - Pending Upload"
     #: Approved into the repository. A record only reaches this once a Document
     #: exists for it, so COMPLETED now means "filed", not merely "finished".
     COMPLETED = "COMPLETED", "Completed"
@@ -76,6 +76,16 @@ AWAITING_RECEIPT_STATUSES = {Status.PENDING_RECEIPT}
 #: "is the work over?" rather than "is it in the repository?". The few places
 #: that mean the narrower thing test Status.COMPLETED directly.
 COMPLETED_STATUSES = {Status.COMPLETED_PENDING_UPLOAD, Status.COMPLETED}
+
+
+def overdue_q():
+    """Records past their deadline with work still owed on them.
+
+    The one definition of overdue in the query layer. Every queue, filter,
+    count and reminder reads it, so no two of them can disagree about which
+    documents are late.
+    """
+    return Q(due_at__lt=timezone.now()) & ~Q(status__in=COMPLETED_STATUSES)
 
 #: Statuses that belong in the Document Tracking module. COMPLETED_PENDING_UPLOAD
 #: is here on purpose: a finished record stays visible in Tracking until an
@@ -236,7 +246,7 @@ class TrackingRecordQuerySet(models.QuerySet):
         return self.filter(status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True)
 
     def overdue(self):
-        return self.filter(due_at__lt=timezone.now()).exclude(status__in=COMPLETED_STATUSES)
+        return self.filter(overdue_q())
 
     def with_related(self):
         return self.select_related(
@@ -354,7 +364,7 @@ class TrackingRecord(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.tracking_number} — {self.subject}"
+        return f"{self.display_tracking_number} — {self.subject}"
 
     def get_absolute_url(self) -> str:
         return reverse("tracking:detail", args=[self.pk])

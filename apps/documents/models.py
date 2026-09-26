@@ -56,6 +56,11 @@ class Source(models.TextChoices):
 #: existed twice.
 COMPLETED_SOURCE = Source.DTS
 
+#: The repository filter's name for "every origin but tracking": the
+#: historical side of the same rule, by exclusion, so the Historical figure on
+#: the dashboard and the page its segment opens cannot count different sets.
+HISTORICAL_FILTER = "historical"
+
 
 class OcrStatus(models.TextChoices):
     PENDING = "PENDING", "Waiting for text extraction"

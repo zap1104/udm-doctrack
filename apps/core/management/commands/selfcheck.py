@@ -206,7 +206,7 @@ class Command(BaseCommand):
                 raise RuntimeError(f"Expected PENDING_RECEIPT after routing, got {record.status}")
             return True
 
-        self.step("Status is Pending receipt — sending is not receiving", check_pending_receipt)
+        self.step("Status is Pending Receipt — sending is not receiving", check_pending_receipt)
 
         def check_inbox():
             inbox = services.inbox_for(receiver)

@@ -218,10 +218,13 @@
   });
 
   document.querySelectorAll("form[action*='/complete/']").forEach(function (form) {
+    /* The status name comes from the page, rendered through the same filter as
+       every pill, so this dialog cannot call the status something else. */
+    var status = form.getAttribute("data-completed-status") || "Completed - Pending Upload";
     form.addEventListener("submit", function (event) {
       var ok = window.confirm(
         "Mark this document as completed?\n\n" +
-        "It stays in Document Tracking, marked Completed - pending upload, until an administrator approves it into the Document Repository."
+        "It stays in Document Tracking, marked " + status + ", until an administrator approves it into the Document Repository."
       );
       if (!ok) event.preventDefault();
     });

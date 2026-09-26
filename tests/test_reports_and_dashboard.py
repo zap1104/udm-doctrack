@@ -13,6 +13,7 @@ TRACKING_PANELS and REPOSITORY_PANELS.
 from __future__ import annotations
 
 import pytest
+from django.utils import timezone
 
 from apps.tracking.services import (
     complete_record,
@@ -21,7 +22,7 @@ from apps.tracking.services import (
     route_record,
 )
 
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 DASHBOARD = "/"
 
 
@@ -56,15 +57,15 @@ def test_turnaround_reports_office_hours_and_calendar_time_together(
 
 
 @pytest.mark.django_db
-def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
+def test_the_page_says_the_figure_excludes_weekends_and_holidays(
     client, finished_record, users
 ):
     """Labelled honestly rather than presented as exact."""
     client.force_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
-    assert "Office hours only" in body
-    assert "holidays not" in body
+    assert "Turnaround is counted in office hours (8 hours = 1 working day" in body
+    assert "excluding weekends and the holidays listed under Administration" in body
 
 
 # --- the panels the report is specified to carry ----------------------------
@@ -74,9 +75,8 @@ def test_the_page_says_the_figure_excludes_weekends_but_not_holidays(
 #: a per-office turnaround table and an "Archive quality" card that restated
 #: three stat cards verbatim.
 TRACKING_PANELS = (
-    "Created, handed over and completed",
     "Documents by stage",
-    "How long documents take",
+    "Turnaround Time for the Month of {month}",
     "Overdue: who must act next",
     "Documents received by office",
     "Handovers by office: sent and confirmed",
@@ -104,7 +104,9 @@ def test_the_report_carries_exactly_the_specified_panels(client, finished_record
         if "<h2>" in line and "</h2>" in line
     ]
 
-    assert headings == list(TRACKING_PANELS) + list(REPOSITORY_PANELS)
+    month = f"{timezone.localdate():%B %Y}"
+    expected = [panel.format(month=month) for panel in TRACKING_PANELS] + list(REPOSITORY_PANELS)
+    assert headings == expected
 
 
 @pytest.mark.django_db
@@ -240,7 +242,7 @@ def test_overdue_offices_report_a_share_of_the_whole_backlog(
 @pytest.mark.django_db
 def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, users):
     client.force_login(users["admin"])
-    monthly = client.get(REPORTS).context["monthly"]
+    monthly = client.get("/").context["monthly"]
 
     row = monthly["rows"][-1]
     for key in ("created", "transferred", "completed"):
@@ -251,7 +253,7 @@ def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, 
 def test_the_series_never_decrease(client, finished_record, users):
     """A running total that falls is not a running total."""
     client.force_login(users["admin"])
-    rows = client.get(REPORTS).context["monthly"]["rows"]
+    rows = client.get("/").context["monthly"]["rows"]
 
     for key in ("created", "transferred", "completed"):
         values = [row[key] for row in rows]
@@ -268,7 +270,7 @@ def test_the_gap_between_created_and_completed_is_what_is_still_open(
     route_record(open_one, [offices["SUP"]], user=users["med"])
 
     client.force_login(users["admin"])
-    monthly = client.get(REPORTS).context["monthly"]
+    monthly = client.get("/").context["monthly"]
     last = monthly["rows"][-1]
 
     assert monthly["outstanding"] == last["created"] - last["completed"]
@@ -405,7 +407,7 @@ def test_the_export_button_carries_the_office_it_was_pressed_under(
     client.force_login(users["admin"])
     body = client.get(f"{REPORTS}?office={offices['SUP'].pk}").content.decode()
 
-    assert f"/reports/export/?office={offices['SUP'].pk}" in body
+    assert f"/tracking/reports/export/?office={offices['SUP'].pk}" in body
 
 
 @pytest.mark.django_db
@@ -414,7 +416,7 @@ def test_the_export_names_the_office_it_covers(client, finished_record, users, o
     query, so the scope travels with it."""
     client.force_login(users["admin"])
 
-    body = client.get(f"/reports/export/?office={offices['SUP'].pk}").content.decode()
+    body = client.get(f"/tracking/reports/export/?office={offices['SUP'].pk}").content.decode()
 
     assert offices["SUP"].name in body.splitlines()[0]
 

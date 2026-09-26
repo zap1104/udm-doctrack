@@ -32,19 +32,19 @@ def admin_client(client, users):
     "year", ["10000", "10001", "99999999999999", "0", "1", "999999999999999999999"]
 )
 def test_an_out_of_range_year_does_not_crash_the_reports_page(admin_client, year):
-    assert admin_client.get(f"/reports/?year={year}").status_code == 200
+    assert admin_client.get(f"/tracking/reports/?year={year}").status_code == 200
 
 
 @pytest.mark.django_db
 def test_a_real_year_still_filters(admin_client):
-    assert admin_client.get("/reports/?year=2026").status_code == 200
+    assert admin_client.get("/tracking/reports/?year=2026").status_code == 200
 
 
 @pytest.mark.django_db
 def test_a_nonsense_year_is_ignored_rather_than_applied(admin_client):
     """Out of range means "no year filter", not "match nothing"."""
-    baseline = admin_client.get("/reports/").context["total_records"]
-    assert admin_client.get("/reports/?year=10000").context["total_records"] == baseline
+    baseline = admin_client.get("/tracking/reports/").context["total_records"]
+    assert admin_client.get("/tracking/reports/?year=10000").context["total_records"] == baseline
 
 
 # --- 2. the repository filters --------------------------------------------

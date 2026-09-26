@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head reports-page-head">
   <div>
-    <div class="eyebrow">Reports and Analytics</div>
+    <div class="eyebrow">Document Tracking</div>
     <h1>Records Overview</h1>
     {% comment %}
       What this report describes, said in the heading rather than left to be
@@ -29,6 +29,7 @@
        href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>
   </div>
 </div>
+{% include "tracking/_subtabs.html" with active="reports" %}
 
 {% comment %}
   One control, and only for the accounts it is for.
@@ -135,7 +136,7 @@
     {% endcomment %}
     <div class="col-6 col-lg-3">
       <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
-        <div class="label">Pending receipt</div>
+        <div class="label">{{ "PENDING_RECEIPT"|status_label }}</div>
         <div class="value">{% if scope_office %}{{ awaiting_split.ours }}{% else %}{{ awaiting_receipt }}{% endif %}</div>
         {% if scope_office %}
           <div class="hint">
@@ -183,100 +184,11 @@
 
   <div class="row g-4">
     {% comment %}
-      Three cumulative series. Each runs as a running total from the start of
-      records rather than resetting monthly: the reset version answered "how
-      busy was March", which is a staffing question, while the running total
-      answers "is the backlog growing" — the gap between the Created and
-      Completed curves is the work still in the building, and on a monthly
-      reset that gap cannot be seen at all. Created is the tracking side and
-      Completed is the repository side, which is what the pairing is for.
+      "Created, handed over and completed" was the first panel here, and the
+      dashboard draws the same chart from the same function for the same scope.
+      The consultation asked Reports to stop repeating the dashboard; it keeps
+      the panels only it has.
     {% endcomment %}
-    <div class="col-12">
-      <div class="card-udm h-100">
-        <div class="card-udm-head">
-          <div>
-            <h2>Created, handed over and completed</h2>
-            <div class="report-caption">
-              Running totals. The gap between created and completed is work still in the building.
-            </div>
-          </div>
-          <div class="chart-legend">
-            <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
-            <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
-          </div>
-        </div>
-        <div class="card-udm-body">
-          {% if monthly.total %}
-            <div class="column-chart-frame">
-            <div class="column-chart" role="img"
-                 aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
-              {% include "core/_column_axis.html" with ticks=monthly.ticks %}
-              <div class="column-chart-plot">
-                {% for row in monthly.rows %}
-                  {% comment %}
-                    A zero column draws nothing — a minimum-height stub would
-                    paint a value that is not there. On a cumulative series this
-                    only happens before the first record exists.
-                  {% endcomment %}
-                  <div class="column-group" title="{{ row.month|date:'F Y' }} — {{ row.created }} created, {{ row.completed }} completed, {{ row.transferred }} handovers (this month: +{{ row.created_delta }} created, +{{ row.completed_delta }} completed)">
-                    <div class="column-pair">
-                      {% include "core/_columns.html" %}
-                    </div>
-                    <div class="column-label">{{ row.month|date:"M" }}</div>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="chart-scale">
-              Top of the chart = {{ monthly.ceiling }} · {{ monthly.outstanding }} still open ·
-              every bar carries its own running total
-            </div>
-            <details class="chart-note">
-              <summary>How to read this</summary>
-              <p>
-                Each month is the position at the end of that month, counted from the
-                first document in the system — not that month on its own.
-              </p>
-              <p>
-                Created and Completed count documents; the gap between them is the work
-                still in the building. Handovers count moves between offices, so one
-                document endorsed four times adds four — which is why that bar is
-                usually the tallest and why it is not a count of documents. Each bar
-                carries its own number so the three are never mistaken for one another.
-              </p>
-            </details>
-            <details class="chart-table">
-              <summary>View as table</summary>
-              <div class="table-responsive"><table class="table-udm">
-                <thead><tr>
-                  <th>Month</th>
-                  <th class="text-end">Created</th>
-                  <th class="text-end">Handovers</th>
-                  <th class="text-end">Completed</th>
-                  <th class="text-end">Added this month</th>
-                </tr></thead>
-                <tbody>
-                  {% for row in monthly.rows %}
-                    <tr>
-                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
-                      <td class="text-end num">{{ row.created }}</td>
-                      <td class="text-end num">{{ row.transferred }}</td>
-                      <td class="text-end num">{{ row.completed }}</td>
-                      <td class="text-end num text-muted">+{{ row.created_delta }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table></div>
-            </details>
-            </div>
-          {% else %}
-            <div class="report-empty">No tracking activity recorded yet.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
     <!-- status mix -->
     <div class="col-12">
       <div class="card-udm h-100">
@@ -304,13 +216,12 @@
         </div>
         <div class="card-udm-body">
           {% comment %}
-            One labelled bar per status rather than a single stacked bar. The
-            statuses share colours by design — "pending receipt", "forwarded"
-            and "returned" are all the same gold pill everywhere else in the
-            app, because all three mean the same wait —
-            so segments of one stack could not be told apart. Giving each its
-            own row makes the pill the identity channel and leaves colour as
-            reinforcement.
+            One labelled bar per status rather than a single stacked bar: each
+            row names its status with the same pill as everywhere else, so the
+            label carries the identity and the colour (apps.core.colors) only
+            reinforces it. Forwarded and Returned are not statuses — they were
+            merged into Pending Receipt, and survive only as routing actions in
+            a document's history.
           {% endcomment %}
           {% comment %}
             Direction is relative — a document is incoming *to* somebody — so
@@ -351,11 +262,13 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>How long documents take</h2>
+            <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="report-caption">
-              Averages since records began, in working hours. Calendar time is beneath each one.
+              {% if turnaround.is_current %}The month so far. {% endif %}Each stage's average,
+              fastest and slowest, in office hours; calendar time is beneath each average.
             </div>
           </div>
+          {% include "core/_month_picker.html" with picker=month_picker picker_id="report-turnaround-month" %}
         </div>
         <div class="card-udm-body">
           {% comment %}
@@ -366,31 +279,14 @@
             actually waited, which is the fair way to answer them. Either one
             alone misleads, in opposite directions.
           {% endcomment %}
-          {% comment %}
-            Each average says how many it is taken over, so "4 hrs" from three
-            documents is not read with the weight of "4 hrs" from three hundred.
-            A stage with nothing to average says so rather than printing a dash.
-          {% endcomment %}
-          <div class="report-metric">
-            <span>Average time to confirm receipt<br><small class="text-muted">sent → confirmed · {{ turnaround.receipt_samples }} handover{{ turnaround.receipt_samples|pluralize }}</small></span>
-            <strong>{{ turnaround.receipt }}
-              <small class="d-block text-muted fw-normal">{{ turnaround.receipt_calendar }} on the calendar</small>
-            </strong>
-          </div>
-          <div class="report-metric">
-            <span>Average time in process<br><small class="text-muted">first receipt → completion · {{ turnaround.processing_samples }} document{{ turnaround.processing_samples|pluralize }}</small></span>
-            <strong>{{ turnaround.processing }}
-              <small class="d-block text-muted fw-normal">{{ turnaround.processing_calendar }} on the calendar</small>
-            </strong>
-          </div>
-          <div class="report-metric">
-            <span>Average total lifetime<br><small class="text-muted">created → completed · {{ turnaround.lifetime_samples }} document{{ turnaround.lifetime_samples|pluralize }}</small></span>
-            <strong>{{ turnaround.lifetime }}
-              <small class="d-block text-muted fw-normal">{{ turnaround.lifetime_calendar }} on the calendar</small>
-            </strong>
-          </div>
+          {% include "core/_turnaround_stages.html" %}
           <p class="form-text mt-2 mb-0">{{ turnaround.office_hours_caveat }}</p>
 
+          {% comment %}
+            Only when something in the month had a deadline: 0% for a month in
+            which nothing was due would read as "everything was late".
+          {% endcomment %}
+          {% if turnaround.has_on_time %}
           <div class="meter mt-3">
             <div class="meter-head">
               <span>Completed on or before deadline</span>
@@ -403,6 +299,7 @@
               {{ turnaround.on_time }} of {{ turnaround.on_time_total }} completed document{{ turnaround.on_time_total|pluralize }} that had a deadline
             </div>
           </div>
+          {% endif %}
 
           {% comment %}
             Why the receipt average cannot be complete yet: handovers still

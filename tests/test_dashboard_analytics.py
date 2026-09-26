@@ -30,7 +30,7 @@ from apps.tracking.services import (
 )
 
 DASHBOARD = "/"
-REPORTS = "/reports/"
+REPORTS = "/tracking/reports/"
 
 
 # ---------------------------------------------------------------- fixtures
@@ -116,21 +116,23 @@ def test_reports_delegates_rather_than_keeping_its_own_copy(client, users, finis
     implementations wearing one name."""
     import apps.core.views as views
 
+    # turnaround(), the aggregation both pages still share: monthly_volume was
+    # the one watched here, until Reports stopped drawing the running totals.
     calls = []
-    original = analytics.monthly_volume
+    original = analytics.turnaround
 
-    def spy(records):
+    def spy(records, *args, **kwargs):
         calls.append(records)
-        return original(records)
+        return original(records, *args, **kwargs)
 
-    views.analytics.monthly_volume = spy
+    views.analytics.turnaround = spy
     try:
         client.force_login(users["admin"])
         client.get(REPORTS)
     finally:
-        views.analytics.monthly_volume = original
+        views.analytics.turnaround = original
 
-    assert calls, "ReportsView did not call analytics.monthly_volume"
+    assert calls, "ReportsView did not call analytics.turnaround"
 
 
 # --- oldest days -----------------------------------------------------------
@@ -680,7 +682,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
-    assert body.index("trend-legend") > body.index("How long documents take")
+    assert body.index("trend-legend") > body.index("Turnaround Time for the Month of")
 
 
 @pytest.mark.django_db
@@ -715,8 +717,10 @@ def test_the_memo_is_composed_server_side(client, users, finished_record):
     client.force_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
 
+    month = f"{timezone.localdate():%B %Y}"
     assert memo_headings(memo) == [
-        "Overview", "Needs attention", "Turnaround", "Repository activity this month",
+        "Overview", "Needs attention", f"Turnaround Time for the Month of {month}",
+        "Repository activity this month",
     ]
     for section in memo:
         assert section["lines"], section["heading"]
@@ -1149,13 +1153,15 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    for heading in ("Action Centre", "Newest in the Document Repository",
-                    "Created, handed over and completed", "How long documents take"):
-        assert f"<h2>{heading}</h2>" in body, heading
+    assert "Newest in the Document Repository" not in body, "removed in the consultation"
+    for heading in ("Action Centre",
+                    "Created, handed over and completed &mdash; running totals",
+                    "Turnaround Time for the Month of"):
+        assert f"<h2>{heading}" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("How long documents take") < body.index('id="dashboard-memo"')
+    assert body.index("Turnaround Time for the Month of") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Action Centre
@@ -1193,9 +1199,14 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "Needs action" in body
+    # The queue block is titled by the queue picked, Pending Receipt until
+    # another chip is chosen, and it still comes first.
+    import re
+
+    queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
+    assert queue
     assert "Recently moved" in body
-    assert body.index("Needs action") < body.index("Recently moved")
+    assert queue.start() < body.index("Recently moved")
 
 
 @pytest.mark.django_db
@@ -1205,7 +1216,9 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert '<h3 class="desk-block-title">Needs action</h3>' in body
+    import re
+
+    assert re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
     assert '<h3 class="desk-block-title">Recently moved</h3>' in body
 
 
@@ -1229,7 +1242,7 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
     # Deadline row, where it composes with a queue instead of replacing one.
     assert "/tracking/?overdue=yes" in body
     assert "/tracking/?scope=overdue" not in body
-    assert "/reports/?status=OVERDUE" not in body
+    assert "/tracking/reports/?status=OVERDUE" not in body
     # `custody` is every record whose current_office is this office, completed
     # ones included, so a card counting it read 1 over a page of 9.
     assert "?scope=custody" not in body
@@ -1328,7 +1341,6 @@ def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, office
 
     assert len(context["attention_records"]) == DASHBOARD_ROWS
     assert len(context["recent_records"]) == DASHBOARD_ROWS
-    assert len(context["recent_documents"]) <= DASHBOARD_ROWS
 
 
 @pytest.mark.django_db
@@ -1509,7 +1521,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
 
     form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
     assert form, "no bulk receipt form rendered"
-    assert "Needs action" in form.group(0)
+    assert 'class="desk-block desk-block--primary"' in form.group(0)
     assert "Recently moved" not in form.group(0)
     assert "csrfmiddlewaretoken" in form.group(0)
 
@@ -1593,9 +1605,9 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: Left is tracking, right is the repository, wherever a row is split.
 EXPECTED_ROWS = [
     ("Tracking", "Repository"),
-    ("Action Centre", "Newest in the Document Repository"),
+    "Action Centre",
     ("Created, handed over and completed", "Added to the repository"),
-    "How long documents take",
+    "Turnaround Time",
 ]
 
 
@@ -1618,28 +1630,25 @@ def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_r
         expected.extend(row if isinstance(row, tuple) else [row])
 
     # "Added to the repository &mdash; September" carries the month, as the
-    # HTML entity rather than the character.
-    normalised = [re.split(r"&mdash;| — ", h)[0].strip() for h in headings]
+    # HTML entity rather than the character, and "Turnaround Time for the
+    # Month of September 2026" carries the month picked.
+    normalised = [re.split(r"&mdash;| — | for the Month of ", h)[0].strip() for h in headings]
     assert normalised == expected
 
 
 @pytest.mark.django_db
-def test_the_repository_column_reaches_the_bottom_of_the_page(client, users, filed_record):
-    """Newest in the Document Repository used to be stacked inside the same
-    column as Office Flow Today, which is why the repository side of the page
-    simply stopped after the donut."""
+def test_the_action_centre_has_its_row_to_itself(client, users, filed_record):
+    """It shared a row with "Newest in the Document Repository", which repeated
+    what the Repository ring and page already show and was removed."""
     import re
 
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    # Split on column boundaries rather than pairing one class with the next
-    # one like it: the charts below are full width now, so a regex looking for
-    # the next col-xl-6 runs off the end of the page and matches nothing.
     columns = re.split(r'<div class="col[ -]', body)
-    holding = [c for c in columns if "Newest in the Document Repository" in c]
-    assert len(holding) == 1, "the panel should open exactly one column"
-    assert "Action Centre" not in holding[0], "the two are still sharing one column"
+    holding = [c for c in columns if "<h2>Action Centre</h2>" in c]
+    assert len(holding) == 1
+    assert holding[0].startswith('12">'), "full width"
 
 
 def test_the_turnaround_panel_is_full_width_and_comes_last():
@@ -1654,7 +1663,7 @@ def test_the_turnaround_panel_is_full_width_and_comes_last():
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    head = html.index("<h2>How long documents take</h2>")
+    head = html.index("<h2>Turnaround Time for the Month of")
     column = html.rindex('<div class="col-', 0, head)
 
     assert html[column:].startswith('<div class="col-12">'), "not full width"
@@ -1761,18 +1770,20 @@ def test_the_dashboard_has_no_print_letterhead(client, users, finished_record):
 
 
 @pytest.mark.django_db
-def test_ctrl_p_on_the_dashboard_is_not_recorded(client, users, finished_record):
-    """An accepted gap, asserted so it stays a decision rather than a surprise.
-
-    Nothing can stop the browser's own print dialog. What the app controls is
-    whether that printout is entered in the audit log, and it is not: the
-    marker that logs one belongs to a document, and this page is not one. The
-    memo's print page carries the marker instead.
-    """
+def test_ctrl_p_on_the_dashboard_is_recorded_and_says_what_it_is(client, users, finished_record):
+    """It was an accepted gap: nothing can stop the browser's own print
+    dialog, and the dashboard carried no marker, so its paper left no trace.
+    The consultation asked for it to be audited like Reports and the memo, and
+    the printout now says it is a view of the screen and where the formal
+    record comes from."""
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "data-print-log" not in body
+    assert 'data-print-log="the dashboard"' in body
+    assert "data-print-log-url" in body and "data-print-log-csrf" in body
+    note = body[body.index('class="dashboard-print-note'):]
+    assert note.startswith('class="dashboard-print-note d-none d-print-block">'), "on paper only"
+    assert "Generate memo" in note[:400]
 
 
 @pytest.mark.django_db

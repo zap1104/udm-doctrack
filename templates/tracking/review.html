@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load doctrack %}
 {% block title %}Review {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -101,7 +102,7 @@
   <div class="col-lg-4">
     <div class="help-note phase2-sticky-card">
       Selecting <strong>Send Document</strong> routes the record to the selected office(s) and generates the routing slip.
-      The record remains <strong>Pending receipt</strong> until the receiving office confirms it.
+      The record remains <strong>{{ "PENDING_RECEIPT"|status_label }}</strong> until the receiving office confirms it.
     </div>
   </div>
 </div>

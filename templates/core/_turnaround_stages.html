@@ -1,0 +1,44 @@
+{% comment %}
+  One row per stage of `turnaround` (analytics.turnaround), shared by the
+  dashboard's summary and Reports so the two word every figure the same way.
+  Each says what it measures and how many it is taken over — "4 hrs" from three
+  documents is not "4 hrs" from three hundred — and a stage with nothing to
+  measure says so rather than printing a dash.
+
+  Fastest and slowest name the document, linked, and only when there are two or
+  more: with one, both would repeat the average. Each figure says which kind it
+  is in words ("Average", "Fastest", "Slowest") rather than leaving it to the
+  heading. Calendar time for an extreme is in its tooltip; the average prints it.
+{% endcomment %}
+{% for stage in turnaround.stages %}
+  <div class="turnaround-stage">
+    <div class="report-metric">
+      <span>{{ stage.label }}<small class="text-muted">{{ stage.measures }} &middot; {{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }}</small></span>
+      {% if stage.samples %}
+        <strong><span class="metric-kind">Average</span> {{ stage.average_label }}<small class="text-muted">{{ stage.average_calendar }} on the calendar</small></strong>
+      {% else %}
+        <strong class="trend-summary-none">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %}</strong>
+      {% endif %}
+    </div>
+    {% if stage.samples > 1 %}
+      <dl class="turnaround-extremes">
+        {% if stage.fastest %}
+          <div title="{{ stage.fastest.calendar_label }} on the calendar">
+            <dt class="metric-kind">Fastest</dt>
+            <dd>{{ stage.fastest.office_label }} &middot; <a class="mono" href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a></dd>
+          </div>
+        {% endif %}
+        <div title="{{ stage.slowest.calendar_label }} on the calendar">
+          <dt class="metric-kind">Slowest</dt>
+          <dd>{{ stage.slowest.office_label }} &middot; <a class="mono" href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a></dd>
+        </div>
+      </dl>
+    {% endif %}
+    {% if stage.outside_office_hours %}
+      <p class="turnaround-outside">
+        {{ stage.outside_office_hours }} {{ stage.noun }}{{ stage.outside_office_hours|pluralize }}
+        happened entirely outside office hours: counted in the average, never as fastest.
+      </p>
+    {% endif %}
+  </div>
+{% endfor %}

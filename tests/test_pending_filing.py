@@ -87,7 +87,7 @@ def test_the_queue_appears_on_the_tracking_page(client, completed_unfiled, users
     client.force_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
-    assert "Completed - pending upload" in body
+    assert "Completed - Pending Upload" in body
     assert completed_unfiled.tracking_number in body
 
 

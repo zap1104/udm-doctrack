@@ -588,17 +588,15 @@ DEFAULT_ACTION_DUE_DAYS = env_int("DEFAULT_ACTION_DUE_DAYS", 3)
 # time inside this window; the calendar figure is kept beside it, never replaced,
 # because it is what a requester actually waited.
 #
-# The window is 8AM-5PM but a day only counts OFFICE_HOURS_PER_DAY of it —
-# nobody is at the desk for the lunch break and the ends of the day, and offices
-# here take lunch at different times, so the day is capped rather than modelled.
-#
-# There is no holiday calendar. An interval spanning one is over-counted by a
-# working day, which is why these figures are always labelled as office hours
-# rather than presented as exact.
+# The window is 8AM-5PM with one shared lunch break, 12PM-1PM, which is not
+# counted: one working day is eight office hours. The day's length is derived
+# from these four times (business_time.working_day_seconds), never configured
+# separately, so it cannot disagree with the window.
 # ---------------------------------------------------------------------------
 OFFICE_DAY_START = _time_setting("OFFICE_DAY_START", "08:00")
 OFFICE_DAY_END = _time_setting("OFFICE_DAY_END", "17:00")
-OFFICE_HOURS_PER_DAY = float(env("OFFICE_HOURS_PER_DAY", "7"))
+OFFICE_LUNCH_START = _time_setting("OFFICE_LUNCH_START", "12:00")
+OFFICE_LUNCH_END = _time_setting("OFFICE_LUNCH_END", "13:00")
 #: Days 0..N-1 of the week are working days: 5 means Monday to Friday.
 OFFICE_WEEK_DAYS = env_int("OFFICE_WEEK_DAYS", 5)
 

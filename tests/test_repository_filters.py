@@ -18,7 +18,7 @@ from datetime import date
 import pytest
 
 from apps.core.models import DocumentType, Tag
-from apps.documents.models import Document, Source
+from apps.documents.models import HISTORICAL_FILTER, Document, Source
 
 
 @pytest.fixture
@@ -79,7 +79,9 @@ def test_only_months_that_hold_something_are_offered(admin_client, repository):
 @pytest.mark.django_db
 def test_only_sources_present_are_offered(admin_client, repository):
     form = admin_client.get("/documents/").context["form"]
-    assert set(_choice_values(form, "source")) == {Source.UPLOAD, Source.DTS}
+    # Plus "historical", offered whenever anything came from outside tracking:
+    # it is how the dashboard's Historical segment opens its own documents.
+    assert set(_choice_values(form, "source")) == {Source.UPLOAD, Source.DTS, HISTORICAL_FILTER}
     assert Source.SCAN not in _choice_values(form, "source"), "nothing was scanned"
 
 

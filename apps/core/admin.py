@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import AuditLog, DocumentType, MetadataFieldDefinition, Tag, TagRule
+from .models import AuditLog, DocumentType, Holiday, MetadataFieldDefinition, Tag, TagRule
+
+
+@admin.register(Holiday)
+class HolidayAdmin(admin.ModelAdmin):
+    list_display = ("name", "date", "recurring", "is_active")
+    list_filter = ("recurring", "is_active")
+    search_fields = ("name",)
 
 
 @admin.register(DocumentType)

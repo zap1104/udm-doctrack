@@ -783,7 +783,7 @@ def test_the_ring_total_is_the_tracking_page_minus_drafts(client, users, traffic
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/tracking/", "/documents/", "/reports/"])
+@pytest.mark.parametrize("path", ["/tracking/", "/documents/", "/tracking/reports/"])
 def test_no_office_filter_fails_open(client, users, path):
     """A filter that fails open is worse than one that errors: the reader
     believes the page is narrowed to one office and it is the whole
@@ -905,8 +905,8 @@ def deadlines(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("key", "label"),
-    [("pending_late", "Pending receipt"), ("received_late", "Received"),
-     ("process_late", "In process")],
+    [("pending_late", "Pending Receipt"), ("received_late", "Received"),
+     ("process_late", "In Process")],
 )
 def test_a_late_record_shows_its_stage_and_its_lateness(client, users, deadlines, key, label):
     """The pill replaced the stage: `display_status` returned "OVERDUE", so a
@@ -993,7 +993,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
     no record of what stage the late documents were at — and a spreadsheet
     attached to a memo is read by somebody who cannot re-run the query."""
     client.force_login(users["admin"])
-    rows = client.get("/reports/export/").content.decode().splitlines()
+    rows = client.get("/tracking/reports/export/").content.decode().splitlines()
 
     header = next(r for r in rows if r.startswith("Tracking number"))
     columns = header.split(",")
@@ -1001,7 +1001,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
 
     late = deadlines["pending_late"]
     line = next(r for r in rows if late.tracking_number in r)
-    assert "Pending receipt" in line, "the stage survives the export"
+    assert "Pending Receipt" in line, "the stage survives the export"
     assert "Yes" in line.split(",")[columns.index("Overdue")]
 
 

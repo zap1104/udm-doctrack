@@ -11,8 +11,10 @@ Two rules hold throughout:
 * **Nothing writes.** Every function takes a queryset somebody else has already
   scoped with `visible_to(user)` and returns dictionaries. Scoping is the
   caller's job precisely so it cannot be forgotten here.
-* **Durations are office hours first.** `average_business_seconds` is the
-  headline everywhere, with calendar time beside it, because that is the
+* **Durations are office hours first.** `business_time` counts them, and
+  `_turnaround_samples` is the one place their intervals are collected; the
+  office-hours figure is the headline everywhere, with calendar time beside
+  it, because that is the
   distinction Reports already draws — a dashboard that measured the same thing
   on a different basis would read as a contradiction, not a second view.
 """
@@ -22,20 +24,22 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from math import cos, pi, sin
 
-from django.db.models import Avg, Count, DurationField, F, Q
+from django.db.models import Count, F, Q
 from django.db.models.functions import TruncMonth
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Office
 from apps.documents.models import COMPLETED_SOURCE
-from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status
+from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status, overdue_q
 
 from .business_time import (
-    OFFICE_HOURS_CAVEAT,
     _two_units,
-    average_business_seconds,
     business_seconds_between,
     humanise_business_seconds,
+    load_holidays,
+    office_hours_caveat,
+    working_day_hours,
     working_day_seconds,
 )
 from .colors import STATUS_COLOURS
@@ -296,11 +300,7 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
     documents for its own headline figure.
     """
     now = timezone.now()
-    late = (
-        records.filter(due_at__lt=now)
-        .exclude(status__in=COMPLETED_STATUSES)
-        .exclude(current_office__isnull=True)
-    )
+    late = records.filter(overdue_q()).exclude(current_office__isnull=True)
     grouped = list(
         late.values("current_office__code", "current_office__name")
         .annotate(total=Count("id", distinct=True))
@@ -373,8 +373,7 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
     quietly under-report the thing the banner exists to state.
     """
     total = (
-        records.filter(due_at__lt=timezone.now())
-        .exclude(status__in=COMPLETED_STATUSES)
+        records.filter(overdue_q())
         .distinct()
         .count()
     )
@@ -486,181 +485,325 @@ def monthly_volume(records) -> dict:
     }
 
 
-def turnaround(records) -> dict:
-    """Real averages from the timestamps the routing steps already carry.
+#: The three stages every turnaround figure is reported in, in order: the key,
+#: what the stage is called, what it measures, and the thing it is counted in.
+TURNAROUND_STAGES = (
+    ("receipt", "Receipt", "sent → confirmed", "handover"),
+    ("processing", Status.IN_PROCESS.label, "first receipt → completed", "document"),
+    ("lifetime", "Total lifetime", "created → completed", "document"),
+)
+
+
+def _turnaround_samples(records, since=None, until=None, holidays=None) -> dict:
+    """Every interval a turnaround figure is taken over, one list per stage.
+
+    The one place these are collected, so the monthly trend, the month's
+    summary, Reports and the memo cannot count a different set. Two queries,
+    whatever the period.
+
+    Bucketed by when the *work finished*: a handover by when it was confirmed,
+    a document by when it was completed, so a period's figure covers work
+    actually closed in it. Completion rather than approval, because the wait
+    for an administrator is somebody else's queue.
+
+    Each sample carries the record it belongs to, so the fastest and slowest can
+    name it, and `ended` so a tie can be broken by who finished first.
+    """
+    if holidays is None:
+        holidays = load_holidays()
+
+    steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
+    done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
+    if since is not None:
+        steps = steps.filter(received_at__gte=since)
+        done = done.filter(completed_at__gte=since)
+    if until is not None:
+        steps = steps.filter(received_at__lt=until)
+        done = done.filter(completed_at__lt=until)
+
+    samples = {key: [] for key, *_ in TURNAROUND_STAGES}
+    deadlines = []
+
+    def sample(start, end, record_id, tracking_number):
+        return {
+            "office": business_seconds_between(start, end, holidays),
+            "calendar": max(0.0, (end - start).total_seconds()),
+            "ended": end,
+            "month": _month_of(end),
+            "record_id": record_id,
+            "tracking_number": tracking_number,
+        }
+
+    for sent_at, received_at, record_id, number in steps.order_by().values_list(
+        "sent_at", "received_at", "record_id", "record__tracking_number"
+    ):
+        samples["receipt"].append(sample(sent_at, received_at, record_id, number))
+
+    for record_id, number, created_at, first_received_at, completed_at, due_at in (
+        done.order_by().values_list(
+            "pk", "tracking_number", "created_at", "first_received_at", "completed_at", "due_at"
+        ).distinct()
+    ):
+        samples["lifetime"].append(sample(created_at, completed_at, record_id, number))
+        if first_received_at:
+            samples["processing"].append(sample(first_received_at, completed_at, record_id, number))
+        if due_at:
+            deadlines.append((_month_of(completed_at), completed_at <= due_at))
+
+    return {"samples": samples, "deadlines": deadlines}
+
+
+def _mean(values):
+    return sum(values) / len(values) if values else None
+
+
+def _named(sample) -> dict:
+    """A fastest or slowest sample, in the words and link a reader needs."""
+    return {
+        "office_label": humanise_business_seconds(sample["office"]),
+        "calendar_label": humanise_duration(timedelta(seconds=sample["calendar"])),
+        "office_seconds": sample["office"],
+        "tracking_number": sample["tracking_number"],
+        "url": reverse("tracking:detail", args=[sample["record_id"]]),
+    }
+
+
+def _stage(key, label, measures, noun, samples) -> dict:
+    """Average, fastest and slowest for one stage.
+
+    Fastest leaves out the intervals that fell entirely outside office hours: a
+    handover sent and confirmed on a Saturday took no office time, and would be
+    "fastest" every month without saying anything about anybody's speed. They
+    still count in the average, which is what they did before this existed, and
+    `outside_office_hours` says how many there were.
+
+    Ties go to whoever finished first, then to the lower tracking number, so the
+    same data always names the same document.
+    """
+    timed = [s for s in samples if s["office"] > 0]
+    fastest = min(timed, key=lambda s: (s["office"], s["ended"], s["tracking_number"]), default=None)
+    slowest = min(samples, key=lambda s: (-s["office"], s["ended"], s["tracking_number"]), default=None)
+    office = _mean([s["office"] for s in samples])
+    calendar = _mean([s["calendar"] for s in samples])
+    return {
+        "key": key,
+        "label": label,
+        "measures": measures,
+        "noun": noun,
+        "samples": len(samples),
+        "average_seconds": office,
+        "average_label": humanise_business_seconds(office),
+        "average_calendar": humanise_duration(None if calendar is None else timedelta(seconds=calendar)),
+        "fastest": _named(fastest) if fastest else None,
+        "slowest": _named(slowest) if slowest else None,
+        "outside_office_hours": len(samples) - len(timed),
+    }
+
+
+def _month_bounds(month):
+    """The first instant of `month` and of the month after it, local time."""
+    tz = timezone.get_current_timezone()
+    following = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return (
+        timezone.make_aware(datetime.combine(month, time.min), tz),
+        timezone.make_aware(datetime.combine(following, time.min), tz),
+    )
+
+
+def turnaround(records, month=None) -> dict:
+    """Turnaround for one period: every stage's average, fastest and slowest.
+
+    `month` is the first day of a calendar month; None is every month there is.
+    The dashboard, Reports and the memo all call this for the month the reader
+    picked, so a figure that appears on two of them is the same figure.
 
     Each duration is reported twice: in office hours, and on the calendar.
     Neither replaces the other. Office hours answer "how much working time did
     the office have to act", which is the fair way to judge an office; calendar
     time is what the requester actually waited, which is the fair way to answer
-    them. Showing only the first would flatter every office that let something
-    sit over a weekend; showing only the second charges them for the weekend.
+    them.
     """
-    steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-    receipt_row = steps.aggregate(
-        value=Avg(F("received_at") - F("sent_at"), output_field=DurationField()),
-        samples=Count("id"),
-    )
-    receipt = receipt_row["value"]
-    receipt_office = average_business_seconds(steps.values_list("sent_at", "received_at"))
+    since, until = _month_bounds(month) if month else (None, None)
+    collected = _turnaround_samples(records, since, until)
+    stages = [
+        _stage(key, label, measures, noun, collected["samples"][key])
+        for key, label, measures, noun in TURNAROUND_STAGES
+    ]
+    closed = len(collected["deadlines"])
+    on_time = sum(1 for _month, kept in collected["deadlines"] if kept)
 
-    # Turnaround measures how long the *work* took, so it ends at completion
-    # rather than at approval — the wait for an administrator is somebody else's
-    # queue and would otherwise be charged to the office that finished on time.
-    done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
-    processing_set = done.filter(first_received_at__isnull=False)
-    # Each average and how many it is taken over, from one query.
-    processing_row = processing_set.aggregate(
-        value=Avg(F("completed_at") - F("first_received_at"), output_field=DurationField()),
-        samples=Count("id"),
-    )
-    processing = processing_row["value"]
-    processing_office = average_business_seconds(
-        processing_set.values_list("first_received_at", "completed_at")
-    )
-    lifetime_row = done.aggregate(
-        value=Avg(F("completed_at") - F("created_at"), output_field=DurationField()),
-        samples=Count("id"),
-    )
-    lifetime = lifetime_row["value"]
-    lifetime_office = average_business_seconds(done.values_list("created_at", "completed_at"))
-
-    with_deadline = done.filter(due_at__isnull=False)
-    deadline_total = with_deadline.count()
-    on_time = with_deadline.filter(completed_at__lte=F("due_at")).count()
-
-    return {
-        # Office hours: the headline figures.
-        "receipt": humanise_business_seconds(receipt_office),
-        "processing": humanise_business_seconds(processing_office),
-        "lifetime": humanise_business_seconds(lifetime_office),
-        # Calendar: kept beside them, never instead of them.
-        "receipt_calendar": humanise_duration(receipt),
-        "processing_calendar": humanise_duration(processing),
-        "lifetime_calendar": humanise_duration(lifetime),
-        "office_hours_caveat": OFFICE_HOURS_CAVEAT,
-        # How many each average is taken over, so "4 hrs" from three documents
-        # is not read with the weight of "4 hrs" from three hundred.
-        "receipt_samples": receipt_row["samples"],
-        "processing_samples": processing_row["samples"],
-        "lifetime_samples": lifetime_row["samples"],
+    result = {
+        "month": month,
+        # "So far" and "yet" belong to the month still running; a past month is
+        # finished, and "none completed yet" would promise work that never came.
+        "is_current": month == timezone.localdate().replace(day=1),
+        "stages": stages,
+        "office_hours_caveat": office_hours_caveat(),
+        "working_day_hours": working_day_hours(),
         "on_time": on_time,
-        "on_time_total": deadline_total,
-        "on_time_percent": percent(on_time, deadline_total),
+        "on_time_total": closed,
+        "on_time_percent": percent(on_time, closed),
+        # A period with nothing due has no rate. 0% would read as "everything
+        # was late" when the truth is "nothing was owed".
+        "has_on_time": bool(closed),
         # Handovers the receipt average cannot include yet: sent in the batch
         # the document is on now, not yet confirmed, on a document still in
         # circulation. It counted every unconfirmed step ever written, which
         # included siblings on finished documents and hops the document had
         # already moved past — 83 on the seeded data, beside a Pending receipt
-        # card reading 20. None of those will ever be confirmed.
+        # card reading 20. None of those will ever be confirmed. Live, not
+        # of the period: it is what is waiting now.
         "awaiting_confirmation": RoutingStep.objects.filter(
             record__in=records,
             received_at__isnull=True,
             batch=F("record__current_batch"),
         ).exclude(record__status__in=COMPLETED_STATUSES).count(),
     }
+    # The flat names the pages have always read: office-hours average, its
+    # calendar twin, and how many it is taken over — so "4 hrs" from three
+    # documents is not read with the weight of "4 hrs" from three hundred.
+    for stage in stages:
+        result[stage["key"]] = stage["average_label"]
+        result[f"{stage['key']}_calendar"] = stage["average_calendar"]
+        result[f"{stage['key']}_samples"] = stage["samples"]
+    return result
+
+
+def _duration(start, end, holidays, live=False) -> dict:
+    """One interval as the timeline and export state it: office time first."""
+    office = business_seconds_between(start, end, holidays)
+    return {
+        "office_seconds": office,
+        "office": humanise_business_seconds(office),
+        "calendar": humanise_duration(end - start),
+        # Still running: measured up to now, and said to be "so far".
+        "live": live,
+    }
+
+
+def record_waits(record, steps, holidays=None, now=None) -> dict:
+    """Office time at each hop of one record, keyed by routing step.
+
+    `receipt` is sent to confirmed — or sent to now, "so far", while nobody
+    has confirmed. `held` is how long the receiving office kept it: confirmed
+    to the next time that office sent it on, or to completion when that office
+    finished it, or to now while it still has it. None when the office did
+    neither, such as a copy one recipient of a batch confirmed while another
+    carried the work on.
+
+    Counted by the same engine, holidays and lunch as every turnaround figure,
+    so a hop's wait on this page adds up the same way the averages do.
+    """
+    if holidays is None:
+        holidays = load_holidays()
+    now = now or timezone.now()
+    finished = record.status in COMPLETED_STATUSES and record.completed_at
+    waits = {}
+    for step in steps:
+        entry = {"receipt": None, "held": None, "held_until": None}
+        if step.received_at:
+            entry["receipt"] = _duration(step.sent_at, step.received_at, holidays)
+            passed_on = min(
+                (
+                    later.sent_at for later in steps
+                    if later.from_office_id == step.to_office_id and later.sent_at >= step.received_at
+                ),
+                default=None,
+            )
+            if passed_on:
+                entry["held"] = _duration(step.received_at, passed_on, holidays)
+                entry["held_until"] = "sending it on"
+            elif record.current_office_id == step.to_office_id:
+                if finished and record.completed_at >= step.received_at:
+                    entry["held"] = _duration(step.received_at, record.completed_at, holidays)
+                    entry["held_until"] = "completing it"
+                elif not finished and step.batch == record.current_batch:
+                    entry["held"] = _duration(step.received_at, now, holidays, live=True)
+        elif not finished and step.batch == record.current_batch:
+            entry["receipt"] = _duration(step.sent_at, now, holidays, live=True)
+        waits[step.pk] = entry
+    return waits
+
+
+def record_durations(record, steps, holidays=None) -> dict:
+    """The three stages for one record, in office seconds, None where the
+    stage has not happened: the per-record twin of `turnaround()`, by the same
+    definitions, for the export.
+
+    Receipt is every confirmed hop's wait added together — the time the record
+    spent waiting for somebody to sign for it.
+    """
+    if holidays is None:
+        holidays = load_holidays()
+    finished = record.status in COMPLETED_STATUSES and record.completed_at
+    received = [step for step in steps if step.received_at]
+    return {
+        "receipt": (
+            sum(business_seconds_between(s.sent_at, s.received_at, holidays) for s in received)
+            if received else None
+        ),
+        "processing": (
+            business_seconds_between(record.first_received_at, record.completed_at, holidays)
+            if finished and record.first_received_at else None
+        ),
+        "lifetime": (
+            business_seconds_between(record.created_at, record.completed_at, holidays)
+            if finished else None
+        ),
+    }
 
 
 def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     """The three turnaround averages, one point per month.
 
-    `turnaround()` returns a single average over the whole period, which cannot
-    show whether an office is getting faster or slower — and that is the entire
-    question a trend line exists to answer.
-
-    Bucketed by when the *work finished*, not when it started, so a month's
-    figure covers documents actually closed in it. Office hours, the same basis
-    Reports uses, so the two pages cannot disagree about the same metric.
+    `turnaround()` answers for one period, which cannot show whether an office
+    is getting faster or slower — and that is the entire question a trend line
+    exists to answer. Both are built from `_turnaround_samples`, so a month's
+    point on this chart and that month's `turnaround()` are the same figure.
     """
     months, since = month_window(months_back)
-    step_rows = RoutingStep.objects.filter(
-        record__in=records, received_at__isnull=False, received_at__gte=since
-    ).values_list("sent_at", "received_at")
-    done_rows = records.filter(
-        status__in=COMPLETED_STATUSES,
-        completed_at__isnull=False,
-        completed_at__gte=since,
-    ).values_list("created_at", "first_received_at", "completed_at", "due_at")
+    collected = _turnaround_samples(records, since=since)
 
-    # Office seconds for the chart and the headline, calendar seconds beside
-    # them — the same pair Reports shows for the whole period.
-    buckets = {
-        month: {
-            "receipt": [], "processing": [], "lifetime": [],
-            "receipt_calendar": [], "processing_calendar": [], "lifetime_calendar": [],
-            "on_time": 0, "closed": 0,
-        }
-        for month in months
-    }
-
-    def calendar_seconds(start, end):
-        return max(0.0, (end - start).total_seconds())
-
-    for sent_at, received_at in step_rows:
-        bucket = buckets.get(_month_of(received_at))
-        if bucket is not None:
-            bucket["receipt"].append(business_seconds_between(sent_at, received_at))
-            bucket["receipt_calendar"].append(calendar_seconds(sent_at, received_at))
-
-    for created_at, first_received_at, completed_at, due_at in done_rows:
-        bucket = buckets.get(_month_of(completed_at))
-        if bucket is None:
-            continue
-        bucket["lifetime"].append(business_seconds_between(created_at, completed_at))
-        bucket["lifetime_calendar"].append(calendar_seconds(created_at, completed_at))
-        if first_received_at:
-            bucket["processing"].append(
-                business_seconds_between(first_received_at, completed_at)
-            )
-            bucket["processing_calendar"].append(
-                calendar_seconds(first_received_at, completed_at)
-            )
-        if due_at:
-            bucket["closed"] += 1
-            if completed_at <= due_at:
-                bucket["on_time"] += 1
-
-    def average_seconds(samples):
-        return sum(samples) / len(samples) if samples else None
+    buckets = {month: {key: [] for key, *_ in TURNAROUND_STAGES} for month in months}
+    for key, samples in collected["samples"].items():
+        for sample in samples:
+            if sample["month"] in buckets:
+                buckets[sample["month"]][key].append(sample)
+    deadlines = {month: [0, 0] for month in months}
+    for month, kept in collected["deadlines"]:
+        if month in deadlines:
+            deadlines[month][0] += 1
+            deadlines[month][1] += int(kept)
 
     day = working_day_seconds()
-
-    def average_days(samples):
-        seconds = average_seconds(samples)
-        return None if seconds is None else round(seconds / day, 1)
-
-    def calendar_label(samples):
-        seconds = average_seconds(samples)
-        return humanise_duration(None if seconds is None else timedelta(seconds=seconds))
-
     rows = []
     for month in months:
-        bucket = buckets[month]
-        row = {
-            "month": month,
-            "receipt": average_days(bucket["receipt"]),
-            "processing": average_days(bucket["processing"]),
-            "lifetime": average_days(bucket["lifetime"]),
-        }
+        closed, on_time = deadlines[month]
+        row = {"month": month}
         # Days for the axis, office language for the prose beside it. A
         # sentence reading "an average of 0.0 working days" is not something
-        # anybody would write; "under a minute" is. The month's own figures,
-        # so the summary beside the chart can say what its last point says.
-        for key in ("receipt", "processing", "lifetime"):
-            row[f"{key}_label"] = humanise_business_seconds(average_seconds(bucket[key]))
-            row[f"{key}_calendar"] = calendar_label(bucket[f"{key}_calendar"])
-            row[f"{key}_samples"] = len(bucket[key])
-        rows.append(
+        # anybody would write; "under a minute" is.
+        for key, *_ in TURNAROUND_STAGES:
+            samples = buckets[month][key]
+            office = _mean([s["office"] for s in samples])
+            calendar = _mean([s["calendar"] for s in samples])
+            row[key] = None if office is None else round(office / day, 1)
+            row[f"{key}_label"] = humanise_business_seconds(office)
+            row[f"{key}_calendar"] = humanise_duration(
+                None if calendar is None else timedelta(seconds=calendar)
+            )
+            row[f"{key}_samples"] = len(samples)
+        row.update(
             {
-                **row,
-                "on_time": bucket["on_time"],
-                "closed": bucket["closed"],
-                "on_time_percent": percent(bucket["on_time"], bucket["closed"]),
+                "on_time": on_time,
+                "closed": closed,
+                "on_time_percent": percent(on_time, closed),
                 # A month with nothing due has no rate. 0% would read as
                 # "everything was late" when the truth is "nothing was owed".
-                "has_on_time": bool(bucket["closed"]),
+                "has_on_time": bool(closed),
             }
         )
+        rows.append(row)
 
     measured = [
         value
@@ -677,9 +820,9 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
         "ceiling": ceiling,
         "ticks": axis_ticks(ceiling),
         "has_data": bool(measured),
-        "office_hours_caveat": OFFICE_HOURS_CAVEAT,
+        "office_hours_caveat": office_hours_caveat(),
         "latest": rows[-1] if rows else None,
-        "working_day_hours": round(day / 3600, 1),
+        "working_day_hours": working_day_hours(),
     }
 
 
@@ -846,12 +989,7 @@ def combined_totals(records, documents) -> dict:
         "in_process": by_status(Status.IN_PROCESS),
         "pending_upload": by_status(Status.COMPLETED_PENDING_UPLOAD),
         # Not a slice; the stat card and the memo both read it from here.
-        "overdue": (
-            records.filter(due_at__lt=timezone.now())
-            .exclude(status__in=COMPLETED_STATUSES)
-            .distinct()
-            .count()
-        ),
+        "overdue": records.filter(overdue_q()).distinct().count(),
         "historical": historical,
         "completed": repository_total - historical,
     }

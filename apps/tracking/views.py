@@ -13,7 +13,9 @@ from django.utils import timezone
 from django.views.generic import View
 
 from apps.accounts.models import Office
+from apps.core import analytics
 from apps.core import filters as core_filters
+from apps.core.business_time import office_hours_caveat
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
@@ -116,23 +118,10 @@ class RecordListView(AppLoginRequiredMixin, View):
         narrow_office = resolved.as_office
         queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
 
-        # "Every office" narrows nothing: it is the absence of an office filter,
-        # not a filter naming one.
-        #
-        # The third copy of this condition, now the same named function the
-        # dashboard and Reports call — see core_filters.office_touches_record_q.
-        # It matched originating-or-current, which is a narrower set than the
-        # dashboard ring counts, and the ring's slices link *here*: "Pending
-        # receipt 2" opened a page listing 1. Whichever way that gap is closed
-        # the two must be closed together, because a count that disagrees with
-        # the page behind it is the fault this whole branch exists to remove.
-        #
-        # `apply_scope` below is untouched and still answers its own question —
-        # what is on this office's desk right now. This only widens the picker's
-        # *narrowing* fallback, which applies to the views that are not a queue.
-        if narrow_office and scope not in services.OFFICE_SCOPED:
-            records = records.filter(core_filters.office_touches_record_q(narrow_office))
-        records = services.apply_scope(records, scope, request.user, office=queue_office)
+        # The queue as `services.office_queue` builds it: the one place the
+        # office rule is written, shared with Search and the dashboard's Action
+        # Centre, so a count there is the number of rows here.
+        records = services.office_queue(records, scope, request.user, office=queue_office)
         # A second, independent scope so the filter panel narrows *within* the
         # queue the pill selected rather than replacing it: "Office files" while
         # on Overdue means overdue records in your office, not one or the other.
@@ -384,7 +373,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
         request.session.pop(DRAFT_DEADLINE_KEY.format(pk=record.pk), None)
         messages.success(
             request,
-            f"{record.tracking_number} was routed. It stays “Pending receipt” until the "
+            f"{record.tracking_number} was routed. It stays “{Status.PENDING_RECEIPT.label}” until the "
             "receiving office confirms it.",
         )
         return redirect(record.get_absolute_url())
@@ -415,6 +404,11 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "from_office", "to_office", "sent_by", "received_by"
             ).order_by("sequence")
         )
+        # Office time at each hop, from the engine every turnaround figure uses.
+        # Attached to the step for the template; nothing is saved.
+        waits = analytics.record_waits(record, steps)
+        for step in steps:
+            step.waits = waits[step.pk]
         activities = list(
             record.activities.select_related("actor", "actor_office")
             .exclude(event__in=QUIET_EVENTS)
@@ -456,6 +450,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "show_filing_panel": can_archive_now or can_reopen,
                 "reopen_form": ReopenForm(),
                 "archived_document": archived_document,
+                "office_hours_caveat": office_hours_caveat(),
             },
         )
 
@@ -689,13 +684,19 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         record = _get_record(request, pk)
+        # A slip documents movement and quotes the tracking number, and a draft
+        # has neither: its number is issued when it is sent. Refused before
+        # anything is logged, so no print of a placeholder reaches the audit log.
+        if not record.has_tracking_number:
+            messages.info(request, "A draft has no routing slip. Send it first; it gets its number then.")
+            return redirect(record.get_absolute_url())
         # A paper slip leaves the system entirely, so both trails record who
         # generated one before the browser ever opens the print dialog: the
         # audit log for the administrator's view, and the record's own timeline
         # so the print shows up beside the movements it documents.
         entry = log_action(
             AuditLog.Action.PRINT,
-            f"Generated the routing slip for {record.tracking_number}",
+            f"Generated the routing slip for {record.display_tracking_number}",
             actor=request.user,
             target=record,
             request=request,
@@ -720,7 +721,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 "qr_svg": qr_svg(
                     f"{settings.SITE_BASE_URL}{record.get_absolute_url()}" if settings.SITE_BASE_URL
                     else request.build_absolute_uri(record.get_absolute_url()),
-                    label=f"QR code for {record.tracking_number}",
+                    label=f"QR code for {record.display_tracking_number}",
                 ),
             },
         )
