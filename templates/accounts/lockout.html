@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Sign-in Paused · {{ SITE_NAME }}{% endblock %}
 {% block body %}
-<div class="login-wrap">
+<div class="login-wrap" data-bs-theme="light">
   <section class="login-art" aria-labelledby="lockout-heading">
     <div class="grid-lines" aria-hidden="true"></div>
     <a class="login-brand" href="{% url 'accounts:login' %}" aria-label="{{ SITE_NAME }} sign in"><img src="{% static 'img/favicon.svg' %}" alt=""><span class="wordmark wordmark--light"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span></a>

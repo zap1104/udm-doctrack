@@ -11,6 +11,8 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="{{ PALETTE.navy }}">
   <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+  {# The theme, before the stylesheets paint anything: see static/js/theme-init.js. #}
+  <script src="{% static 'js/theme-init.js' %}"></script>
   <meta name="description" content="{{ SITE_LONG_NAME }}">
   {% if USE_LOCAL_VENDOR %}
     <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">

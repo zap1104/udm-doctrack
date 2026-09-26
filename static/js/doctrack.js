@@ -905,14 +905,17 @@
    makes an explicit choice beat the OS, which is the behaviour people expect
    from a toggle they can see.
 
-   Applied to the app only: the sign-in and lockout pages pin their tokens back
-   in CSS, so setting the attribute globally is harmless there.
+   Set on the whole document, and harmless on the pages that stay light: the
+   sign-in and lockout screens, the routing slip and the printed memo take the
+   light palette back in CSS, and carry data-bs-theme="light" for Bootstrap.
 
-   The attribute is set as early as this script runs. It is loaded at the end of
-   <body>, so a dark-preferring user sees a brief light flash on first paint —
-   accepted rather than fixed with a blocking inline script in <head>, because
-   the site runs under a Content-Security-Policy that forbids inline script and
-   loosening it for a colour scheme is a bad trade.
+   The first paint is handled by static/js/theme-init.js, a small external
+   script in <head> (so the CSP's script-src 'self' covers it): it sets the
+   theme before the stylesheets apply, where this file, loaded at the end of
+   <body>, left a dark-preferring reader a light flash on every page. This file
+   keeps the toggle and the operating-system follow, and writes the same two
+   attributes: data-theme for the app's stylesheet, data-bs-theme for
+   Bootstrap's own components.
 -------------------------------------------------------------------------- */
 (function () {
   "use strict";
@@ -946,6 +949,7 @@
 
   function apply(theme) {
     root.setAttribute("data-theme", theme);
+    root.setAttribute("data-bs-theme", theme);
     var toggles = document.querySelectorAll("[data-theme-toggle]");
     var next = theme === "dark" ? "light" : "dark";
     var label = "Switch to " + next + " theme";
