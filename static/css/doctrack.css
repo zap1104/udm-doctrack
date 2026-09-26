@@ -2404,6 +2404,41 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-summary-figures .report-metric > strong { min-width:0; }
 .trend-summary .meter-head { margin-top:10px; padding-top:10px; border-top:1px solid var(--chart-grid); }
 
+/* ------------------------------------------------------- dashboard sides
+   Document Tracking on the left, Document Repository on the right, each under
+   its own heading and in its own colour, so a figure's module is visible before
+   its title is read: teal for what is moving, the Completed green for what has
+   been filed. The accent runs along the heading and across the top of every
+   card on that side. Below xl the sides stack, tracking first. */
+.dashboard-side { display:flex; flex-direction:column; min-width:0; }
+.dashboard-side--tracking { --side-accent:var(--udm-teal); }
+.dashboard-side--repository { --side-accent:var(--status-completed); }
+/* Title and link on one line, the caption under both at full width, so the
+   narrow repository side's heading is as tall as the tracking side's and the
+   first cards on each side start level. */
+.dashboard-side-head {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 14px;
+  margin-bottom:14px; padding-bottom:10px; border-bottom:3px solid var(--side-accent);
+}
+.dashboard-side-head .dashboard-side-caption { grid-column:1 / -1; }
+.dashboard-side-title { color:var(--side-accent); font-size:13px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+.dashboard-side-caption { margin-top:2px; color:var(--udm-muted); font-size:13px; }
+.dashboard-side-stack { display:flex; flex-direction:column; gap:1.5rem; min-width:0; container:dashboard-side / inline-size; }
+.dashboard-side-stack > .row { margin-bottom:0 !important; }
+/* height:auto over Bootstrap's .h-100: in a stretched column, 100% was the
+   whole side, and the first card grew as tall as every card below it. */
+.dashboard-side-stack > .card-udm { height:auto !important; border-top:3px solid var(--side-accent); }
+/* The repository side is a third of the page on a wide screen. Its office bars
+   had a 190px label, a count and a share beside them, which left the bar about
+   40px: there the name and figures take one line and the bar the next. */
+@container dashboard-side (max-width: 520px) {
+  .report-series-item--wide.report-series-item--share { grid-template-columns:minmax(0,1fr) 44px 40px; row-gap:5px; }
+  .report-series-item--wide.report-series-item--share > .report-bar { grid-column:1 / -1; grid-row:2; }
+}
+@media print {
+  .dashboard-side-stack > .card-udm { border-top-width:1px; }
+}
+
 /* ------------------------------------------------------------- uploads */
 .uploads-leader { display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:10px 13px; margin-bottom:12px; border:1px solid var(--udm-gold-tint-strong); border-radius:10px; background:var(--udm-gold-tint); color:var(--udm-gold-ink-dark); font-size:13px; }
 .uploads-leader-tag { padding:2px 9px; border-radius:999px; background:var(--udm-gold); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }

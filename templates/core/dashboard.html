@@ -87,6 +87,29 @@
   the number answered for the picked one.
 {% endcomment %}
 {% comment %}
+  Two sides, labelled, and every panel on one of them: Document Tracking on the
+  left, what is moving between offices, and Document Repository on the right,
+  what has been filed. The page used to run as full-width rows, with the one
+  repository chart sitting between two tracking charts, so a reader could not
+  tell at a glance which module a figure belonged to.
+
+  Tracking has the wide side: its queue tables and twelve-month charts need the
+  width, and the charts size themselves to their container, not the window.
+  Below the xl breakpoint the sides stack, tracking first, each still headed by
+  its own title.
+{% endcomment %}
+<div class="row g-4 dashboard-sides">
+  <section class="col-xl-8 dashboard-side dashboard-side--tracking" aria-labelledby="side-tracking-title">
+    <header class="dashboard-side-head">
+      <div class="dashboard-side-title" id="side-tracking-title">Document Tracking</div>
+      <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+        <span>Open Tracking</span>
+        <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <div class="dashboard-side-caption">What is moving between offices, what needs doing, and how long it takes.</div>
+    </header>
+    <div class="dashboard-side-stack">
+{% comment %}
   Three cards, not four. "Held by your office" was the fourth and it counted
   ?scope=received, which is a queue you reach in one click from Incoming — the
   card was reporting a stage of the same pile the card beside it already
@@ -154,19 +177,6 @@
     </a>
   </div>
 </div>
-
-{% comment %}
-  Two labels for the whole page, not for one row. Every row below reads
-  tracking on the left and the repository on the right, and saying so once here
-  is what makes the other rows legible without repeating a heading on each.
-{% endcomment %}
-<div class="row g-4 mb-1" aria-hidden="true">
-  <div class="col-xl-6"><div class="eyebrow">tracking</div></div>
-  <div class="col-xl-6"><div class="eyebrow">repository</div></div>
-</div>
-
-<div class="row g-4 mb-3">
-  <div class="col-xl-6">
     <div class="card-udm h-100" data-ring-card>
       <div class="card-udm-head">
         <div>
@@ -267,36 +277,7 @@
         </p>
       </div>
     </div>
-  </div>
-
-  <div class="col-xl-6">
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <div>
-          <h2>Repository</h2>
-          <div class="card-udm-caption">
-            Documents filed and kept &mdash; {{ repository_donut.total }} in total.
-          </div>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% if repository_donut.total %}
-          {% include "core/_donut.html" with donut=repository_donut %}
-        {% else %}
-          <div class="report-empty">Nothing has been filed yet.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mb-4">
-  <div class="col-12">
     {% comment %}
-          The Action Centre has the row to itself. "Newest in the Document
-          Repository" shared it, repeating what the Repository ring above and the
-          Repository page already show: the dashboard is for what needs doing.
-
           Action Centre. Two questions that were two panels: what needs doing, and what
           moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
           sitting in different rows and answering versions of the same question, so the
@@ -357,16 +338,6 @@
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<div class="row g-4 mb-4">
-  {% comment %}
-    Full width, not half. Three labelled columns a month need about 70px of
-    month to sit in; in a half-width card a month is 34px and the numbers
-    collide. The panel beside it moves under it.
-  {% endcomment %}
-  <div class="col-12">
     {% comment %}
             Monthly volume. The same cumulative three-series chart Reports draws, from
             the same function — running totals rather than monthly resets, because the
@@ -448,75 +419,6 @@
         {% endif %}
       </div>
     </div>
-  </div>
-  <div class="col-12">
-    {% comment %}
-            Uploads by office. One combined figure per office — a document uploaded
-            directly and a tracked record completed and filed are both an office adding
-            to the repository, and splitting them would make an office doing one of each
-            look half as productive as one doing two of the same.
-          {% endcomment %}
-    <div class="card-udm h-100">
-      <div class="card-udm-head">
-        <div>
-          <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
-          <div class="card-udm-caption">
-            Uploads, plus documents filed when tracking finished.
-            {% if uploads_by_office.total %}Each bar is an office's share of all {{ uploads_by_office.total }}.{% endif %}
-          </div>
-        </div>
-      </div>
-      <div class="card-udm-body">
-        {% if uploads_by_office.rows %}
-          {% comment %}
-            Named only when one office is genuinely ahead. On a tie the server
-            sends no leader, because calling a tie "the top office" hands out a
-            distinction the numbers did not award.
-          {% endcomment %}
-          {% if uploads_by_office.leader %}
-            <div class="uploads-leader">
-              <span class="uploads-leader-tag">Most this month</span>
-              <span>
-                <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
-                {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
-                ({% share uploads_by_office.leader.total uploads_by_office.total %})
-              </span>
-            </div>
-          {% endif %}
-          {% comment %}
-            The last row may be "Other (n offices)", carrying what the cap left
-            out so the rows add up to the total above them. It is muted, and its
-            bar is its share like every other row's. `not row.is_remainder` on
-            the leader test because the remainder's code is blank, and so is the
-            leader's when there is none.
-
-            Every bar is a share of the whole, the percentage printed beside it,
-            so the track is 100% and the bars together fill exactly one. They
-            were measured against the busiest office, which always drew a full
-            track: 3 of 15 filled the card beside the words "20%".
-          {% endcomment %}
-          {% for row in uploads_by_office.rows %}
-            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}"
-                 title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
-              <span>{{ row.name }}</span>
-              <div class="report-bar">
-                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-completed-strong{% else %}bar-completed{% endif %}"
-                   style="width:{{ row.bar_percent }}%"></i>
-              </div>
-              <strong class="num">{{ row.total }}</strong>
-              <span class="status-share num">{% share row.total uploads_by_office.total %}</span>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="report-empty">Nothing has been added to the repository this month.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mb-4">
-  <div class="col-12">
     {% comment %}
           Turnaround by month. Counted in office hours, the same basis the Reports
           figures use — a document routed Friday 4PM and received Monday 9AM waited
@@ -743,7 +645,100 @@
           {% endif %}
         </div>
       </div>
-  </div>
+    </div>
+  </section>
+
+  <section class="col-xl-4 dashboard-side dashboard-side--repository" aria-labelledby="side-repository-title">
+    <header class="dashboard-side-head">
+      <div class="dashboard-side-title" id="side-repository-title">Document Repository</div>
+      <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
+        <span>Open Repository</span>
+        <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <div class="dashboard-side-caption">What has been filed, and which office added it.</div>
+    </header>
+    <div class="dashboard-side-stack">
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Repository</h2>
+          <div class="card-udm-caption">
+            Documents filed and kept &mdash; {{ repository_donut.total }} in total.
+          </div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        {% if repository_donut.total %}
+          {% include "core/_donut.html" with donut=repository_donut %}
+        {% else %}
+          <div class="report-empty">Nothing has been filed yet.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% comment %}
+            Uploads by office. One combined figure per office — a document uploaded
+            directly and a tracked record completed and filed are both an office adding
+            to the repository, and splitting them would make an office doing one of each
+            look half as productive as one doing two of the same.
+          {% endcomment %}
+    <div class="card-udm h-100">
+      <div class="card-udm-head">
+        <div>
+          <h2>Added to the repository &mdash; {{ uploads_by_office.month|date:"F" }}</h2>
+          <div class="card-udm-caption">
+            Uploads, plus documents filed when tracking finished.
+            {% if uploads_by_office.total %}Each bar is an office's share of all {{ uploads_by_office.total }}.{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        {% if uploads_by_office.rows %}
+          {% comment %}
+            Named only when one office is genuinely ahead. On a tie the server
+            sends no leader, because calling a tie "the top office" hands out a
+            distinction the numbers did not award.
+          {% endcomment %}
+          {% if uploads_by_office.leader %}
+            <div class="uploads-leader">
+              <span class="uploads-leader-tag">Most this month</span>
+              <span>
+                <strong>{{ uploads_by_office.leader.name }}</strong> &mdash;
+                {{ uploads_by_office.leader.total }} of {{ uploads_by_office.total }}
+                ({% share uploads_by_office.leader.total uploads_by_office.total %})
+              </span>
+            </div>
+          {% endif %}
+          {% comment %}
+            The last row may be "Other (n offices)", carrying what the cap left
+            out so the rows add up to the total above them. It is muted, and its
+            bar is its share like every other row's. `not row.is_remainder` on
+            the leader test because the remainder's code is blank, and so is the
+            leader's when there is none.
+
+            Every bar is a share of the whole, the percentage printed beside it,
+            so the track is 100% and the bars together fill exactly one. They
+            were measured against the busiest office, which always drew a full
+            track: 3 of 15 filled the card beside the words "20%".
+          {% endcomment %}
+          {% for row in uploads_by_office.rows %}
+            <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}"
+                 title="{{ row.name }} &mdash; {{ row.uploaded }} uploaded, {{ row.filed }} completed and filed">
+              <span>{{ row.name }}</span>
+              <div class="report-bar">
+                <i class="{% if not row.is_remainder and row.code == uploads_by_office.leader.code %}bar-completed-strong{% else %}bar-completed{% endif %}"
+                   style="width:{{ row.bar_percent }}%"></i>
+              </div>
+              <strong class="num">{{ row.total }}</strong>
+              <span class="status-share num">{% share row.total uploads_by_office.total %}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="report-empty">Nothing has been added to the repository this month.</div>
+        {% endif %}
+      </div>
+    </div>
+    </div>
+  </section>
 </div>
 
 {% comment %}
