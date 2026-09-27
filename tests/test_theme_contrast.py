@@ -50,20 +50,26 @@ ANCESTOR_GROUNDS = (
 #: work and is left exactly as it was, because the brief for that change was
 #: "dont change anything for light mode".
 #:
-#: FIXME: these are genuine AA failures in light mode — gold #c49a2e carries
-#: only 2.44:1 on white, and white-on-gold 2.62:1. Fixing them means re-tuning
-#: --udm-gold or giving the gold text a darker ink (--udm-gold-ink is #8a6a12
-#: and clears the floor), which is a visible change to the light palette and so
-#: wants its own decision. The set must not grow in the meantime.
+#: The eyebrows now use --udm-gold-ink, and the receipt icon and the uploads
+#: leader tag put --udm-on-gold (navy) on the gold rather than white, so those
+#: three came off this list.
+#:
+#: FIXME: these two are still gold #c49a2e as text, 2.44:1 on white. Both are
+#: large display type (the wordmark's "UDM" and the 404's number), where the
+#: gold is the brand mark itself, so darkening them is a branding decision
+#: rather than a contrast fix. The set must not grow in the meantime.
 LIGHT_BASELINE = {
     ".wordmark .udm",
-    ".eyebrow",
     ".error-code",
-    ".btn-receipt-icon",
-    ".uploads-leader-tag",
 }
 
 VAR = re.compile(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*?)\s*)?\)")
+
+#: The light palette's rule. It is a selector list — the root, and the paper
+#: surfaces that keep the light values in the dark theme — so the pattern takes
+#: everything up to the brace rather than expecting ":root {".
+LIGHT = r"^:root(?:,[^{]*)?"
+DARK = r':root\[data-theme="dark"\]'
 
 
 def _decomment(css: str) -> str:
@@ -147,9 +153,9 @@ def _failures(theme: str) -> list[tuple[str, str, float]]:
     """Rules whose text falls below the floor on the given theme's grounds."""
     css = _decomment(CSS.read_text(encoding="utf-8"))
 
-    table = _token_block(css, r"^:root")
+    table = _token_block(css, LIGHT)
     if theme == "dark":
-        table = {**table, **_token_block(css, r':root\[data-theme="dark"\]')}
+        table = {**table, **_token_block(css, DARK)}
 
     surface = _resolve("var(--udm-surface)", table)
     canvas = _resolve("var(--udm-canvas)", table)
@@ -229,9 +235,9 @@ def test_light_mode_contrast_did_not_get_worse():
     """Light mode is held at its baseline rather than at zero.
 
     The dark-mode fix was explicitly scoped to leave light alone, and light
-    carries five gold-on-white pairings that were already under the floor. They
-    are recorded in LIGHT_BASELINE with a FIXME rather than silently passed, so
-    the set can shrink but not grow.
+    carried five gold-on-white pairings that were already under the floor; two
+    remain. They are recorded in LIGHT_BASELINE with a FIXME rather than
+    silently passed, so the set can shrink but not grow.
     """
     failures = _failures("light")
     selectors = {selector for selector, _, _ in failures}
@@ -251,17 +257,19 @@ def test_navy_keeps_its_two_jobs_apart():
     they did, and to --udm-ink in dark, where navy has become a background."""
     css = _decomment(CSS.read_text(encoding="utf-8"))
 
-    light = _token_block(css, r"^:root")
-    dark = {**light, **_token_block(css, r':root\[data-theme="dark"\]')}
+    light = _token_block(css, LIGHT)
+    dark = {**light, **_token_block(css, DARK)}
 
     assert _resolve("var(--udm-navy-text)", light) == _resolve("var(--udm-navy)", light)
     assert _resolve("var(--udm-navy-text)", dark) == _resolve("var(--udm-ink)", dark)
 
-    # The sign-in screen pins the light palette back; navy-text has to be pinned
-    # with it or a dark-theme sign-in gets near-black headings where a
-    # light-theme one gets navy.
-    pin = _token_block(css, r':root\[data-theme="dark"\] \.login-wrap')
-    assert "--udm-navy-text" in pin, "the .login-wrap pin has to carry it too"
+    # The sign-in screen keeps the light palette in the dark theme; navy-text
+    # has to come back with it or a dark-theme sign-in gets near-black headings
+    # where a light-theme one gets navy. It does by the sign-in screen sitting
+    # in the light palette's own selector list, which carries every token.
+    selector = re.search(LIGHT + r"\{", css, re.M).group(0)
+    assert ".login-wrap" in selector, "the sign-in screen has to take the light palette"
+    assert "--udm-navy-text" in light
 
 
 def test_the_text_token_never_took_over_navys_background_job():
@@ -299,9 +307,16 @@ def test_both_themes_pin_color_scheme():
     css = CSS.read_text(encoding="utf-8")
     body = _decomment(css)
 
-    light = body[body.index(":root {"):body.index("}", body.index(":root {"))]
+    light_start = re.search(LIGHT + r"\{", body, re.M).start()
+    light = body[light_start:body.index("}", light_start)]
     assert "color-scheme: light" in light, "the light theme must pin it too"
 
     dark_start = body.index(':root[data-theme="dark"] {')
     dark = body[dark_start:body.index("}", dark_start)]
     assert "color-scheme: dark" in dark
+
+    # The paper surfaces stay light in the dark theme, native controls included.
+    assert re.search(
+        r':root\[data-theme="dark"\] :is\(\.login-wrap, \.memo-print, \.routing-slip\)'
+        r"\s*\{\s*color-scheme: light;", body,
+    )

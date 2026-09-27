@@ -339,8 +339,13 @@ def test_the_theme_is_built_on_the_existing_tokens():
 
 
 def test_the_sign_in_page_stays_light():
+    """It is named in the light palette's own selector list, so in the dark
+    theme it takes every light token (tests/test_dark_mode.py checks the rest:
+    the other paper surfaces, and Bootstrap's data-bs-theme)."""
+    import re
+
     css = CSS.read_text(encoding="utf-8")
-    assert ':root[data-theme="dark"] .login-wrap' in css
+    assert re.search(r'^:root,\s*:root\[data-theme="dark"\] :is\([^)]*\.login-wrap\b', css, re.M)
 
 
 def test_printing_uses_the_light_palette():

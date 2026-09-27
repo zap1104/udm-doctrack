@@ -1139,11 +1139,15 @@ def test_every_dashboard_row_and_column_sits_at_the_depth_it_should():
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
     _, trace = _div_depth(html)
 
+    # Rows now also sit inside a side (the stat cards' row), so a row may be
+    # nested; what Bootstrap needs is that every .col- is directly inside one.
+    rows = []
     for number, depth, line in trace:
         if re.search(r'<div class="row\b', line):
-            assert depth == 0, f"line {number}: .row nested at depth {depth}"
+            rows.append(depth)
         elif re.search(r'<div class="col-', line):
-            assert depth == 1, f"line {number}: .col- at depth {depth}, not inside a .row"
+            assert rows, f"line {number}: .col- before any .row"
+            assert depth == rows[-1] + 1, f"line {number}: .col- at depth {depth}, not inside its .row"
 
 
 @pytest.mark.django_db
@@ -1600,85 +1604,75 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
     assert body.count("onchange=") <= 1
 
 
-# ------------------------------------------------------- the column rule
-#: Top to bottom. A pair is (left, right); a lone string is a full-width row.
-#: Left is tracking, right is the repository, wherever a row is split.
-EXPECTED_ROWS = [
-    ("Tracking", "Repository"),
-    "Action Centre",
-    ("Created, handed over and completed", "Added to the repository"),
-    "Turnaround Time",
-]
+# ------------------------------------------------------- the side rule
+#: Each side's panels, top to bottom. Document Tracking is the left, wide side;
+#: Document Repository the right. The page ran as full-width rows before, with
+#: the one repository chart between two tracking charts, so a figure's module
+#: could not be told from where it sat.
+TRACKING_SIDE = ["Tracking", "Action Centre", "Created, handed over and completed", "Turnaround Time"]
+REPOSITORY_SIDE = ["Repository", "Added to the repository"]
 
 
-@pytest.mark.django_db
-def test_the_panels_run_in_the_order_the_layout_specifies(client, users, filed_record):
-    """The donut row teaches "left is what is moving, right is what is filed".
-    The page used to drop that immediately, so a reader who had just learned it
-    was wrong by the next row."""
+def _side(body, name):
+    """The rendered markup of one side, and its panel headings in order."""
     import re
 
-    client.force_login(users["admin"])
-    body = client.get(DASHBOARD).content.decode()
-
+    marker = f'class="col-xl-{8 if name == "tracking" else 4} dashboard-side dashboard-side--{name}"'
+    start = body.rindex("<section", 0, body.index(marker))
+    depth, end = 0, start
+    for tag in re.finditer(r"<section\b|</section>", body[start:]):
+        depth += 1 if tag.group(0) == "<section" else -1
+        if depth == 0:
+            end = start + tag.end()
+            break
+    markup = body[start:end]
     headings = [
-        re.sub(r"<[^>]+>|\s+", " ", m.group(1) or m.group(2)).strip()
-        for m in re.finditer(r"<h2>(.*?)</h2>", body, re.S)
+        re.split(r"&mdash;| — | for the Month of ", re.sub(r"<[^>]+>|\s+", " ", m.group(1)).strip())[0].strip()
+        for m in re.finditer(r"<h2>(.*?)</h2>", markup, re.S)
     ]
-    expected = []
-    for row in EXPECTED_ROWS:
-        expected.extend(row if isinstance(row, tuple) else [row])
-
-    # "Added to the repository &mdash; September" carries the month, as the
-    # HTML entity rather than the character, and "Turnaround Time for the
-    # Month of September 2026" carries the month picked.
-    normalised = [re.split(r"&mdash;| — | for the Month of ", h)[0].strip() for h in headings]
-    assert normalised == expected
+    return markup, headings
 
 
 @pytest.mark.django_db
-def test_the_action_centre_has_its_row_to_itself(client, users, filed_record):
-    """It shared a row with "Newest in the Document Repository", which repeated
-    what the Repository ring and page already show and was removed."""
-    import re
-
+def test_every_panel_sits_on_its_own_side(client, users, filed_record):
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    columns = re.split(r'<div class="col[ -]', body)
-    holding = [c for c in columns if "<h2>Action Centre</h2>" in c]
-    assert len(holding) == 1
-    assert holding[0].startswith('12">'), "full width"
+    assert _side(body, "tracking")[1] == TRACKING_SIDE
+    assert _side(body, "repository")[1] == REPOSITORY_SIDE
+    assert body.index("dashboard-side--tracking") < body.index("dashboard-side--repository"), (
+        "tracking first, so it leads when the sides stack on a narrow screen"
+    )
 
 
-def test_the_turnaround_panel_is_full_width_and_comes_last():
-    """It is the one chart spanning both domains, so it closes the page under
-    the four half-width rows rather than sitting in one of them. Three series
-    over twelve months does not fit in half a row either — that is what commit
-    4b082e8 was about.
+@pytest.mark.django_db
+def test_each_side_is_headed_and_opens_its_module(client, users, offices, filed_record):
+    client.force_login(users["admin"])
+    office = offices["SUP"].pk
+    body = client.get(f"{DASHBOARD}?office={office}").content.decode()
 
-    Asserted as <div> depth: a panel in a col-xl-6 sits at the same depth as one
-    in a col-12, so the class is checked directly.
-    """
+    tracking, _ = _side(body, "tracking")
+    repository, _ = _side(body, "repository")
+    assert 'id="side-tracking-title">Document Tracking</div>' in tracking
+    assert 'id="side-repository-title">Document Repository</div>' in repository
+    assert f'href="/tracking/?office={office}"' in tracking, "the office picked rides along"
+    assert f'href="/documents/?office={office}"' in repository
+    assert '<div class="eyebrow">tracking</div>' not in body, "the headings replace the old labels"
+
+
+def test_the_sides_split_two_thirds_to_a_third_and_the_charts_are_on_the_wide_one():
+    """The twelve-month charts need width: they sit on the tracking side,
+    which is the wide one, and size themselves to it (container queries)."""
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    head = html.index("<h2>Turnaround Time for the Month of")
-    column = html.rindex('<div class="col-', 0, head)
+    tracking = html.index('<section class="col-xl-8 dashboard-side dashboard-side--tracking"')
+    repository = html.index('<section class="col-xl-4 dashboard-side dashboard-side--repository"')
 
-    assert html[column:].startswith('<div class="col-12">'), "not full width"
-    assert "<h2>" not in html[head + 1:html.index("{% comment %}\n  Generate memo.")], "not last"
-
-
-@pytest.mark.django_db
-def test_the_page_carries_its_two_column_labels(client, users, filed_record):
-    """Said once, above the first split row: every row below reads tracking on
-    the left and the repository on the right."""
-    client.force_login(users["admin"])
-    body = client.get(DASHBOARD).content.decode()
-
-    assert '<div class="eyebrow">tracking</div>' in body
-    assert '<div class="eyebrow">repository</div>' in body
+    for chart in ('class="column-chart-frame"', 'class="trend-svg"'):
+        assert tracking < html.index(chart) < repository, chart
+    last = html.rindex("<h2>", tracking, repository)
+    assert html.startswith("<h2>Turnaround Time for the Month of", last), "turnaround closes its side"
 
 
 @pytest.mark.django_db

@@ -252,6 +252,29 @@ def badge_palette(base: str) -> tuple[str, str]:
     return tint, ink
 
 
+#: The dark theme's card, which a dark badge sits on (--udm-surface in dark).
+DARK_SURFACE = "#17212c"
+
+
+def badge_palette_dark(base: str) -> tuple[str, str]:
+    """The same pair for the dark theme: a deep wash of the colour over the
+    dark card, and text lightened in steps until it clears AA against it.
+
+    The light pair thinned the colour almost to white, which on a dark page is
+    a pale chip shouting from every table row. Mirrored here: the colour is
+    mixed into the card rather than into white, and the ink lifts toward white
+    rather than darkening toward black.
+    """
+    base = normalise_hex(base)
+    tint = _mix(base, DARK_SURFACE, 0.24)
+    ink = base
+    for _ in range(24):  # bounded: each step lightens, so this always terminates
+        if contrast_ratio(ink, tint) >= MIN_CONTRAST:
+            break
+        ink = _mix(ink, "#ffffff", 0.85)
+    return tint, ink
+
+
 # ---------------------------------------------------------------------------
 # QR codes
 # ---------------------------------------------------------------------------

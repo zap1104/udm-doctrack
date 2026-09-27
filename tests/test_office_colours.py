@@ -11,33 +11,72 @@ who cannot tell the two colours apart.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from apps.accounts.models import OFFICE_COLOURS, Office
-from apps.core.utils import MIN_CONTRAST, badge_palette, contrast_ratio, normalise_hex
+from apps.core.utils import (
+    DARK_SURFACE,
+    MIN_CONTRAST,
+    badge_palette,
+    badge_palette_dark,
+    contrast_ratio,
+    normalise_hex,
+)
+
+#: What an administrator might pick, including the colours built to break a
+#: naive derivation.
+CHOSEN = [
+    "#ffffff",  # white: nothing to darken toward on its own
+    "#ffffcc",  # the pale yellow that defeats naive "use the colour as text"
+    "#ccff00",  # neon
+    "#000000",  # black: in the dark theme, nothing darker to sit it on
+    "#ffe0f0",
+    "#00ffff",
+    "#808080",
+    "#0f0",  # shorthand
+    *OFFICE_COLOURS,
+]
 
 
 # ---------------------------------------------------------------------------
 # Readability, whatever the administrator picks
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    "chosen",
-    [
-        "#ffffff",  # white: nothing to darken toward on its own
-        "#ffffcc",  # the pale yellow that defeats naive "use the colour as text"
-        "#ccff00",  # neon
-        "#000000",
-        "#ffe0f0",
-        "#00ffff",
-        "#808080",
-        "#0f0",  # shorthand
-        *OFFICE_COLOURS,
-    ],
-)
+@pytest.mark.parametrize("chosen", CHOSEN)
 def test_every_badge_clears_wcag_aa(chosen):
     tint, ink = badge_palette(chosen)
 
     assert contrast_ratio(ink, tint) >= MIN_CONTRAST, f"{chosen} -> {ink} on {tint}"
+
+
+@pytest.mark.parametrize("chosen", CHOSEN)
+def test_every_dark_theme_badge_clears_wcag_aa(chosen):
+    """The dark theme's pair is derived separately: the light pair is a colour
+    thinned almost to white, which on the dark card is a pale chip in every
+    table row, with dark text the rest of the page does not have."""
+    tint, ink = badge_palette_dark(chosen)
+
+    assert contrast_ratio(ink, tint) >= MIN_CONTRAST, f"{chosen} -> {ink} on {tint}"
+
+
+@pytest.mark.parametrize("chosen", CHOSEN)
+def test_a_dark_theme_badge_is_a_wash_on_the_card_not_a_light_chip(chosen):
+    """Its ground stays close to the card it sits on, so the badge reads as
+    colour on the dark page rather than a light patch cut out of it."""
+    tint, _ink = badge_palette_dark(chosen)
+
+    assert contrast_ratio(tint, DARK_SURFACE) < 2.5, f"{chosen} -> {tint} stands out from the card"
+
+
+def test_the_dark_theme_card_the_badges_are_mixed_on_is_the_real_one():
+    """DARK_SURFACE is a copy of the stylesheet's dark --udm-surface. If the two
+    part, every badge is tuned for a card that is no longer there."""
+    from tests.test_theme_contrast import DARK, _decomment, _token_block
+
+    css = _decomment(pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8"))
+
+    assert _token_block(css, DARK)["--udm-surface"].strip().lower() == DARK_SURFACE
 
 
 @pytest.mark.parametrize("junk", ["", None, "not-a-colour", "red;background:url(x)", "#12345", "javascript:x"])
@@ -111,6 +150,9 @@ def test_the_record_page_colour_codes_its_offices(client, users, offices, memo_t
 
     assert "office-badge" in body
     assert offices["MED"].badge["tint"] in body
+    # Both themes' pairs travel with the badge; the stylesheet picks one.
+    assert f"--office-tint-dark:{offices['MED'].badge['tint_dark']};" in body
+    assert f"--office-ink-dark:{offices['MED'].badge['ink_dark']};" in body
     # Colour is never alone: the code is on the badge as text.
     assert "MED" in body and "SUP" in body
 
