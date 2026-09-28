@@ -973,6 +973,15 @@ a:hover { text-decoration: underline; }
 .subtab { margin-bottom:-1px; padding:9px 14px; border-bottom:3px solid transparent; color:var(--udm-muted); font-size:14px; font-weight:600; text-decoration:none; }
 .subtab:hover,.subtab:focus { color:var(--udm-navy-text); text-decoration:none; }
 .subtab.is-active { border-bottom-color:var(--udm-teal); color:var(--udm-navy-text); }
+.app-sidebar .nav-item--child { margin-left:24px; min-height:44px; padding-left:18px; font-size:14px; }
+.report-count-link { font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+#report-records { scroll-margin-top:90px; }
+#report-records td:first-child { min-width:220px; max-width:440px; overflow-wrap:anywhere; }
+@media (max-width:575.98px) {
+  #report-records .card-udm-head { flex-direction:column; align-items:stretch; }
+  #report-records .card-udm-head > .btn { align-self:flex-start; }
+}
+.dashboard-turnaround-summary { margin-top:20px; }
 .reports-tabs { display:inline-flex; gap:4px; margin-bottom:18px; padding:4px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); box-shadow:var(--shadow-card); }
 .reports-tab { padding:8px 15px; border:0; border-radius:7px; background:transparent; color:var(--udm-muted); font-size:13px; font-weight:700; }
 .reports-tab:hover,.reports-tab:focus { background:var(--udm-canvas); color:var(--udm-navy-text); }
@@ -1130,11 +1139,24 @@ a:hover { text-decoration: underline; }
    cumulative, what "historical" means, why office hours. One plain line stays
    under every title; this holds the rest. */
 .chart-note { margin-top:10px; }
-.chart-note summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
-.chart-note p { margin:8px 0 0; color:var(--udm-muted); font-size:12.5px; line-height:1.5; max-width:70ch; }
+.chart-note p { margin:12px 0 0; color:var(--udm-slate-text); font-size:14px; line-height:1.7; max-width:70ch; }
 .chart-table { margin-top:12px; }
-.chart-table summary { color:var(--udm-teal); font-size:12.5px; cursor:pointer; }
 .chart-table table { margin-top:8px; }
+/* Shared native disclosures: the entire row is a target, and the browser
+   provides the expanded state and Enter/Space behavior without JavaScript. */
+.disclosure-control { display:grid; grid-template-columns:12px minmax(0,1fr) auto; align-items:center; gap:12px; width:100%; min-height:48px; padding:12px 14px; border:1px solid var(--udm-line-strong); border-radius:8px; background:var(--udm-surface-sunk); color:var(--udm-navy-text); font-size:15px; line-height:1.4; list-style:none; cursor:pointer; }
+.disclosure-control::-webkit-details-marker { display:none; }
+.disclosure-control::before { content:""; width:8px; height:8px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg); }
+details[open] > .disclosure-control::before { transform:rotate(45deg); }
+.disclosure-control:hover { border-color:var(--udm-teal); background:var(--udm-teal-soft); }
+.disclosure-control:focus-visible { outline:3px solid var(--udm-teal); outline-offset:3px; }
+.disclosure-copy { min-width:0; }
+.disclosure-title { display:block; font-weight:650; overflow-wrap:anywhere; }
+.disclosure-description { display:block; margin-top:3px; color:var(--udm-slate-text); font-size:13px; font-weight:400; line-height:1.5; }
+.disclosure-state { padding:4px 8px; border:1px solid var(--udm-line); border-radius:6px; background:var(--udm-surface); color:var(--udm-navy-text); font-size:12px; font-weight:600; white-space:nowrap; }
+.disclosure-hide { display:none; }
+details[open] > .disclosure-control .disclosure-show { display:none; }
+details[open] > .disclosure-control .disclosure-hide { display:inline; }
 /* The site-wide `.table-responsive > .table-udm { min-width:720px }` is for the
    record lists. A chart's table has three to five short columns, and under that
    minimum it scrolled sideways inside a 435px dashboard card, hiding the
@@ -1997,21 +2019,6 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    long; the markup ships open so a blocked script leaves the whole history
    readable rather than hidden. */
 .fold { margin: 0 0 14px; }
-.fold > summary {
-  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
-  border: 1px solid var(--udm-line); border-radius: 999px; background:var(--udm-surface);
-  color: var(--udm-navy-text); cursor: pointer; font-size: 12.5px; font-weight: 600;
-  list-style: none;
-}
-.fold > summary::-webkit-details-marker { display: none; }
-.fold > summary::before {
-  content: "▾"; font-size: 10px; transition: transform 0.12s ease;
-}
-.fold:not([open]) > summary::before { transform: rotate(-90deg); }
-.fold:not([open]) > summary::after { content: " — hidden"; font-weight: 400; color: var(--udm-muted); }
-.fold > summary:hover, .fold > summary:focus-visible {
-  border-color: var(--udm-teal); background: var(--udm-teal-soft); color: var(--udm-teal-ink);
-}
 .fold[open] > summary { margin-bottom: 12px; }
 
 /* A paper record has to carry the whole history whatever the screen was
@@ -2442,6 +2449,70 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-summary-figures .report-metric > span,
 .trend-summary-figures .report-metric > strong { min-width:0; }
 .trend-summary .meter-head { margin-top:10px; padding-top:10px; border-top:1px solid var(--chart-grid); }
+
+/* The tracking side owns the entire turnaround panel. Put its figures below
+   the plot so neither is squeezed by a second column inside the dashboard. */
+.dashboard-turnaround .trend-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; }
+.dashboard-turnaround { scroll-margin-top:90px; }
+.dashboard-turnaround-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--udm-line); }
+.dashboard-turnaround-filters > div { flex:1 1 145px; min-width:0; }
+.dashboard-turnaround-filters label { display:block; margin-bottom:4px; color:var(--udm-slate-text); font-size:12px; font-weight:600; }
+.dashboard-turnaround-filters .form-select { width:100%; }
+.dashboard-turnaround-filters .dashboard-turnaround-filter-actions { flex:0 1 auto; display:flex; gap:8px; }
+.dashboard-turnaround-period { margin:10px 0 16px; color:var(--udm-muted); font-size:12px; }
+.dashboard-turnaround-statistics { margin-top:16px; padding-top:14px; border-top:1px solid var(--udm-line); }
+.dashboard-turnaround-statistics .dashboard-turnaround-summary { margin-top:16px; }
+.dashboard-turnaround-summary { padding:0; border:0; border-radius:0; }
+.dashboard-turnaround-summary .trend-summary-head { margin-bottom:8px; font-size:12px; color:var(--udm-navy-text); }
+.dashboard-turnaround-guide { margin:0 0 16px; color:var(--udm-muted); font-size:13px; line-height:1.6; }
+.dashboard-turnaround-stages { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+.dashboard-turnaround-stage { min-width:0; padding:16px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface-sunk); }
+.dashboard-turnaround-stage-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; }
+.dashboard-turnaround-stage h3 { margin:0; color:var(--udm-navy-text); font-size:15px; font-weight:700; }
+.dashboard-turnaround-samples { color:var(--udm-muted); font-size:12px; white-space:nowrap; }
+.dashboard-turnaround-measure { margin:4px 0 14px; color:var(--udm-muted); font-size:12px; }
+.dashboard-turnaround-averages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; margin:0; }
+.dashboard-turnaround-averages dt { margin-bottom:4px; color:var(--udm-muted); font-size:12px; font-weight:500; }
+.dashboard-turnaround-averages dd { margin:0; line-height:1.35; }
+.dashboard-turnaround-primary { color:var(--udm-navy-text); font-size:22px; font-weight:750; }
+.dashboard-turnaround-calendar { color:var(--udm-slate-text); font-size:18px; font-weight:600; }
+.dashboard-turnaround-range { display:flex; flex-wrap:wrap; gap:8px 24px; margin:14px 0 0; padding-top:10px; border-top:1px solid var(--udm-line); }
+.dashboard-turnaround-range > div { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0; }
+.dashboard-turnaround-range dt { color:var(--udm-muted); font-size:12px; font-weight:500; }
+.dashboard-turnaround-range dd { margin:0; color:var(--udm-navy-text); font-size:13px; font-weight:650; }
+.dashboard-turnaround-details { margin-top:14px; color:var(--udm-muted); font-size:12px; }
+.dashboard-turnaround-detail-note { margin:10px 0 8px; }
+.dashboard-turnaround-extremes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; margin:0; }
+.dashboard-turnaround-extremes dt { margin-bottom:3px; font-weight:500; }
+.dashboard-turnaround-extremes dd { display:flex; flex-direction:column; align-items:flex-start; gap:4px; margin:0; min-width:0; }
+.dashboard-turnaround-extremes strong { color:var(--udm-navy-text); font-size:14px; }
+.dashboard-turnaround-extremes a { max-width:100%; overflow-wrap:anywhere; }
+.dashboard-turnaround-extremes small { font-size:11.5px; }
+.dashboard-turnaround-calculation { margin:10px 0 0; padding-left:10px; border-left:2px solid var(--udm-line-strong); color:var(--udm-muted); font-size:12px; line-height:1.6; }
+.dashboard-turnaround-empty { margin:0; color:var(--udm-muted); font-size:14px; }
+.dashboard-turnaround-on-time { margin-top:16px; padding:14px 16px; border:1px solid var(--udm-line); border-radius:10px; }
+.dashboard-turnaround-on-time .meter-head { margin:0 0 8px; padding:0; border:0; }
+.dashboard-turnaround-on-time .meter-head > span { color:var(--udm-navy-text); font-weight:600; }
+.dashboard-turnaround-on-time .meter-head > strong { font-size:22px; }
+.dashboard-turnaround-on-time .meter-foot { margin:8px 0 0; line-height:1.5; }
+@container dashboard-side (min-width:900px) {
+  .dashboard-turnaround-stages { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .dashboard-turnaround-averages { grid-template-columns:minmax(0,1fr); }
+  .dashboard-turnaround-extremes { grid-template-columns:minmax(0,1fr); }
+}
+@container dashboard-side (max-width:400px) {
+  .dashboard-turnaround-stage { padding:14px; }
+  .dashboard-turnaround-averages { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .dashboard-turnaround-primary { font-size:20px; }
+  .dashboard-turnaround-calendar { font-size:16px; }
+  .dashboard-turnaround-extremes { grid-template-columns:minmax(0,1fr); }
+}
+@media print {
+  .dashboard-turnaround-statistics::details-content { content-visibility:visible; }
+  .dashboard-turnaround-statistics > summary { display:none; }
+  .dashboard-turnaround-details::details-content { content-visibility:visible; }
+  .dashboard-turnaround-stage { break-inside:avoid; }
+}
 
 /* ------------------------------------------------------- dashboard sides
    Document Tracking on the left, Document Repository on the right, each under

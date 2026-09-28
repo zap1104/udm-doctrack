@@ -105,7 +105,7 @@ def test_the_report_carries_exactly_the_specified_panels(client, finished_record
     ]
 
     month = f"{timezone.localdate():%B %Y}"
-    expected = [panel.format(month=month) for panel in TRACKING_PANELS] + list(REPOSITORY_PANELS)
+    expected = [panel.format(month=month) for panel in TRACKING_PANELS]
     assert headings == expected
 
 
@@ -117,10 +117,11 @@ def test_the_two_sections_stay_apart(client, finished_record, users):
     body = client.get(REPORTS).content.decode()
 
     tracking = body.index('data-report-panel="tracking"')
-    documents = body.index('data-report-panel="documents"')
-
-    assert tracking < body.index(TRACKING_PANELS[-1]) < documents
-    assert documents < body.index(REPOSITORY_PANELS[0])
+    assert 'data-report-panel="documents"' not in body
+    assert tracking < body.index(TRACKING_PANELS[-1])
+    repository = client.get("/documents/reports/").content.decode()
+    assert 'data-report-panel="tracking"' not in repository
+    assert repository.index('data-report-panel="documents"') < repository.index(REPOSITORY_PANELS[0])
 
 
 @pytest.mark.django_db
@@ -174,7 +175,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     digitised. A month of 90 uploads and 2 completions draws the same single bar
     as the reverse and means the opposite thing about how the office is doing."""
     client.force_login(users["admin"])
-    response = client.get(REPORTS)
+    response = client.get("/documents/reports/")
     rows = [row for row in response.context["document_months"]["rows"] if row["total"]]
     body = response.content.decode()
 
@@ -320,7 +321,7 @@ def test_the_two_report_sections_are_named_exactly(client, users):
     body = client.get(REPORTS).content.decode()
 
     assert "Document Tracking Reports" in body
-    assert "Document Repository Report" in body
+    assert "Document Repository Reports" in client.get("/documents/reports/").content.decode()
     assert "Document Management Reports" not in body
 
 
@@ -588,14 +589,14 @@ def test_the_screen_rule_still_hides_the_inactive_panel():
 
 
 @pytest.mark.django_db
-def test_both_panels_are_present_in_the_markup_with_one_active(client, users):
-    """Print isolation is done in CSS off the active class, so the markup must
-    carry exactly one active panel for it to have something to select."""
+@pytest.mark.parametrize("path", [REPORTS, "/documents/reports/"])
+def test_only_the_requested_report_panel_is_rendered(client, users, path):
+    """Each report prints only its own domain, with no hidden second report."""
     client.force_login(users["admin"])
-    body = client.get(REPORTS).content.decode()
+    body = client.get(path).content.decode()
 
     assert body.count('class="report-panel active"') == 1
-    assert body.count('class="report-panel"') == 1
+    assert 'class="report-panel"' not in body
 
 
 # --- completion rate over documents in circulation ----------------------------

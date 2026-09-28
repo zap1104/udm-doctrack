@@ -61,7 +61,7 @@
       is where they are offered from. It stays in this context so the dashboard
       can offer them again without re-deriving the rule.
     {% endcomment %}
-    <a class="btn btn-udm-outline" href="{% url 'core:reports' %}">Open Reports</a>
+    <a class="btn btn-udm-outline" href="{% url 'core:reports' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">Open Reports</a>
     {% comment %}
       "Print dashboard" was here and is gone. The dashboard is a screen for
       reading, not a document: printing it produced a chopped-up screenshot
@@ -124,15 +124,22 @@
     and not a link, because there is no page for them to open that means what
     the label says.
   {% endcomment %}
+  <div class="col-6 col-md-3">
+    <a class="stat-card navy" href="{{ tracking_total_url }}" data-tracking-total>
+      <div class="label">Total documents in tracking</div>
+      <div class="value">{{ tracking_total_count }}</div>
+      <div class="hint">Current tracking records · {{ scope.label }}</div>
+    </a>
+  </div>
   {% if scope.all_offices %}
-    <div class="col-6 col-md-4">
+    <div class="col-6 col-md-3">
       <div class="stat-card is-disabled" aria-disabled="true">
         <div class="label">Incoming</div>
         <div class="value" aria-hidden="true">&mdash;</div>
         <div class="hint">Pick an office above to count what is addressed to it</div>
       </div>
     </div>
-    <div class="col-6 col-md-4">
+    <div class="col-6 col-md-3">
       <div class="stat-card gold is-disabled" aria-disabled="true">
         <div class="label">Outgoing</div>
         <div class="value" aria-hidden="true">&mdash;</div>
@@ -140,7 +147,7 @@
       </div>
     </div>
   {% else %}
-  <div class="col-6 col-md-4">
+  <div class="col-6 col-md-3">
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>
       <div class="value">{{ incoming_count }}</div>
@@ -153,7 +160,7 @@
       <div class="hint">{{ incoming_new_today }} moved today · addressed to your office</div>
     </a>
   </div>
-  <div class="col-6 col-md-4">
+  <div class="col-6 col-md-3">
     <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=outgoing{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
@@ -161,7 +168,7 @@
     </a>
   </div>
   {% endif %}
-  <div class="col-6 col-md-4">
+  <div class="col-6 col-md-3">
     {% comment %}
       Overdue opens the tracking list, like the three cards beside it. It used
       to open Reports on the argument that "why are these late and whose are
@@ -380,7 +387,7 @@
             every bar carries its own running total
           </div>
           <details class="chart-note">
-            <summary>How to read this</summary>
+            <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="How to read this chart" description="Understand running totals and handovers." %}</summary>
             <p>
               Each month is the position at the end of that month, counted from the
               first document in the system &mdash; not that month on its own. A month
@@ -395,7 +402,7 @@
             </p>
           </details>
           <details class="chart-table">
-            <summary>View as table</summary>
+            <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View as table" description="Compare monthly counts in rows and columns." %}</summary>
             <div class="table-responsive"><table class="table-udm">
               <thead><tr>
                 <th>Month</th><th class="text-end">Created</th>
@@ -427,222 +434,45 @@
           rather than drawn at zero: nothing finished is not the same as finished
           instantly.
         {% endcomment %}
-    <div class="card-udm">
+    <div class="card-udm dashboard-turnaround" id="turnaround-panel">
       <div class="card-udm-head">
         <div>
           <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="card-udm-caption">
-              The month's average, fastest and slowest for each stage, beside the line
-              of monthly averages from {{ turnaround_trend.rows.0.month|date:"F Y" }}
-              to {{ turnaround_trend.latest.month|date:"F Y" }}.
+              Daily averages for the selected month, with its summary below. Receipts are counted on confirmation; completed work on completion.
             </div>
             <details class="chart-note">
-              <summary>How to read this</summary>
+              <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="How to read this chart" description="Learn how office hours affect turnaround time." %}</summary>
               <p>
                 {{ turnaround_trend.office_hours_caveat }} A document sitting over a
                 weekend is not charged for it.
               </p>
             </details>
           </div>
-          {% include "core/_month_picker.html" with picker=month_picker picker_id="turnaround-month" %}
         </div>
         <div class="card-udm-body">
-          {% if turnaround_trend.has_data %}
-            {% comment %}
-              The legend sits in the body rather than beside the heading. In the
-              head it shared one line with the title and the office-hours caveat,
-              which at this column width left three keys fighting a sentence for
-              the same few centimetres.
-            {% endcomment %}
-            {% comment %}
-              A line key, not a square: the legend mirrors the mark it names.
-              Each says what its line measures, from which moment to which,
-              because "Receipt" alone does not say whether the clock starts when
-              a document is sent or when it is opened.
-            {% endcomment %}
-            <div class="chart-legend trend-legend">
-              {% for series in turnaround_trend_points %}
-                <span class="chart-key trend-key">
-                  <i class="trend-key-line" style="background:{{ series.colour }}" aria-hidden="true"></i>
-                  <span><strong>{{ series.label }}</strong> {{ series.measures }}</span>
-                </span>
-              {% endfor %}
+          <form class="dashboard-turnaround-filters no-print" method="get" action="#turnaround-panel" aria-label="Turnaround filters">
+            {% for key, value in turnaround_filters.keep %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+            <div>
+              <label for="turnaround-month">Month</label>
+              <select class="form-select form-select-sm" id="turnaround-month" name="month">
+                {% for option in month_picker.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+              </select>
             </div>
-            <div class="trend-layout">
-              <div class="trend-chart">
-                {% comment %}
-                  The y-axis, in working days, beside the SVG rather than inside it:
-                  SVG text scales with the chart and would shrink to nothing at the
-                  widths this card is drawn at. Placed by the same geometry as the
-                  rules, so a label is level with its rule.
-                {% endcomment %}
-                <div class="trend-plot">
-                <div class="trend-axis-values num" aria-hidden="true">
-                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent }}%">{{ line.value }}</span>{% endif %}{% endfor %}
-                </div>
-                {% comment %}
-                  No preserveAspectRatio="none": it stretches the plot to the column
-                  width, which turns every data point from a circle into an oval.
-                  The default uniform scaling keeps the dots round, and the CSS sizes
-                  the box by the viewBox's own ratio so nothing is letterboxed.
-                {% endcomment %}
-                <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
-                     aria-label="Line chart of average turnaround in working days per month. Point at a month for its figures; the table below lists every value.">
-                  {% comment %}
-                    Rules and baseline from the same constants that place the
-                    data. They were literals here while the plot geometry lived in
-                    Python, so the two agreed only by hand and changing the box
-                    moved the lines off the data without saying so.
-                  {% endcomment %}
-                  <g aria-hidden="true">
-                    {% for line in turnaround_trend_geometry.grid %}
-                      <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
-                            y1="{{ line.y }}" y2="{{ line.y }}"
-                            class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
-                    {% endfor %}
-                  </g>
-                  {% comment %}
-                    Colours through `style`, not the stroke attribute: they are CSS
-                    custom properties, which not every browser resolves in a
-                    presentation attribute. Dots are filled with the card's own
-                    surface, not white, so they do not glare on the dark theme.
-
-                    The lines are revealed left to right by a clip on their group,
-                    not drawn in with a dash. The dash (pathLength="1" and
-                    stroke-dasharray:1) was measured in SVG units while
-                    non-scaling-stroke made the browser lay it out in screen
-                    pixels, so on a stretched chart it covered only part of each
-                    line: every line stopped around May and the later months
-                    were left as loose dots. A clip cannot come up short: it ends
-                    at the edge of the plot whatever the line's length.
-                  {% endcomment %}
-                  <g class="trend-lines">
-                    {% for series in turnaround_trend_points %}
-                      <polyline class="trend-line" points="{{ series.polyline }}"
-                                style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
-                    {% endfor %}
-                  </g>
-                  {% for series in turnaround_trend_points %}
-                    {% for dot in series.dots %}
-                      <circle class="trend-point" cx="{{ dot.x }}" cy="{{ dot.y }}" r="3"
-                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
-                    {% endfor %}
-                  {% endfor %}
-                </svg>
-                {% comment %}
-                  The hover layer: one target per month, over the plot and aligned
-                  to it by the same geometry. Pointing at a month draws a guide
-                  down to the baseline, enlarges that month's dots, and opens a
-                  card with its three figures in words and what each is averaged
-                  over. CSS does the showing, so it works without script; the
-                  script adds a tap on a touch screen and the arrow keys for a
-                  keyboard, which reach the chart as one tab stop rather than
-                  twelve. The table below still holds every value.
-                {% endcomment %}
-                {% if turnaround_trend_geometry.months %}
-                  <div class="trend-hover" tabindex="0" role="group" data-trend-hover
-                       style="--plot-top:{{ turnaround_trend_geometry.plot_top_percent }}%;--plot-bottom:{{ turnaround_trend_geometry.plot_bottom_percent }}%"
-                       aria-label="Turnaround by month. Use the left and right arrow keys to read each month.">
-                    {% for month in turnaround_trend_geometry.months %}
-                      <div class="trend-hit trend-hit--{{ month.side }}" data-trend-month
-                           style="left:{{ month.left }}%;width:{{ month.width }}%" aria-label="{{ month.summary }}">
-                        <span class="trend-cross" aria-hidden="true"></span>
-                        {% for point in month.points %}<span class="trend-dot" style="top:{{ point.top_percent }}%;--dot:{{ point.colour }}" aria-hidden="true"></span>{% endfor %}
-                        <div class="trend-tip" aria-hidden="true">
-                          <div class="trend-tip-month">{{ month.label }}</div>
-                          {% for point in month.points %}
-                            <div class="trend-tip-row">
-                              <i style="background:{{ point.colour }}"></i>
-                              <strong>{{ point.text }}</strong>
-                              <span>{{ point.label }} &middot; {{ point.samples }} {{ point.unit }}</span>
-                            </div>
-                          {% empty %}
-                            <div class="trend-tip-row trend-tip-empty">Nothing received or completed</div>
-                          {% endfor %}
-                        </div>
-                      </div>
-                    {% endfor %}
-                    <div class="visually-hidden" aria-live="polite" data-trend-announce></div>
-                  </div>
-                {% endif %}
-                </div>
-                <div class="trend-axis-labels" aria-hidden="true">
-                  {% for row in turnaround_trend.rows %}
-                    <span>{{ row.month|date:"M" }}</span>
-                  {% endfor %}
-                </div>
-                <div class="chart-scale">
-                  Working days, averaged per month &middot; one working day is
-                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours,
-                  weekends excluded
-                </div>
-              </div>
-              <div class="trend-summary">
-                {% comment %}
-                  The month the chart ends on, in words. It printed the all-time
-                  averages under this month's name, so its figures disagreed with
-                  the last point of the line beside it: "In process 3 days 3 hrs"
-                  next to a line reading one day. Each figure now says how many
-                  documents it is taken over, and a stage with none this month
-                  says so rather than printing a dash.
-                {% endcomment %}
-                {% comment %}
-                  The month picked above, from analytics.turnaround — the service
-                  Reports and the memo read — so a figure here is the figure they
-                  print for the same month. "So far" and "yet" only for the month
-                  still running.
-                {% endcomment %}
-                <div class="trend-summary-head">{{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}</div>
-                <div class="trend-summary-figures">
-                  {% include "core/_turnaround_stages.html" %}
-                </div>
-                {% comment %}
-                  Only shown when something actually had a deadline that month. A 0%
-                  printed for a month in which nothing was due would read as
-                  "everything was late", which is the opposite of the truth.
-                {% endcomment %}
-                {% if turnaround.has_on_time %}
-                  <div class="meter-head">
-                    <span>Completed on time</span>
-                    <strong class="num">{{ turnaround.on_time_percent }}%</strong>
-                  </div>
-                  <div class="meter-track">
-                    <i class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></i>
-                  </div>
-                  <div class="meter-foot">
-                    {{ turnaround.on_time }} of {{ turnaround.on_time_total }}
-                    document{{ turnaround.on_time_total|pluralize }} with a deadline
-                  </div>
-                {% endif %}
-              </div>
+            <div>
+              <label for="turnaround-stage">Stage</label>
+              <select class="form-select form-select-sm" id="turnaround-stage" name="turnaround_stage">
+                {% for option in turnaround_filters.stages %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+              </select>
             </div>
-            <details class="chart-table">
-              <summary>View as table</summary>
-              <div class="table-responsive"><table class="table-udm">
-                <thead><tr>
-                  <th>Month</th><th class="text-end">To received</th><th class="text-end">Processing</th>
-                  <th class="text-end">Lifetime</th><th class="text-end">On time</th>
-                </tr></thead>
-                <tbody>
-                  {% for row in turnaround_trend.rows %}
-                    <tr>
-                      <td>{{ row.month|date:"F Y" }}</td>
-                      <td class="text-end num">{{ row.receipt|default_if_none:"—" }}</td>
-                      <td class="text-end num">{{ row.processing|default_if_none:"—" }}</td>
-                      <td class="text-end num">{{ row.lifetime|default_if_none:"—" }}</td>
-                      <td class="text-end num">
-                        {% if row.has_on_time %}{{ row.on_time_percent }}%{% else %}&mdash;{% endif %}
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table></div>
-            </details>
-          {% else %}
-            <div class="report-empty">
-              Nothing has been received or completed yet, so there is no turnaround to measure.
+            <div class="dashboard-turnaround-filter-actions">
+              <button type="submit" class="btn btn-sm btn-udm">Apply</button>
+              <a class="btn btn-sm btn-udm-outline" href="{{ turnaround_filters.reset_url }}">Reset</a>
             </div>
-          {% endif %}
+          </form>
+          <p class="dashboard-turnaround-period">Daily view · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} &middot; current month so far{% endif %}</p>
+          {% include "core/_turnaround_chart.html" %}
+          {% include "core/_dashboard_turnaround.html" with turnaround=turnaround_panel %}
         </div>
       </div>
     </div>

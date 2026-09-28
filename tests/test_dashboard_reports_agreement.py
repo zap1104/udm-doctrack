@@ -331,6 +331,8 @@ DASHBOARD_CONTEXT = {
     "recent_records", "repository_donut", "scope",
     "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
+    "turnaround_panel", "turnaround_filters", "turnaround_table_series",
+    "turnaround_table_rows", "turnaround_show_on_time", "tracking_total_count", "tracking_total_url",
 }
 
 #: Read in Python rather than by a template. `get_memo_context` computes them once
@@ -420,13 +422,15 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: separately, since the queue is now also rendered on its own.
 #: 47: "Newest in the Document Repository" left the dashboard, and its
 #: document list and the office badges it drew went with it.
-DASHBOARD_QUERIES = 47
+# Daily samples and the linked tracking total add four fixed queries.
+DASHBOARD_QUERIES = 51
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
 #: 45: the same six, on the same service.
 #: 39: the running-totals chart left Reports, which repeated the dashboard's.
-REPORTS_QUERIES = 39
+# Annual trend and paginated drilldown replace the repository panel rendering.
+REPORTS_QUERIES = 46
 
 
 @pytest.mark.django_db
@@ -459,12 +463,12 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 49
+DASHBOARD_OFFICE_QUERIES = 53
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 40
+REPORTS_OFFICE_QUERIES = 47
 
 
 @pytest.mark.django_db

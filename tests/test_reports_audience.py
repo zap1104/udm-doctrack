@@ -159,7 +159,7 @@ def _listed(client, url):
 def test_every_retention_figure_is_the_list_it_opens(client, users, scheduled, who):
     client.force_login(users[who])
 
-    context = client.get(REPORTS).context
+    context = client.get("/documents/reports/").context
     retention = context["retention"]
 
     assert retention["due"] == _listed(client, retention["due_url"])
@@ -172,7 +172,7 @@ def test_every_retention_figure_is_the_list_it_opens(client, users, scheduled, w
 def test_retention_counts_what_is_past_and_what_is_coming(client, users, scheduled):
     client.force_login(users["med_admin"])
 
-    retention = client.get(REPORTS).context["retention"]
+    retention = client.get("/documents/reports/").context["retention"]
 
     assert (retention["due"], retention["soon"], retention["unscheduled"]) == (2, 1, 1)
 
@@ -183,7 +183,7 @@ def test_repository_upkeep_is_for_administrators(client, users, scheduled, who, 
     """Tagging and text extraction are an administrator's to fix."""
     client.force_login(users[who])
 
-    response = client.get(REPORTS)
+    response = client.get("/documents/reports/")
 
     assert ("extraction" in response.context) is shown
     assert ("Repository upkeep" in response.content.decode()) is shown
@@ -194,7 +194,7 @@ def test_the_types_in_use_card_is_gone(client, users, scheduled):
     """It counted the type panel's rows, "Unclassified" and "Other" included."""
     client.force_login(users["admin"])
 
-    assert "Document types in use" not in client.get(REPORTS).content.decode()
+    assert "Document types in use" not in client.get("/documents/reports/").content.decode()
 
 
 # --- a document nobody can open is not counted ----------------------------------
@@ -203,11 +203,11 @@ def test_a_deactivated_document_leaves_every_count(client, users, scheduled):
     """The repository, search and the document page all hide it; the dashboard
     and Reports went on counting it, so a figure could exceed its list."""
     client.force_login(users["admin"])
-    before_report = client.get(REPORTS).context["total_documents"]
+    before_report = client.get("/documents/reports/").context["total_documents"]
     before_ring = client.get("/").context["repository_donut"]["total"]
 
     Document.objects.filter(title="Past due").update(is_active=False)
 
-    assert client.get(REPORTS).context["total_documents"] == before_report - 1
+    assert client.get("/documents/reports/").context["total_documents"] == before_report - 1
     assert client.get("/").context["repository_donut"]["total"] == before_ring - 1
-    assert client.get(REPORTS).context["total_documents"] == _listed(client, REPOSITORY)
+    assert client.get("/documents/reports/").context["total_documents"] == _listed(client, REPOSITORY)

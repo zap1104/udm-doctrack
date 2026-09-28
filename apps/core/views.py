@@ -631,6 +631,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         split = not scope["all_offices"]
         incoming = queue(tracking_services.SCOPE_INCOMING) if split else None
         outgoing = queue(tracking_services.SCOPE_OUTGOING) if split else None
+        tracking_total = tracking_services.office_queue(desk, "", user, office=scope_office).distinct()
         tracking_rings = self._tracking_rings(
             scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], desk
         )
@@ -697,6 +698,10 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # None under every office, where there is no direction to count;
                 # the template shows the cards disabled rather than a number.
                 "incoming_count": tracking_rings["counts"].get("incoming"),
+                "tracking_total_count": tracking_total.count(),
+                "tracking_total_url": core_filters.link(
+                    reverse("tracking:list"), office="all" if scope["all_offices"] else
+                    (scope["office"].pk if scope["office"] else None)),
                 "incoming_new_today": (
                     incoming.filter(last_movement_at__date=today).count() if split else None
                 ),
@@ -723,12 +728,14 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         """
         records, _ = self._scoped(user, scope["office"])
         breakdown = memo_context["breakdown"]
+        turnaround_panel = self._turnaround_panel_context(memo_context, records)
 
         return {
             "repository_donut": self._domain_donut(breakdown, "repository"),
             "monthly": analytics.monthly_volume(records),
-            "turnaround_trend_points": self._trend_points(memo_context["turnaround_trend"]),
-            "turnaround_trend_geometry": self._trend_geometry(memo_context["turnaround_trend"]),
+            **turnaround_panel,
+            "turnaround_trend_points": self._trend_points(turnaround_panel["turnaround_trend"]),
+            "turnaround_trend_geometry": self._trend_geometry(turnaround_panel["turnaround_trend"]),
             # `live_by_status` was computed here — a grouped query on every load —
             # and no template has read it since the "Records by status" panel
             # left the dashboard. Found by the context allowlist in
@@ -736,6 +743,59 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             # exactly this. `analytics.live_records_by_status` is kept: it is a
             # tested helper, and removing a function is a separate decision from
             # removing a call nobody reads.
+        }
+
+    def _turnaround_panel_context(self, memo_context, records=None):
+        """Filter this panel's presentation without changing the memo or other cards."""
+        stage = self.request.GET.get("turnaround_stage", "all")
+        allowed_stages = {key for key, *_ in self.TREND_SERIES}
+        if stage not in allowed_stages | {"all"}:
+            messages.warning(self.request, "Unknown turnaround stage. Showing all stages.")
+            stage = "all"
+        selected_month = memo_context["turnaround"]["month"]
+        if records is None:
+            records, _ = self._scoped(self.request.user, memo_context["scope"]["office"])
+        source = analytics.turnaround_by_day(records, selected_month)
+        rows = [dict(row) for row in source["rows"]]
+        series = [item for item in self.TREND_SERIES if stage in ("all", item[0])]
+        for row in rows:
+            for key in allowed_stages:
+                if stage not in ("all", key):
+                    row[key] = None
+        measured = [row[key] for row in rows for key, *_ in series if row[key] is not None]
+        ceiling = max(1, int(max(measured, default=0)) + 1) if measured else 1
+        trend = {
+            **source, "rows": rows, "latest": rows[-1] if rows else None,
+            "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling), "has_data": bool(measured),
+        }
+        figures = {
+            **memo_context["turnaround"],
+            "stages": [item for item in memo_context["turnaround"]["stages"]
+                       if stage in ("all", item["key"])],
+            "has_on_time": memo_context["turnaround"]["has_on_time"] and stage in ("all", "lifetime"),
+        }
+        keep = [
+            (key, value) for key, values in self.request.GET.lists()
+            if key not in {"month", "turnaround_stage", "turnaround_window", "page"}
+            for value in values
+        ]
+        return {
+            "turnaround_trend": trend,
+            "turnaround_panel": figures,
+            "turnaround_filters": {
+                "keep": keep,
+                "stages": [{"value": "all", "label": "All stages", "selected": stage == "all"}]
+                          + [{"value": key, "label": label, "selected": stage == key}
+                             for key, label, *_ in self.TREND_SERIES],
+                "reset_url": core_filters.link(reverse("core:dashboard"), self.request,
+                                               month=None, turnaround_stage=None,
+                                               turnaround_window=None) + "#turnaround-panel",
+            },
+            "turnaround_table_series": [{"key": key, "label": label} for key, label, *_ in series],
+            "turnaround_table_rows": [
+                {**row, "values": [row[key] for key, *_ in series]} for row in rows
+            ],
+            "turnaround_show_on_time": False,
         }
 
     #: The live stages a tracking ring is sliced by, in the order the ring has
@@ -1012,9 +1072,15 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         months = []
         for index, row in enumerate(rows):
             points = []
-            for key, label, status, _measures, unit in self.TREND_SERIES:
-                if row[key] is None:
-                    continue
+            # Read the popup from the highest line down at this month. Use the
+            # actual values rather than rounded labels or screen positions;
+            # equal values keep the legend's order and absent lines stay out.
+            series = sorted(
+                (item for item in self.TREND_SERIES if row[item[0]] is not None),
+                key=lambda item: row[item[0]],
+                reverse=True,
+            )
+            for key, label, status, _measures, unit in series:
                 y = self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h
                 samples = row[f"{key}_samples"]
                 points.append(
@@ -1028,7 +1094,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                         "top_percent": round(100 * y / self.TREND_HEIGHT, 2),
                     }
                 )
-            month = f"{row['month']:%B %Y}"
+            month = row.get("period_label", f"{row['month']:%B %Y}")
             summary = "; ".join(
                 f"{point['label']} {point['text']} over {point['samples']} {point['unit']}"
                 for point in points
@@ -1312,6 +1378,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     nothing on this page is a placeholder waiting for a dataset."""
 
     template_name = "reports/reports.html"
+    report_domain = "tracking"
 
     def _filters(self):
         """The office this report answers for, saying what it refused.
@@ -1477,7 +1544,84 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         if user.is_office_admin:
             context["untagged_documents"] = documents.filter(tags__isnull=True).distinct().count()
             context["extraction"] = self._extraction_state(documents)
+        repository = self.report_domain == "documents"
+        context.update({"report_domain": self.report_domain, "is_repository_report": repository,
+                        "report_title": "Document Repository Reports" if repository else "Document Tracking Reports",
+                        "report_url": reverse("core:repository_reports" if repository else "core:reports")})
+        context.update(self._records_context(documents if repository else records, filters, context["document_types"]))
+        if not repository:
+            current_year = timezone.localdate().year
+            first_year = min({current_year} | {value.year for value in records.dates("created_at", "year")})
+            # A document can finish in a year when no new documents were created.
+            years = list(range(current_year, first_year - 1, -1))
+            raw_year = self.request.GET.get("trend_year", str(timezone.localdate().year))
+            year = int(raw_year) if raw_year.isascii() and raw_year.isdigit() and len(raw_year) == 4 else None
+            if year not in years:
+                messages.warning(self.request, "Unknown trend year. Showing the current year.")
+                year = timezone.localdate().year
+            trend = analytics.turnaround_by_month(records, year=year)
+            drawing = DashboardView()
+            context.update({"trend_year": year, "trend_years": years,
+                            "turnaround_trend": trend,
+                            "turnaround_trend_points": drawing._trend_points(trend),
+                            "turnaround_trend_geometry": drawing._trend_geometry(trend),
+                            "turnaround_table_series": [{"key": key, "label": label} for key, label, *_ in drawing.TREND_SERIES],
+                            "turnaround_table_rows": [{**row, "values": [row[key] for key, *_ in drawing.TREND_SERIES]} for row in trend["rows"]],
+                            "turnaround_show_on_time": True})
         return context
+
+    def _records_context(self, records, filters, chart_types):
+        """Drill into the same scoped records counted by this report's charts."""
+        repository = self.report_domain == "documents"
+        base_url = reverse("core:repository_reports" if repository else "core:reports")
+        office = filters["office"]
+        params = {"office": office.pk if office else None}
+        reset = core_filters.link(base_url, **params) + "#report-records"
+        types = list(records.order_by().values("document_type_id", "document_type__name").distinct())
+        choices = [{"value": str(row["document_type_id"] or "none"),
+                    "label": row["document_type__name"] or "Unclassified"} for row in types]
+        choices.sort(key=lambda row: row["label"])
+        remainder = next((row for row in chart_types if row.get("is_remainder")), None) if repository else None
+        if remainder:
+            choices.append({"value": "other", "label": remainder["label"]})
+        status = self.request.GET.get("record_status", "")
+        kind = self.request.GET.get("record_type", "")
+        month = self.request.GET.get("record_month", "")
+        query = self.request.GET.get("record_q", "").strip()
+        if status and not repository:
+            if status in Status.values:
+                records = records.filter(status=status)
+            else:
+                messages.warning(self.request, "Unknown record status. Showing all statuses.")
+                status = ""
+        if kind:
+            if kind in {row["value"] for row in choices}:
+                if kind == "other":
+                    ids = remainder["type_ids"]
+                    match = Q(document_type_id__in=[pk for pk in ids if pk is not None])
+                    if None in ids:
+                        match |= Q(document_type__isnull=True)
+                    records = records.filter(match)
+                else:
+                    records = records.filter(document_type_id=None if kind == "none" else int(kind))
+            else:
+                messages.warning(self.request, "Unknown document type. Showing all types.")
+                kind = ""
+        if month:
+            try:
+                chosen = datetime.strptime(month, "%Y-%m").date()
+            except ValueError:
+                messages.warning(self.request, "Invalid record month. Showing all months.")
+                month = ""
+            else:
+                records = records.filter(created_at__year=chosen.year, created_at__month=chosen.month)
+        if query:
+            records = records.filter(Q(title__icontains=query) | Q(reference_number__icontains=query)) if repository else records.filter(Q(subject__icontains=query) | Q(tracking_number__icontains=query))
+        page = paginate(self.request, records.select_related("office", "document_type").order_by("-created_at", "-pk") if repository else records.with_related().order_by("-created_at", "-pk"))
+        return {**page, "report_records_count": page["page_obj"].paginator.count,
+                "report_record_types": choices, "report_record_statuses": Status.choices,
+                "record_status": status, "record_type": kind, "record_month": month, "record_q": query,
+                "report_records_url": reset, "report_records_office": office}
 
     def _office_activity(self, records, office):
         """What one office itself received and sent, counted in handovers.
@@ -1843,12 +1987,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         administrator can act on, and hiding it inside a tail would lose it.
         """
         rows = list(
-            documents.values("document_type__name")
+            documents.values("document_type_id", "document_type__name")
             .annotate(total=Count("id", distinct=True))
             .order_by("-total")
         )
         for row in rows:
             row["label"] = row["document_type__name"] or "Unclassified"
+            row["type_value"] = str(row["document_type_id"] or "none")
         documents_total = sum(row["total"] for row in rows)
         rows, cut, remainder_label = analytics.cap_with_remainder(
             rows, analytics.TOP_N, "type"
@@ -1859,6 +2004,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "label": remainder_label,
                     "total": sum(row["total"] for row in cut),
                     "is_remainder": True,
+                    "type_value": "other",
+                    "type_ids": [row["document_type_id"] for row in cut],
                 }
             )
         # Every bar is the type's share of every document, the tail included,

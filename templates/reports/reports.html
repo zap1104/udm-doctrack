@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% load doctrack %}
-{% block title %}Reports · {{ SITE_NAME }}{% endblock %}
+{% block title %}{{ report_title }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head reports-page-head">
   <div>
-    <div class="eyebrow">Document Tracking</div>
-    <h1>Records Overview</h1>
+    <div class="eyebrow">{% if is_repository_report %}Document Repository{% else %}Document Tracking{% endif %}</div>
+    <h1>{{ report_title }}</h1>
     {% comment %}
       What this report describes, said in the heading rather than left to be
       inferred from a filter row that most accounts cannot see. `scope_label`
@@ -18,6 +18,7 @@
     </p>
   </div>
   <div class="d-flex flex-wrap gap-2 no-print">
+    <a class="btn btn-udm-outline" href="#report-records">View report records</a>
     <button class="btn btn-udm-outline" type="button" data-print-trigger>Print Report</button>
     {% comment %}
       The office rides along. This was a bare URL, so the export re-read its
@@ -25,11 +26,11 @@
       to one office handed back every record the exporter could see, under a
       filename that did not say so either.
     {% endcomment %}
-    <a class="btn btn-udm"
-       href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>
+    {% if not is_repository_report %}<a class="btn btn-udm"
+       href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>{% endif %}
   </div>
 </div>
-{% include "tracking/_subtabs.html" with active="reports" %}
+{% if is_repository_report %}{% include "documents/_subtabs.html" with active="reports" %}{% else %}{% include "tracking/_subtabs.html" with active="reports" %}{% endif %}
 
 {% comment %}
   One control, and only for the accounts it is for.
@@ -55,7 +56,7 @@
         <div class="report-caption">Applied to every figure and chart on this page.</div>
       </div>
       {% if filters.office and not filters.defaulted %}
-        <a class="small" href="{% url 'core:reports' %}">{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
+        <a class="small" href="{{ report_url }}">{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
       {% endif %}
     </div>
     <div class="card-udm-body">
@@ -104,12 +105,8 @@
   <span>{{ report_generated_at|date:"d M Y, g:i A" }}</span>
 </div>
 
-<div class="reports-tabs no-print" role="tablist" aria-label="Report categories">
-  <button class="reports-tab active" type="button" data-report-tab="tracking" aria-selected="true">Document Tracking Reports</button>
-  <button class="reports-tab" type="button" data-report-tab="documents" aria-selected="false">Document Repository Report</button>
-</div>
-
 <!-- ------------------------------------------------------------------ tracking -->
+{% if not is_repository_report %}
 <section class="report-panel active" data-report-panel="tracking" aria-labelledby="tracking-reports-heading">
   <div class="report-section-head">
     <div>
@@ -120,7 +117,7 @@
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-      <a class="stat-card navy" href="{% url 'tracking:list' %}">
+      <a class="stat-card navy" href="{{ report_records_url }}">
         <div class="label">Tracked documents</div>
         <div class="value">{{ total_records }}</div>
         <div class="hint">Active and completed records you can see</div>
@@ -204,7 +201,7 @@
               {% endif %}
             </div>
             <details class="chart-note">
-              <summary>How to read this</summary>
+              <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="How to read this chart" description="Understand document stages and overdue counts." %}</summary>
               <p>
                 Every document is in exactly one stage, so these add up to the total
                 above. Overdue is not a stage: a document is late or on time whatever
@@ -238,7 +235,7 @@
             <div class="status-row">
               <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
               <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
-              <strong class="num">{{ row.total }}</strong>
+              <a class="num report-count-link" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_status={{ row.status }}#report-records" aria-label="View {{ row.total }} {{ row.status|status_label }} records">{{ row.total }}</a>
               <span class="status-share num">{% share row.total total_records %}</span>
             </div>
             {% if scope_office %}
@@ -257,6 +254,17 @@
       </div>
     </div>
 
+    <div class="col-12">
+      <section class="card-udm" aria-labelledby="annual-turnaround-title">
+        <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly working-time averages for this report’s office scope. Gaps mean no observations.</p></div>
+          <form method="get" class="d-flex gap-2 align-items-end no-print">
+            {% if filters.office %}<input type="hidden" name="office" value="{{ filters.office.pk }}">{% endif %}
+            <div><label for="trend-year" class="form-label">Year</label><select id="trend-year" name="trend_year" class="form-select">{% for year in trend_years %}<option value="{{ year }}"{% if year == trend_year %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></div>
+            <button class="btn btn-udm" type="submit">Apply</button>
+          </form>
+        </div><div class="card-udm-body">{% include "core/_turnaround_chart.html" %}</div>
+      </section>
+    </div>
     <!-- turnaround -->
     <div class="col-xl-5">
       <div class="card-udm h-100">
@@ -532,7 +540,8 @@
 </section>
 
 <!-- ----------------------------------------------------------------- documents -->
-<section class="report-panel" data-report-panel="documents" aria-labelledby="document-reports-heading">
+{% else %}
+<section class="report-panel active" data-report-panel="documents" aria-labelledby="document-reports-heading">
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>
@@ -663,7 +672,7 @@
             </div>
             <div class="chart-scale">Top of the chart = {{ document_months.ceiling }} · every bar carries its own count.</div>
             <details class="chart-table">
-              <summary>View as table</summary>
+              <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View as table" description="Compare completed and historical documents by month." %}</summary>
               <div class="table-responsive"><table class="table-udm">
                 <thead><tr>
                   <th>Month</th>
@@ -674,7 +683,7 @@
                 <tbody>
                   {% for row in document_months.rows %}
                     <tr>
-                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
+                      <td><a href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_month={{ row.month|date:'Y-m' }}#report-records"><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></a></td>
                       <td class="text-end num">{{ row.completed }}</td>
                       <td class="text-end num">{{ row.historical }}</td>
                       <td class="text-end num">{{ row.total }}</td>
@@ -707,7 +716,7 @@
           {% endcomment %}
           {% for row in document_types %}
             <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}">
-              <span>{{ row.label|truncatechars:30 }}</span>
+              <a href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_type={{ row.type_value }}#report-records">{{ row.label }}</a>
               <div class="report-bar"><i class="bar-neutral" style="width:{{ row.bar_percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
               <span class="status-share num">{% share row.total total_documents %}</span>
@@ -721,6 +730,9 @@
 
   </div>
 </section>
+
+{% endif %}
+{% include "reports/_records.html" %}
 
 <footer class="report-print-footer">
   <span>{{ SITE_LONG_NAME }}</span>

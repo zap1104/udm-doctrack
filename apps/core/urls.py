@@ -18,6 +18,7 @@ urlpatterns = [
     # the old addresses redirect permanently, query string and all, so a
     # bookmarked or printed link to a report still opens that report.
     path("tracking/reports/", views.ReportsView.as_view(), name="reports"),
+    path("documents/reports/", views.ReportsView.as_view(report_domain="documents"), name="repository_reports"),
     path("tracking/reports/export/", views.ReportExportView.as_view(), name="report_export"),
     path("reports/", RedirectView.as_view(pattern_name="core:reports", permanent=True, query_string=True)),
     path(

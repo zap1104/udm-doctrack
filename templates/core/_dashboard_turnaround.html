@@ -1,0 +1,69 @@
+<section class="trend-summary dashboard-turnaround-summary" aria-label="Turnaround figures for the selected month">
+  <div class="trend-summary-head">{{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}</div>
+  <p class="dashboard-turnaround-guide">
+    Working time counts office hours only; one working day is {{ turnaround.working_day_hours|floatformat:"-2" }} hours.
+    Elapsed time includes nights, weekends and holidays.
+  </p>
+  <div class="dashboard-turnaround-stages">
+    {% for stage in turnaround.stages %}
+      <section class="dashboard-turnaround-stage" aria-labelledby="turnaround-stage-{{ stage.key }}">
+        <div class="dashboard-turnaround-stage-head">
+          <h3 id="turnaround-stage-{{ stage.key }}">{{ stage.label }}</h3>
+          <span class="dashboard-turnaround-samples">{{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }}</span>
+        </div>
+        <p class="dashboard-turnaround-measure">
+          {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → work completed{% else %}Created → work completed{% endif %}
+        </p>
+        {% if stage.samples %}
+          <dl class="dashboard-turnaround-averages">
+            <div>
+              <dt>Average working time</dt>
+              <dd class="dashboard-turnaround-primary num">{{ stage.average_label }}</dd>
+            </div>
+            <div>
+              <dt>Average elapsed time</dt>
+              <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar }}</dd>
+            </div>
+          </dl>
+          {% if stage.samples > 1 %}
+            <dl class="dashboard-turnaround-range">
+              <div><dt>Fastest working time</dt><dd class="num">{% if stage.fastest %}{{ stage.fastest.office_label }}{% else %}No office-hours sample{% endif %}</dd></div>
+              <div><dt>Slowest working time</dt><dd class="num">{{ stage.slowest.office_label }}</dd></div>
+            </dl>
+            <details class="dashboard-turnaround-details">
+              <summary class="disclosure-control" aria-label="Fastest and slowest records for {{ stage.label }}">{% include "core/_disclosure_content.html" with label="View fastest & slowest records" description="Open document links and compare elapsed durations." %}</summary>
+              <p class="dashboard-turnaround-detail-note">Compared using working time.</p>
+              <dl class="dashboard-turnaround-extremes">
+                {% if stage.fastest %}
+                  <div>
+                    <dt>Fastest</dt>
+                    <dd><strong class="num">{{ stage.fastest.office_label }}</strong><a class="mono" href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><small>{{ stage.fastest.calendar_label }} elapsed</small></dd>
+                  </div>
+                {% endif %}
+                <div>
+                  <dt>Slowest</dt>
+                  <dd><strong class="num">{{ stage.slowest.office_label }}</strong><a class="mono" href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><small>{{ stage.slowest.calendar_label }} elapsed</small></dd>
+                </div>
+              </dl>
+            </details>
+          {% endif %}
+          {% if stage.outside_office_hours %}
+            <p class="dashboard-turnaround-calculation">{{ stage.outside_office_hours }} {{ stage.noun }}{{ stage.outside_office_hours|pluralize }} outside office hours {{ stage.outside_office_hours|pluralize:"counts,count" }} as 0 in the average and {{ stage.outside_office_hours|pluralize:"is,are" }} excluded from Fastest.</p>
+          {% endif %}
+        {% else %}
+          <p class="dashboard-turnaround-empty">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %} this month.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+  {% if turnaround.has_on_time %}
+    <div class="dashboard-turnaround-on-time">
+      <div class="meter-head">
+        <span>Completed on time</span>
+        <strong class="num">{{ turnaround.on_time_percent }}%</strong>
+      </div>
+      <div class="meter-track"><i class="meter-fill" style="width:{{ turnaround.on_time_percent }}%"></i></div>
+      <p class="meter-foot">{{ turnaround.on_time }} of {{ turnaround.on_time_total }} document{{ turnaround.on_time_total|pluralize }} with a deadline completed on time this month.</p>
+    </div>
+  {% endif %}
+</section>

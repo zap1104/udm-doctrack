@@ -21,7 +21,7 @@ Two rules hold throughout:
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from math import cos, pi, sin
 
 from django.db.models import Count, F, Q
@@ -753,7 +753,7 @@ def record_durations(record, steps, holidays=None) -> dict:
     }
 
 
-def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
+def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None) -> dict:
     """The three turnaround averages, one point per month.
 
     `turnaround()` answers for one period, which cannot show whether an office
@@ -762,7 +762,12 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     point on this chart and that month's `turnaround()` are the same figure.
     """
     months, since = month_window(months_back)
-    collected = _turnaround_samples(records, since=since)
+    until = None
+    if year is not None:
+        months = [date(year, month, 1) for month in range(1, 13)]
+        since = timezone.make_aware(datetime(year, 1, 1))
+        until = timezone.make_aware(datetime(year + 1, 1, 1))
+    collected = _turnaround_samples(records, since=since, until=until)
 
     buckets = {month: {key: [] for key, *_ in TURNAROUND_STAGES} for month in months}
     for key, samples in collected["samples"].items():
@@ -824,6 +829,39 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
         "latest": rows[-1] if rows else None,
         "working_day_hours": working_day_hours(),
     }
+
+
+def turnaround_by_day(records, month) -> dict:
+    """Daily averages in one month, using the summary's exact sample population."""
+    since = timezone.make_aware(datetime.combine(month, time.min))
+    next_month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    until = timezone.make_aware(datetime.combine(next_month, time.min))
+    collected = _turnaround_samples(records, since=since, until=until)
+    last = min(next_month - timedelta(days=1), timezone.localdate())
+    days = [month + timedelta(days=i) for i in range(max(0, (last - month).days + 1))]
+    buckets = {day: {key: [] for key, *_ in TURNAROUND_STAGES} for day in days}
+    for key, samples in collected["samples"].items():
+        for sample in samples:
+            day = timezone.localdate(sample["ended"])
+            if day in buckets:
+                buckets[day][key].append(sample)
+    rows = []
+    for day, stages in buckets.items():
+        row = {"month": day, "period_label": day.strftime("%d %B %Y"),
+               "axis_label": str(day.day) if day.day == 1 or day.day % 5 == 0 or day == last else ""}
+        for key, samples in stages.items():
+            average = _mean([sample["office"] for sample in samples])
+            calendar = _mean([sample["calendar"] for sample in samples])
+            row[key] = None if average is None else round(average / working_day_seconds(), 1)
+            row[f"{key}_label"] = humanise_business_seconds(average)
+            row[f"{key}_calendar"] = humanise_duration(None if calendar is None else timedelta(seconds=calendar))
+            row[f"{key}_samples"] = len(samples)
+        rows.append(row)
+    measured = [row[key] for row in rows for key, *_ in TURNAROUND_STAGES if row[key] is not None]
+    ceiling = max(1, int(max(measured, default=0)) + 1)
+    return {"rows": rows, "latest": rows[-1] if rows else None, "ceiling": ceiling,
+            "ticks": axis_ticks(ceiling), "has_data": bool(measured), "daily": True,
+            "office_hours_caveat": office_hours_caveat(), "working_day_hours": working_day_hours()}
 
 
 def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:

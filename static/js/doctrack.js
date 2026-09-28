@@ -1247,10 +1247,26 @@
     return Array.prototype.slice.call(box.querySelectorAll("[data-trend-month]"));
   }
 
+  function fitTip(box, month) {
+    var tip = month && month.querySelector(".trend-tip");
+    if (!tip) return;
+    var plot = box.getBoundingClientRect();
+    var hit = month.getBoundingClientRect();
+    var centre = hit.left + hit.width / 2;
+    var preferred = month.classList.contains("trend-hit--left")
+      ? centre - tip.offsetWidth - 12 : centre + 12;
+    // Short windows have wider month targets. Keep their popup inside the
+    // plot too, especially when only one or three months fit on a phone.
+    var left = Math.max(plot.left, Math.min(preferred, plot.right - tip.offsetWidth));
+    tip.style.left = (left - hit.left) + "px";
+    tip.style.right = "auto";
+  }
+
   function show(box, month) {
     monthsOf(box).forEach(function (each) {
       each.classList.toggle("is-active", each === month);
     });
+    fitTip(box, month);
     var live = box.querySelector("[data-trend-announce]");
     if (live) live.textContent = month ? month.getAttribute("aria-label") : "";
   }
@@ -1279,6 +1295,15 @@
     if (event.pointerType !== "mouse") return;
     var box = event.target.closest && event.target.closest("[data-trend-hover]");
     if (box && box.querySelector(".is-active")) show(box, null);
+    var month = event.target.closest && event.target.closest("[data-trend-month]");
+    if (box && month) fitTip(box, month);
+  });
+
+  window.addEventListener("resize", function () {
+    document.querySelectorAll("[data-trend-hover]").forEach(function (box) {
+      var month = box.querySelector(".is-active, .trend-hit:hover");
+      if (month) fitTip(box, month);
+    });
   });
 
   document.addEventListener("keydown", function (event) {

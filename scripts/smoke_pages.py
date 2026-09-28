@@ -54,6 +54,7 @@ class HttpsClient(Client):
 STATIC_PAGES = [
     ("core:dashboard", ()),
     ("core:reports", ()),
+    ("core:repository_reports", ()),
     ("core:report_export", ()),
     ("tracking:list", ()),
     ("documents:repository", ()),

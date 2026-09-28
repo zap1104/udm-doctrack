@@ -59,7 +59,7 @@
             {% if token == page_size %}
               <span class="page-size-option is-active" aria-current="true">{{ label }}</span>
             {% else %}
-              <a class="page-size-option" href="{% page_size_url token size_param page_param %}"
+              <a class="page-size-option" href="{% page_size_url token size_param page_param %}{{ page_anchor }}"
                  {% if token == page_size_all %}title="Every row, up to {{ page_size_cap }} on a page"{% endif %}>{{ label }}</a>
             {% endif %}
           {% endfor %}
@@ -71,9 +71,9 @@
     <div class="page-controls page-controls--steps no-print">
       <nav class="page-steps" aria-label="Pagination">
         <ul class="pagination pagination-sm mb-0 app-pagination">
-          {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
+          {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}{{ page_anchor }}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
           <li class="page-item disabled"><span class="page-link" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-          {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
+          {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}{{ page_anchor }}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
         </ul>
       </nav>
     </div>
@@ -86,9 +86,9 @@
   {% endcomment %}
   <nav class="mt-4" aria-label="Pagination">
     <ul class="pagination pagination-sm justify-content-center app-pagination">
-      {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
+      {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.previous_page_number page_param %}{{ page_anchor }}" rel="prev">Previous</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Previous</span></li>{% endif %}
       <li class="page-item disabled"><span class="page-link" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-      {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
+      {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% pagination_url page_obj.next_page_number page_param %}{{ page_anchor }}" rel="next">Next</a></li>{% else %}<li class="page-item disabled"><span class="page-link">Next</span></li>{% endif %}
     </ul>
   </nav>
 {% endif %}

@@ -66,7 +66,10 @@
       <div class="card-udm-body">
         {% if older_attachments %}
           <details class="fold" open>
-            <summary>{{ older_attachments|length }} earlier file{{ older_attachments|length|pluralize }}</summary>
+            <summary class="disclosure-control">
+              <span class="disclosure-copy"><span class="disclosure-title">{{ older_attachments|length }} earlier file{{ older_attachments|length|pluralize }}</span><span class="disclosure-description">View files from earlier in this record's history.</span></span>
+              {% include "core/_disclosure_state.html" %}
+            </summary>
             {% for attachment in older_attachments %}
               {% include "tracking/_attachment_chip.html" %}
             {% endfor %}
@@ -108,7 +111,10 @@
         {% endcomment %}
         {% if older_steps %}
           <details class="fold" open>
-            <summary>{{ older_steps|length }} earlier movement{{ older_steps|length|pluralize }}</summary>
+            <summary class="disclosure-control">
+              <span class="disclosure-copy"><span class="disclosure-title">{{ older_steps|length }} earlier movement{{ older_steps|length|pluralize }}</span><span class="disclosure-description">Review previous routing steps between offices.</span></span>
+              {% include "core/_disclosure_state.html" %}
+            </summary>
             <ul class="timeline">
               {% for step in older_steps %}{% include "tracking/_timeline_step.html" %}{% endfor %}
             </ul>
@@ -129,7 +135,10 @@
         <h3 style="font-size:15px;">Activity log</h3>
         {% if older_activities %}
           <details class="fold" open>
-            <summary>{{ older_activities|length }} earlier entr{{ older_activities|length|pluralize:"y,ies" }}</summary>
+            <summary class="disclosure-control">
+              <span class="disclosure-copy"><span class="disclosure-title">{{ older_activities|length }} earlier entr{{ older_activities|length|pluralize:"y,ies" }}</span><span class="disclosure-description">Review earlier updates in the activity log.</span></span>
+              {% include "core/_disclosure_state.html" %}
+            </summary>
             <ul class="timeline">
               {% for activity in older_activities %}{% include "tracking/_timeline_activity.html" %}{% endfor %}
             </ul>

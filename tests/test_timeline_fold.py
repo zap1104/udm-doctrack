@@ -15,7 +15,10 @@ from apps.tracking.models import QUIET_EVENTS, RoutingStep
 from apps.tracking.services import add_remark, confirm_receipt, create_draft_record, route_record
 from apps.tracking.views import TIMELINE_VISIBLE
 
-FOLD_RE = re.compile(r'<details class="fold" open>\s*<summary>([^<]+)</summary>')
+FOLD_RE = re.compile(
+    r'<details class="fold" open>\s*<summary\b[^>]*>\s*'
+    r'<span class="disclosure-copy"><span class="disclosure-title">([^<]+)</span>'
+)
 
 
 def shown_activities(record):

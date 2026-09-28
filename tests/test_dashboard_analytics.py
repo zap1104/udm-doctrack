@@ -1661,7 +1661,7 @@ def test_each_side_is_headed_and_opens_its_module(client, users, offices, filed_
 
 
 def test_the_sides_split_two_thirds_to_a_third_and_the_charts_are_on_the_wide_one():
-    """The twelve-month charts need width: they sit on the tracking side,
+    """The tracking charts need width: they sit on the tracking side,
     which is the wide one, and size themselves to it (container queries)."""
     import pathlib
 
@@ -1669,7 +1669,7 @@ def test_the_sides_split_two_thirds_to_a_third_and_the_charts_are_on_the_wide_on
     tracking = html.index('<section class="col-xl-8 dashboard-side dashboard-side--tracking"')
     repository = html.index('<section class="col-xl-4 dashboard-side dashboard-side--repository"')
 
-    for chart in ('class="column-chart-frame"', 'class="trend-svg"'):
+    for chart in ('class="column-chart-frame"', '{% include "core/_turnaround_chart.html" %}'):
         assert tracking < html.index(chart) < repository, chart
     last = html.rindex("<h2>", tracking, repository)
     assert html.startswith("<h2>Turnaround Time for the Month of", last), "turnaround closes its side"

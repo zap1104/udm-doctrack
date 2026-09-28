@@ -48,13 +48,9 @@ def test_the_sidebar_order_puts_search_second(client, users):
     body = client.get("/").content.decode()
     nav = body[body.index('aria-label="Main navigation"') : body.index("</nav>")]
 
-    order = [
-        label
-        for label in ("Dashboard", "Search", "Document Tracking", "Document Repository", "Reports")
-        if label in nav
-    ]
-    # Reports is a tab of Document Tracking now, not a sidebar item.
-    assert order == ["Dashboard", "Search", "Document Tracking", "Document Repository"]
+    paths = ["/", "/search/", "/tracking/", "/tracking/reports/", "/documents/", "/documents/reports/"]
+    positions = [nav.index(f'href="{path}"') for path in paths]
+    assert positions == sorted(positions), "Reports appears directly under its own module"
 
 
 @pytest.mark.django_db
