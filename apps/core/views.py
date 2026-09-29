@@ -12,7 +12,9 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView, View
 
 from apps.accounts.models import Office
@@ -325,6 +327,9 @@ class DashboardMemoMixin:
             )
         if not timing:
             timing = [line("", f"Nothing was completed in {period}.")]
+        if lifetime["excluded"]:
+            timing.append(line("Excluded lifetime samples", self._plural(lifetime["excluded"], "document")
+                               + " with timestamps out of order"))
 
         if uploads["rows"]:
             # Every office that added something, not only the leader. Naming one
@@ -506,6 +511,7 @@ DESK_DEFAULT = tracking_services.SCOPE_PENDING_RECEIPT
 DESK_TARGET = "action-centre-queue"
 
 
+@method_decorator(never_cache, name="dispatch")
 class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     template_name = "core/dashboard.html"
 
@@ -633,7 +639,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         outgoing = queue(tracking_services.SCOPE_OUTGOING) if split else None
         tracking_total = tracking_services.office_queue(desk, "", user, office=scope_office).distinct()
         tracking_rings = self._tracking_rings(
-            scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], desk
+            scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], tracking_total
         )
         # Was overdue_for(user), which has no office in it at all — so the card
         # read the same figure whichever office the picker named. This is the
@@ -770,6 +776,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         }
         figures = {
             **memo_context["turnaround"],
+            "show_deadline_summary": stage in ("all", "lifetime"),
             "stages": [item for item in memo_context["turnaround"]["stages"]
                        if stage in ("all", item["key"])],
             "has_on_time": memo_context["turnaround"]["has_on_time"] and stage in ("all", "lifetime"),
@@ -798,11 +805,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             "turnaround_show_on_time": False,
         }
 
-    #: The live stages a tracking ring is sliced by, in the order the ring has
-    #: always drawn them. Completed - pending upload is not among them. Incoming
-    #: and Outgoing exclude every completed status, so as a slice of a direction
-    #: ring it would always be empty, and counted any other way it would open a
-    #: page that can never list it. It is a figure beside the rings instead.
+    #: Direction rings show unfinished transfers. Pending upload is displayed
+    #: separately below the chart and remains included in Total in Tracking.
     RING_STAGES = (
         ("pending_receipt", Status.PENDING_RECEIPT, Status.PENDING_RECEIPT.label),
         ("received", Status.RECEIVED, "Received"),
@@ -845,16 +849,18 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         them in the browser. Refetching on every press would be a round trip for
         numbers the page already had.
 
-        Completed - pending upload is the tracking ring's old fourth slice,
-        carried beside the rings with the count and link it always had. It is
-        never overdue, so the overdue view has no figure beside it.
+        Completed - pending upload is shown separately below the chart and is
+        included in the tracking total, never in a pie slice or overdue count.
         """
         tracking_url = reverse("tracking:list")
         dashboard_url = reverse("core:dashboard")
         office_pk = scope["office"].pk if scope["office"] else None
         requested = self.request.GET.get("ring")
         view = requested if requested in self.RING_VIEWS else "status"
-        pending = next(row for row in breakdown["slices"] if row["key"] == "pending_upload")
+        totals = desk.aggregate(
+            total=Count("pk", distinct=True),
+            pending=Count("pk", filter=Q(status=Status.COMPLETED_PENDING_UPLOAD), distinct=True),
+        )
         rings = {
             "split": not scope["all_offices"],
             "view": view,
@@ -872,7 +878,14 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 scope["office"].code if scope["office"]
                 else getattr(self.request.user.office, "code", "") or scope["display"]
             ),
-            "pending_upload": {"total": pending["total"], "url": pending["url"]},
+            "total": totals["total"],
+            "other_total": totals["total"] - totals["pending"],
+            "pending_upload": {
+                "total": totals["pending"],
+                "url": core_filters.link(tracking_url, office=office_pk, status=Status.COMPLETED_PENDING_UPLOAD),
+                "percent": analytics.percent(totals["pending"], totals["total"]),
+                "width": 100 * totals["pending"] / totals["total"] if totals["total"] else 0,
+            },
             "counts": {},
             "overdue_total": 0,
             "rings": [],
@@ -903,7 +916,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             ring = {
                 "key": key,
                 "title": title,
-                "status": self._ring(self._stage_slices(grouped, "total", tracking_url, links)),
+                "status": self._ring(self._stage_slices(grouped, "total", tracking_url, links, include_all=key == "all")),
                 "overdue": self._ring(
                     self._stage_slices(grouped, "overdue", tracking_url, {**links, "overdue": "yes"})
                 ),
@@ -912,19 +925,22 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             rings["rings"].append(ring)
         return rings
 
-    def _stage_slices(self, grouped, measure, tracking_url, links):
+    def _stage_slices(self, grouped, measure, tracking_url, links, include_all=False):
         """One slice per live stage: `measure` ("total" or "overdue") from the
         grouped counts, and a link to the tracking list narrowed by `links`
         plus the stage. A None in `links` leaves that parameter off."""
+        stages = self.RING_STAGES
+        if include_all:
+            stages += (("draft", Status.DRAFT, Status.DRAFT.label),)
         return [
             {
                 "key": slug,
                 "label": label,
                 "total": grouped.get(status, {}).get(measure, 0),
-                "colour": BREAKDOWN_COLOURS[slug],
+                "colour": STATUS_COLOURS[status],
                 "url": core_filters.link(tracking_url, **{**links, "status": status}),
             }
-            for slug, status, label in self.RING_STAGES
+            for slug, status, label in stages
         ]
 
     def _domain_donut(self, breakdown, group):
@@ -1096,7 +1112,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 )
             month = row.get("period_label", f"{row['month']:%B %Y}")
             summary = "; ".join(
-                f"{point['label']} {point['text']} over {point['samples']} {point['unit']}"
+                f"{point['label']} {point['text']} working time, {point['calendar']} elapsed, over {point['samples']} {point['unit']}"
                 for point in points
             ) or "nothing received or completed"
             centre = (index + 0.5) * width
@@ -1115,9 +1131,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     def _trend_points(self, trend):
         """The three turnaround series as SVG polylines.
 
-        Months with no completions are skipped rather than plotted at zero: a
-        month in which nothing was finished did not take zero days to finish
-        things, and a line dropping to the axis would say exactly that.
+        Connect observed values at their actual dates. Missing dates contribute
+        neither dots nor zero values; connecting lines are visual guides only.
         """
         rows = trend["rows"]
         if not rows or not trend["has_data"]:
@@ -1373,6 +1388,7 @@ def report_scope_office(request, filters):
     return None if filters["can_pick"] else request.user.office
 
 
+@method_decorator(never_cache, name="dispatch")
 class ReportsView(AppLoginRequiredMixin, TemplateView):
     """Records overview. Every number here is computed from the routing steps —
     nothing on this page is a placeholder waiting for a dataset."""
@@ -2286,6 +2302,7 @@ class NotificationMarkAllReadView(AppLoginRequiredMixin, View):
         return redirect("core:notifications")
 
 
+@method_decorator(never_cache, name="dispatch")
 class DashboardMemoPrintView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     """The memo on its own page, so printing it produces the memo.
 

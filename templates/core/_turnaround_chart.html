@@ -106,6 +106,7 @@
                               <i style="background:{{ point.colour }}"></i>
                               <strong>{{ point.text }}</strong>
                               <span>{{ point.label }} &middot; {{ point.samples }} {{ point.unit }}</span>
+                              <span>{{ point.calendar }} elapsed</span>
                             </div>
                           {% empty %}
                             <div class="trend-tip-row trend-tip-empty">Nothing received or completed</div>
@@ -127,6 +128,7 @@
                   {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours,
                   weekends excluded
                 </div>
+                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Dots show recorded averages. Lines connect available observations; dates without dots have no samples.</p>
               </div>
             </div>
             <details class="chart-table">

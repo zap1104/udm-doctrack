@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from apps.core import analytics
 from apps.core.views import DASHBOARD_ROWS
-from apps.documents.models import Document
+from apps.documents.models import Document, Source
 from apps.tracking.models import TrackingRecord
 from apps.tracking.services import (
     complete_record,
@@ -250,32 +250,27 @@ def test_the_trend_ceiling_is_never_zero(users):
 
 # --- uploads by office -----------------------------------------------------
 @pytest.mark.django_db
-def test_uploads_by_office_adds_filing_to_uploading(finished_record, users, offices):
-    """One combined figure: a document uploaded and a record completed and filed
-    are both an office adding to the repository."""
-    uploads = analytics.uploads_by_office(
-        Document.objects.visible_to(users["admin"]),
-        TrackingRecord.objects.visible_to(users["admin"]),
+def test_repository_additions_exclude_unfiled_completions(finished_record, users, offices):
+    records = TrackingRecord.objects.visible_to(users["admin"])
+    documents = Document.objects.visible_to(users["admin"])
+    assert analytics.uploads_by_office(documents, records)["total"] == 0
+    Document.objects.create(
+        title="Filed once", office=offices["SUP"], year=timezone.localdate().year,
+        source=Source.DTS, tracking_record=finished_record, uploaded_by=users["sup"],
     )
-
-    row = next(r for r in uploads["rows"] if r["code"] == offices["SUP"].code)
-    assert row["filed"] == 1
-    assert row["total"] == row["uploaded"] + row["filed"]
+    uploads = analytics.uploads_by_office(documents, records)
+    assert uploads["total"] == 1
+    assert uploads["rows"][0]["filed"] == 1
+    assert uploads["rows"][0]["uploaded"] == 0
 
 
 @pytest.mark.django_db
 def test_a_tie_names_no_leader(users, offices, memo_type):
-    """Calling a tie "the top office" hands out a distinction the numbers did
-    not award."""
     for office, actor in ((offices["SUP"], users["sup"]), (offices["HR"], users["hr"])):
-        record = create_draft_record(
-            user=users["med"], subject=f"For {office.code}", instructions="x",
-            document_type=memo_type,
+        Document.objects.create(
+            title=f"Filed by {office.code}", office=office, uploaded_by=actor,
+            year=timezone.localdate().year, source=Source.UPLOAD,
         )
-        route_record(record, [office], user=users["med"])
-        confirm_receipt(record, user=actor)
-        record.refresh_from_db()
-        complete_record(record, user=actor)
 
     uploads = analytics.uploads_by_office(
         Document.objects.visible_to(users["admin"]),
@@ -287,7 +282,7 @@ def test_a_tie_names_no_leader(users, offices, memo_type):
 
 
 @pytest.mark.django_db
-def test_one_office_clearly_ahead_is_named(finished_record, users, offices):
+def test_one_office_clearly_ahead_is_named(filed_record, users, offices):
     uploads = analytics.uploads_by_office(
         Document.objects.visible_to(users["admin"]),
         TrackingRecord.objects.visible_to(users["admin"]),
@@ -297,11 +292,9 @@ def test_one_office_clearly_ahead_is_named(finished_record, users, offices):
 
 
 @pytest.mark.django_db
-def test_uploads_covers_this_month_only(finished_record, users):
+def test_uploads_covers_this_month_only(filed_record, users):
     """A cumulative version would rank offices by how long they have existed."""
-    TrackingRecord.objects.filter(pk=finished_record.pk).update(
-        completed_at=timezone.now() - timedelta(days=400)
-    )
+    Document.objects.all().update(created_at=timezone.now() - timedelta(days=400))
 
     uploads = analytics.uploads_by_office(
         Document.objects.visible_to(users["admin"]),
@@ -471,8 +464,7 @@ def test_each_ring_is_measured_against_its_own_domain(client, users, filed_recor
 def test_every_office_ring_and_the_figure_beside_it_still_account_for_everything(
     client, users, filed_record
 ):
-    """Under every office, the tracking ring, the pending-upload figure beside
-    it and the repository ring are the whole breakdown.
+    """Under every office, pending upload is separate from the tracking ring.
 
     Rewritten when the tracking ring split by direction. "The two rings
     together are the whole" cannot survive a split for one office: Incoming and
@@ -490,6 +482,9 @@ def test_every_office_ring_and_the_figure_beside_it_still_account_for_everything
         + context["repository_donut"]["total"]
         == context["breakdown"]["total"]
     )
+    assert ring["status"]["total"] + tracking["pending_upload"]["total"] == context["tracking_total_count"]
+    assert not any(row["key"] == "pending_upload" for row in ring["status"]["slices"])
+    assert tracking["other_total"] + tracking["pending_upload"]["total"] == tracking["total"]
 
 
 @pytest.mark.django_db
@@ -532,7 +527,7 @@ def test_a_domain_with_nothing_in_it_says_so_rather_than_drawing_an_empty_circle
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "Nothing is in tracking." in body
+    assert "No unfinished tracking records." in body
     assert "Nothing has been filed yet." in body
 
 
@@ -1209,8 +1204,8 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
 
     queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
     assert queue
-    assert "Recently moved" in body
-    assert queue.start() < body.index("Recently moved")
+    assert "Recent document updates" in body
+    assert queue.start() < body.index("Recent document updates")
 
 
 @pytest.mark.django_db
@@ -1223,7 +1218,7 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
     import re
 
     assert re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
-    assert '<h3 class="desk-block-title">Recently moved</h3>' in body
+    assert '<h3 class="desk-block-title">Recent document updates</h3>' in body
 
 
 @pytest.mark.django_db
@@ -1330,7 +1325,7 @@ def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awai
 
 @pytest.mark.django_db
 def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, offices, memo_type):
-    """Recently moved carried eight rows against Needs action's five and the
+    """Recent document updates carried eight rows against Needs action's five and the
     Repository panel's five. The three sit in a two-column row, so the tall one
     dragged the card beside it out with it and the row was always ragged."""
     for index in range(9):
@@ -1516,7 +1511,7 @@ def test_the_custody_box_is_required_not_pre_ticked(client, users, awaiting_rece
 
 @pytest.mark.django_db
 def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaiting_receipt):
-    """Recently moved is read-only. A form spanning both would put rows nobody
+    """Recent document updates is read-only. A form spanning both would put rows nobody
     can act on inside the thing that submits."""
     import re
 
@@ -1526,7 +1521,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
     form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
     assert form, "no bulk receipt form rendered"
     assert 'class="desk-block desk-block--primary"' in form.group(0)
-    assert "Recently moved" not in form.group(0)
+    assert "Recent document updates" not in form.group(0)
     assert "csrfmiddlewaretoken" in form.group(0)
 
 

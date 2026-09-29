@@ -12,6 +12,7 @@
 {% endcomment %}
 {% for stage in turnaround.stages %}
   <div class="turnaround-stage">
+    {% if stage.excluded %}<p class="form-text">{{ stage.excluded }} {{ stage.noun }}{{ stage.excluded|pluralize }} excluded: required timestamps are missing or out of order.</p>{% endif %}
     <div class="report-metric">
       <span>{{ stage.label }}<small class="text-muted">{{ stage.measures }} &middot; {{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }}</small></span>
       {% if stage.samples %}

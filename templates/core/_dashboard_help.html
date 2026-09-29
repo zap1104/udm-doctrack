@@ -1,0 +1,12 @@
+<details class="chart-note dashboard-help">
+  <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="Understand the dashboard numbers" description="Check what counts, which period applies, and why totals differ." %}</summary>
+  <dl class="dashboard-metric-guide">
+    <div><dt>Total in tracking</dt><dd>The documents in the linked Tracking list for your permissions and office selection. It includes work completed but still awaiting filing where the list includes it.</dd></div>
+    <div><dt>Incoming and Outgoing</dt><dd>Unfinished documents in the current routing batch, addressed to or sent by the selected office. Outgoing includes documents already received. These are overlapping views, not parts of a total.</dd></div>
+    <div><dt>Overdue</dt><dd>Unfinished documents whose action deadline has passed. The card covers the scoped tracking list; the rings describe the current transfer. A document previously handled by the office can appear on the card without appearing in either ring.</dd></div>
+    <div><dt>Turnaround for the selected month</dt><dd>Receipt measures sent to confirmed, per handover. In Process measures first receipt to completion, per document. Lifetime measures creation to completion, per document. These spans overlap. A month uses all its samples, rather than averaging the daily averages. Blank dates have no samples.</dd></div>
+    <div><dt>Working and elapsed time</dt><dd>Working time uses configured office hours, lunch breaks, weekends and the administrator-maintained holiday calendar. Elapsed time is the full wait. These figures describe document timelines across offices, not individual staff performance.</dd></div>
+    <div><dt>Repository additions</dt><dd>Active repository documents created during the current calendar month, including historical uploads, scans and files from Tracking. Each repository document counts once. Completion alone does not add a repository document.</dd></div>
+  </dl>
+  <p>Open a tracking card to inspect its records. Use the separate Tracking and Repository Reports pages for charts and searchable record lists. Filters on a report's record list apply to that list only.</p>
+</details>

@@ -282,10 +282,8 @@ def test_upload_rows_sum_to_a_total_counted_over_every_office(client, users, agr
 
     since = timezone.localdate().replace(day=1)
     added = Document.objects.visible_to(users["admin"]).filter(created_at__date__gte=since).count()
-    filed = TrackingRecord.objects.visible_to(users["admin"]).filter(
-        status__in=COMPLETED_STATUSES, completed_at__date__gte=since
-    ).count()
-    assert uploads["total"] == added + filed, "not the sum of the rows that survived the cap"
+    assert uploads["total"] == added, "only actual repository documents count"
+
 
 
 @pytest.mark.django_db
@@ -423,7 +421,9 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 #: 47: "Newest in the Document Repository" left the dashboard, and its
 #: document list and the office badges it drew went with it.
 # Daily samples and the linked tracking total add four fixed queries.
-DASHBOARD_QUERIES = 51
+# Repository additions now use one grouped query; the tracking-total summary
+# adds one aggregate, reducing the all-office page by one query overall.
+DASHBOARD_QUERIES = 50
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.

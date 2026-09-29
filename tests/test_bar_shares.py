@@ -31,7 +31,7 @@ ADMINISTRATION = "/administration/"
 #: A bar and the share printed after it in the same row. The tempered dot stops
 #: a row with no share from borrowing the next row's.
 BAR_THEN_SHARE = re.compile(
-    r'class="report-bar">\s*<i[^>]*?style="width:(\d+)%[^"]*"'
+    r'class="report-bar">\s*<i[^>]*?style="width:(\d+(?:\.\d+)?)%[^"]*"'
     r'(?:(?!class="report-bar").)*?class="status-share num">([^<]+)<',
     re.S,
 )
@@ -44,7 +44,7 @@ def _drawn_at(text: str) -> int:
 
 
 def _pairs(body: str) -> list[tuple[int, str]]:
-    return [(int(width), share.strip()) for width, share in BAR_THEN_SHARE.findall(body)]
+    return [(float(width), share.strip()) for width, share in BAR_THEN_SHARE.findall(body)]
 
 
 # --- the arithmetic ---------------------------------------------------------
@@ -76,7 +76,7 @@ def test_every_bar_is_drawn_at_the_share_beside_it(client, users, agreement, url
 
     assert len(pairs) >= 5, "the pattern found the bars"
     for width, share in pairs:
-        assert width == _drawn_at(share), (width, share)
+        assert abs(width - _drawn_at(share)) < 1, (width, share)
 
 
 @pytest.mark.django_db
@@ -89,7 +89,7 @@ def test_the_searches_panel_draws_its_shares_too(client, users):
 
     assert len(pairs) == analytics.TOP_N + 1, "twelve queries and the rest"
     for width, share in pairs:
-        assert width == _drawn_at(share), (width, share)
+        assert abs(width - _drawn_at(share)) < 1, (width, share)
 
 
 # --- the leader no longer fills the track -----------------------------------
@@ -102,9 +102,9 @@ def test_the_busiest_office_is_drawn_at_its_share_not_at_full_length(
     leader = uploads["rows"][0]
 
     assert leader["total"] < uploads["total"]
-    assert leader["bar_percent"] == analytics.bar(leader["total"], uploads["total"]) < 100
+    assert leader["bar_percent"] == 100 * leader["total"] / uploads["total"] < 100
     for row in uploads["rows"]:
-        assert row["bar_percent"] == analytics.bar(row["total"], uploads["total"])
+        assert row["bar_percent"] == 100 * row["total"] / uploads["total"]
 
 
 @pytest.mark.django_db
@@ -115,7 +115,7 @@ def test_the_other_row_is_drawn_at_its_share(client, users, agreement):  # noqa:
     uploads = client.get(f"{DASHBOARD}?office=all").context["uploads_by_office"]
     other = next(row for row in uploads["rows"] if row.get("is_remainder"))
 
-    assert other["bar_percent"] == analytics.bar(other["total"], uploads["total"]) > 0
+    assert other["bar_percent"] == 100 * other["total"] / uploads["total"] > 0
 
 
 @pytest.mark.django_db

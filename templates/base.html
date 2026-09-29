@@ -51,6 +51,7 @@
       warns, so a half-typed remark is never lost to a silent sign-out.
     {% endcomment %}
     {% if user.is_authenticated %}
+      {% include "partials/_page_help.html" %}
       <span hidden
             data-session-timeout="{{ SESSION_IDLE_SECONDS }}"
             data-session-warn-at="{{ SESSION_WARNING_SECONDS }}"

@@ -12,6 +12,17 @@
   and push the URL, so Back and a bookmark still land on the queue picked.
 {% endcomment %}
 <div id="{{ desk_target }}" class="desk-queue">
+  <div class="card-udm-head action-centre-head">
+    <div>
+      <h2>Action Centre</h2>
+      <div class="card-udm-caption">Review documents by queue and confirm receipts.</div>
+    </div>
+    <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
+       aria-label="Open {{ desk_queue.label }} in Tracking{% if desk_queue.count %}, {{ desk_queue.count }} documents{% endif %}">
+      <span>{% if desk_queue.count %}View all {{ desk_queue.count }} document{{ desk_queue.count|pluralize }}{% else %}Open Tracking{% endif %}</span>
+      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
   <nav class="desk-chips" aria-label="Action Centre queues">
     {% for queue in desk_queues %}
       {% if queue.disabled %}
@@ -51,7 +62,7 @@
       <div class="desk-block desk-block--primary">
         <h3 class="desk-block-title">
           {{ desk_queue.label }}
-          <span class="desk-block-count">{% if desk_queue.count > attention_records|length %}{{ attention_records|length }} of {{ desk_queue.count }}{% else %}{{ desk_queue.count }}{% endif %}</span>
+          <span class="desk-block-count">Showing {{ attention_records|length }} of {{ desk_queue.count }}</span>
         </h3>
         <div class="card-udm-body p-0">
           {% if attention_records %}
@@ -158,10 +169,4 @@
 
       {% if can_bulk_receive %}</form>{% endif %}
 
-  <div class="desk-queue-foot">
-    <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}">
-      <span>{% if desk_queue.count %}View all {{ desk_queue.count }} in Tracking{% else %}Open in Tracking{% endif %}</span>
-      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
-    </a>
-  </div>
 </div>
