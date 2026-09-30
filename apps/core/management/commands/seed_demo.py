@@ -27,8 +27,9 @@ import random
 from collections import Counter
 from datetime import datetime, time, timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -316,6 +317,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if not settings.ALLOW_DEMO_SEED:
+            raise CommandError("Demo seeding is disabled. Use ALLOW_DEMO_SEED=True only on a disposable demo database.")
         password = options["password"]
 
         if options["wipe"]:
@@ -377,8 +380,7 @@ class Command(BaseCommand):
         # One account per role, named. The block listed three and none of them
         # was an office administrator or a viewer, so the two roles whose whole
         # point is what they *cannot* do had no way into the demo.
-        self.stdout.write("  Sign in at /accounts/login/  — password for every account below:")
-        self.stdout.write(f"  {password}")
+        self.stdout.write("  Sign in at /accounts/login/ using the configured demo password.")
         self.stdout.write("")
         self.stdout.write("  System administrator : admin        every office, and /admin/")
         self.stdout.write("  Office administrator : med.head     MED only — hires, suspends, approves")

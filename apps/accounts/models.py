@@ -227,6 +227,11 @@ class User(AbstractUser):
         default=False, help_text="Force a password change on the next sign-in."
     )
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    verified_email = models.EmailField(blank=True, editable=False)
+
+    @property
+    def email_is_verified(self) -> bool:
+        return bool(self.email) and self.email.casefold() == self.verified_email.casefold()
 
     objects = UserManagerFromQuerySet()
 
@@ -328,6 +333,8 @@ class User(AbstractUser):
             return False
         if self.is_system_admin:
             return True
+        if other.is_system_admin or other.is_staff:
+            return False
         other_office_id = getattr(other, "office_id", None)
         return bool(self.office_id) and self.office_id == other_office_id
 

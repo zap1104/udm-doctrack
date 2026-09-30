@@ -5,7 +5,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
-    preDeployCommand: "python manage.py migrate --noinput && python manage.py init_db"
+    preDeployCommand: "python manage.py check --deploy --fail-level ERROR && python manage.py migrate --noinput && python manage.py init_db"
     startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120"
     healthCheckPath: /healthz/
     envVars:
@@ -14,7 +14,7 @@ services:
       - key: DJANGO_DEBUG
         value: "False"
       - key: DJANGO_ALLOWED_HOSTS
-        value: ".onrender.com"
+        sync: false
       - key: PYTHON_VERSION
         value: "3.12.4"
       - key: DATABASE_URL
@@ -22,7 +22,29 @@ services:
           name: udm-doctrack-db
           property: connectionString
       - key: STORAGE_BACKEND
-        value: "local"
+        value: "s3"
+      - key: ENABLE_CSP
+        value: "True"
+      - key: ALLOW_DEMO_SEED
+        value: "False"
+      - key: SITE_BASE_URL
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
       - key: OCR_SPACE_API_KEY
         sync: false
 

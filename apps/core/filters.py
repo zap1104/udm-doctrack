@@ -163,7 +163,7 @@ def _office_by_pk_or_code(raw: str) -> Office | None:
     an archived office went on filtering as though nothing had changed.
     """
     raw = (raw or "").strip()
-    if not raw:
+    if not raw or len(raw) > 64:
         return None
     if raw.isdigit():
         return Office.active.filter(pk=raw).first()

@@ -293,7 +293,7 @@ def test_a_viewer_is_not_offered_the_upload_button(client, users):
     client.force_login(users["viewer"])
     body = client.get(REPOSITORY).content.decode()
 
-    assert "Upload Document" not in body
+    assert 'href="/documents/upload/"' not in body
 
 
 @pytest.mark.django_db
@@ -301,7 +301,7 @@ def test_an_ordinary_user_still_gets_the_upload_button(client, users):
     client.force_login(users["med"])
     body = client.get(REPOSITORY).content.decode()
 
-    assert "Upload Document" in body
+    assert 'href="/documents/upload/"' in body
 
 
 @pytest.mark.django_db

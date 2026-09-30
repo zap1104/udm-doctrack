@@ -1302,12 +1302,13 @@ def test_an_ordinary_user_can_still_use_the_repository_folders(client, users, of
     there left every folder rendered and none of them filtering, for everybody
     who was not an administrator.
     """
-    from apps.documents.models import Document, Source
+    from apps.documents.models import AccessLevel, Document, Source
 
     for office in (offices["HR"], offices["MED"]):
         Document.objects.create(
             title=f"Filed by {office.code}", office=office, year=2026,
             source=Source.UPLOAD, uploaded_by=users["admin"], ocr_status="SKIPPED",
+            access_level=AccessLevel.OVPA,
         )
 
     client.force_login(users["med"])

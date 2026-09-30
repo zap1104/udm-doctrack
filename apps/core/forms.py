@@ -58,6 +58,10 @@ class MultipleFileField(forms.FileField):
     def clean(self, data, initial=None):
         single_clean = super().clean
         if isinstance(data, list | tuple):
+            from django.conf import settings
+
+            if len(data) > settings.MAX_UPLOAD_FILES:
+                raise forms.ValidationError(f"Upload at most {settings.MAX_UPLOAD_FILES} files at a time.")
             return [single_clean(item, initial) for item in data]
         if data in self.empty_values and initial:
             return initial

@@ -195,7 +195,7 @@ class RoutingSLA(TimeStampedModel):
 class TrackingRecordQuerySet(models.QuerySet):
     def visible_to(self, user):
         """Records the user is allowed to see at all."""
-        if not user.is_authenticated:
+        if not user.is_authenticated or not user.is_active:
             return self.none()
         if user.is_system_admin:
             return self
@@ -515,6 +515,15 @@ class TrackingRecord(TimeStampedModel):
                 user.is_records_staff and user.office_id == self.originating_office_id
             )
         return bool(user.office_id) and self.has_custody(user.office)
+
+    def can_user_grant_access(self, user) -> bool:
+        if not user.is_authenticated or not user.is_active or user.is_viewer:
+            return False
+        if user.is_system_admin or self.created_by_id == user.pk:
+            return True
+        return bool(user.office_id) and (
+            user.office_id == self.originating_office_id or self.has_custody(user.office)
+        )
 
     def can_user_confirm_receipt(self, user) -> bool:
         if not user.is_authenticated or not user.office_id or user.is_viewer:

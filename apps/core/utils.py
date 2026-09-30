@@ -31,7 +31,7 @@ def client_ip(request) -> str | None:
     if request is None:
         return None
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
+    if forwarded and settings.TRUST_PROXY_HEADERS:
         return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR") or None
 
@@ -87,6 +87,8 @@ def file_extension(filename: str) -> str:
 def validate_upload(uploaded_file) -> None:
     """Validate extension, size, and a small pure-Python content signature."""
     extension = file_extension(getattr(uploaded_file, "name", ""))
+    if ":" in getattr(uploaded_file, "name", ""):
+        raise ValidationError("Colons are not allowed in uploaded filenames.")
     allowed = [item.lower() for item in settings.ALLOWED_UPLOAD_EXTENSIONS]
     if extension not in allowed:
         raise ValidationError(
@@ -126,6 +128,13 @@ def validate_upload(uploaded_file) -> None:
         try:
             uploaded_file.seek(0)
             with zipfile.ZipFile(uploaded_file) as archive:
+                members = archive.infolist()
+                if (
+                    len(members) > settings.MAX_UPLOAD_ARCHIVE_MEMBERS
+                    or sum(member.file_size for member in members) > settings.MAX_UPLOAD_UNCOMPRESSED_MB * 1024 * 1024
+                    or any(member.flag_bits & 1 for member in members)
+                ):
+                    raise ValidationError("This Office file is encrypted or expands beyond the safe processing limit.")
                 names = set(archive.namelist())
                 valid = "[Content_Types].xml" in names and any(name.startswith(zip_types[extension]) for name in names)
         except (OSError, zipfile.BadZipFile):
@@ -138,6 +147,8 @@ def validate_upload(uploaded_file) -> None:
         # so a renamed script cannot enter the repository as a text document.
         decoded = payload.decode("utf-8", errors="ignore").lstrip().lower()
         signatures[extension] = not (decoded.startswith("<html") or "<script" in decoded[:4096])
+    if extension not in signatures:
+        raise ValidationError("This file type has no supported content validator.")
     if extension in signatures and not signatures[extension]:
         raise ValidationError(
             f"The contents of “{uploaded_file.name}” do not match its .{extension} extension. "

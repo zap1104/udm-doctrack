@@ -292,7 +292,6 @@ def lockout_response(request, credentials=None):
             },
             status=settings.AXES_HTTP_RESPONSE_CODE,
         )
-        response["Access-Control-Allow-Origin"] = settings.AXES_ALLOWED_CORS_ORIGINS
         return response
 
     request.session[SESSION_USERNAME_KEY] = username or ""

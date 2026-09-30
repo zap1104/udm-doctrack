@@ -6,8 +6,10 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
+from django.db.models.functions import ExtractYear
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
@@ -16,6 +18,7 @@ from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, DocumentType, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.utils import log_action
+from apps.tracking.services import pending_upload_for
 
 from . import services
 from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
@@ -70,14 +73,28 @@ class RepositoryView(AppLoginRequiredMixin, View):
             "document_types": DocumentType.active.filter(documents__in=visible).distinct(),
             # Most-used first: with a shared vocabulary the useful tags are the
             # common ones, and alphabetical order buries them under one-offs.
-            "tags": Tag.active.filter(documents__in=visible).distinct().order_by("-usage_count", "name"),
+            "tags": Tag.active.filter(documents__in=visible).annotate(
+                visible_usage=Count("documents", filter=Q(documents__in=visible), distinct=True)
+            ).order_by("-visible_usage", "name"),
             "sources": set(visible.values_list("source", flat=True).distinct()),
         }
 
     def get(self, request):
         documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
-        form = RepositoryFilterForm(request.GET or None, **self._options(visible))
+        pending_visible = pending_upload_for(request.user).filter(is_archived=False)
+        pending_view = request.GET.get("view") == "pending"
+        options = self._options(visible)
+        if pending_view:
+            options.update(
+                years=sorted({year for year in pending_visible.annotate(completion_year=ExtractYear("completed_at")).values_list("completion_year", flat=True) if year}, reverse=True),
+                months=set(pending_visible.values_list("completed_at__month", flat=True)),
+                document_types=DocumentType.active.filter(tracking_records__in=pending_visible).distinct(),
+                tags=Tag.active.none(), sources=set(),
+            )
+        form = RepositoryFilterForm(request.GET or None, **options)
+        if pending_view:
+            form.fields["q"].widget.attrs["placeholder"] = "Search subject or tracking number…"
 
         # Through the shared resolver, so `office` is a primary key here as it
         # is on every other page. It read a *code*, from `Office.objects` rather
@@ -93,6 +110,12 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # for anybody who was not an administrator.
         resolved = core_filters.resolve(request, allow_office=True, gate_office=False)
         selected_office = resolved.as_office
+        allowed_offices = set(visible.values_list("office_id", flat=True)) | set(pending_visible.values_list("originating_office_id", flat=True))
+        denied_folder = selected_office is not None and selected_office.pk not in allowed_offices
+        if denied_folder:
+            selected_office = None
+            documents = documents.none()
+            messages.warning(request, "This folder has no documents available to your account.")
         if selected_office:
             documents = documents.filter(office=selected_office)
         elif "office" in resolved.invalid:
@@ -147,14 +170,41 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 + ". Showing the rest.",
             )
 
-        documents = documents.distinct().order_by("-document_date", "-created_at")
+        documents = documents.annotate(file_count=Count("files", distinct=True)).distinct().order_by("-document_date", "-created_at", "-pk")
         # `?per_page=` decides how many cards a page carries. See
         # apps/core/pagination.py.
         page_context = paginate(request, documents, PAGE_SIZE)
         page = page_context["page_obj"]
 
+        # This is a separate queue, not part of the filed-document total.
+        # Start with the tracking visibility rule before counts or filters.
+        pending = pending_visible
+        if denied_folder:
+            pending = pending.none()
+        elif selected_office:
+            pending = pending.filter(originating_office=selected_office)
+        pending_count = pending.count()
+        if pending_view:
+            if query:
+                pending = pending.filter(Q(subject__icontains=query) | Q(tracking_number__icontains=query))
+            if data.get("document_type"):
+                pending = pending.filter(document_type=data["document_type"])
+            if data.get("year"):
+                pending = pending.filter(completed_at__year=data["year"])
+            if data.get("month"):
+                pending = pending.filter(completed_at__month=data["month"])
+        pending = pending.annotate(file_count=Count("attachments", distinct=True)).order_by("completed_at", "pk")
+        if pending_view:
+            page_context = paginate(request, pending, PAGE_SIZE)
+            page = page_context["page_obj"]
+            pending_rows = list(page.object_list)
+        else:
+            pending_rows = list(pending[:2])
+        for record in pending_rows:
+            record.can_approve = record.can_user_approve_upload(request.user)
+
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
-        smart_folders = (
+        smart_folders = list(
             # office__id so the folder links can carry a primary key, which is
             # what `office` means everywhere else; the code stays for the active
             # check and the title.
@@ -162,17 +212,35 @@ class RepositoryView(AppLoginRequiredMixin, View):
             .annotate(total=Count("id", distinct=True))
             .order_by("office__name")
         )
+        base_url = reverse("documents:repository")
+        folder_map = {folder["office__id"]: folder for folder in smart_folders}
+        for entry in pending_visible.order_by().values("originating_office_id", "originating_office__code", "originating_office__name").annotate(total=Count("pk", distinct=True)):
+            office_id = entry["originating_office_id"]
+            folder = folder_map.setdefault(office_id, {
+                "office__id": office_id, "office__code": entry["originating_office__code"],
+                "office__name": entry["originating_office__name"], "total": 0,
+            })
+            folder["pending_count"] = entry["total"]
+        smart_folders = sorted(folder_map.values(), key=lambda folder: folder["office__name"])
+        for folder in smart_folders:
+            folder["url"] = core_filters.link(base_url, request, office=folder["office__id"], page=None)
+        folder_documents = visible.filter(office=selected_office) if selected_office else visible
+        if denied_folder:
+            folder_documents = folder_documents.none()
+        type_base = folder_documents
+        if pending_view:
+            type_base = pending_visible.filter(originating_office=selected_office) if selected_office else pending_visible
+        if denied_folder:
+            type_base = type_base.none()
+        type_folders = list(type_base.values("document_type_id", "document_type__name").annotate(total=Count("pk", distinct=True)).order_by("document_type__name"))
+        # Unclassified remains visible in the list; only selectable types become folders.
+        type_folders = [folder for folder in type_folders if folder["document_type_id"]]
+        for folder in type_folders:
+            folder["url"] = core_filters.link(base_url, request, document_type=folder["document_type_id"], page=None)
+            folder["selected"] = bool(data.get("document_type") and data["document_type"].pk == folder["document_type_id"])
 
-        # The completed-but-unapproved queue used to live here. It has moved to
-        # the Document Tracking page, and the reason it was ever on this one no
-        # longer holds: completing a record set COMPLETED immediately, which
-        # dropped it out of Tracking, so a record finished but never filed was
-        # in neither module and this page was the only place left to surface it
-        # from. Approval is now a stage of the tracking lifecycle
-        # (COMPLETED_PENDING_UPLOAD is in ACTIVE_STATUSES), so those records
-        # never leave Tracking until the act that files them has happened, and
-        # the queue belongs beside them. See TrackingRecordQuerySet.pending_filing.
-        retention_due_query = visible.due_for_retention_review(today).with_related().order_by("retention_until")
+        # Retention reviews cover only filed documents in the selected folder.
+        retention_due_query = folder_documents.due_for_retention_review(today).with_related().order_by("retention_until")
         retention_due_count = retention_due_query.count()
         retention_due = list(retention_due_query[:RETENTION_DUE_SHOWN])
 
@@ -182,7 +250,17 @@ class RepositoryView(AppLoginRequiredMixin, View):
             {
                 "form": form,
                 **page_context,
-                "documents": page.object_list,
+                "documents": [] if pending_view else page.object_list,
+                "pending_view": pending_view,
+                "pending_upload": pending_rows,
+                "pending_count": pending_count,
+                "pending_all_count": pending_visible.count(),
+                "pending_url": core_filters.link(base_url, request, view="pending", tag=None, source=None, retention=None, page=None),
+                "filed_url": core_filters.link(base_url, request, view=None, page=None),
+                "all_folders_url": core_filters.link(base_url, request, office=None, document_type=None, page=None),
+                "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, tag=None, source=None, year=None, month=None, retention=None, page=None),
+                "type_folders": type_folders,
+                "filed_count": folder_documents.count(),
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses
                 # them on its own; this only stops offering a dead end.
@@ -201,7 +279,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "retention_due_count": retention_due_count,
                 "retention_due_more": max(0, retention_due_count - len(retention_due)),
                 "years": years,
-                "popular_tags": Tag.active.filter(usage_count__gt=0).order_by("-usage_count")[:12],
+                "popular_tags": Tag.active.filter(documents__in=folder_documents).annotate(
+                    visible_usage=Count("documents", filter=Q(documents__in=folder_documents), distinct=True)
+                ).order_by("-visible_usage", "name")[:8],
             },
         )
 
@@ -221,7 +301,7 @@ class UploadView(OfficeAssignedMixin, View):
             return render(request, self.template_name, {"form": form})
 
         uploaded = form.cleaned_data["file"]
-        duplicate = services.duplicate_of(uploaded)
+        duplicate = services.duplicate_of(uploaded, user=request.user)
         try:
             document, suggestion = services.ingest_upload(
                 user=request.user,

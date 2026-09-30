@@ -1,187 +1,65 @@
 {% extends "base.html" %}
-{% load doctrack %}
+{% load doctrack static %}
 {% block title %}Document Repository · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <div class="eyebrow">Document Repository</div>
-    <h1>Office Document Repository</h1>
-    <p class="sub">Completed records, archived documents, and historical office uploads. Active work remains in Tracking.</p>
+<div class="repository-page">
+  <div class="page-head">
+    <div><div class="eyebrow">Office records</div><h1>Document Repository</h1><p class="sub">Find filed documents by office, or review completed records waiting to be filed.</p></div>
+    {% if can_start_work %}<a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload a document</a>{% endif %}
   </div>
-  {% comment %}
-    Hidden from the accounts UploadView would turn away — a viewer, and an
-    account with no office. Hiding it is not the permission: the view still
-    refuses the request on its own.
-
-    FIXME: the label. This says "Upload Document" and the upload page's own
-    title agrees, so nothing contradicts it today — the dashboard's "Upload to
-    Repository" button that used to disagree was removed in c17f417. What is
-    left is whether "Upload Document" is the right name for putting something
-    into the repository, which is a wording decision rather than a mismatch.
-  {% endcomment %}
-  {% if can_start_work %}
-    <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
-  {% endif %}
-</div>
-
-{% include "documents/_subtabs.html" with active="repository" %}
-
-{% comment %}
-  Folders across the full width rather than squeezed into a quarter-width rail.
-  A repository is a filing room: the first thing a reader wants is the drawers,
-  and in a narrow column the office names truncated to the point where two
-  offices read the same. Equal columns because no office's drawer is more
-  important than another's — the count inside each is the only ranking.
-
-  The column count is settings-driven (REPOSITORY_FOLDER_COLUMNS, default 4)
-  because the team has not settled on a number; it is one line to change.
-{% endcomment %}
-<div class="card-udm mb-4">
-  <div class="card-udm-head">
-    <div>
-      <h2>Office Folders</h2>
-      <div class="card-udm-caption">
-        Views over metadata (office · type · year). One file, many folders — nothing is
-        duplicated on disk.
-      </div>
-    </div>
-  </div>
-  <div class="card-udm-body">
-    <div class="folder-grid" style="--folder-columns:{{ folder_columns }};">
-      <a class="folder-tile {% if not selected_office %}active{% endif %}" href="{% url 'documents:repository' %}">
-        <span class="folder-tile-name">All documents</span>
-        <span class="folder-tile-count num">{{ all_count }}</span>
+  {% include "documents/_subtabs.html" with active="repository" %}
+  <details class="repository-folders card-udm" data-repository-folders data-repository-folder-selected="{% if selected_office %}true{% else %}false{% endif %}" open>
+    <summary class="repository-section-head"><span><strong id="repository-folders-title">Office Folders</strong><span class="repository-folder-hint">{% if selected_office %}Current folder: {{ selected_office.name }}{% else %}Only folders and records available to your account.{% endif %}</span></span><span class="repository-folder-toggle"></span></summary>
+    <div class="repository-folder-grid" style="--folder-columns:{{ folder_columns }};">
+      <a class="repository-folder{% if not selected_office %} is-selected{% endif %}" href="{{ all_folders_url }}"{% if not selected_office %} aria-current="true"{% endif %}>
+        {% include "documents/_folder_icon.html" %}<span class="repository-folder-copy"><strong>All available offices</strong><span>{{ all_count }} filed{% if pending_all_count %} · {{ pending_all_count }} pending upload{% endif %}</span></span>
       </a>
       {% for folder in smart_folders %}
-        <a class="folder-tile {% if selected_office.code == folder.office__code %}active{% endif %}"
-           href="?office={{ folder.office__id }}" title="{{ folder.office__name }}">
-          <span class="folder-tile-name">{{ folder.office__name }}</span>
-          <span class="folder-tile-count num">{{ folder.total }}</span>
-        </a>
+      <a class="repository-folder{% if selected_office.pk == folder.office__id %} is-selected{% endif %}" href="{{ folder.url }}"{% if selected_office.pk == folder.office__id %} aria-current="true"{% endif %}>
+        {% include "documents/_folder_icon.html" %}<span class="repository-folder-copy"><span class="repository-folder-code">{{ folder.office__code }}</span><strong>{{ folder.office__name }}</strong><span>{{ folder.total }} filed{% if folder.pending_count %} · {{ folder.pending_count }} pending upload{% endif %}</span></span>
+      </a>
       {% endfor %}
     </div>
-  </div>
-</div>
-
-<div class="row g-4">
-  <div class="col-lg-3">
-    <div class="card-udm">
-      <div class="card-udm-head"><h2>Popular Tags</h2></div>
-      <div class="card-udm-body">
-        {% for tag in popular_tags %}
-          <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }} <span class="text-muted">{{ tag.usage_count }}</span></a>
-        {% empty %}
-          <p class="text-muted mb-0" style="font-size:13.5px;">Tags appear here once documents are filed.</p>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-9">
-    <div class="card-udm mb-3"><div class="card-udm-body">
-      {% comment %}
-        Two rows, each summing to twelve. The controls used to total
-        seventeen columns in one row and wrapped wherever they landed, which
-        is how "year" and "month" — the two halves of one date filter — ended
-        up separated by document type and tag. Read order now matches the way
-        the filters are used: what you are looking for, what kind of thing it
-        is, then when it is from.
-      {% endcomment %}
-      <form method="get" class="row g-2">
-        {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.pk }}">{% endif %}
-        {# Carried so filtering does not reset a reader who asked for a longer page. #}
-        <input type="hidden" name="per_page" value="{{ page_size }}">
-        <div class="col-12 col-lg-9">{{ form.q }}</div>
-        <div class="col-12 col-lg-3 d-flex gap-2">
-          <button class="btn btn-udm flex-grow-1" type="submit">Filter</button>
-          <a class="btn btn-udm-outline flex-grow-1" href="{% url 'documents:repository' %}">Clear</a>
-        </div>
-
-        <div class="col-6 col-lg-2">{{ form.document_type }}</div>
-        <div class="col-6 col-lg-2">{{ form.tag }}</div>
-        <div class="col-6 col-lg-2">{{ form.source }}</div>
-        <div class="col-6 col-lg-2">{{ form.year }}</div>
-        <div class="col-6 col-lg-2">{{ form.month }}</div>
-        <div class="col-6 col-lg-2">{{ form.retention }}</div>
-      </form>
-    </div></div>
-
-    {% comment %}
-      The "Pending filing" queue used to sit here. It has moved to the Document
-      Tracking page: those records are completed but not yet approved into the
-      repository, so they are still tracking's business, and approving one is
-      what puts it on this page in the first place. See the comment on
-      TrackingRecordQuerySet.pending_filing for why it was ever here.
-    {% endcomment %}
-
-    {% if retention_due %}
-      <div class="card-udm mb-3 no-print">
-        <div class="card-udm-head">
-          <div><h2>Retention review due</h2><div class="card-udm-caption">These dates require a records officer's disposition review. Nothing is deleted or hidden automatically.</div></div>
-          <a class="small" href="?retention=due">Show all {{ retention_due_count }}</a>
-        </div>
-        <div class="card-udm-body p-0 table-responsive">
-          <table class="table-udm"><thead><tr><th>Document</th><th>Office</th><th>Retention date</th><th></th></tr></thead><tbody>
-          {% for due_document in retention_due %}<tr><td><a href="{{ due_document.get_absolute_url }}">{{ due_document.title|truncatechars:58 }}</a></td><td>{% include "partials/_office_badge.html" with office=due_document.office %}</td><td>{{ due_document.retention_until|date:"d M Y" }}</td><td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{{ due_document.get_absolute_url }}">Review</a></td></tr>{% endfor %}
-          </tbody></table>
-        </div>
-        {% if retention_due_more %}<div class="card-udm-body pt-0"><p class="text-muted mb-0">and {{ retention_due_more }} more due for review.</p></div>{% endif %}
-      </div>
+  </details>
+  <section class="repository-workspace" aria-label="Documents in the selected folder">
+    <nav class="repository-breadcrumb" aria-label="Repository location"><a href="{{ all_folders_url }}">All available offices</a>{% if selected_office %}<span aria-hidden="true">/</span><strong>{{ selected_office.name }}</strong>{% endif %}</nav>
+    <nav class="repository-views" aria-label="Repository lists">
+      <a href="{{ filed_url }}" class="repository-view{% if not pending_view %} is-active{% endif %}"{% if not pending_view %} aria-current="page"{% endif %}>Filed documents <span class="num">{{ filed_count }}</span></a>
+      <a href="{{ pending_url }}" class="repository-view{% if pending_view %} is-active{% endif %}"{% if pending_view %} aria-current="page"{% endif %}>Pending upload <span class="num">{{ pending_count }}</span></a>
+    </nav>
+    {% if not pending_view and pending_count %}
+    <section class="repository-pending-preview" aria-labelledby="pending-preview-title">
+      <div class="repository-section-head"><div><h2 id="pending-preview-title">Waiting to be filed <span class="num">{{ pending_count }}</span></h2><p>Completed in Tracking. An authorized administrator must approve these into the repository.</p></div><a class="btn btn-sm btn-udm-outline" href="{{ pending_url }}">View pending uploads</a></div>
+      {% include "documents/_repository_pending.html" %}
+    </section>
     {% endif %}
-
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <span class="text-muted" style="font-size:13.5px;">
-        {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
-      </span>
-      {# This page's search is the repository half of the unified search page. #}
-      <a class="small" href="{% url 'search:index' %}?mode=repository">Advanced relevance search →</a>
-    </div>
-
-    {% comment %}
-      Above the grid, beside the count it belongs to. Under a full page of tiles
-      the control is a scroll away, which is the wrong end of a list somebody is
-      trying to make shorter.
-    {% endcomment %}
-    {% pager section="size" %}
-
-    <div class="row g-3">
-      {% for document in documents %}
-        <div class="col-md-6 col-xl-4">
-          <a class="doc-tile" href="{{ document.get_absolute_url }}">
-            <div class="d-flex justify-content-between align-items-start">
-              <span class="pill pill-muted">{{ document.document_type.name|default:"Unclassified"|truncatechars:18 }}</span>
-              <span class="pill {% if document.source == 'DTS' %}pill-completed{% else %}pill-draft{% endif %}">
-                {% if document.source == 'DTS' %}Completed{% else %}Historical{% endif %}
-              </span>
-            </div>
-            <h3>{{ document.title|truncatechars:64 }}</h3>
-            <div class="meta">
-              {% include "partials/_office_badge.html" with office=document.office %} {{ document.document_date|default:document.created_at|date:"d M Y" }}
-              {% if document.reference_number %}<br><span class="mono">{{ document.reference_number }}</span>{% endif %}
-            </div>
-            <div>
-              {% for tag in document.tags.all|slice:":3" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
-            </div>
-            {% if document.retention_is_due %}<div class="text-danger" style="font-size:12px;">Retention review due {{ document.retention_until|date:"d M Y" }}</div>{% elif document.retention_is_due_soon %}<div class="text-muted" style="font-size:12px;">Retention review by {{ document.retention_until|date:"d M Y" }}</div>{% endif %}
-            {% if not document.has_text %}
-              <div class="text-muted" style="font-size:12px;">No extracted text — searchable by metadata only</div>
-            {% endif %}
-          </a>
-        </div>
-      {% empty %}
-        <div class="col-12">
-          <div class="card-udm"><div class="card-udm-body empty-state">
-            <h3>No documents match this view</h3>
-            <p>Clear the filters or upload a historical office document.</p>
-            {% if can_start_work %}
-              <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
-            {% endif %}
-          </div></div>
-        </div>
-      {% endfor %}
-    </div>
-
+    <div class="repository-list-head"><div><h2>{% if pending_view %}Pending upload{% elif selected_office %}{{ selected_office.code }} documents{% else %}Filed documents{% endif %}</h2><p>{% if pending_view %}Completed records awaiting approval. They are counted separately from filed documents.{% else %}Approved tracking records, historical uploads, and scanned documents.{% endif %}</p></div>{% if not pending_view %}<a href="{% url 'search:index' %}?mode=repository">Advanced search</a>{% endif %}</div>
+    <form method="get" class="repository-filters card-udm" aria-label="Filter repository records">
+      {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.pk }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
+      <input type="hidden" name="per_page" value="{{ page_size }}">
+      <div class="repository-search"><div><label for="{{ form.q.id_for_label }}">{% if pending_view %}Search subject or tracking number{% else %}Search title, reference, or document text{% endif %}</label>{{ form.q }}</div><button class="btn btn-udm" type="submit">Search</button><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>
+      <div class="repository-filter-grid">
+        <div><label for="{{ form.document_type.id_for_label }}">Document type</label>{{ form.document_type }}</div>
+        <div><label for="{{ form.year.id_for_label }}">{% if pending_view %}Completion year{% else %}Year{% endif %}</label>{{ form.year }}</div>
+        <div><label for="{{ form.month.id_for_label }}">{% if pending_view %}Completion month{% else %}Month{% endif %}</label>{{ form.month }}</div>
+        {% if not pending_view %}<div><label for="{{ form.tag.id_for_label }}">Tag</label>{{ form.tag }}</div><div><label for="{{ form.source.id_for_label }}">Document origin</label>{{ form.source }}</div><div><label for="{{ form.retention.id_for_label }}">Retention review</label>{{ form.retention }}</div>{% endif %}
+      </div><button class="btn btn-sm btn-udm-outline repository-apply" type="submit">Apply filters</button>
+    </form>
+    {% if type_folders %}<nav class="repository-type-folders" aria-label="Browse by document type"><span>By type</span>{% for folder in type_folders %}<a href="{{ folder.url }}"{% if folder.selected %} class="is-selected" aria-current="true"{% endif %}>{{ folder.document_type__name }} <span class="num">{{ folder.total }}</span></a>{% endfor %}</nav>{% endif %}
+    {% if popular_tags and not pending_view %}<nav class="repository-tags" aria-label="Tags in this folder"><span>Tags</span>{% for tag in popular_tags %}<a href="{% filter_url 'tag' tag.pk %}">{{ tag.name }} <span class="num">{{ tag.visible_usage }}</span></a>{% endfor %}</nav>{% endif %}
+    {% if retention_due and not pending_view %}<aside class="repository-retention"><div><strong>{{ retention_due_count }} document{{ retention_due_count|pluralize }} due for retention review</strong><span>Review the retention decision; documents are never deleted automatically.</span></div><a class="btn btn-sm btn-udm-outline" href="{% filter_url 'retention' 'due' %}">Review documents</a></aside>{% endif %}
+    <div class="repository-results"><span>{{ total }} {% if pending_view %}pending record{% else %}document{% endif %}{{ total|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>{% pager section="size" %}</div>
+    {% if pending_view %}<div class="card-udm repository-pending-list">{% include "documents/_repository_pending.html" %}</div>
+    {% else %}<div class="repository-document-list">
+      {% for document in documents %}<article class="repository-document card-udm">
+        <span class="repository-file-icon" aria-hidden="true"><svg viewBox="0 0 24 28" fill="none"><path d="M4 1h10l7 7v18H4zM14 1v8h7M8 15h9M8 20h7" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+        <div class="repository-document-copy"><h3><a href="{{ document.get_absolute_url }}">{{ document.title }}</a></h3><div class="repository-document-meta">{% include "partials/_office_badge.html" with office=document.office %}<span>{{ document.document_type.name|default:"Unclassified" }}</span><span>{% if document.document_date %}{{ document.document_date|date:"d M Y" }}{% else %}Added {{ document.created_at|date:"d M Y" }}{% endif %}</span></div>{% if document.reference_number %}<p class="mono">{{ document.reference_number }}</p>{% endif %}<div class="repository-document-tags">{% for tag in document.tags.all|slice:":3" %}<span>{{ tag.name }}</span>{% endfor %}</div></div>
+        <div class="repository-document-state"><span class="pill {% if document.source == 'DTS' %}pill-completed{% else %}pill-muted{% endif %}">{% if document.source == 'DTS' %}From Tracking{% else %}Historical{% endif %}</span><span>{{ document.file_count }} file{{ document.file_count|pluralize }}</span>{% if document.retention_is_due %}<span class="text-danger">Retention review due</span>{% endif %}</div>
+        <a class="btn btn-sm btn-udm-outline repository-open" href="{{ document.get_absolute_url }}" aria-label="Open {{ document.title }}">Open</a>
+      </article>{% empty %}<div class="card-udm empty-state"><h3>No documents found</h3><p>Try another folder or clear the filters to see available documents.</p><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>{% endfor %}
+    </div>{% endif %}
     {% pager section="steps" %}
-  </div>
+  </section>
 </div>
 {% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/repository.js' %}"></script>{% endblock %}

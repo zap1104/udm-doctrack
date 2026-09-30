@@ -14,7 +14,7 @@ urlpatterns = [
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("memo/print/", views.DashboardMemoPrintView.as_view(), name="dashboard_memo_print"),
     # Reports is a part of Document Tracking, so it lives under its path and the
-    # sidebar highlights Document Tracking there. The names are unchanged, and
+    # sidebar highlights its Reports link there. The names are unchanged, and
     # the old addresses redirect permanently, query string and all, so a
     # bookmarked or printed link to a report still opens that report.
     path("tracking/reports/", views.ReportsView.as_view(), name="reports"),

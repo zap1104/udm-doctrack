@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+import regex
 from django.conf import settings
 
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag, TagRule
@@ -316,8 +317,8 @@ def _rule_matches(rule: TagRule, haystack: str) -> bool:
         return any(word.strip() in haystack for word in pattern.split(",") if word.strip())
     if rule.match_type == TagRule.MatchType.REGEX:
         try:
-            return re.search(rule.pattern, haystack, re.IGNORECASE) is not None
-        except re.error:
+            return regex.search(rule.pattern, haystack, regex.IGNORECASE | regex.VERSION0, timeout=0.05) is not None
+        except (regex.error, TimeoutError):
             return False
     return False
 

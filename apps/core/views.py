@@ -1019,7 +1019,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: mauve, and the whole life ends Completed green, so a line and the stage
     #: it measures are one colour across the page.
     TREND_SERIES = (
-        ("receipt", "Receipt", Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
+        ("receipt", Status.PENDING_RECEIPT.label, Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
         ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "confirmed until completed", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
@@ -2162,6 +2162,16 @@ class HealthzView(View):
         from django.core.files.storage import default_storage
         from django.db import connection
         from django.db.migrations.executor import MigrationExecutor
+        if not (request.user.is_authenticated and request.user.is_system_admin):
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                healthy = True
+            except Exception:
+                healthy = False
+            response = JsonResponse({"status": "ok" if healthy else "unhealthy"}, status=200 if healthy else 503)
+            response["Cache-Control"] = "no-store"
+            return response
         checks = {}
         try:
             with connection.cursor() as cursor:

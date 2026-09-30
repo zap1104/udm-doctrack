@@ -85,18 +85,18 @@ class AccessLevel(models.TextChoices):
 
 class DocumentQuerySet(models.QuerySet):
     def visible_to(self, user):
-        if not user.is_authenticated:
+        if not user.is_authenticated or not user.is_active:
             return self.none()
         if user.is_system_admin:
             return self
         conditions = Q(access_level=AccessLevel.OVPA) | Q(uploaded_by=user) | Q(grants__user=user)
         if user.office_id:
-            conditions |= (
+            office_history = (
                 Q(office_id=user.office_id)
-                | Q(grants__office_id=user.office_id)
                 | Q(tracking_record__routing_steps__to_office_id=user.office_id)
                 | Q(tracking_record__originating_office_id=user.office_id)
             )
+            conditions |= Q(grants__office_id=user.office_id) | (office_history & ~Q(access_level=AccessLevel.RESTRICTED))
         return self.filter(conditions).distinct()
 
     def with_related(self):
@@ -288,6 +288,8 @@ class Document(TimeStampedModel):
         return Document.objects.filter(pk=self.pk).visible_to(user).exists()
 
     def can_user_edit(self, user) -> bool:
+        if not user.is_authenticated or not user.is_active or user.is_viewer:
+            return False
         if user.is_system_admin:
             return True
         if self.uploaded_by_id == user.pk:

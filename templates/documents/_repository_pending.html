@@ -1,0 +1,5 @@
+<ul class="repository-queue">
+  {% for record in pending_upload %}
+  <li><div class="repository-queue-copy"><a class="repository-queue-title" href="{{ record.get_absolute_url }}">{{ record.subject }}</a><span class="mono">{{ record.display_tracking_number }}</span><div class="repository-queue-meta"><span>{{ record.originating_office.code }}</span><span>{% if record.completed_at %}Completed {{ record.completed_at|date:"d M Y" }}{% else %}Completion date unavailable{% endif %}</span><span>{{ record.file_count }} attachment{{ record.file_count|pluralize }}</span></div></div><a class="btn btn-sm {% if record.can_approve %}btn-udm{% else %}btn-udm-outline{% endif %}" href="{{ record.get_absolute_url }}" aria-label="{% if record.can_approve %}Review and file{% else %}View{% endif %} {{ record.display_tracking_number }}">{% if record.can_approve %}Review &amp; file{% else %}View record{% endif %}</a></li>
+  {% empty %}<li class="repository-queue-empty"><div><strong>No pending uploads found</strong><p>Completed records appear here until an authorized administrator files them.</p></div></li>{% endfor %}
+</ul>

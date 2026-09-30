@@ -1,7 +1,7 @@
 """Reports is a tab of Document Tracking, not an item of its own.
 
-It lives at /tracking/reports/, the sidebar highlights Document Tracking on
-it, and a Tracking | Reports strip joins the two pages. The old address
+It lives at /tracking/reports/, the sidebar highlights only its Reports link,
+and a Tracking | Reports strip joins the two pages. The old address
 redirects permanently with its query string, so a bookmarked or printed link
 to a report still opens that report.
 """
@@ -35,15 +35,19 @@ def test_the_old_address_redirects_permanently_with_its_query(client, users, old
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "viewer"])
-def test_reports_highlights_document_tracking_and_its_own_tab(client, users, role):
+@pytest.mark.parametrize("path", ["/tracking/reports/", "/documents/reports/"])
+def test_reports_highlights_only_its_own_sidebar_link(client, users, role, path):
     client.force_login(users[role])
-    body = client.get("/tracking/reports/").content.decode()
+    body = client.get(path).content.decode()
 
     sidebar = body[body.index('aria-label="Main navigation"'):body.index("</nav>", body.index('aria-label="Main navigation"'))]
     assert 'href="/tracking/reports/"' in sidebar
     assert 'href="/documents/reports/"' in sidebar
-    assert re.search(r'href="/tracking/"\s*aria-current="page"', sidebar), "Document Tracking is the section"
-    assert '<a class="subtab is-active" href="/tracking/reports/" aria-current="page">Reports</a>' in body
+    assert re.findall(r'href="([^"]+)"\s*aria-current="page"', sidebar) == [path]
+    assert len(re.findall(r'class="[^"]*\bactive\b[^"]*"', sidebar)) == 1
+    assert "↳" not in sidebar
+    if path == "/tracking/reports/":
+        assert '<a class="subtab is-active" href="/tracking/reports/" aria-current="page">Reports</a>' in body
 
 
 @pytest.mark.django_db
