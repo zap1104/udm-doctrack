@@ -1,14 +1,14 @@
-<ul class="nav nav-tabs mb-4">
-  <li class="nav-item"><a class="nav-link {% if tab == 'users' %}active{% endif %}" href="{% url 'accounts:user_list' %}">Users</a></li>
+<nav class="subtabs subtabs--administration no-print" aria-label="Administration sections">
+  <a class="subtab {% if tab == 'users' %}is-active{% endif %}" href="{% url 'accounts:user_list' %}"{% if tab == 'users' %} aria-current="page"{% endif %}>Users</a>
   {% comment %}
     Offices is a system administrator's screen. Shown to an office administrator,
     the tab answered with a 403 — a control that exists to refuse the reader.
   {% endcomment %}
-  {% if user.is_system_admin %}<li class="nav-item"><a class="nav-link {% if tab == 'offices' %}active{% endif %}" href="{% url 'accounts:office_list' %}">Offices</a></li>{% endif %}
-  <li class="nav-item"><a class="nav-link {% if slug == 'document-types' %}active{% endif %}" href="{% url 'core:masterdata_list' 'document-types' %}">Document types</a></li>
-  <li class="nav-item"><a class="nav-link {% if slug == 'tags' %}active{% endif %}" href="{% url 'core:masterdata_list' 'tags' %}">Tags</a></li>
-  <li class="nav-item"><a class="nav-link {% if slug == 'metadata-rules' %}active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-rules' %}">Metadata rules</a></li>
-  <li class="nav-item"><a class="nav-link {% if slug == 'metadata-fields' %}active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-fields' %}">Metadata fields</a></li>
-  {% if user.is_system_admin %}<li class="nav-item"><a class="nav-link {% if slug == 'holidays' %}active{% endif %}" href="{% url 'core:masterdata_list' 'holidays' %}">Holidays</a></li>{% endif %}
-  <li class="nav-item"><a class="nav-link {% if tab == 'audit' %}active{% endif %}" href="{% url 'core:audit_log' %}">Audit log</a></li>
-</ul>
+  {% if user.is_system_admin %}<a class="subtab {% if tab == 'offices' %}is-active{% endif %}" href="{% url 'accounts:office_list' %}"{% if tab == 'offices' %} aria-current="page"{% endif %}>Offices</a>{% endif %}
+  <a class="subtab {% if slug == 'document-types' %}is-active{% endif %}" href="{% url 'core:masterdata_list' 'document-types' %}"{% if slug == 'document-types' %} aria-current="page"{% endif %}>Document types</a>
+  <a class="subtab {% if slug == 'tags' %}is-active{% endif %}" href="{% url 'core:masterdata_list' 'tags' %}"{% if slug == 'tags' %} aria-current="page"{% endif %}>Tags</a>
+  <a class="subtab {% if slug == 'metadata-rules' %}is-active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-rules' %}"{% if slug == 'metadata-rules' %} aria-current="page"{% endif %}>Metadata rules</a>
+  <a class="subtab {% if slug == 'metadata-fields' %}is-active{% endif %}" href="{% url 'core:masterdata_list' 'metadata-fields' %}"{% if slug == 'metadata-fields' %} aria-current="page"{% endif %}>Metadata fields</a>
+  {% if user.is_system_admin %}<a class="subtab {% if slug == 'holidays' %}is-active{% endif %}" href="{% url 'core:masterdata_list' 'holidays' %}"{% if slug == 'holidays' %} aria-current="page"{% endif %}>Holidays</a>{% endif %}
+  <a class="subtab {% if tab == 'audit' %}is-active{% endif %}" href="{% url 'core:audit_log' %}"{% if tab == 'audit' %} aria-current="page"{% endif %}>Audit log</a>
+</nav>

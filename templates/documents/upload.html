@@ -21,7 +21,7 @@
         {% include "partials/_form_errors.html" %}
         <div class="mb-3">
           <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark">*</span></label>
-          <div style="border:2px dashed var(--udm-line-soft);border-radius:10px;padding:22px;background:var(--udm-surface-sunk);text-align:center;">
+          <div class="phase2-upload-box">
             {{ form.file }}
             <div class="form-text mt-2">{{ form.file.help_text }}</div>
           </div>
@@ -31,16 +31,15 @@
         {% include "partials/_field.html" with field=form.source %}
         {% include "partials/_field.html" with field=form.ocr_language %}
         {% include "partials/_field.html" with field=form.allow_external_ocr %}
-        <button class="btn btn-udm" type="submit">Read File and Continue</button>
-        <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Cancel</a>
+        <div class="form-actions"><button class="btn btn-udm" type="submit">Read File and Continue</button>
+        <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Cancel</a></div>
       </form>
     </div></div>
   </div>
 
   <div class="col-lg-5">
-    <div class="card-udm"><div class="card-udm-body">
-      <h2 style="font-size:15px;">What Happens Next</h2>
-      <ol class="ps-3" style="font-size:13.5px;color:var(--udm-slate-text);">
+    <div class="card-udm"><div class="card-udm-head"><h2>What Happens Next</h2></div><div class="card-udm-body">
+      <ol class="phase2-checklist">
         <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
         <li class="mb-2">Scanned pages use OCR only when a provider is configured and you allow external OCR for this record.</li>
         <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>

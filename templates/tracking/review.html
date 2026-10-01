@@ -26,7 +26,7 @@
       </div>
       <div class="card-udm-body">
         <div class="table-responsive">
-          <table class="table phase2-review-table align-middle">
+          <table class="table phase2-review-table table-stacked align-middle">
             <tbody>
               <tr><th>Originating office</th><td>{{ record.originating_office.name }}</td></tr>
               <tr><th>Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
@@ -89,7 +89,7 @@
             </p>
           {% endif %}
 
-          <div class="d-flex flex-wrap gap-2">
+          <div class="form-actions">
             <button class="btn btn-udm-outline" type="button" data-back-to-edit>Back to Edit</button>
             <button class="btn btn-udm" type="submit">Send Document</button>
             <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as Draft</a>

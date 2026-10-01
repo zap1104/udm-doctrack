@@ -21,9 +21,11 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
+from apps.core.security import redact_secrets
 from apps.core.utils import file_extension, normalise_text
 
 logger = logging.getLogger("doctrack")
@@ -197,6 +199,9 @@ def _retryable_ocr_error(exc: Exception) -> bool:
 
 
 def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> ExtractionResult:
+    endpoint = urlsplit(settings.OCR_SPACE_ENDPOINT)
+    if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:
+        return ExtractionResult(status="FAILED", notes=["OCR.space requires an HTTPS endpoint without embedded credentials."])
     api_key = settings.OCR_SPACE_API_KEY
     if not api_key:
         return ExtractionResult(status="SKIPPED", notes=["OCR_SPACE_API_KEY is not set"])
@@ -271,7 +276,7 @@ def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
         )
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         logger.warning("OCR.space call failed: %s", exc)
-        return ExtractionResult(status="FAILED", engine="ocr.space", notes=[str(exc)[:200]])
+        return ExtractionResult(status="FAILED", engine="ocr.space", notes=["The OCR provider could not process this file. Contact the administrator."])
 
 
 def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> ExtractionResult:
@@ -332,7 +337,7 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
         )
     except Exception as exc:  # pragma: no cover - depends on external service
         logger.warning("Azure Document Intelligence failed: %s", exc)
-        return ExtractionResult(status="FAILED", engine="azure-document-intelligence", notes=[str(exc)[:200]])
+        return ExtractionResult(status="FAILED", engine="azure-document-intelligence", notes=["The OCR provider could not process this file. Contact the administrator."])
 
 
 def run_ocr(
@@ -399,6 +404,7 @@ def extract_document_text(
 
 
 def _clip(result: ExtractionResult) -> ExtractionResult:
+    result.notes = [redact_secrets(note) for note in result.notes]
     limit = settings.OCR_MAX_CHARS
     if len(result.text) > limit:
         result.text = result.text[:limit]

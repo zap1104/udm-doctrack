@@ -15,6 +15,7 @@
       <div class="col-sm-6 col-lg-3"><label for="report-record-type" class="form-label">Document type</label><select id="report-record-type" name="record_type" class="form-select"><option value="">All types</option>{% for option in report_record_types %}<option value="{{ option.value }}"{% if option.value == record_type %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
       <div class="col-sm-6 col-lg-2"><label for="report-record-month" class="form-label">{% if is_repository_report %}Filed{% else %}Created{% endif %} month</label><input id="report-record-month" type="month" class="form-control" name="record_month" value="{{ record_month }}"></div>
       <div class="col-sm-6 col-lg-2"><button class="btn btn-udm" type="submit">Find records</button></div>
+      {% if not is_repository_report %}<div class="col-12"><label class="form-check"><input class="form-check-input" type="checkbox" name="record_overdue" value="yes"{% if record_overdue %} checked{% endif %}><span class="form-check-label">Only overdue documents</span></label></div>{% endif %}
     </form>
     {% pager section="size" anchor="report-records" %}
     <div class="table-responsive"><table class="table-udm">

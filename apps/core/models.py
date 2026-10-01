@@ -26,6 +26,17 @@ class ActiveManager(models.Manager):
         return super().get_queryset().filter(is_active=True)
 
 
+class SecurityThrottle(models.Model):
+    """Shared fixed-window counters, locked atomically across workers."""
+
+    key = models.CharField(max_length=64, primary_key=True)
+    attempts = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f"{self.key[:12]}: {self.attempts} requests"
+
+
 class DocumentType(TimeStampedModel):
     """Memorandum, Letter, Work Order, Purchase Request, Endorsement, ..."""
 

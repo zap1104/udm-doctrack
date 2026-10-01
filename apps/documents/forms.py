@@ -33,7 +33,7 @@ class UploadForm(BootstrapFormMixin, forms.Form):
     )
     allow_external_ocr = forms.BooleanField(
         required=False,
-        initial=True,
+        initial=False,
         label="Allow external OCR for scanned pages",
         help_text=(
             "Clear this for sensitive records. The file stays stored, and local text layers are still read, "
@@ -100,6 +100,8 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
         self.metadata_definitions = list(MetadataFieldDefinition.active.all())
         super().__init__(*args, **kwargs)
         self.fields["office"].queryset = Office.active.all()
+        if user is not None and not user.is_system_admin:
+            self.fields["office"].queryset = Office.active.filter(pk=self.instance.office_id or user.office_id)
         self.fields["document_type"].queryset = DocumentType.active.all()
         self.fields["document_type"].empty_label = "Not specified"
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})

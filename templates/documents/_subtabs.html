@@ -1,4 +1,5 @@
-<nav class="subtabs no-print" aria-label="Document Repository">
-  <a class="subtab{% if active == 'repository' %} is-active{% endif %}" href="{% url 'documents:repository' %}"{% if active == 'repository' %} aria-current="page"{% endif %}>Repository</a>
+<nav class="subtabs subtabs--repository no-print" aria-label="Document Repository">
+  <a class="subtab{% if active == 'repository' %} is-active{% endif %}" href="{% url 'documents:repository' %}"{% if active == 'repository' %} aria-current="page"{% endif %}>All documents</a>
+  <a class="subtab{% if active == 'folders' %} is-active{% endif %}" href="{% if folders_url %}{{ folders_url }}{% else %}{% url 'documents:repository' %}?view=folders{% endif %}"{% if active == 'folders' %} aria-current="page"{% endif %}>Browse folders</a>
   <a class="subtab{% if active == 'reports' %} is-active{% endif %}" href="{% url 'core:repository_reports' %}"{% if active == 'reports' %} aria-current="page"{% endif %}>Reports</a>
 </nav>

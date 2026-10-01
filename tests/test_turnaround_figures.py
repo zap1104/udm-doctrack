@@ -89,10 +89,14 @@ def test_durations_drop_a_zero_second_unit():
 
 # --- the month the summary names ------------------------------------------------
 @pytest.fixture
-def slow_then_fast(users, offices, memo_type):
+def slow_then_fast(users, offices, memo_type, monkeypatch):
     """One document that took weeks, finished months ago, and one that took an
     hour, finished this month: the all-time average and this month's are far
     apart, which is what makes the mislabelling visible."""
+    # Use a stable mid-month clock: on the first day there is only one daily
+    # point, so there cannot be two tooltip edges or a separate empty day.
+    fixed_now = timezone.make_aware(datetime(2026, 9, 15, 12))
+    monkeypatch.setattr(timezone, "now", lambda: fixed_now)
     made = []
     for subject in ("Slow, long ago", "Fast, this month"):
         record = create_draft_record(
@@ -104,6 +108,11 @@ def slow_then_fast(users, offices, memo_type):
         complete_record(record, user=users["sup"])
         made.append(record)
     now = timezone.now()
+    # sent_at's model default holds the original clock callable, so align the
+    # handovers explicitly with the fixture clock as well.
+    RoutingStep.objects.filter(record__in=made).update(
+        sent_at=now - timedelta(minutes=5), received_at=now,
+    )
     long_ago = now - timedelta(days=120)
     TrackingRecord.objects.filter(pk=made[0].pk).update(
         created_at=long_ago - timedelta(days=30), first_received_at=long_ago - timedelta(days=29),
@@ -244,12 +253,12 @@ def test_every_month_has_a_hover_target_placed_on_its_dots(client, users, slow_t
 @pytest.mark.parametrize(
     "values, expected",
     [
-        ((0.2, 1.9, 2.4), ["Total lifetime", "In Process", "Receipt"]),
-        ((3.0, 1.0, 2.0), ["Receipt", "Total lifetime", "In Process"]),
-        ((1.0, 3.0, 2.0), ["In Process", "Total lifetime", "Receipt"]),
-        ((2.0, 2.0, 2.0), ["Receipt", "In Process", "Total lifetime"]),
+        ((0.2, 1.9, 2.4), ["Total lifetime", "In Process", "Pending Receipt"]),
+        ((3.0, 1.0, 2.0), ["Pending Receipt", "Total lifetime", "In Process"]),
+        ((1.0, 3.0, 2.0), ["In Process", "Total lifetime", "Pending Receipt"]),
+        ((2.0, 2.0, 2.0), ["Pending Receipt", "In Process", "Total lifetime"]),
         ((None, 1.0, 2.0), ["Total lifetime", "In Process"]),
-        ((1.00001, 1.00002, None), ["In Process", "Receipt"]),
+        ((1.00001, 1.00002, None), ["In Process", "Pending Receipt"]),
         ((None, None, None), []),
     ],
 )

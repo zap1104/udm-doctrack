@@ -12,20 +12,24 @@ from django.contrib.auth.views import (
     PasswordResetDoneView,
     PasswordResetView,
 )
-from django.core.cache import cache
+from django.core.mail import send_mail
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, View
 
 from apps.core.middleware import idle_seconds_for
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, SystemAdminRequiredMixin
 from apps.core.models import AuditLog, NotificationPreference
 from apps.core.pagination import paginate
-from apps.core.utils import log_action
+from apps.core.security import allow_sensitive_request
+from apps.core.utils import client_ip, log_action
 
+from .email_verification import email_verification_token
 from .forms import (
+    AccountPasswordChangeForm,
+    AccountSetPasswordForm,
     AdminSetPasswordForm,
     AdminUserCreateForm,
     AdminUserUpdateForm,
@@ -33,6 +37,7 @@ from .forms import (
     OfficeForm,
     ProfileForm,
     SignInForm,
+    VerifiedEmailPasswordResetForm,
 )
 from .models import Office, User
 
@@ -46,20 +51,56 @@ class PasswordResetAvailableMixin:
 
 
 class PasswordResetRequestView(PasswordResetAvailableMixin, PasswordResetView):
+    form_class = VerifiedEmailPasswordResetForm
     template_name = "accounts/password_reset_form.html"
     email_template_name = "accounts/password_reset_email.txt"
     subject_template_name = "accounts/password_reset_subject.txt"
     success_url = reverse_lazy("accounts:password_reset_done")
 
     def form_valid(self, form):
-        key = f"password-reset:{self.request.META.get('REMOTE_ADDR', '')}"
-        attempts = cache.get(key, 0)
-        if attempts >= 5:
+        address = client_ip(self.request)
+        email = form.cleaned_data["email"].strip().casefold()
+        if not allow_sensitive_request("password-reset-ip", address, limit=5, seconds=3600):
             return redirect(self.success_url)
-        cache.set(key, attempts + 1, 60 * 60)
+        if not allow_sensitive_request("password-reset-email", email, limit=3, seconds=3600):
+            return redirect(self.success_url)
         response = super().form_valid(form)
         log_action(AuditLog.Action.UPDATE, "Password recovery requested", request=self.request, extra={"kind": "password_reset"})
         return response
+
+
+class EmailVerificationRequestView(AppLoginRequiredMixin, View):
+    def post(self, request):
+        user = request.user
+        if not settings.EMAIL_CONFIGURED or not user.email:
+            messages.info(request, "Add an email address and ask the administrator to configure email delivery.")
+        elif user.email_is_verified:
+            messages.info(request, "Your email address is already verified.")
+        elif allow_sensitive_request("email-verification", user.pk, limit=3, seconds=3600):
+            token = email_verification_token.make_token(user)
+            path = reverse("accounts:verify_email_confirm", args=[user.pk, token])
+            url = settings.SITE_BASE_URL + path if settings.SITE_BASE_URL else request.build_absolute_uri(path)
+            send_mail("Verify your UDM DocTrack email", f"Sign in to your account and open this link to confirm your email:\n{url}\nRequest a new link if this one has expired.", settings.DEFAULT_FROM_EMAIL, [user.email])
+            messages.success(request, "Verification link sent. Check your email.")
+        else:
+            messages.info(request, "Please wait before requesting another verification link.")
+        return redirect("accounts:profile")
+
+
+class EmailVerificationConfirmView(AppLoginRequiredMixin, View):
+    def _valid(self, request, pk, token):
+        return request.user.pk == pk and bool(request.user.email) and email_verification_token.check_token(request.user, token)
+
+    def get(self, request, pk, token):
+        return render(request, "accounts/verify_email.html", {"validlink": self._valid(request, pk, token)})
+
+    def post(self, request, pk, token):
+        if self._valid(request, pk, token):
+            User.objects.filter(pk=pk, email=request.user.email).update(verified_email=request.user.email)
+            log_action(AuditLog.Action.UPDATE, "Verified own email address", actor=request.user, request=request)
+            messages.success(request, "Email verified. You can now use email password recovery.")
+            return redirect("accounts:profile")
+        return render(request, "accounts/verify_email.html", {"validlink": False}, status=400)
 
 
 class PasswordResetDonePage(PasswordResetAvailableMixin, PasswordResetDoneView):
@@ -67,6 +108,7 @@ class PasswordResetDonePage(PasswordResetAvailableMixin, PasswordResetDoneView):
 
 
 class PasswordResetConfirmPage(PasswordResetAvailableMixin, PasswordResetConfirmView):
+    form_class = AccountSetPasswordForm
     template_name = "accounts/password_reset_confirm.html"
 
     def form_valid(self, form):
@@ -97,6 +139,7 @@ class SignOutView(LogoutView):
 
 
 class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
+    form_class = AccountPasswordChangeForm
     template_name = "accounts/password_change.html"
     success_url = reverse_lazy("core:dashboard")
 
@@ -187,7 +230,7 @@ class OfficeScopedUserMixin:
         # unassigned account in the system.
         if not self.request.user.office_id:
             return users.none()
-        return users.filter(office_id=self.request.user.office_id)
+        return users.filter(office_id=self.request.user.office_id, is_superuser=False, is_staff=False).exclude(role=User.Role.SYSTEM_ADMIN)
 
     def selectable_offices(self):
         if self.request.user.is_system_admin:

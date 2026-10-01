@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -99,7 +101,9 @@ def has_package(name: str) -> bool:
 # Core
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
-DEBUG = env_bool("DJANGO_DEBUG", True)
+DEBUG = env_bool("DJANGO_DEBUG", False)
+if not DEBUG and (SECRET_KEY == "dev-only-insecure-key-change-me" or len(SECRET_KEY) < 50):
+    raise ImproperlyConfigured("Production requires a random DJANGO_SECRET_KEY of at least 50 characters.")
 # To reach the dev server from a phone on the same wifi, add that machine's LAN
 # address to DJANGO_ALLOWED_HOSTS in .env — not here. .env is untracked, so the
 # address stays off GitHub and out of everybody else's checkout.
@@ -122,7 +126,7 @@ SITE_LONG_NAME = env(
 # Applications
 # ---------------------------------------------------------------------------
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "apps.core.admin_site.SystemAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -136,7 +140,7 @@ if DEBUG and has_package("whitenoise"):
 INSTALLED_APPS.append("django.contrib.staticfiles")
 
 ENABLE_AXES = env_bool("ENABLE_AXES", True) and has_package("axes")
-ENABLE_CSP = env_bool("ENABLE_CSP", False) and has_package("csp")
+ENABLE_CSP = env_bool("ENABLE_CSP", not DEBUG) and has_package("csp")
 ENABLE_BACKGROUND_TASKS = env_bool(
     "ENABLE_BACKGROUND_TASKS", False) and has_package("django_q")
 
@@ -174,6 +178,8 @@ MIDDLEWARE += [
     "apps.core.middleware.RoleIdleTimeoutMiddleware",
     # After auth and messages: it reads request.user and adds a message.
     "apps.core.middleware.ForcePasswordChangeMiddleware",
+    "apps.core.middleware.SensitiveRequestMiddleware",
+    "apps.core.middleware.PrivateResponseMiddleware",
 ]
 
 if ENABLE_CSP:
@@ -370,7 +376,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool(
     "SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_HTTPONLY = True
 # HTMX reads the token from the DOM, not the cookie.
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
@@ -428,6 +434,9 @@ if ENABLE_CSP:
     CSP_IMG_SRC = ("'self'", "data:", "blob:")
     CSP_CONNECT_SRC = ("'self'",)
     CSP_FRAME_ANCESTORS = ("'none'",)
+    CSP_OBJECT_SRC = ("'none'",)
+    CSP_BASE_URI = ("'self'",)
+    CSP_FORM_ACTION = ("'self'",)
 
 
 # ---------------------------------------------------------------------------
@@ -505,11 +514,18 @@ STORAGES = {"default": _default_storage, "staticfiles": _static_storage}
 DATA_UPLOAD_MAX_MEMORY_SIZE = env_int("MAX_UPLOAD_MB", 25) * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 MAX_UPLOAD_MB = env_int("MAX_UPLOAD_MB", 25)
+MAX_UPLOAD_FILES = env_int("MAX_UPLOAD_FILES", 10)
+DATA_UPLOAD_MAX_NUMBER_FILES = MAX_UPLOAD_FILES
 ALLOWED_UPLOAD_EXTENSIONS = env_list(
     "ALLOWED_UPLOAD_EXTENSIONS",
     "pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,tif,tiff",
 )
 SIGNED_URL_TTL_SECONDS = env_int("SIGNED_URL_TTL_SECONDS", 900)
+MAX_UPLOAD_UNCOMPRESSED_MB = env_int("MAX_UPLOAD_UNCOMPRESSED_MB", 100)
+MAX_UPLOAD_ARCHIVE_MEMBERS = env_int("MAX_UPLOAD_ARCHIVE_MEMBERS", 2000)
+PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT", 3600)
+ALLOW_DEMO_SEED = env_bool("ALLOW_DEMO_SEED", DEBUG)
+TRUST_PROXY_HEADERS = env_bool("TRUST_PROXY_HEADERS", False)
 
 
 # ---------------------------------------------------------------------------
@@ -643,13 +659,15 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "simple": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
+        "simple": {"()": "apps.core.security.RedactingFormatter", "format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
     },
     "handlers": {
         "console": {"class": "logging.StreamHandler", "formatter": "simple"},
     },
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
     "loggers": {
+        "django.request": {"level": "WARNING", "handlers": ["console"], "propagate": False},
+        "django.server": {"level": "INFO", "handlers": ["console"], "propagate": False},
         "django.db.backends": {"level": "WARNING", "handlers": ["console"], "propagate": False},
         "doctrack": {"level": env("LOG_LEVEL", "INFO"), "handlers": ["console"], "propagate": False},
     },

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django import template
 from django.http import QueryDict
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 
 from apps.core.analytics import share_text
 from apps.core.colors import STATUS_PILLS
@@ -260,9 +260,7 @@ def relevance_bar(score) -> str:
     except (TypeError, ValueError):
         value = 0
     css = relevance_class(value)
-    return mark_safe(
-        f'<div class="relevance-bar {css}"><span style="width:{value}%"></span></div>'
-    )
+    return format_html('<div class="relevance-bar {}"><span style="width:{}%"></span></div>', css, value)
 
 
 @register.filter

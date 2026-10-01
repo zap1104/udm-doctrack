@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from django.conf import settings
 from django.core.checks import Error, Tags, register
 
@@ -6,11 +8,11 @@ from django.core.checks import Error, Tags, register
 def deployment_configuration(app_configs, **kwargs):
     """Fail closed on settings that would lose data or weaken production security."""
     if getattr(settings, "DEBUG", True):
-        return []
+        return [Error("DEBUG must be disabled for deployment.", hint="Set DJANGO_DEBUG=False.", id="doctrack.E013")]
     errors = []
-    if settings.SECRET_KEY == "dev-only-insecure-key-change-me":
-        errors.append(Error("DJANGO_SECRET_KEY is still the development default.", hint="Set DJANGO_SECRET_KEY to a random secret before deploying.", id="doctrack.E001"))
-    if not settings.ALLOWED_HOSTS or settings.ALLOWED_HOSTS == ["*"]:
+    if settings.SECRET_KEY == "dev-only-insecure-key-change-me" or len(settings.SECRET_KEY) < 50:
+        errors.append(Error("DJANGO_SECRET_KEY is the development default or too short.", hint="Set DJANGO_SECRET_KEY to a random secret before deploying.", id="doctrack.E001"))
+    if not settings.ALLOWED_HOSTS or "*" in settings.ALLOWED_HOSTS:
         errors.append(Error("DJANGO_ALLOWED_HOSTS is empty or allows every host.", hint="Set DJANGO_ALLOWED_HOSTS to the deployed hostname(s).", id="doctrack.E002"))
     if getattr(settings, "FILE_STORAGE_BACKEND", "local") == "local":
         errors.append(Error("STORAGE_BACKEND=local is not durable on a production platform.", hint="Set STORAGE_BACKEND=s3 or azure and configure its credentials.", id="doctrack.E003"))
@@ -20,6 +22,24 @@ def deployment_configuration(app_configs, **kwargs):
         errors.append(Error("EMAIL_BACKEND is the console backend.", hint="Set EMAIL_BACKEND to smtp.EmailBackend and provide EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, and EMAIL_PORT.", id="doctrack.E005"))
     if not getattr(settings, "SECURE_SSL_REDIRECT", False):
         errors.append(Error("HTTPS redirect is disabled.", hint="Set SECURE_SSL_REDIRECT=True in the production environment.", id="doctrack.E006"))
+    storage = settings.STORAGES["default"]
+    options = storage.get("OPTIONS", {})
+    if storage["BACKEND"].endswith("FileSystemStorage"):
+        if settings.FILE_STORAGE_BACKEND != "local":
+            errors.append(Error("Cloud storage was selected but its package is missing.", id="doctrack.E014"))
+    elif settings.FILE_STORAGE_BACKEND == "s3" and not options.get("bucket_name"):
+        errors.append(Error("The private storage bucket name is missing.", id="doctrack.E015"))
+    if settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend" and (not settings.EMAIL_HOST or not settings.EMAIL_USE_TLS):
+        errors.append(Error("Production SMTP requires a host and encrypted transport.", id="doctrack.E016"))
+    if not settings.ENABLE_AXES:
+        errors.append(Error("Login lockout is disabled or django-axes is missing.", id="doctrack.E009"))
+    if settings.PASSWORD_HASHERS[0] != "django.contrib.auth.hashers.Argon2PasswordHasher":
+        errors.append(Error("Argon2 is not the preferred password hasher.", id="doctrack.E010"))
+    if settings.ALLOW_DEMO_SEED:
+        errors.append(Error("Demo seeding is enabled in production.", hint="Set ALLOW_DEMO_SEED=False.", id="doctrack.E011"))
+    base = urlsplit(settings.SITE_BASE_URL)
+    if settings.EMAIL_CONFIGURED and (base.scheme != "https" or not base.hostname or base.username or base.query or base.fragment):
+        errors.append(Error("SITE_BASE_URL must be an explicit HTTPS address for account emails.", id="doctrack.E012"))
     return errors
 
 

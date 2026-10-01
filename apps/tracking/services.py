@@ -720,6 +720,8 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
 @transaction.atomic
 def grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
     refuse_viewers(user, "share documents")
+    if not record.can_user_grant_access(user):
+        raise PermissionDenied("Only the originating or holding office can share this record.")
     grant, created = RecordAccessGrant.objects.get_or_create(
         record=record,
         office=office,

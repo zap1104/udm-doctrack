@@ -8,7 +8,7 @@
     <h1>Review Extracted Document Details</h1>
     <div class="step-indicator mt-2">
       <span class="step"><span class="num">1</span> Choose File</span>
-      <span>›</span>
+      <span aria-hidden="true">›</span>
       <span class="step active"><span class="num">2</span> Review Extracted Details</span>
     </div>
   </div>
@@ -112,7 +112,7 @@
 
           {% if form.metadata_fields %}
             <hr>
-            <h3 style="font-size:15px;">Office metadata fields</h3>
+            <h3 class="section-heading">Office metadata fields</h3>
             <p class="form-text mb-3">Administrators define these fields. Filling them makes search far more precise.</p>
             <div class="row">
               {% for definition, field in form.metadata_fields %}
@@ -125,7 +125,7 @@
             Recommendations are editable proposals based on extracted text and configured rules. Review every value before saving.
           </div>
 
-          <div class="d-flex gap-2">
+          <div class="form-actions">
             <button class="btn btn-udm" type="submit">Save to the Document Repository</button>
             <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Back</a>
           </div>

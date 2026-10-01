@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load static %}
+{% block body %}
+<div class="login-wrap" data-bs-theme="light">
+  <section class="login-art" aria-labelledby="access-brand-heading">
+    <div class="grid-lines" aria-hidden="true"></div>
+    {% include "accounts/_brand.html" %}
+    <div><h1 id="access-brand-heading">Your records. Your account.</h1><div class="rule"></div><p>Recover access to the workspace for offices under OVPA. Use the email address registered with your administrator.</p></div>
+    <p class="login-institution">Universidad de Manila · Office of the Vice President for Administration</p>
+  </section>
+  <main class="login-form" id="main-content">
+    <div class="inner account-access">
+      {% include "partials/_messages.html" %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+{% endblock %}

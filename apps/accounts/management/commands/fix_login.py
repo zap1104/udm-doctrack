@@ -12,8 +12,10 @@ an earlier crash. This checks all five and fixes what it safely can.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.contrib.auth.password_validation import validate_password
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.accounts.models import LoginLockout
 
@@ -36,6 +38,10 @@ class Command(BaseCommand):
         parser.add_argument("--keep-lockouts", action="store_true", help="Do not clear django-axes lockouts.")
 
     def handle(self, *args, **options):
+        if options["reset_password"] and not settings.DEBUG:
+            if not options["user"] or options["password"] == DEMO_PASSWORD:
+                raise CommandError("Production password repair requires one --user and a unique --password.")
+            validate_password(options["password"])
         problems = 0
 
         # -- 1. Are there any accounts at all? --------------------------------
@@ -75,7 +81,7 @@ class Command(BaseCommand):
 
             if options["reset_password"]:
                 user.set_password(options["password"])
-                user.must_change_password = False
+                user.must_change_password = True
                 user.is_active = True
                 user.save()
                 notes.append(self.style.SUCCESS("password reset"))
@@ -148,4 +154,4 @@ class Command(BaseCommand):
             self.stdout.write("   python manage.py fix_login --user admin --reset-password")
         else:
             self.stdout.write(self.style.SUCCESS("No sign-in problems found."))
-            self.stdout.write(f"Try: admin / {DEMO_PASSWORD}  at  /accounts/login/")
+            self.stdout.write("Sign in at /accounts/login/ using your account's password.")

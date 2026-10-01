@@ -1,9 +1,12 @@
 """Request-scoped middleware."""
 
 import threading
+import time
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import logout
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
 
@@ -95,6 +98,15 @@ class RoleIdleTimeoutMiddleware:
         user = getattr(request, "user", None)
         if user is not None and user.is_authenticated:
             seconds = idle_seconds_for(user)
+            now = time.time()
+            last_activity = request.session.get("_last_user_activity", now)
+            if now - last_activity >= seconds:
+                logout(request)
+                return redirect(settings.LOGIN_URL)
+            # Automatic polling is not evidence that someone is at the desk.
+            polling = request.path == "/notifications/count/" or request.path.endswith("/extraction-status/")
+            if not polling:
+                request.session["_last_user_activity"] = now
             if seconds != settings.SESSION_COOKIE_AGE:
                 request.session.set_expiry(seconds)
             elif request.session.get_expiry_age() != settings.SESSION_COOKIE_AGE:
@@ -102,6 +114,50 @@ class RoleIdleTimeoutMiddleware:
                 # administrator mid-session; without this the shorter window
                 # would stick to the session until the next sign-in.
                 request.session.set_expiry(seconds)
+        return self.get_response(request)
+
+
+class PrivateResponseMiddleware:
+    """Sensitive HTML, JSON, and downloads must not survive in browser caches."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.user.is_authenticated or request.path.startswith("/accounts/"):
+            if "no-store" not in response.get("Cache-Control", ""):
+                response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class SensitiveRequestMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method == "POST":
+            from .security import allow_sensitive_request
+            from .utils import client_ip
+
+            if request.path in ("/accounts/login/", "/django-admin/login/"):
+                if not allow_sensitive_request("login-ip", client_ip(request), limit=120, seconds=60):
+                    response = HttpResponse("Too many sign-in requests. Try again shortly.", status=429)
+                    response["Retry-After"] = "60"
+                    return response
+            if request.user.is_authenticated and (request.path.endswith("/re-extract/") or request.path == "/documents/upload/"):
+                if not allow_sensitive_request("file-processing", request.user.pk, limit=10, seconds=600):
+                    response = HttpResponse("Too many file-processing requests. Try again later.", status=429)
+                    response["Retry-After"] = "600"
+                    return response
+            if request.user.is_authenticated and (
+                request.path == "/accounts/password/"
+                or (request.path.startswith("/accounts/users/") and "set_password" in request.POST)
+            ):
+                if not allow_sensitive_request("password-change", request.user.pk, limit=10, seconds=600):
+                    response = HttpResponse("Too many password-change requests. Try again later.", status=429)
+                    response["Retry-After"] = "600"
+                    return response
         return self.get_response(request)
 
 

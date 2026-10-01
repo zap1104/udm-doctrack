@@ -8,6 +8,7 @@ Used by the setup scripts so a new teammate gets a working login in one step.
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import Office
@@ -25,6 +26,7 @@ class Command(BaseCommand):
         parser.add_argument("--office", default="REC", help="Office code to attach the account to.")
 
     def handle(self, *args, **options):
+        validate_password(options["password"])
         office = Office.objects.filter(code__iexact=options["office"]).first()
         if not office:
             office = Office.objects.create(
@@ -40,11 +42,11 @@ class Command(BaseCommand):
         )
         user.email = options["email"] or user.email
         user.office = user.office or office
-        user.role = "ADMIN"
+        user.role = "SYSTEM_ADMIN"
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
-        user.must_change_password = False
+        user.must_change_password = True
         user.set_password(options["password"])
         user.save()
 

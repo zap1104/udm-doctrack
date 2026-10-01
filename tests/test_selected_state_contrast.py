@@ -34,7 +34,7 @@ SELECTED_STATES = (
     ".folder-tile.active",
     ".smart-folder.active",
     ".reports-tab.active",
-    ".nav-item.active",
+    ".app-sidebar .nav-item.active",
 )
 
 
@@ -101,9 +101,10 @@ def test_the_prose_link_rule_cannot_outrank_a_component():
     list could only ever be one component behind."""
     css = CSS.read_text(encoding="utf-8")
     link_rules = [
-        selector
+        one
         for selector, _body in _rules(css)
-        if "app-content" in selector and ":hover" in selector and "a" in selector
+        for one in split_selectors(selector)
+        if "app-content" in one and ":hover" in one and re.search(r"(?<![\w.-])a(?![\w-])", one)
     ]
 
     assert link_rules, "the prose-link hover rule should still exist"

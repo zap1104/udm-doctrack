@@ -15,7 +15,7 @@
     {% if response.total_matches > shown_count %}
       of {{ response.total_matches }} matched
     {% endif %}
-    <span class="text-muted">· {{ response.duration_ms }} ms · Sorted by relevance</span>
+    <span class="text-muted">· {{ response.duration_ms }} ms · {% if response.query %}Sorted by relevance{% else %}Newest documents first{% endif %}</span>
   </div>
   {% comment %}
     The size row only, on the same line as the count it governs. This is a
@@ -25,6 +25,10 @@
   {% endcomment %}
   {% pager section="size" %}
 </div>
+
+{% if response.truncated %}
+  <p class="form-text">{% if response.query %}Relevance was checked for {{ response.evaluated_count }} of {{ response.total_matches }} matching documents.{% else %}The newest {{ response.evaluated_count }} of {{ response.total_matches }} matching documents are available in this result set.{% endif %} Narrow the search or filters to find the remaining documents.</p>
+{% endif %}
 
 {% if response.hidden_count %}
   <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">

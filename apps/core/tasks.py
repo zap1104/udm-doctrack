@@ -106,3 +106,11 @@ def chase_unreceived_and_overdue():
         raised["overdue"] += 1
 
     return raised
+
+
+def prune_security_throttles():
+    """Run daily via django-q or the deployment's scheduler."""
+    from .models import SecurityThrottle
+
+    count, _ = SecurityThrottle.objects.filter(expires_at__lt=timezone.now()).delete()
+    return count

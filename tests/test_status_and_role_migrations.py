@@ -222,18 +222,24 @@ def test_a_migrated_secretary_can_still_forward_and_share(
     confirm_receipt(record, user=secretary)
     record.refresh_from_db()
 
-    # 3. may forward it onward
-    route_record(record, [offices["HR"]], user=secretary, action=RoutingStep.Action.FORWARD)
-    record.refresh_from_db()
-    assert record.status == Status.PENDING_RECEIPT
-
-    # 4. and may share it — the endpoint gated on is_records_staff
+    # 3. may share it while their office holds the record.
     client.force_login(secretary)
     response = client.post(
         f"/tracking/{record.pk}/share/", {"office": offices["HR"].pk, "reason": "fyi"}
     )
     assert response.status_code == 302
     assert record.grants.filter(office=offices["HR"]).exists()
+
+    # 4. may forward it onward, but historical access must not allow resharing.
+    route_record(record, [offices["HR"]], user=secretary, action=RoutingStep.Action.FORWARD)
+    record.refresh_from_db()
+    assert record.status == Status.PENDING_RECEIPT
+    confirm_receipt(record, user=users["hr"])
+    response = client.post(
+        f"/tracking/{record.pk}/share/", {"office": offices["REC"].pk, "reason": "fyi"}
+    )
+    assert response.status_code == 403
+    assert not record.grants.filter(office=offices["REC"]).exists()
 
 
 @pytest.mark.django_db

@@ -12,12 +12,7 @@
       screen every user sees before they are signed in did not say which
       institution it belonged to.
     {% endcomment %}
-    <a class="login-brand" href="{% url 'accounts:login' %}" aria-label="{{ SITE_NAME }} sign in">
-      <img class="login-brand-seal" src="{% static 'img/UniversidadDeManila.jpg' %}"
-           alt="Universidad de Manila seal">
-      <img class="login-brand-mark" src="{% static 'img/favicon.svg' %}" alt="">
-      <span class="wordmark wordmark--light"><span class="udm">UDM</span><span class="doctrack">Doc Track</span></span>
-    </a>
+    {% include "accounts/_brand.html" %}
     <div><span class="login-kicker">Office records workspace</span><h1 id="login-brand-heading">Records move. Accountability stays.</h1><div class="rule"></div><p>Track active documents, confirm receipt with a recorded timestamp, and keep completed records searchable in one secure workspace for offices under OVPA.</p><ul class="login-workflow" aria-label="DocTrack workflow"><li><strong>Track</strong><span>Know where work is</span></li><li><strong>Confirm</strong><span>Record every handoff</span></li><li><strong>Archive</strong><span>Find it later</span></li></ul></div>
     <p class="login-institution">Universidad de Manila · Office of the Vice President for Administration</p>
   </section>

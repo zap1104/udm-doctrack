@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, SetPasswordForm, UserCreationForm
+from django.conf import settings
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
 
 from apps.core.forms import BootstrapFormMixin, ColourInput
 from apps.core.models import NotificationPreference
@@ -26,6 +35,25 @@ class SignInForm(BootstrapFormMixin, AuthenticationForm):
         "invalid_login": "That username and password do not match an account. Check both and try again.",
         "inactive": "This account is deactivated. Ask the system administrator to reactivate it.",
     }
+
+
+class VerifiedEmailPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
+    def get_users(self, email):
+        return (user for user in super().get_users(email) if user.email_is_verified)
+
+    def save(self, **kwargs):
+        if settings.SITE_BASE_URL:
+            kwargs["domain_override"] = urlsplit(settings.SITE_BASE_URL).netloc
+            kwargs["use_https"] = True
+        return super().save(**kwargs)
+
+
+class AccountPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
+    """Keep Django's password validation and use the shared form widgets."""
+
+
+class AccountSetPasswordForm(BootstrapFormMixin, SetPasswordForm):
+    """Password recovery uses the same widgets as the signed-in account forms."""
 
 
 def _offices_for(actor):

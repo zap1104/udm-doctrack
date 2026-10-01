@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
@@ -36,7 +36,7 @@ logger = logging.getLogger("doctrack")
 @transaction.atomic
 def ingest_upload(
     *, user, uploaded_file, office=None, source=Source.UPLOAD,
-    ocr_language="auto", allow_external_ocr=True,
+    ocr_language="auto", allow_external_ocr=False,
 ) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
 
@@ -46,6 +46,10 @@ def ingest_upload(
     """
     validate_upload(uploaded_file)
     office = office or user.office
+    if not user.is_authenticated or not user.is_active or user.is_viewer:
+        raise PermissionDenied("Your account cannot upload documents.")
+    if not user.is_system_admin and getattr(office, "pk", None) != user.office_id:
+        raise PermissionDenied("You can only upload to your own office.")
     if office is None:
         raise ValidationError("Your account has no office, so it cannot own a document.")
 
@@ -133,13 +137,16 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False)
     )
 
 
-def duplicate_of(uploaded_file) -> Document | None:
+def duplicate_of(uploaded_file, *, user=None) -> Document | None:
     """Warn (never block) when the same file was already archived."""
     try:
         digest = checksum_of(uploaded_file)
     except Exception:
         return None
-    existing = DocumentFile.objects.filter(checksum=digest).select_related("document").first()
+    if user is None:
+        return None
+    visible = Document.objects.visible_to(user).filter(is_active=True)
+    existing = DocumentFile.objects.filter(checksum=digest, document__in=visible).select_related("document").first()
     return existing.document if existing else None
 
 
@@ -149,6 +156,10 @@ def duplicate_of(uploaded_file) -> Document | None:
 @transaction.atomic
 def save_document_metadata(document: Document, *, user, data: dict, tag_names, metadata_values: dict,
                            accepted_from_suggestion: dict | None = None) -> Document:
+    if not document.can_user_edit(user):
+        raise PermissionDenied("Only the owning office can edit this record.")
+    if data.get("office") and not user.is_system_admin and data["office"].pk != document.office_id:
+        raise PermissionDenied("Only a system administrator can transfer ownership.")
     for field_name in (
         "title", "description", "reference_number", "author_name", "recipient_name",
         "signatory", "access_level",
@@ -227,6 +238,8 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
 
 @transaction.atomic
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
+    if not document.can_user_edit(user):
+        raise PermissionDenied("Only the owning office can add files.")
     validate_upload(uploaded_file)
     use_async = settings.ENABLE_BACKGROUND_TASKS and run_extraction
     extraction = (

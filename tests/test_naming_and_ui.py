@@ -273,7 +273,10 @@ def test_a_record_awaiting_receipt_does_not_name_a_person_who_does_not_exist(
 @pytest.mark.django_db
 def test_the_repository_renders_folders_in_a_grid(client, users):
     client.force_login(users["admin"])
-    response = client.get("/documents/")
+    list_body = client.get("/documents/").content.decode()
+    assert "Office Folders" not in list_body
+    assert "Browse folders" in list_body
+    response = client.get("/documents/?view=folders")
     body = response.content.decode()
 
     assert "folder-grid" in body
@@ -285,7 +288,7 @@ def test_the_repository_renders_folders_in_a_grid(client, users):
 def test_the_column_count_comes_from_settings(client, users, settings):
     settings.REPOSITORY_FOLDER_COLUMNS = 6
     client.force_login(users["admin"])
-    body = client.get("/documents/").content.decode()
+    body = client.get("/documents/?view=folders").content.decode()
 
     assert "--folder-columns:6" in body
 

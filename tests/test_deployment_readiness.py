@@ -54,7 +54,8 @@ def test_notifications_are_read_per_user_not_per_office(offices):
 
 
 @pytest.mark.django_db
-def test_healthz_reports_database_and_migrations(client):
+def test_healthz_reports_database_and_migrations(client, users):
+    client.force_login(users["admin"])
     response = client.get("/healthz/")
     assert response.status_code == 200
     assert response.json()["checks"]["database"] is True

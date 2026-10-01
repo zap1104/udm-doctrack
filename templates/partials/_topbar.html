@@ -15,7 +15,7 @@
     <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search archive..." aria-label="Search the document archive" autocomplete="off">
   </form>
 
-  <div class="ms-auto d-flex align-items-center gap-3">
+  <div class="topbar-controls ms-auto d-flex align-items-center">
     <button class="page-help-launch" type="button" data-page-help-open hidden
             aria-controls="page-help-panel" aria-label="Open page guide">
       {% include "partials/_help_icon.html" %}<span class="d-none d-sm-inline">Help</span>

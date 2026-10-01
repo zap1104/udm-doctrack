@@ -660,8 +660,8 @@ class ReopenRecordView(OfficeAssignedMixin, View):
 class GrantAccessView(OfficeAssignedMixin, View):
     def post(self, request, pk):
         record = _get_record(request, pk)
-        if not (request.user.is_records_staff or record.created_by_id == request.user.pk):
-            raise PermissionDenied("Only records personnel or the originator can share this record.")
+        if not record.can_user_grant_access(request.user):
+            raise PermissionDenied("Only the originating or holding office can share this record.")
         form = GrantAccessForm(request.POST)
         if not form.is_valid():
             messages.error(request, "Choose an office or a user.")
