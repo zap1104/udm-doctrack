@@ -289,8 +289,8 @@ def test_the_text_token_never_took_over_navys_background_job():
     css = _decomment(CSS.read_text(encoding="utf-8"))
 
     misused = re.findall(r"([-\w]+)\s*:\s*var\(--udm-navy-text\)", css)
-    # Bootstrap's active-color variable also paints foreground text.
-    text_properties = {"color", "--bs-btn-active-color"}
+    # Bootstrap's button and dropdown color variables also paint foreground text.
+    text_properties = {"color", "--bs-btn-active-color", "--bs-dropdown-link-hover-color"}
     assert set(misused) <= text_properties, f"navy-text used for {sorted(set(misused) - text_properties)}"
 
     # And navy itself must still be doing that background job somewhere.

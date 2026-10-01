@@ -183,6 +183,8 @@ def humanise_business_seconds(seconds) -> str:
     """
     if seconds is None:
         return "—"
+    if seconds <= 0:
+        return "0 mins"
     seconds = int(seconds)
     if seconds < 60:
         return "under a minute"

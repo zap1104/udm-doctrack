@@ -196,6 +196,10 @@ def humanise_duration(delta) -> str:
     """A timedelta as office language: '2 days 4 hrs', '3 hrs', '18 mins'."""
     if delta is None:
         return "—"
+    if delta.total_seconds() < 0:
+        return "—"
+    if delta.total_seconds() == 0:
+        return "0 mins"
     total = int(delta.total_seconds())
     if total < 60:
         return "under a minute"
@@ -502,7 +506,7 @@ TURNAROUND_STAGES = (
 )
 
 
-def _turnaround_samples(records, since=None, until=None, holidays=None) -> dict:
+def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=None) -> dict:
     """Every interval a turnaround figure is taken over, one list per stage.
 
     The one place these are collected, so the monthly trend, the month's
@@ -519,9 +523,12 @@ def _turnaround_samples(records, since=None, until=None, holidays=None) -> dict:
     """
     if holidays is None:
         holidays = load_holidays()
+    now = now or timezone.now()
 
-    steps = RoutingStep.objects.filter(record__in=records, received_at__isnull=False)
-    done = records.filter(status__in=COMPLETED_STATUSES, completed_at__isnull=False)
+    # Future-dated events cannot contribute to a report of work already done.
+    # Use the same cutoff for the month's summary and both trend charts.
+    steps = RoutingStep.objects.filter(record__in=records, received_at__lte=now)
+    done = records.filter(status__in=COMPLETED_STATUSES, completed_at__lte=now)
     if since is not None:
         steps = steps.filter(received_at__gte=since)
         done = done.filter(completed_at__gte=since)
@@ -574,6 +581,39 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
+def _sample_counts(samples) -> dict:
+    """The denominator and its distinct documents, including genuine zeros.
+
+    Receipt is measured per handover, not per document. An instant confirmation
+    also has zero working time, but is not an interval outside office hours.
+    """
+    return {
+        "samples": len(samples),
+        "documents": len({sample["record_id"] for sample in samples}),
+        "zero_working_time": sum(sample["office"] == 0 for sample in samples),
+        "outside_office_hours": sum(
+            sample["office"] == 0 and sample["calendar"] > 0 for sample in samples
+        ),
+        "instantaneous": sum(sample["calendar"] == 0 for sample in samples),
+    }
+
+
+def _turnaround_row(key, samples, day_seconds) -> dict:
+    """A chart point and its readable durations use the same sample population."""
+    office = _mean([sample["office"] for sample in samples])
+    calendar = _mean([sample["calendar"] for sample in samples])
+    return {
+        # Keep precision until SVG geometry is drawn. Rounding to tenths of a
+        # working day hid every positive average below 24 minutes as zero.
+        key: None if office is None else office / day_seconds,
+        f"{key}_label": humanise_business_seconds(office),
+        f"{key}_calendar": humanise_duration(
+            None if calendar is None else timedelta(seconds=calendar)
+        ),
+        **{f"{key}_{name}": value for name, value in _sample_counts(samples).items()},
+    }
+
+
 def _named(sample) -> dict:
     """A fastest or slowest sample, in the words and link a reader needs."""
     return {
@@ -592,7 +632,7 @@ def _stage(key, label, measures, noun, samples) -> dict:
     handover sent and confirmed on a Saturday took no office time, and would be
     "fastest" every month without saying anything about anybody's speed. They
     still count in the average, which is what they did before this existed, and
-    `outside_office_hours` says how many there were.
+    `zero_working_time` says how many there were, including instant confirmations.
 
     Ties go to whoever finished first, then to the lower tracking number, so the
     same data always names the same document.
@@ -607,13 +647,13 @@ def _stage(key, label, measures, noun, samples) -> dict:
         "label": label,
         "measures": measures,
         "noun": noun,
-        "samples": len(samples),
+        **_sample_counts(samples),
         "average_seconds": office,
+        "average_calendar_seconds": calendar,
         "average_label": humanise_business_seconds(office),
         "average_calendar": humanise_duration(None if calendar is None else timedelta(seconds=calendar)),
         "fastest": _named(fastest) if fastest else None,
         "slowest": _named(slowest) if slowest else None,
-        "outside_office_hours": len(samples) - len(timed),
     }
 
 
@@ -627,7 +667,7 @@ def _month_bounds(month):
     )
 
 
-def turnaround(records, month=None) -> dict:
+def turnaround(records, month=None, *, now=None) -> dict:
     """Turnaround for one period: every stage's average, fastest and slowest.
 
     `month` is the first day of a calendar month; None is every month there is.
@@ -641,7 +681,8 @@ def turnaround(records, month=None) -> dict:
     them.
     """
     since, until = _month_bounds(month) if month else (None, None)
-    collected = _turnaround_samples(records, since, until)
+    now = now or timezone.now()
+    collected = _turnaround_samples(records, since, until, now=now)
     stages = [
         _stage(key, label, measures, noun, collected["samples"][key])
         for key, label, measures, noun in TURNAROUND_STAGES
@@ -650,12 +691,20 @@ def turnaround(records, month=None) -> dict:
         stage["excluded"] = collected["excluded"][stage["key"]]
     closed = len(collected["deadlines"])
     on_time = sum(1 for _month, kept in collected["deadlines"] if kept)
+    waiting = RoutingStep.objects.filter(
+        record__in=records, received_at__isnull=True,
+        batch=F("record__current_batch"), sent_at__lte=now,
+    ).exclude(record__status__in=COMPLETED_STATUSES).aggregate(
+        handovers=Count("pk"), documents=Count("record_id", distinct=True),
+        pending_documents=Count("record_id", filter=Q(record__status=Status.PENDING_RECEIPT), distinct=True),
+    )
 
     result = {
         "month": month,
         # "So far" and "yet" belong to the month still running; a past month is
         # finished, and "none completed yet" would promise work that never came.
-        "is_current": month == timezone.localdate().replace(day=1),
+        "is_current": month == timezone.localdate(now).replace(day=1),
+        "as_of": now,
         "stages": stages,
         "office_hours_caveat": office_hours_caveat(),
         "working_day_hours": working_day_hours(),
@@ -672,11 +721,10 @@ def turnaround(records, month=None) -> dict:
         # already moved past — 83 on the seeded data, beside a Pending receipt
         # card reading 20. None of those will ever be confirmed. Live, not
         # of the period: it is what is waiting now.
-        "awaiting_confirmation": RoutingStep.objects.filter(
-            record__in=records,
-            received_at__isnull=True,
-            batch=F("record__current_batch"),
-        ).exclude(record__status__in=COMPLETED_STATUSES).count(),
+        "awaiting_confirmation": waiting["handovers"],
+        "awaiting_confirmation_documents": waiting["documents"],
+        "awaiting_confirmation_pending_documents": waiting["pending_documents"],
+        "awaiting_confirmation_other_documents": waiting["documents"] - waiting["pending_documents"],
     }
     # The flat names the pages have always read: office-hours average, its
     # calendar twin, and how many it is taken over — so "4 hrs" from three
@@ -690,6 +738,8 @@ def turnaround(records, month=None) -> dict:
 
 def _duration(start, end, holidays, live=False) -> dict:
     """One interval as the timeline and export state it: office time first."""
+    if start is None or end is None or end < start:
+        return None
     office = business_seconds_between(start, end, holidays)
     return {
         "office_seconds": office,
@@ -744,7 +794,7 @@ def record_waits(record, steps, holidays=None, now=None) -> dict:
     return waits
 
 
-def record_durations(record, steps, holidays=None) -> dict:
+def record_durations(record, steps, holidays=None, *, now=None) -> dict:
     """The three stages for one record, in office seconds, None where the
     stage has not happened: the per-record twin of `turnaround()`, by the same
     definitions, for the export.
@@ -754,8 +804,13 @@ def record_durations(record, steps, holidays=None) -> dict:
     """
     if holidays is None:
         holidays = load_holidays()
-    finished = record.status in COMPLETED_STATUSES and record.completed_at
-    received = [step for step in steps if step.received_at]
+    now = now or timezone.now()
+    finished = (
+        record.status in COMPLETED_STATUSES and record.completed_at
+        and record.created_at <= record.completed_at <= now
+    )
+    received = [step for step in steps if step.sent_at and step.received_at
+                and step.sent_at <= step.received_at <= now]
     return {
         "receipt": (
             sum(business_seconds_between(s.sent_at, s.received_at, holidays) for s in received)
@@ -763,7 +818,8 @@ def record_durations(record, steps, holidays=None) -> dict:
         ),
         "processing": (
             business_seconds_between(record.first_received_at, record.completed_at, holidays)
-            if finished and record.first_received_at else None
+            if finished and record.first_received_at
+            and record.created_at <= record.first_received_at <= record.completed_at else None
         ),
         "lifetime": (
             business_seconds_between(record.created_at, record.completed_at, holidays)
@@ -772,7 +828,7 @@ def record_durations(record, steps, holidays=None) -> dict:
     }
 
 
-def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None) -> dict:
+def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None, now=None) -> dict:
     """The three turnaround averages, one point per month.
 
     `turnaround()` answers for one period, which cannot show whether an office
@@ -786,7 +842,7 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None)
         months = [date(year, month, 1) for month in range(1, 13)]
         since = timezone.make_aware(datetime(year, 1, 1))
         until = timezone.make_aware(datetime(year + 1, 1, 1))
-    collected = _turnaround_samples(records, since=since, until=until)
+    collected = _turnaround_samples(records, since=since, until=until, now=now)
 
     buckets = {month: {key: [] for key, *_ in TURNAROUND_STAGES} for month in months}
     for key, samples in collected["samples"].items():
@@ -804,19 +860,8 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None)
     for month in months:
         closed, on_time = deadlines[month]
         row = {"month": month}
-        # Days for the axis, office language for the prose beside it. A
-        # sentence reading "an average of 0.0 working days" is not something
-        # anybody would write; "under a minute" is.
         for key, *_ in TURNAROUND_STAGES:
-            samples = buckets[month][key]
-            office = _mean([s["office"] for s in samples])
-            calendar = _mean([s["calendar"] for s in samples])
-            row[key] = None if office is None else round(office / day, 1)
-            row[f"{key}_label"] = humanise_business_seconds(office)
-            row[f"{key}_calendar"] = humanise_duration(
-                None if calendar is None else timedelta(seconds=calendar)
-            )
-            row[f"{key}_samples"] = len(samples)
+            row.update(_turnaround_row(key, buckets[month][key], day))
         row.update(
             {
                 "on_time": on_time,
@@ -850,13 +895,14 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None)
     }
 
 
-def turnaround_by_day(records, month) -> dict:
+def turnaround_by_day(records, month, *, now=None) -> dict:
     """Daily averages in one month, using the summary's exact sample population."""
     since = timezone.make_aware(datetime.combine(month, time.min))
     next_month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
     until = timezone.make_aware(datetime.combine(next_month, time.min))
-    collected = _turnaround_samples(records, since=since, until=until)
-    last = min(next_month - timedelta(days=1), timezone.localdate())
+    now = now or timezone.now()
+    collected = _turnaround_samples(records, since=since, until=until, now=now)
+    last = min(next_month - timedelta(days=1), timezone.localdate(now))
     days = [month + timedelta(days=i) for i in range(max(0, (last - month).days + 1))]
     buckets = {day: {key: [] for key, *_ in TURNAROUND_STAGES} for day in days}
     for key, samples in collected["samples"].items():
@@ -865,16 +911,12 @@ def turnaround_by_day(records, month) -> dict:
             if day in buckets:
                 buckets[day][key].append(sample)
     rows = []
+    day_seconds = working_day_seconds()
     for day, stages in buckets.items():
         row = {"month": day, "period_label": day.strftime("%d %B %Y"),
                "axis_label": str(day.day) if day.day == 1 or day.day % 5 == 0 or day == last else ""}
         for key, samples in stages.items():
-            average = _mean([sample["office"] for sample in samples])
-            calendar = _mean([sample["calendar"] for sample in samples])
-            row[key] = None if average is None else round(average / working_day_seconds(), 1)
-            row[f"{key}_label"] = humanise_business_seconds(average)
-            row[f"{key}_calendar"] = humanise_duration(None if calendar is None else timedelta(seconds=calendar))
-            row[f"{key}_samples"] = len(samples)
+            row.update(_turnaround_row(key, samples, day_seconds))
         rows.append(row)
     measured = [row[key] for row in rows for key, *_ in TURNAROUND_STAGES if row[key] is not None]
     ceiling = max(1, int(max(measured, default=0)) + 1)

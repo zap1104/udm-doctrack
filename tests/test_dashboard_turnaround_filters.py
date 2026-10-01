@@ -1,8 +1,10 @@
 """Dashboard turnaround filters must agree across chart, popup and optional details."""
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from django.contrib.messages import get_messages
+from django.utils import timezone
 
 from tests.test_turnaround_period import two_months  # noqa: F401
 
@@ -11,8 +13,10 @@ from tests.test_turnaround_period import two_months  # noqa: F401
 @pytest.mark.parametrize("stage", ["receipt", "processing", "lifetime"])
 def test_stage_filter_changes_every_turnaround_view_only(client, users, two_months, stage):  # noqa: F811
     client.force_login(users["admin"])
-    baseline = client.get("/").context
-    response = client.get("/", {"turnaround_stage": stage, "turnaround_window": "3"})
+    # Compare the same snapshot; the service exposes its precise cutoff.
+    with patch("django.utils.timezone.now", return_value=timezone.now()):
+        baseline = client.get("/").context
+        response = client.get("/", {"turnaround_stage": stage, "turnaround_window": "3"})
     context = response.context
 
     assert all(row["month"].replace(day=1) == context["turnaround"]["month"] for row in context["turnaround_trend"]["rows"])

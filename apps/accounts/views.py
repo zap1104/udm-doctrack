@@ -251,7 +251,9 @@ class UserListView(OfficeScopedUserMixin, AdminRequiredMixin, TemplateView):
         # expected a number". A filter that cannot be honoured is dropped and
         # said, never crashed on.
         raw_office = self.request.GET.get("office", "").strip()
-        office = raw_office if raw_office.isdigit() else ""
+        office = raw_office if raw_office.isascii() and raw_office.isdigit() and len(raw_office) <= 19 else ""
+        if office and not self.selectable_offices().filter(pk=office).exists():
+            office = ""
         if raw_office and not office:
             messages.warning(
                 self.request, "Ignored an office filter that was not recognised."

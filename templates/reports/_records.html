@@ -8,9 +8,10 @@
   </div>
   <div class="card-udm-body">
     <form method="get" action="#report-records" class="row g-3 align-items-end mb-3 no-print">
+      <input type="hidden" name="per_page" value="{{ page_size }}">
       {% if report_records_office %}<input type="hidden" name="office" value="{{ report_records_office.pk }}">{% endif %}
       {% if trend_year %}<input type="hidden" name="trend_year" value="{{ trend_year }}">{% endif %}
-      <div class="col-sm-6 col-lg-3"><label for="report-record-query" class="form-label">Title or reference number</label><input id="report-record-query" class="form-control" type="search" name="record_q" value="{{ record_q }}"></div>
+      <div class="col-sm-6 col-lg-3"><label for="report-record-query" class="form-label">{% if is_repository_report %}Title or reference number{% else %}Subject or tracking number{% endif %}</label><input id="report-record-query" class="form-control" type="search" name="record_q" value="{{ record_q }}"></div>
       {% if not is_repository_report %}<div class="col-sm-6 col-lg-2"><label for="report-record-status" class="form-label">Stage</label><select id="report-record-status" name="record_status" class="form-select"><option value="">All stages</option>{% for value,label in report_record_statuses %}<option value="{{ value }}"{% if value == record_status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
       <div class="col-sm-6 col-lg-3"><label for="report-record-type" class="form-label">Document type</label><select id="report-record-type" name="record_type" class="form-select"><option value="">All types</option>{% for option in report_record_types %}<option value="{{ option.value }}"{% if option.value == record_type %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
       <div class="col-sm-6 col-lg-2"><label for="report-record-month" class="form-label">{% if is_repository_report %}Filed{% else %}Created{% endif %} month</label><input id="report-record-month" type="month" class="form-control" name="record_month" value="{{ record_month }}"></div>

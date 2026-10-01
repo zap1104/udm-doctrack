@@ -1,0 +1,5 @@
+{% if turnaround.awaiting_confirmation %}
+  <p class="turnaround-waiting-note"><strong>Waiting now, all months:</strong> {{ turnaround.awaiting_confirmation }} handover{{ turnaround.awaiting_confirmation|pluralize }} across {{ turnaround.awaiting_confirmation_documents }} document{{ turnaround.awaiting_confirmation_documents|pluralize }}.
+    <span>{{ turnaround.awaiting_confirmation_pending_documents }} Pending Receipt document{{ turnaround.awaiting_confirmation_pending_documents|pluralize }}{% if turnaround.awaiting_confirmation_other_documents %}; {{ turnaround.awaiting_confirmation_other_documents }} in other stages await additional recipients{% endif %}. Waiting handovers are excluded from averages until confirmed.</span>
+  </p>
+{% endif %}

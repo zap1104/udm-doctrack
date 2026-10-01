@@ -149,6 +149,29 @@ neither leaves anything behind.
 No `make` on Windows? Every command is just `python manage.py <thing>` (or
 `python scripts/<thing>.py`) — see the `Makefile`.
 
+To preview an already configured Windows checkout without rerunning setup:
+
+```powershell
+.\scripts\start.ps1 -PreviewOnly -Port 8000
+```
+
+Read-only checks of live numbers and filters, using the project's environment:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\audit_counts.py
+.\.venv\Scripts\python.exe scripts\audit_filters.py
+.\.venv\Scripts\python.exe scripts\audit_turnaround.py
+```
+
+These audits compare permission-scoped counts and record lists, filter choices,
+invalid selections, and preserved form selections. Sessions and request logs
+are rolled back. They complement the full test suite used before pushing.
+The turnaround audit also checks known intervals, short waits, repeated
+handovers, zero working time, month boundaries, and invalid timestamps using
+temporary records that are rolled back. See [the turnaround calculation guide](docs/TURNAROUND_TIME.md).
+The [graph testing report](docs/TURNAROUND_GRAPH_TESTING.md) describes the
+calculation, interaction, permission, and responsive checks and their limits.
+
 ---
 
 ## For the team

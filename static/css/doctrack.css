@@ -1,7 +1,7 @@
-/* UDM DocTrack — visual system taken straight from the UI/UX mockups.
-   Palette: UDM Navy #0B315A · Institutional Gold #C49A2E · Action Teal #16697A
-            Success Green #2E7D5B · Canvas #F5F7FA
-   Type:    Aptos (ships with Microsoft 365) with a system fallback stack. */
+/* UDM DocTrack shared visual system.
+   Palette: Institutional Green #174A37 · Gold #D5B86A · Khaki #F1EDDF
+   Type: DM Sans / Space Grotesk, with system fallbacks.
+   Legacy navy/teal token names retain their roles in the green palette. */
 
 /* The light palette. Declared on the root, and again on the three things that
    are paper whatever the screen is (the sign-in screen, the printed memo, the
@@ -9,157 +9,125 @@
    list rather than from a partial copy that falls behind it. */
 :root,
 :root[data-theme="dark"] :is(.login-wrap, .memo-print, .routing-slip) {
-  --udm-navy: #0b315a;
-  /* Navy doing its *text* job, split from navy doing its background job. The
-     two want opposite things once the page goes dark: the background darkens
-     with it, the text has to lift off it. Identical to --udm-navy in this
-     theme, so nothing here changes; the dark block is where they diverge. */
+  --udm-navy: #174a37;
   --udm-navy-text: var(--udm-navy);
-  --udm-navy-700: #0e3c6d;
-  --udm-navy-600: #14477e;
-  --udm-gold: #c49a2e;
-  --udm-gold-soft: #f6edd8;
-  --udm-teal: #16697a;
-  --udm-teal-soft: #e3f0f2;
-  --udm-green: #2e7d5b;
-  --udm-green-soft: #e4f2ea;
-  --udm-red: #b4342b;
-  /* The hovered fill, the counterpart of --udm-navy-600. Further from the text
-     on it than --udm-red is, so that text's contrast goes *up* on hover rather
-     than down: darker here, under white, and lighter in the dark theme, where
-     the text on a solid red is the dark canvas. Not --udm-red-ink: that is the
-     text colour for --udm-red-soft, and it inverts between themes. */
-  --udm-red-600: #93291f;
+  --udm-navy-700: #103326;
+  --udm-navy-600: #286b45;
+  --udm-gold: #d5b86a;
+  --udm-gold-soft: #f4ecd8;
+  --udm-teal: #286b45;
+  --udm-teal-soft: #e5f1e7;
+  --udm-green: #4d824e;
+  --udm-green-soft: #e5f1e7;
+  --udm-red: #b44b4b;
+  --udm-red-600: #8f3838;
   --udm-red-soft: #fbe7e5;
-  --udm-canvas: #f5f7fa;
-  /* The raised surface: cards, tables, the topbar. Was #fff literal in 30-odd
-     places, which is what made a dark theme impossible to add without editing
-     every component. One token means the theme block below re-points them all. */
-  --udm-surface: #ffffff;
-  --udm-line: #dfe5ec;
-  --udm-line-strong: #b9c9da;
-  --udm-line-soft: #cfd8e6;
-  --udm-label-ink: #33415a;
-  --udm-ink: #16202c;
-  --udm-muted: #63718a;
-  --udm-slate-text: #41506a;
-  --udm-slate-soft: #eceff4;
-  --udm-slate-ink: #55637a;
-  /* "Ink" tokens: the readable-on-tint text colour paired with each *-soft
-     background above (pills, receipt/dashboard-action chips). Named
-     separately from the base hue so a repaint can retune contrast on tints
-     without having to touch the solid brand colours. */
+  --udm-canvas: #f1eddf;
+  --udm-surface: #f8f5eb;
+  --udm-line: #d6d5c4;
+  --udm-line-strong: #afbda8;
+  --udm-line-soft: #dce0d0;
+  --udm-label-ink: #365146;
+  --udm-ink: #183126;
+  --udm-muted: #576b5c;
+  --udm-slate-text: #4f6358;
+  --udm-slate-soft: #e7ebdd;
+  --udm-slate-ink: #53685b;
   --udm-green-ink: #1f5a42;
-  --udm-gold-ink: #8a6a12;
-  --udm-gold-ink-dark: #624907;
+  --udm-gold-ink: #725616;
+  --udm-gold-ink-dark: #59420f;
   --udm-gold-ink-hover: #4f3a05;
-  --udm-gold-border: #bf9323;
-  --udm-gold-tint: #fffaf0;
-  --udm-gold-tint-strong: #eedcae;
-  --udm-teal-ink: #10505d;
-  --udm-teal-ink-dark: #0f5260;
-  --udm-red-ink: #8f2a22;
-  /* Role tokens: each names a job, not a hue, so the dark block can give the
-     job its own colour without re-theming every component that does it. The
-     light values are what those rules painted before they were tokens. */
-  --udm-navy-soft: #e6edf5;
-  --udm-primary: var(--udm-navy);
-  --udm-primary-hover: var(--udm-navy-600);
+  --udm-gold-border: #b9923e;
+  --udm-gold-tint: #f5efdc;
+  --udm-gold-tint-strong: #f1dfad;
+  --udm-teal-ink: #1f5a42;
+  --udm-teal-ink-dark: #174a37;
+  --udm-red-ink: #8f3838;
+  --udm-navy-soft: #e1e9db;
+  --udm-primary: #286b45;
+  --udm-primary-hover: #1d5034;
   --udm-primary-ink: #ffffff;
-  /* "This is the one picked": a queue pill, a tab, a page size, a filter. */
-  --udm-selected-bg: var(--udm-navy);
-  --udm-selected-bg-hover: var(--udm-navy-600);
+  --udm-selected-bg: #286b45;
+  --udm-selected-bg-hover: #1d5034;
   --udm-selected-ink: #ffffff;
-  /* Text on a solid red, teal or green fill; and on gold, which is too light
-     for white in either theme. */
   --udm-on-accent: #ffffff;
-  --udm-on-gold: #21252c;
-  --udm-row-line: #eef1f6;
-  --udm-surface-sunk: #fafbfd;
-  --udm-track: #e7ecf3;
-  --udm-highlight: #fdf3d4;
-  --udm-note-bg: #fffdf6;
+  --udm-on-gold: #241f1b;
+  --udm-row-line: #e4e3d5;
+  --udm-surface-sunk: #ece8da;
+  --udm-track: #e2e7d8;
+  --udm-highlight: #f7efd9;
+  --udm-note-bg: #f3edda;
   --udm-note-ink: #5a4a20;
-  /* Bootstrap's own link colour, for its tabs and link buttons: the brand teal
-     rather than Bootstrap's blue, which was 4.2:1 on this canvas. */
   --bs-link-color: var(--udm-teal);
-  --bs-link-color-rgb: 22, 105, 122;
+  --bs-link-color-rgb: var(--udm-link-rgb);
   --bs-link-hover-color: var(--udm-teal-ink);
-  --bs-link-hover-color-rgb: 16, 80, 93;
-  /* Chart colours: two validated categorical slots plus the reserved status
-     scale. --chart-one / --chart-two clear the lightness band, chroma floor,
-     protan/deutan separation and 3:1 contrast on white; they are
-     snapped-to-passing steps of UDM teal and institutional gold, which sit
-     just below the chroma floor at their brand values. Series identity is
-     never carried by colour alone — every chart ships a legend or a
-     labelled list, and the column charts a table view. */
+  --bs-link-hover-color-rgb: var(--udm-link-hover-rgb);
   --chart-one: #0a6e9a;
   --chart-two: #b58c24;
-  /* Third categorical slot, added for the cumulative created / transferred /
-     completed chart. Moss green: it clears the same lightness band and 3:1
-     contrast on white as the other two, and sits far enough from both in hue
-     to stay separable under protanopia and deuteranopia — where teal and gold
-     already separate on lightness, and this sits between them on neither. */
   --chart-three: #2f7d4f;
-  /* The alert pair, for a panel whose whole subject is lateness. Deliberately
-     not a third and fourth categorical slot: --chart-one/two/three are chosen
-     to be *equal* — no series louder than another — and the overdue panel needs
-     the opposite. Both are red because both rows are late; they separate on
-     lightness rather than hue, so they stay tellable apart under protanopia and
-     deuteranopia where two reds would otherwise collapse.
-
-     6.06:1 and 3.57:1 on the card, so each clears the 3:1 that WCAG 1.4.11 asks
-     of a graphic carrying meaning. Colour is reinforcement here either way —
-     every row in that panel is labelled in words. */
   --chart-alert: #b4342b;
   --chart-alert-soft: #cf6a5e;
-  --chart-track: #e8edf3;
-  --chart-grid: #eef1f6;
-  /* One colour per status, and the same colour wherever that status is drawn:
-     pill, ring slice, stage bar, trend line. The lifecycle reads left to right
-     as slate, amber, blue, mauve, teal, green; red is overdue, a condition on
-     top of any stage rather than a stage. Chosen so the statuses that touch in
-     a chart (ring slices, trend lines, the monthly columns) stay apart for
-     protanopia, deuteranopia and tritanopia, not only for full colour vision;
-     every status is also always drawn with its label. Each has a mark colour
-     (at least 3:1 on the surface), a soft fill and an ink (at least 7:1 on the
-     soft fill) for pills.
-
-     The --chart-* series below are not statuses and do not borrow one:
-     "created" is the brand navy, "historical" a neutral slate, "neutral" the
-     bars that count things with no status (document types, searches). */
-  --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
-  --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
-  --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
-  --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
-  --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
-  --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
-  --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
-  --chart-created: #0b315a;
+  --chart-track: #e2e7d8;
+  --chart-grid: #e4e3d5;
+  --status-draft: #6b778b;
+  --status-draft-soft: #ebf1f8;
+  --status-draft-ink: #424e5e;
+  --status-pending: #bc7700;
+  --status-pending-soft: #fceeda;
+  --status-pending-ink: #65470f;
+  --status-received: #2d557d;
+  --status-received-soft: #e5f2ff;
+  --status-received-ink: #194f81;
+  --status-process: #ab6da6;
+  --status-process-soft: #fce9fa;
+  --status-process-ink: #6b3767;
+  --status-upload: #389695;
+  --status-upload-soft: #daf7f8;
+  --status-upload-ink: #1b575a;
+  --status-completed: #1d6835;
+  --status-completed-soft: #e3f6e6;
+  --status-completed-ink: #195c2e;
+  --status-overdue: #b4342b;
+  --status-overdue-soft: #ffebe8;
+  --status-overdue-ink: #7a342e;
+  --chart-created: #174a37;
   --chart-historical: #7d889a;
   --chart-received-part: #8fb3d6;
   --chart-neutral: #55637a;
   --sidebar-width: 236px;
-  --radius: 10px;
-  --shadow-card: 0 1px 2px rgba(11, 49, 90, 0.06), 0 8px 24px rgba(11, 49, 90, 0.05);
-
-  /* Pin the browser's own chrome to this theme.
-     base.html declares <meta name="color-scheme" content="light dark">, which
-     says the page supports both — so with nothing declared here the browser
-     paints native control internals from the *OS* preference. On a machine set
-     to dark with the app in light mode, that meant the date input's text, the
-     time input's "--:-- --" and both picker glyphs were rendered near-white on
-     our white field. Invisible, and only for that combination, which is why it
-     survived: on a light OS everything looked correct.
-     [data-theme="dark"] already declares `dark`; this is its missing partner,
-     so the controls follow the app's theme rather than the desktop's. It covers
-     every native control at once — date, time, select popups, scrollbars,
-     spinners — not only the deadline pair where it was spotted. */
+  --radius: 4px;
+  --shadow-card: none;
+  --udm-focus: #286b45;
+  --udm-link-rgb: 40, 107, 69;
+  --udm-link-hover-rgb: 31, 90, 66;
   color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Bootstrap surfaces and native controls share the screen palette. */
+body {
+  --bs-body-bg-rgb: 241, 237, 223;
+  --bs-tertiary-color: var(--udm-muted);
+  --bs-tertiary-bg: var(--udm-surface-sunk);
+  --bs-secondary-bg: var(--udm-surface);
+  --bs-dropdown-bg: var(--udm-surface);
+  --bs-modal-bg: var(--udm-surface);
+}
+:root[data-theme="dark"] body { --bs-body-bg-rgb: 17, 27, 21; }
+.card, .modal-content, .dropdown-menu, .list-group-item {
+  background-color: var(--udm-surface);
+  color: var(--udm-ink);
+  border-color: var(--udm-line);
+}
+.dropdown-menu {
+  --bs-dropdown-link-color: var(--udm-ink);
+  --bs-dropdown-link-hover-color: var(--udm-navy-text);
+  --bs-dropdown-link-hover-bg: var(--udm-surface-sunk);
+  --bs-dropdown-link-active-color: var(--udm-selected-ink);
+  --bs-dropdown-link-active-bg: var(--udm-selected-bg);
 }
 
 body {
@@ -853,7 +821,7 @@ a:hover { text-decoration: underline; }
 .routing-slip-summary-value { padding:10px 13px; }
 .routing-slip-summary-row--subject .routing-slip-summary-value { color:var(--udm-navy); font-size:16px; font-weight:700; }
 .routing-slip-notes { white-space:normal; }
-.routing-slip-privacy { margin:16px 0; padding:10px 13px; border-left:3px solid var(--udm-gold); background:#fffdf6; color:#665224; font-size:11px; line-height:1.45; }
+.routing-slip-privacy { margin:16px 0; padding:10px 13px; border-left:3px solid var(--udm-gold); background:var(--udm-note-bg); color:var(--udm-note-ink); font-size:11px; line-height:1.45; }
 .routing-slip-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:20px 0 8px; }
 .routing-slip-section-head h2 { margin:0; font-size:16px; }
 .routing-slip-section-head span { color:var(--udm-muted); font-size:11px; }
@@ -1630,7 +1598,7 @@ body.sidebar-open { overflow:hidden; }
 .login-form-heading { margin-bottom:20px; }
 .login-form-heading h2 { margin:2px 0 5px; font-size:27px; }
 .login-form-heading p { margin:0; color:var(--udm-muted); font-size:14px; }
-.login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:#fffdf6; color:#5a4a20; font-size:12.5px; }
+.login-security-note { display:grid; gap:2px; margin-top:18px; padding:10px 12px; border-left:3px solid var(--udm-gold); border-radius:0 8px 8px 0; background:var(--udm-note-bg); color:var(--udm-note-ink); font-size:12.5px; }
 .login-account-note { margin:16px 0 0; color:var(--udm-muted); font-size:12.5px; }
 .lockout-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:13px; border-radius:50%; background:var(--udm-gold-soft); color:#806414; font-size:23px; font-weight:800; }
 .error-page { max-width:680px; margin:7vh auto; padding:48px 28px; border:1px solid var(--udm-line); border-radius:var(--radius); background:var(--udm-surface); box-shadow:var(--shadow-card); text-align:center; }
@@ -2484,6 +2452,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round; }
 .trend-lines { clip-path:inset(0 100% 0 0); animation:trend-reveal 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
 .trend-point { fill:var(--udm-surface); stroke-width:2; opacity:0; animation:trend-fade 280ms ease-out 650ms forwards; }
+.trend-point--overlap { fill:none; }
 @keyframes trend-reveal { to { clip-path:inset(0 0 0 0); } }
 @keyframes trend-fade { to { opacity:1; } }
 
@@ -2499,14 +2468,15 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-hit { position:absolute; top:0; bottom:0; cursor:crosshair; }
 .trend-cross { position:absolute; top:var(--plot-top); bottom:var(--plot-bottom); left:50%; width:0;
   border-left:1px solid var(--udm-line-strong); opacity:0; transition:opacity 140ms ease; }
-.trend-dot { position:absolute; left:50%; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; border-radius:50%;
+.trend-dot { position:absolute; left:50%; width:var(--dot-size,13px); height:var(--dot-size,13px); margin:calc(var(--dot-size,13px) / -2) 0 0 calc(var(--dot-size,13px) / -2); border-radius:50%;
   background:var(--udm-surface); border:3px solid var(--dot); box-shadow:0 0 0 2px var(--udm-surface);
   opacity:0; transform:scale(.35); transition:transform 180ms cubic-bezier(.2,.9,.3,1.35), opacity 120ms ease; }
+.trend-dot--overlap { background:transparent; box-shadow:none; }
 .trend-tip { position:absolute; top:var(--plot-top); z-index:6; min-width:200px; max-width:260px; padding:9px 11px 10px;
   border:1px solid var(--udm-line); border-radius:9px; background:var(--udm-surface);
   box-shadow:0 10px 24px rgba(6,28,52,.16); pointer-events:none;
   opacity:0; visibility:hidden; transform:translateY(6px);
-  transition:opacity 150ms ease, transform 170ms cubic-bezier(.2,.8,.2,1), visibility 0s linear 170ms; }
+  transition:opacity 150ms ease, transform 170ms cubic-bezier(.2,.8,.2,1), visibility 0s; }
 .trend-hit--right .trend-tip { left:calc(50% + 12px); }
 .trend-hit--left .trend-tip { right:calc(50% + 12px); }
 .trend-tip-month { margin-bottom:6px; color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
@@ -2543,9 +2513,9 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-tip-row span { grid-column:2; color:var(--udm-muted); font-size:12px; line-height:1.4; }
 .trend-tip-empty { display:block; color:var(--udm-muted); font-size:12.5px; }
 
-.trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
-.trend-hit:hover .trend-dot,.trend-hit.is-active .trend-dot { opacity:1; transform:scale(1); }
-.trend-hit:hover .trend-tip,.trend-hit.is-active .trend-tip {
+.trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
+.trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-dot,.trend-hit.is-active .trend-dot { opacity:1; transform:scale(1); }
+.trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-tip,.trend-hit.is-active .trend-tip {
   opacity:1; visibility:visible; transform:translateY(0); transition-delay:0s; }
 /* While one month is shown, the lines step back so its dots read first. */
 .trend-plot:has(.trend-hit:hover) .trend-line,.trend-plot:has(.trend-hit.is-active) .trend-line { opacity:.55; transition:opacity 150ms ease; }
@@ -2606,6 +2576,8 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround-summary .trend-summary-head { margin-bottom:8px; font-size:12px; color:var(--udm-navy-text); }
 .dashboard-turnaround-guide { margin:0 0 16px; color:var(--udm-muted); font-size:13px; line-height:1.6; }
 .dashboard-turnaround-stages { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+.report-turnaround-stages { container:dashboard-side / inline-size; }
+.report-turnaround-stages .dashboard-turnaround-stage { border-bottom:1px solid var(--udm-line); }
 .dashboard-turnaround-stage { min-width:0; padding:14px 16px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
 .dashboard-turnaround-stage--receipt { --stage-colour:var(--status-pending); --stage-tint:var(--status-pending-soft); --stage-ink:var(--status-pending-ink); }
 .dashboard-turnaround-stage--processing { --stage-colour:var(--status-process); --stage-tint:var(--status-process-soft); --stage-ink:var(--status-process-ink); }
@@ -2616,7 +2588,16 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround-stage-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; }
 .dashboard-turnaround-stage h3 { margin:0; color:var(--udm-navy-text); font-size:16px; font-weight:700; }
 .dashboard-turnaround-samples { color:var(--udm-slate-text); font-size:14px; white-space:nowrap; }
-.dashboard-turnaround-measure { margin:3px 0 10px; color:var(--udm-slate-text); font-size:14px; }
+.dashboard-turnaround-measure { margin:3px 0; color:var(--udm-slate-text); font-size:14px; }
+.turnaround-period-note { margin:0 0 12px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
+.turnaround-sample-basis { margin:0 0 10px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
+.turnaround-zero-note { margin:8px 0 0; color:var(--udm-slate-text); font-size:12.5px; line-height:1.5; }
+.turnaround-waiting-note { margin:12px 0 0; padding-top:10px; border-top:1px solid var(--udm-line); color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
+.turnaround-waiting-note > span { display:block; margin-top:3px; }
+.turnaround-table-value { min-width:180px; }
+.turnaround-table-value strong { display:block; font-size:14px; }
+.turnaround-table-value > span,.turnaround-table-count { display:block; color:var(--udm-slate-text); font-size:12.5px; line-height:1.5; }
+.report-metric .turnaround-sample-basis { margin:3px 0 0; }
 .dashboard-turnaround-averages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 16px; margin:0; }
 .dashboard-turnaround-averages dt { margin-bottom:3px; color:var(--udm-slate-text); font-size:14px; font-weight:500; }
 .dashboard-turnaround-averages dd { margin:0; line-height:1.35; }
@@ -2636,23 +2617,23 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround-on-time .meter-head > span { color:var(--udm-navy-text); font-weight:600; }
 .dashboard-turnaround-on-time .meter-head > strong { font-size:22px; }
 .dashboard-turnaround-on-time .meter-foot { margin:8px 0 0; line-height:1.5; }
-@container dashboard-side (min-width:900px) {
+@container dashboard-side (min-width:620px) {
   .dashboard-turnaround-stage { display:grid; grid-template-columns:minmax(160px,.65fr) minmax(0,2fr); column-gap:20px; }
-  .dashboard-turnaround-stage-head,.dashboard-turnaround-measure,.dashboard-turnaround-stage > .dashboard-turnaround-calculation,.dashboard-turnaround-stage > .dashboard-turnaround-empty { grid-column:1 / -1; }
+  .dashboard-turnaround-stage-head,.dashboard-turnaround-measure,.dashboard-turnaround-stage > .turnaround-sample-basis,.dashboard-turnaround-stage > .turnaround-zero-note,.dashboard-turnaround-stage > .dashboard-turnaround-calculation,.dashboard-turnaround-stage > .dashboard-turnaround-empty { grid-column:1 / -1; }
   .dashboard-turnaround-averages { grid-template-columns:minmax(0,1fr); }
   .dashboard-turnaround-extremes { margin:0; padding:0 0 0 20px; border-top:0; border-left:1px solid var(--udm-line); }
 }
 @media (pointer:coarse) {
   .dashboard-turnaround-extremes a { min-height:44px; }
 }
-@container dashboard-side (max-width:520px) {
+@container dashboard-side (max-width:400px) {
   .dashboard-turnaround-extremes { grid-template-columns:minmax(0,1fr); }
   .dashboard-turnaround-extremes > div + div { border-top:1px solid var(--udm-line); padding-top:10px; }
 }
 @container dashboard-side (max-width:400px) {
   .dashboard-turnaround-stage { padding:14px; }
-  .dashboard-turnaround-averages { grid-template-columns:minmax(0,1fr); gap:10px; }
-  .dashboard-turnaround-primary { font-size:20px; }
+  .dashboard-turnaround-averages { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .dashboard-turnaround-primary { font-size:18px; }
   .dashboard-turnaround-calendar { font-size:16px; }
   .dashboard-turnaround-extremes { grid-template-columns:minmax(0,1fr); }
 }
@@ -2794,114 +2775,98 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    soft tints go near-black, and the gold and green inks disappear into them. A
    status pill nobody can read is worse than no colour at all. */
 :root[data-theme="dark"] {
-  color-scheme: dark;
-
-  /* Surfaces: canvas is the page, surface is the card raised off it. */
-  --udm-canvas: #0f1720;
-  --udm-surface: #17212c;
-
-  /* Navy is structural here (sidebar, buttons) rather than decorative, so it
-     darkens with the page instead of glowing against it. */
-  --udm-navy: #16222f;
-  /* ...which leaves navy-as-text at 1.01:1 on the card surface — invisible —
-     so here it parts company with the background and becomes the body ink. */
+  --udm-canvas: #111b15;
+  --udm-surface: #1a2920;
+  --udm-navy: #174a37;
   --udm-navy-text: var(--udm-ink);
-  --udm-navy-700: #1d2e3f;
-  --udm-navy-600: #24384c;
-
-  /* Brand hues lightened to clear contrast on the dark ground. */
+  --udm-navy-700: #103326;
+  --udm-navy-600: #286b45;
   --udm-gold: #e0b757;
-  --udm-teal: #4aa9bd;
-  --udm-green: #56b287;
+  --udm-teal: #8ccc9f;
+  --udm-green: #8ccc9f;
   --udm-red: #e2695f;
-  /* Lighter than the red, not darker: the text on it is dark here (7.4:1). */
   --udm-red-600: #ee8a80;
-  /* Re-picked, not reused: on the dark card the light-theme pair would sit at
-     2.4:1 and 1.6:1. 7.11:1 and 3.60:1 here, separating by the same lightness
-     step the light pair uses. */
   --chart-alert: #ff8a7a;
   --chart-alert-soft: #c0554b;
-
-  /* Tints become low-lightness washes of the same hue, not pale panels. */
   --udm-gold-soft: #3a2f14;
-  --udm-teal-soft: #12333a;
-  --udm-green-soft: #14332a;
+  --udm-teal-soft: #233e2c;
+  --udm-green-soft: #233e2c;
   --udm-red-soft: #3a1e1b;
-  --udm-slate-soft: #212c39;
-
-  /* Ink on those washes, re-tuned to stay legible against them. */
+  --udm-slate-soft: #27352b;
   --udm-gold-ink: #f0d391;
   --udm-gold-ink-dark: #f6e2b4;
   --udm-gold-ink-hover: #fbeed0;
   --udm-gold-border: #8a6a12;
   --udm-gold-tint: #241d0d;
   --udm-gold-tint-strong: #4a3c19;
-  --udm-teal-ink: #8fd4e2;
-  --udm-teal-ink-dark: #b0e2ec;
-  --udm-green-ink: #92dcb6;
+  --udm-teal-ink: #b6e1bd;
+  --udm-teal-ink-dark: #ceeacf;
+  --udm-green-ink: #b6e1bd;
   --udm-red-ink: #f3ada6;
-  --udm-slate-ink: #a8b6c8;
-
-  /* Text and rules. */
-  --udm-ink: #e6edf5;
-  --udm-label-ink: #cbd6e4;
-  --udm-slate-text: #b9c6d6;
-  --udm-muted: #91a1b5;
-  --udm-line: #27333f;
-  --udm-line-strong: #3a4a5c;
-  --udm-line-soft: #2f3d4c;
-
-  /* Charts: same three categorical slots, lifted to clear the dark ground
-     while keeping the hue separation that makes them distinguishable under
-     protanopia and deuteranopia. */
+  --udm-slate-ink: #bdcdbd;
+  --udm-ink: #e7eddf;
+  --udm-label-ink: #cfddcc;
+  --udm-slate-text: #bdcdbd;
+  --udm-muted: #adbeaa;
+  --udm-line: #37493a;
+  --udm-line-strong: #566b55;
+  --udm-line-soft: #425744;
   --chart-one: #4aa9d4;
   --chart-two: #d8ae4e;
   --chart-three: #5cb37e;
-  --chart-track: #212d3a;
-  --chart-grid: #202b36;
-  /* The status palette for the dark surface: the same hues, stepped so each
-     mark still clears 3:1 on #17212c and each ink 7:1 on its soft fill, and
-     re-checked for colour-blind separation on this surface rather than
-     assumed from the light one. */
-  --status-draft: #8e9bb0; --status-draft-soft: #2c3136; --status-draft-ink: #c7d6e8;
-  --status-pending: #e3ad4b; --status-pending-soft: #3d2d14; --status-pending-ink: #f0cf9d;
-  --status-received: #7fb6ee; --status-received-soft: #1e3246; --status-received-ink: #b7d8fb;
-  --status-process: #c876c1; --status-process-soft: #3d283b; --status-process-ink: #f1c3ec;
-  --status-upload: #9cd7da; --status-upload-soft: #0d3739; --status-upload-ink: #98e4e8;
-  --status-completed: #62946c; --status-completed-soft: #1f3724; --status-completed-ink: #b2e3bb;
-  --status-overdue: #ff8a7a; --status-overdue-soft: #442724; --status-overdue-ink: #fac6bf;
-  --chart-created: #d0dae6;
-  --chart-historical: #b3bfd0;
+  --chart-track: #304233;
+  --chart-grid: #304233;
+  --status-draft: #8e9bb0;
+  --status-draft-soft: #2c3136;
+  --status-draft-ink: #c7d6e8;
+  --status-pending: #e3ad4b;
+  --status-pending-soft: #3d2d14;
+  --status-pending-ink: #f0cf9d;
+  --status-received: #7fb6ee;
+  --status-received-soft: #1e3246;
+  --status-received-ink: #b7d8fb;
+  --status-process: #c876c1;
+  --status-process-soft: #3d283b;
+  --status-process-ink: #f1c3ec;
+  --status-upload: #9cd7da;
+  --status-upload-soft: #0d3739;
+  --status-upload-ink: #98e4e8;
+  --status-completed: #62946c;
+  --status-completed-soft: #1f3724;
+  --status-completed-ink: #b2e3bb;
+  --status-overdue: #ff8a7a;
+  --status-overdue-soft: #442724;
+  --status-overdue-ink: #fac6bf;
+  --chart-created: #ceeacf;
+  --chart-historical: #bdcdbd;
   --chart-received-part: #c9e2fb;
-  --chart-neutral: #a8b6c8;
-
-  /* Roles. Navy is a surface here, so nothing that has to stand out may be
-     navy: a primary button is a lifted navy blue with white on it (6.3:1), a
-     selected state is the theme's teal with the canvas as its text (6.7:1), and
-     text on the lightened brand hues goes dark rather than white. */
-  --udm-navy-soft: #1b2a3a;
-  --udm-primary: #2f6399;
-  --udm-primary-hover: #3a73ad;
+  --chart-neutral: #bdcdbd;
+  --udm-navy-soft: #253d2c;
+  --udm-primary: #286b45;
+  --udm-primary-hover: #317951;
   --udm-primary-ink: #ffffff;
   --udm-selected-bg: var(--udm-teal);
-  --udm-selected-bg-hover: #6cc0d1;
+  --udm-selected-bg-hover: #afe0b7;
   --udm-selected-ink: var(--udm-canvas);
   --udm-on-accent: var(--udm-canvas);
   --udm-on-gold: var(--udm-canvas);
-  --udm-row-line: #232e3a;
-  --udm-surface-sunk: #131c26;
-  --udm-track: #212d3a;
+  --udm-row-line: #304233;
+  --udm-surface-sunk: #142219;
+  --udm-track: #304233;
   --udm-highlight: #4a3c19;
   --udm-note-bg: #241f12;
   --udm-note-ink: #f0e2c0;
-
-  --shadow-card: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-card: none;
+  --udm-focus: #8ccc9f;
+  --udm-link-rgb: 140, 204, 159;
+  --udm-link-hover-rgb: 182, 225, 189;
+  color-scheme: dark;
 }
 
 /* Bootstrap paints its own form controls and tables from its variables, which
    are not ours. Re-pointed here rather than restyled, so the controls keep
    Bootstrap's behaviour and only change colour. */
-:root[data-theme="dark"] body {
+body {
   --bs-body-bg: var(--udm-canvas);
   --bs-body-color: var(--udm-ink);
   --bs-border-color: var(--udm-line);
@@ -2914,9 +2879,9 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   /* Bootstrap's link blue was #0d6efd, 3.6:1 on the card: tabs and link
      buttons read in it. Links take the theme's teal instead. */
   --bs-link-color: var(--udm-teal);
-  --bs-link-color-rgb: 74, 169, 189;
+  --bs-link-color-rgb: var(--udm-link-rgb);
   --bs-link-hover-color: var(--udm-teal-ink);
-  --bs-link-hover-color-rgb: 143, 212, 226;
+  --bs-link-hover-color-rgb: var(--udm-link-hover-rgb);
   /* The message banners, in the palette's own washes and inks. */
   --bs-success-bg-subtle: var(--udm-green-soft);
   --bs-success-border-subtle: #2c5a45;
@@ -2979,60 +2944,41 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 @media print {
   :root[data-theme="dark"] {
     color-scheme: light;
-    --udm-canvas: #ffffff;
-    --udm-surface: #ffffff;
-    --udm-ink: #183126;
-    --udm-label-ink: #365146;
-    --udm-slate-text: #4f6358;
-    --udm-muted: #68796c;
-    --udm-line: #d8e2e0;
-    --udm-line-strong: #b8cbc1;
-    --udm-line-soft: #e5ece8;
-    --udm-gold-soft: #f4ecd8;
-    --udm-teal-soft: #e5f1e7;
-    --udm-green-soft: #e5f1e7;
-    --udm-red-soft: #fbe7e5;
-    --udm-slate-soft: #eef4ec;
-    --udm-gold-ink: #725616;
-    --udm-teal-ink: #1f5a42;
-    --udm-green-ink: #1f5a42;
-    --udm-red-ink: #8f3838;
-    --udm-slate-ink: #53685b;
-    --chart-one: #0a6e9a;
-    --chart-two: #b58c24;
-    --chart-three: #2f7d4f;
-    --chart-track: #e8edf3;
-    --chart-grid: #eef1f6;
-    --status-draft: #6b778b; --status-draft-soft: #ebf1f8; --status-draft-ink: #424e5e;
-    --status-pending: #bd871c; --status-pending-soft: #fceeda; --status-pending-ink: #65470f;
-    --status-received: #2d557d; --status-received-soft: #e5f2ff; --status-received-ink: #194f81;
-    --status-process: #ab6da6; --status-process-soft: #fce9fa; --status-process-ink: #6b3767;
-    --status-upload: #4fa1a5; --status-upload-soft: #daf7f8; --status-upload-ink: #1b575a;
-    --status-completed: #1d6835; --status-completed-soft: #e3f6e6; --status-completed-ink: #195c2e;
-    --status-overdue: #b4342b; --status-overdue-soft: #ffebe8; --status-overdue-ink: #7a342e;
-    --chart-created: #0b315a;
-    --chart-historical: #7d889a;
-    --chart-received-part: #8fb3d6;
-    --chart-neutral: #55637a;
     --udm-navy: #174a37;
     --udm-navy-text: var(--udm-navy);
     --udm-navy-700: #103326;
     --udm-navy-600: #286b45;
-    --udm-navy-soft: #e6edf5;
     --udm-gold: #d5b86a;
+    --udm-gold-soft: #f4ecd8;
     --udm-teal: #286b45;
+    --udm-teal-soft: #e5f1e7;
     --udm-green: #4d824e;
+    --udm-green-soft: #e5f1e7;
     --udm-red: #b44b4b;
     --udm-red-600: #8f3838;
-    --chart-alert: #b4342b;
-    --chart-alert-soft: #cf6a5e;
+    --udm-red-soft: #fbe7e5;
+    --udm-canvas: #ffffff;
+    --udm-surface: #ffffff;
+    --udm-line: #d6d5c4;
+    --udm-line-strong: #afbda8;
+    --udm-line-soft: #dce0d0;
+    --udm-label-ink: #365146;
+    --udm-ink: #183126;
+    --udm-muted: #576b5c;
+    --udm-slate-text: #4f6358;
+    --udm-slate-soft: #e7ebdd;
+    --udm-slate-ink: #53685b;
+    --udm-green-ink: #1f5a42;
+    --udm-gold-ink: #725616;
     --udm-gold-ink-dark: #59420f;
     --udm-gold-ink-hover: #4f3a05;
     --udm-gold-border: #b9923e;
-    --udm-gold-tint: #fffaf0;
+    --udm-gold-tint: #f5efdc;
     --udm-gold-tint-strong: #f1dfad;
+    --udm-teal-ink: #1f5a42;
     --udm-teal-ink-dark: #174a37;
-    --shadow-card: none;
+    --udm-red-ink: #8f3838;
+    --udm-navy-soft: #e1e9db;
     --udm-primary: #286b45;
     --udm-primary-hover: #1d5034;
     --udm-primary-ink: #ffffff;
@@ -3041,12 +2987,54 @@ textarea.form-control { resize: vertical; min-height: 64px; }
     --udm-selected-ink: #ffffff;
     --udm-on-accent: #ffffff;
     --udm-on-gold: #241f1b;
-    --udm-row-line: #edf2ee;
-    --udm-surface-sunk: #f4f7f2;
-    --udm-track: #e6eee8;
+    --udm-row-line: #e4e3d5;
+    --udm-surface-sunk: #ece8da;
+    --udm-track: #e2e7d8;
     --udm-highlight: #f7efd9;
-    --udm-note-bg: #fffdf6;
+    --udm-note-bg: #f3edda;
     --udm-note-ink: #5a4a20;
+    --bs-link-color: var(--udm-teal);
+    --bs-link-color-rgb: var(--udm-link-rgb);
+    --bs-link-hover-color: var(--udm-teal-ink);
+    --bs-link-hover-color-rgb: var(--udm-link-hover-rgb);
+    --chart-one: #0a6e9a;
+    --chart-two: #b58c24;
+    --chart-three: #2f7d4f;
+    --chart-alert: #b4342b;
+    --chart-alert-soft: #cf6a5e;
+    --chart-track: #e2e7d8;
+    --chart-grid: #e4e3d5;
+    --status-draft: #6b778b;
+    --status-draft-soft: #ebf1f8;
+    --status-draft-ink: #424e5e;
+    --status-pending: #bc7700;
+    --status-pending-soft: #fceeda;
+    --status-pending-ink: #65470f;
+    --status-received: #2d557d;
+    --status-received-soft: #e5f2ff;
+    --status-received-ink: #194f81;
+    --status-process: #ab6da6;
+    --status-process-soft: #fce9fa;
+    --status-process-ink: #6b3767;
+    --status-upload: #389695;
+    --status-upload-soft: #daf7f8;
+    --status-upload-ink: #1b575a;
+    --status-completed: #1d6835;
+    --status-completed-soft: #e3f6e6;
+    --status-completed-ink: #195c2e;
+    --status-overdue: #b4342b;
+    --status-overdue-soft: #ffebe8;
+    --status-overdue-ink: #7a342e;
+    --chart-created: #174a37;
+    --chart-historical: #7d889a;
+    --chart-received-part: #8fb3d6;
+    --chart-neutral: #55637a;
+    --sidebar-width: 236px;
+    --radius: 4px;
+    --shadow-card: none;
+    --udm-focus: #286b45;
+    --udm-link-rgb: 40, 107, 69;
+    --udm-link-hover-rgb: 31, 90, 66;
   }
 }
 
@@ -3089,60 +3077,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    Dashboard, Tracking, Repository, Reports, Search, and Administration in the
    same visual language without changing their data contracts.
    ================================================================ */
-:root {
-  --udm-navy: #174a37;
-  --udm-navy-700: #103326;
-  --udm-navy-600: #286b45;
-  --udm-navy-text: var(--udm-navy);
-  --udm-gold: #d5b86a;
-  --udm-gold-soft: #f4ecd8;
-  --udm-teal: #286b45;
-  --udm-teal-soft: #e5f1e7;
-  --udm-green: #4d824e;
-  --udm-green-soft: #e5f1e7;
-  --udm-red: #b44b4b;
-  --udm-red-600: #8f3838;
-  --udm-red-soft: #fbe7e5;
-  --udm-canvas: #fbf8f1;
-  --udm-surface: #ffffff;
-  --udm-line: #d8e2e0;
-  --udm-line-strong: #b8cbc1;
-  --udm-line-soft: #e5ece8;
-  --udm-label-ink: #365146;
-  --udm-ink: #183126;
-  --udm-muted: #68796c;
-  --udm-slate-text: #4f6358;
-  --udm-slate-soft: #eef4ec;
-  --udm-slate-ink: #53685b;
-  --udm-green-ink: #1f5a42;
-  --udm-gold-ink: #725616;
-  --udm-gold-ink-dark: #59420f;
-  --udm-gold-border: #b9923e;
-  --udm-gold-tint: #fffaf0;
-  --udm-gold-tint-strong: #f1dfad;
-  --udm-teal-ink: #1f5a42;
-  --udm-teal-ink-dark: #174a37;
-  --udm-red-ink: #8f3838;
-  --udm-primary: #286b45;
-  --udm-primary-hover: #1d5034;
-  --udm-primary-ink: #ffffff;
-  --udm-selected-bg: #286b45;
-  --udm-selected-bg-hover: #1d5034;
-  --udm-selected-ink: #ffffff;
-  --udm-on-accent: #ffffff;
-  --udm-on-gold: #241f1b;
-  --udm-row-line: #edf2ee;
-  --udm-surface-sunk: #f4f7f2;
-  --udm-track: #e6eee8;
-  --udm-highlight: #f7efd9;
-  --udm-note-bg: #fffdf6;
-  --udm-note-ink: #5a4a20;
-  --bs-link-color-rgb: 40, 107, 69;
-  --bs-link-hover-color-rgb: 31, 90, 66;
-  --sidebar-width: 236px;
-  --radius: 4px;
-  --shadow-card: none;
-}
+
 
 body {
   background: var(--udm-canvas);
@@ -3202,13 +3137,13 @@ a:hover { color: var(--udm-teal-ink-dark); }
 
 .app-topbar {
   min-height: 68px;
-  background: rgba(251, 248, 241, .96);
+  background: var(--udm-surface);
   border-bottom: 1px solid var(--udm-line);
   box-shadow: none;
 }
 .topbar-search input,
 .topbar-search .form-control {
-  background: #f1f5f4;
+  background: var(--udm-surface-sunk);
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 4px;
@@ -3228,7 +3163,6 @@ a:hover { color: var(--udm-teal-ink-dark); }
 
 .card-udm,
 .stat-card,
-.report-panel,
 .search-panel,
 .admin-panel,
 .detail-panel,
@@ -3290,13 +3224,13 @@ textarea:focus,
 input:focus {
   background-color: var(--udm-surface);
   border-color: var(--udm-teal);
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #275dcc;
+  box-shadow: 0 0 0 2px var(--udm-surface), 0 0 0 4px var(--udm-focus);
 }
 .filter-bar { background: var(--udm-surface-sunk); }
 
 .table-udm { border-color: var(--udm-line); }
-.table-udm thead th { background: #eef4ec; color: var(--udm-label-ink); border-bottom: 2px solid var(--udm-line-strong); }
-.table-udm tbody tr:hover { background: #f7fbf7; }
+.table-udm thead th { background: var(--udm-slate-soft); color: var(--udm-label-ink); border-bottom: 2px solid var(--udm-line-strong); }
+.table-udm tbody tr:hover { background: var(--udm-surface-sunk); }
 .table-udm td, .table-udm th { border-color: var(--udm-row-line); }
 
 .status-pill, .badge, .office-badge, .overdue-tag { border-radius: 999px; }
@@ -3305,9 +3239,9 @@ input:focus {
 .subtab.is-active { color: var(--udm-navy-text); border-bottom-color: var(--udm-gold); }
 
 :focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid var(--udm-surface);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px #275dcc;
+  box-shadow: 0 0 0 4px var(--udm-focus);
 }
 
 @media (max-width: 767.98px) {
@@ -3350,10 +3284,10 @@ input:focus {
   bottom: 16px;
 }
 .stat-card:hover .stat-card-arrow,
-.tracking-secondary-metric:hover .tracking-secondary-arrow { color: var(--udm-primary-hover); transform: translateX(3px); }
-.stat-card.red { background: #fff7f5; border-color: #d99891; }
+.tracking-secondary-metric:hover .tracking-secondary-arrow { color: var(--udm-teal-ink); transform: translateX(3px); }
+.stat-card.red { background: var(--udm-red-soft); border-color: var(--udm-red); }
 .stat-card.red .label,
-.stat-card.red .value { color: #8f3838; }
+.stat-card.red .value { color: var(--udm-red-ink); }
 .stat-card.is-disabled { opacity: .7; }
 
 .tracking-secondary-metric {
@@ -3396,7 +3330,7 @@ input:focus {
    newly added dashboard components do not flash back to paper colours. */
 :root[data-theme="dark"] .app-topbar,
 :root[data-theme="dark"] .app-footer {
-  background: rgba(23, 33, 44, .96);
+  background: var(--udm-surface);
   color: var(--udm-ink);
 }
 :root[data-theme="dark"] .stat-card,
@@ -3407,20 +3341,20 @@ input:focus {
   color: var(--udm-ink);
 }
 :root[data-theme="dark"] .stat-card.red {
-  background: #442724;
-  border-color: #ff8a7a;
+  background: var(--udm-red-soft);
+  border-color: var(--udm-red);
 }
 :root[data-theme="dark"] .stat-card.red .label,
 :root[data-theme="dark"] .stat-card.red .value,
 :root[data-theme="dark"] .stat-card.red .hint {
-  color: #fac6bf;
+  color: var(--udm-red-ink);
 }
 :root[data-theme="dark"] .table-udm thead th {
-  background: #1f2b36;
+  background: var(--udm-slate-soft);
   color: var(--udm-label-ink);
   border-color: var(--udm-line-strong);
 }
-:root[data-theme="dark"] .table-udm tbody tr:hover { background: #131c26; }
+:root[data-theme="dark"] .table-udm tbody tr:hover { background: var(--udm-surface-sunk); }
 :root[data-theme="dark"] .tracking-secondary-metric {
   background: var(--udm-gold-tint);
   border-color: var(--udm-gold-border);
@@ -3503,7 +3437,7 @@ input:focus {
 
 /* Sign-in refresh: same institutional palette, with a clearer first-visit
    hierarchy and a compact workflow cue instead of extra decoration. */
-.login-wrap { background: #fbf8f1; }
+.login-wrap { background: var(--udm-canvas); }
 .login-art {
   background: #174a37;
   border-right: 1px solid #285d43;
@@ -3531,11 +3465,11 @@ input:focus {
 .login-workflow li { display: grid; gap: 3px; padding-top: 9px; border-top: 1px solid rgba(213, 184, 106, .58); }
 .login-workflow strong { color: #fff; font-size: 12px; }
 .login-workflow span { color: rgba(255, 255, 255, .68); font-size: 11px; line-height: 1.3; }
-.login-form { background: #fffdf8; }
+.login-form { background: var(--udm-surface); }
 .login-form .inner { max-width: 390px; padding: 8px 0; }
 .login-form-heading { margin-bottom: 24px; }
 .login-form-heading h2 { font-weight: 800; }
-.login-security-note { border-radius: 0 4px 4px 0; background: #fff7e6; }
+.login-security-note { border-radius: 0 4px 4px 0; background: var(--udm-gold-soft); }
 .login-form .btn-udm { min-height: 44px; }
 
 @media (max-width: 767.98px) {
@@ -3546,16 +3480,7 @@ input:focus {
 /* Sign-in is a paper surface by design, even when the authenticated app is
    remembered in dark mode. Keep its text and action tokens paired with that
    light surface rather than inheriting dark app tokens through the root. */
-:root[data-theme="dark"] .login-wrap {
-  --udm-ink: #183126;
-  --udm-navy-text: #183126;
-  --udm-muted: #68796c;
-  --udm-primary: #286b45;
-  --udm-primary-hover: #1d5034;
-  --udm-teal: #286b45;
-  --udm-teal-ink: #1f5a42;
-  --udm-line: #d8e2e0;
-}
+
 .login-form { color: #183126; }
 .login-form h2 { color: #183126; }
 .login-form .btn-udm { background: #286b45; border-color: #286b45; color: #ffffff; }
@@ -3654,3 +3579,77 @@ input:focus {
     .account-sticky-note { position: static; }
   }
 }
+
+/* Filters expose the common controls first; secondary choices stay available. */
+.repository-filters { padding: 18px 20px; }
+.repository-search { gap: 10px; align-items: end; }
+.repository-search > div { min-width: 0; }
+.repository-filter-grid { gap: 12px; margin: 14px 0 0; }
+.repository-filter-grid > div { min-width: 0; }
+.repository-filters label { color: var(--udm-label-ink); font-size: 13px; font-weight: 600; }
+.repository-more-filters { border-top: 1px solid var(--udm-line); margin-top: 16px; padding-top: 4px; }
+.repository-more-filters > summary {
+  min-height: 44px; padding: 9px 0; color: var(--udm-teal-ink);
+  cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.repository-more-filters > summary span { color: var(--udm-muted); font-size: 12px; font-weight: 400; margin-left: 8px; }
+.repository-more-filters .repository-filter-grid { margin-top: 4px; }
+.repository-more-filters :is(.repository-type-folders,.repository-tags) { margin: 14px 0 0; gap: 6px; }
+.repository-more-filters :is(.repository-type-folders,.repository-tags) a { font-size: 12px; }
+.active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; }
+.active-filters > span { color: var(--udm-muted); }
+.active-filters a {
+  display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
+  min-height: 36px; padding: 5px 10px; border: 1px solid var(--udm-line-strong);
+  background: var(--udm-teal-soft); color: var(--udm-teal-ink); border-radius: 6px;
+}
+.active-filters a > span:first-child { overflow-wrap: anywhere; }
+.active-filters a > span:last-child { flex-shrink: 0; font-size: 20px; line-height: 1; }
+.repository-filters .errorlist { color: var(--udm-red-ink); list-style: none; padding: 0; margin: 5px 0 0; font-size: 12px; }
+
+.report-panel { border: 0; background: transparent; padding: 0; }
+.report-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-bottom: 24px; }
+.report-metrics > div { width: auto; min-width: 0; padding: 0; }
+.report-metrics .stat-card { min-height: 0; height: 100%; padding: 16px 18px; border-left: 3px solid var(--udm-navy-text); }
+.report-metrics .stat-card.gold { border-left-color: var(--status-pending); }
+.report-metrics .stat-card.red { border-left-color: var(--status-overdue); }
+.report-metrics .stat-card.green { border-left-color: var(--status-completed); }
+.report-metrics .stat-card .value { font-size: 30px; line-height: 1.2; margin: 3px 0 5px; }
+.report-metrics .stat-card .label { font-size: 13px; font-weight: 600; }
+.report-metrics .stat-card .hint { max-width: none; font-size: 12px; line-height: 1.5; }
+.report-metric-note { display: block; margin-top: 3px; }
+.report-year-picker { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: end; gap: 10px; }
+.report-year-picker > div { flex: 0 0 auto; }
+.report-year-picker .form-select { min-width: 8rem; width: 8rem; padding-right: 2.5rem; }
+.report-year-picker label { display: block; margin-bottom: 4px; }
+#annual-turnaround-title { scroll-margin-top: 100px; }
+.report-scope-card { display: flex; flex-wrap: wrap; align-items: center; }
+.report-scope-card .card-udm-head { flex: 1 1 260px; border: 0; padding: 16px 20px; }
+.report-scope-card .card-udm-body { flex: 1 1 380px; padding: 16px 20px; }
+.report-scope-picker { display: flex; align-items: end; gap: 10px; }
+.report-scope-picker > div { width: auto; min-width: 0; }
+.report-scope-picker > div:first-of-type { flex: 1 1 auto; }
+.report-scope-picker .form-label { font-size: 13px; margin-bottom: 4px; }
+.report-scope-picker .btn { white-space: nowrap; }
+.form-select { padding-right: 2.5rem; text-overflow: ellipsis; }
+
+@media (max-width: 991.98px) {
+  .report-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+}
+@media (max-width: 575.98px) {
+  .repository-filters { padding: 15px; }
+  .repository-search { display: flex; flex-wrap: wrap; }
+  .repository-search > div { flex: 1 1 100%; }
+  .repository-search > .btn { flex: 1 1 auto; }
+  .repository-filter-grid { grid-template-columns: 1fr; }
+  .repository-more-filters > summary span { display: block; margin-left: 18px; }
+  .active-filters a { min-height: 44px; }
+  .report-year-picker { width: 100%; }
+  .report-year-picker > div { flex: 1 1 8rem; }
+  .report-year-picker .form-select { width: 100%; }
+  #annual-turnaround-title, #report-records { scroll-margin-top: 150px; }
+  .report-scope-card .card-udm-head { padding: 15px 15px 0; }
+  .report-scope-card .card-udm-body { padding: 10px 15px 15px; }
+  .report-metrics .stat-card { padding: 13px; }
+}
+@media (max-width: 359.98px) { .report-metrics { grid-template-columns: 1fr; } }

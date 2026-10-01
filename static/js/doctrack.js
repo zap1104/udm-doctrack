@@ -1364,6 +1364,8 @@
     if (!tip) return;
     var plot = box.getBoundingClientRect();
     var hit = month.getBoundingClientRect();
+    tip.style.minWidth = Math.min(200, plot.width) + "px";
+    tip.style.maxWidth = Math.min(260, plot.width) + "px";
     var centre = hit.left + hit.width / 2;
     var preferred = month.classList.contains("trend-hit--left")
       ? centre - tip.offsetWidth - 12 : centre + 12;
@@ -1375,6 +1377,7 @@
   }
 
   function show(box, month) {
+    box.classList.toggle("is-dismissed", !month);
     monthsOf(box).forEach(function (each) {
       each.classList.toggle("is-active", each === month);
     });
@@ -1390,7 +1393,15 @@
     }
   }
 
+  // Pointer focus must not select the last date before its click is handled:
+  // clicking that date would otherwise immediately toggle it closed.
+  var pointerFocus = null;
+  document.addEventListener("pointerdown", function (event) {
+    pointerFocus = event.target.closest && event.target.closest("[data-trend-hover]");
+  });
+
   document.addEventListener("click", function (event) {
+    pointerFocus = null;
     var month = event.target.closest && event.target.closest("[data-trend-month]");
     if (!month) {
       clearAll(null);
@@ -1407,8 +1418,19 @@
     if (event.pointerType !== "mouse") return;
     var box = event.target.closest && event.target.closest("[data-trend-hover]");
     if (box && box.querySelector(".is-active")) show(box, null);
+    if (box) box.classList.remove("is-dismissed");
     var month = event.target.closest && event.target.closest("[data-trend-month]");
     if (box && month) fitTip(box, month);
+  });
+
+  document.addEventListener("pointermove", function (event) {
+    if (event.pointerType !== "mouse") return;
+    var box = event.target.closest && event.target.closest("[data-trend-hover]");
+    if (!box) return;
+    if (box.querySelector(".is-active")) show(box, null);
+    box.classList.remove("is-dismissed");
+    var month = event.target.closest && event.target.closest("[data-trend-month]");
+    if (month) fitTip(box, month);
   });
 
   window.addEventListener("resize", function () {
@@ -1437,10 +1459,11 @@
 
   document.addEventListener("focusin", function (event) {
     var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
-    if (box && !box.querySelector(".is-active")) {
+    if (box && box !== pointerFocus && !box.querySelector(".is-active")) {
       var months = monthsOf(box);
       show(box, months[months.length - 1]);
     }
+    pointerFocus = null;
   });
 
   document.addEventListener("focusout", function (event) {

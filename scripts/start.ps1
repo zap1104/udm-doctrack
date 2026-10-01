@@ -1,3 +1,13 @@
+param([switch]$PreviewOnly, [int]$Port = 8000)
+
+if ($PreviewOnly) {
+    Set-Location (Join-Path $PSScriptRoot "..")
+    $env:DJANGO_DEBUG = "True"
+    $env:DJANGO_ALLOWED_HOSTS = "localhost,127.0.0.1"
+    & .\.venv\Scripts\python.exe manage.py runserver "127.0.0.1:$Port" --noreload
+    exit $LASTEXITCODE
+}
+
 # =============================================================================
 # UDM DocTrack — guided setup for Windows
 #

@@ -14,6 +14,17 @@ from apps.tracking.models import Status
 register = template.Library()
 
 
+@register.inclusion_tag("partials/_query_fields.html", takes_context=True)
+def query_fields(context, *exclude):
+    """Keep other GET selections, including repeated values, when one changes."""
+    request = context.get("request")
+    omitted = {"page", *exclude}
+    return {"query_fields": [
+        (name, value) for name, values in request.GET.lists()
+        if name not in omitted for value in values
+    ] if request else []}
+
+
 @register.simple_tag(takes_context=True)
 def pagination_url(context, page_number, param: str = "page") -> str:
     """A link to `page_number` that keeps the current filters and nothing else.

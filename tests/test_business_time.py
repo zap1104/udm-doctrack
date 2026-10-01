@@ -173,6 +173,7 @@ def test_a_day_means_a_working_day_not_twenty_four_hours():
     "seconds, expected",
     [
         (None, "—"),
+        (0, "0 mins"),
         (30, "under a minute"),
         (90 * 60, "1 hr 30 mins"),
         (45 * 60, "45 mins"),

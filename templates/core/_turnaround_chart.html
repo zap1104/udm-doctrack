@@ -1,3 +1,4 @@
+          {% load l10n %}
           {% if turnaround_trend.has_data %}
             {% comment %}
               The legend sits in the body rather than beside the heading. In the
@@ -29,7 +30,7 @@
                 {% endcomment %}
                 <div class="trend-plot">
                 <div class="trend-axis-values num" aria-hidden="true">
-                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent }}%">{{ line.value }}</span>{% endif %}{% endfor %}
+                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent|unlocalize }}%">{{ line.value }}</span>{% endif %}{% endfor %}
                 </div>
                 {% comment %}
                   No preserveAspectRatio="none": it stretches the plot to the column
@@ -47,8 +48,8 @@
                   {% endcomment %}
                   <g aria-hidden="true">
                     {% for line in turnaround_trend_geometry.grid %}
-                      <line x1="0" x2="{{ turnaround_trend_geometry.width }}"
-                            y1="{{ line.y }}" y2="{{ line.y }}"
+                      <line x1="0" x2="{{ turnaround_trend_geometry.width|unlocalize }}"
+                            y1="{{ line.y|unlocalize }}" y2="{{ line.y|unlocalize }}"
                             class="{% if line.axis %}trend-axis{% else %}trend-grid{% endif %}"></line>
                     {% endfor %}
                   </g>
@@ -75,7 +76,7 @@
                   </g>
                   {% for series in turnaround_trend_points %}
                     {% for dot in series.dots %}
-                      <circle class="trend-point" cx="{{ dot.x }}" cy="{{ dot.y }}" r="3"
+                      <circle class="trend-point{% if dot.overlap %} trend-point--overlap{% endif %}" cx="{{ dot.x|unlocalize }}" cy="{{ dot.y|unlocalize }}" r="{{ dot.radius|unlocalize }}"
                               style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
                     {% endfor %}
                   {% endfor %}
@@ -92,21 +93,23 @@
                 {% endcomment %}
                 {% if turnaround_trend_geometry.months %}
                   <div class="trend-hover" tabindex="0" role="group" data-trend-hover
-                       style="--plot-top:{{ turnaround_trend_geometry.plot_top_percent }}%;--plot-bottom:{{ turnaround_trend_geometry.plot_bottom_percent }}%"
+                       style="--plot-top:{{ turnaround_trend_geometry.plot_top_percent|unlocalize }}%;--plot-bottom:{{ turnaround_trend_geometry.plot_bottom_percent|unlocalize }}%"
                        aria-label="Turnaround by date. Use the left and right arrow keys to read each date.">
                     {% for month in turnaround_trend_geometry.months %}
                       <div class="trend-hit trend-hit--{{ month.side }}" data-trend-month
-                           style="left:{{ month.left }}%;width:{{ month.width }}%" aria-label="{{ month.summary }}">
+                           style="left:{{ month.left|unlocalize }}%;width:{{ month.width|unlocalize }}%" aria-label="{{ month.summary }}">
                         <span class="trend-cross" aria-hidden="true"></span>
-                        {% for point in month.points %}<span class="trend-dot" style="top:{{ point.top_percent }}%;--dot:{{ point.colour }}" aria-hidden="true"></span>{% endfor %}
+                        {% for point in month.points %}<span class="trend-dot{% if point.overlap %} trend-dot--overlap{% endif %}" style="top:{{ point.top_percent|unlocalize }}%;--dot:{{ point.colour }};--dot-size:{{ point.marker_size|unlocalize }}px" aria-hidden="true"></span>{% endfor %}
                         <div class="trend-tip" aria-hidden="true">
                           <div class="trend-tip-month">{{ month.label }}</div>
                           {% for point in month.points %}
                             <div class="trend-tip-row">
                               <i style="background:{{ point.colour }}"></i>
                               <strong>{{ point.text }}</strong>
-                              <span>{{ point.label }} &middot; {{ point.samples }} {{ point.unit }}</span>
+                              <span>{{ point.label }} average</span>
+                              <span>{% include "core/_turnaround_sample_count.html" with item=point %}</span>
                               <span>{{ point.calendar }} elapsed</span>
+                              {% if point.zero_working_time %}<span>{{ point.zero_working_time }} with 0 working mins</span>{% endif %}
                             </div>
                           {% empty %}
                             <div class="trend-tip-row trend-tip-empty">Nothing received or completed</div>
@@ -125,16 +128,15 @@
                 </div>
                 <div class="chart-scale">
                   Working days, averaged {% if turnaround_trend.daily %}per day{% else %}per month{% endif %} &middot; one working day is
-                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours,
-                  weekends excluded
+                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours
                 </div>
-                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Dots show recorded averages. Lines connect available observations; dates without dots have no samples.</p>
+                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Dots show average working time for handovers confirmed or documents completed on that date. Concentric rings keep overlapping stages visible; the popup lists each exact average. Lines connect available observations; dates without dots have no valid samples. Zero is a recorded measurement. Monthly averages use the individual observations and their counts, so do not average the daily dots. {{ turnaround_trend.office_hours_caveat }}</p>
               </div>
             </div>
             <details class="chart-table">
-              <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View trend as table" description="Read working-day averages for the selected stages." %}</summary>
+              <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View trend as table" description="Read average times and the number of observations." %}</summary>
               <div class="table-responsive"><table class="table-udm">
-                <caption>Average working days for the selected stages and period.</caption>
+                <caption>Average working time, elapsed time and counts. One working day is {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours; one elapsed day is 24 hours. A dash means no valid observations.</caption>
                 <thead><tr>
                   <th>{% if turnaround_trend.daily %}Day{% else %}Month{% endif %}</th>{% for series in turnaround_table_series %}<th class="text-end">{{ series.label }}</th>{% endfor %}
                   {% if turnaround_show_on_time %}<th class="text-end">On time</th>{% endif %}
@@ -143,9 +145,16 @@
                   {% for row in turnaround_table_rows %}
                     <tr>
                       <td>{% if turnaround_trend.daily %}{{ row.period_label }}{% else %}{{ row.month|date:"F Y" }}{% endif %}</td>
-                      {% for value in row.values %}<td class="text-end num">{{ value|default_if_none:"—" }}</td>{% endfor %}
+                      {% for cell in row.cells %}<td class="text-end turnaround-table-value">
+                        {% if cell.samples %}
+                          <strong class="num">{{ cell.label }}</strong>
+                          <span>{{ cell.calendar }} elapsed</span>
+                          <span>{% include "core/_turnaround_sample_count.html" with item=cell %}</span>
+                          {% if cell.zero_working_time %}<span>{{ cell.zero_working_time }} with 0 working mins</span>{% endif %}
+                        {% else %}<span aria-label="No valid observations">&mdash;</span>{% endif %}
+                      </td>{% endfor %}
                       {% if turnaround_show_on_time %}<td class="text-end num">
-                        {% if row.has_on_time %}{{ row.on_time_percent }}%{% else %}&mdash;{% endif %}
+                        {% if row.has_on_time %}{{ row.on_time_percent }}%<span class="turnaround-table-count">{{ row.on_time }} of {{ row.closed }} with a deadline</span>{% else %}&mdash;{% endif %}
                       </td>{% endif %}
                     </tr>
                   {% endfor %}

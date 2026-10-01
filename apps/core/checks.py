@@ -58,4 +58,8 @@ def office_hours_configuration(app_configs, **kwargs):
         errors.append(Error("OFFICE_DAY_END is not after OFFICE_DAY_START.", hint="Set the office window, e.g. 08:00 to 17:00.", id="doctrack.E007"))
     if lunch_to < lunch_from or lunch_from < opens or lunch_to > closes:
         errors.append(Error("The lunch break is not inside the office day.", hint="Set OFFICE_LUNCH_START and OFFICE_LUNCH_END within the window, or both to the same time for no break.", id="doctrack.E008"))
+    if closes > opens and lunch_from == opens and lunch_to == closes:
+        errors.append(Error("The lunch break consumes the entire office day.", hint="Leave a positive working interval so turnaround can be expressed in working days.", id="doctrack.E017"))
+    if not 1 <= settings.OFFICE_WEEK_DAYS <= 7:
+        errors.append(Error("OFFICE_WEEK_DAYS must be between 1 and 7.", hint="Set the number of working weekdays, e.g. 5 for Monday to Friday.", id="doctrack.E018"))
     return errors

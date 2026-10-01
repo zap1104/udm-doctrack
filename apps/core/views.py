@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import FieldDoesNotExist, PermissionDenied
-from django.db.models import CharField, Count, Exists, F, OuterRef, Q, TextField
+from django.db.models import CharField, Count, Exists, F, Max, Min, OuterRef, Q, TextField
 from django.db.models.functions import TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -778,6 +778,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         figures = {
             **memo_context["turnaround"],
             "show_deadline_summary": stage in ("all", "lifetime"),
+            "show_waiting_summary": stage in ("all", "receipt"),
             "stages": [item for item in memo_context["turnaround"]["stages"]
                        if stage in ("all", item["key"])],
             "has_on_time": memo_context["turnaround"]["has_on_time"] and stage in ("all", "lifetime"),
@@ -800,9 +801,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                                                turnaround_window=None) + "#turnaround-panel",
             },
             "turnaround_table_series": [{"key": key, "label": label} for key, label, *_ in series],
-            "turnaround_table_rows": [
-                {**row, "values": [row[key] for key, *_ in series]} for row in rows
-            ],
+            "turnaround_table_rows": self._turnaround_table_rows(rows, series),
             "turnaround_show_on_time": False,
         }
 
@@ -1021,7 +1020,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: it measures are one colour across the page.
     TREND_SERIES = (
         ("receipt", Status.PENDING_RECEIPT.label, Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
-        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "confirmed until completed", "document"),
+        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "first receipt until completed", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
 
@@ -1054,7 +1053,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 {
                     "y": y,
                     "value": value,
-                    "top_percent": round(100 * y / self.TREND_HEIGHT, 2),
+                    "top_percent": 100 * y / self.TREND_HEIGHT,
                     # The baseline is the axis, not another rule behind the data.
                     "axis": index == len(steps) - 1,
                 }
@@ -1083,6 +1082,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         so it is never cut off and never covers the dots it describes.
         """
         rows = trend["rows"]
+        if not rows or trend.get("has_data") is False:
+            return []
+        markers = self._trend_markers(trend)
         ceiling = trend["ceiling"] or 1
         plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
         width = 100 / len(rows)
@@ -1098,24 +1100,35 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 reverse=True,
             )
             for key, label, status, _measures, unit in series:
-                y = self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h
+                y = round(self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h, 1)
                 samples = row[f"{key}_samples"]
                 points.append(
                     {
+                        "key": key,
                         "label": label,
                         "colour": STATUS_COLOURS[status],
                         "text": row[f"{key}_label"],
                         "calendar": row[f"{key}_calendar"],
                         "samples": samples,
+                        "documents": row[f"{key}_documents"],
+                        "zero_working_time": row[f"{key}_zero_working_time"],
                         "unit": unit + ("" if samples == 1 else "s"),
-                        "top_percent": round(100 * y / self.TREND_HEIGHT, 2),
+                        "top_percent": 100 * y / self.TREND_HEIGHT,
+                        **markers[index, key],
                     }
                 )
             month = row.get("period_label", f"{row['month']:%B %Y}")
-            summary = "; ".join(
-                f"{point['label']} {point['text']} working time, {point['calendar']} elapsed, over {point['samples']} {point['unit']}"
-                for point in points
-            ) or "nothing received or completed"
+            summaries = []
+            for point in points:
+                count = f"{point['samples']} completed {point['unit']}"
+                if point["key"] == "receipt":
+                    document_unit = "document" if point["documents"] == 1 else "documents"
+                    count = f"{point['samples']} confirmed {point['unit']} across {point['documents']} {document_unit}"
+                summary = f"{point['label']} {point['text']} working time, {point['calendar']} elapsed, over {count}"
+                if point["zero_working_time"]:
+                    summary += f"; {point['zero_working_time']} with zero working time"
+                summaries.append(summary)
+            summary = "; ".join(summaries) or "nothing received or completed"
             centre = (index + 0.5) * width
             months.append(
                 {
@@ -1128,6 +1141,51 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 }
             )
         return months
+
+    def _trend_markers(self, trend):
+        """Concentric rings keep stages visible when their rendered points coincide.
+
+        Group by the actual SVG coordinate, including values that round onto
+        the same point. Keep the measured position and tooltip value unchanged.
+        """
+        markers = {}
+        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
+        ceiling = trend["ceiling"] or 1
+        for index, row in enumerate(trend["rows"]):
+            groups = {}
+            for key, *_ in self.TREND_SERIES:
+                if row[key] is not None:
+                    y = round(self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h, 1)
+                    groups.setdefault(y, []).append(key)
+            for keys in groups.values():
+                for rank, key in enumerate(keys):
+                    markers[index, key] = {
+                        "radius": 3 + 3 * rank,
+                        "marker_size": 13 + 8 * rank,
+                        "overlap": len(keys) > 1,
+                    }
+        return markers
+
+    @staticmethod
+    def _turnaround_table_rows(rows, series):
+        """Readable time and denominators beside the unrounded plotting values."""
+        return [
+            {
+                **row,
+                "values": [row[key] for key, *_ in series],
+                "cells": [
+                    {
+                        "key": key, "label": row[f"{key}_label"],
+                        "calendar": row[f"{key}_calendar"],
+                        "samples": row[f"{key}_samples"],
+                        "documents": row[f"{key}_documents"],
+                        "zero_working_time": row[f"{key}_zero_working_time"],
+                    }
+                    for key, *_ in series
+                ],
+            }
+            for row in rows
+        ]
 
     def _trend_points(self, trend):
         """The three turnaround series as SVG polylines.
@@ -1143,6 +1201,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
         step = plot_w / len(rows)
         ceiling = trend["ceiling"] or 1
+        markers = self._trend_markers(trend)
 
         def place(index, value):
             x = self.TREND_PAD_LEFT + (index + 0.5) * step
@@ -1170,7 +1229,11 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     "measures": measures,
                     "colour": colour,
                     "polyline": " ".join(f"{x},{y}" for x, y in points),
-                    "dots": [{"x": x, "y": y} for x, y in points],
+                    "dots": [
+                        {"x": x, "y": y, **markers[index, key]}
+                        for index, row in enumerate(rows) if row[key] is not None
+                        for x, y in [place(index, row[key])]
+                    ],
                 }
             )
         return built
@@ -1269,7 +1332,7 @@ MIN_FILTER_YEAR, MAX_FILTER_YEAR = 1900, 2999
 def _filter_year(raw: str) -> int | None:
     """A usable year from the query string, or None if it is not one."""
     raw = (raw or "").strip()
-    if not raw.isdigit():
+    if not raw.isascii() or not raw.isdigit() or len(raw) != 4:
         return None
     value = int(raw)
     return value if MIN_FILTER_YEAR <= value <= MAX_FILTER_YEAR else None
@@ -1580,9 +1643,24 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         context.update(self._records_context(documents if repository else records, filters, context["document_types"]))
         if not repository:
             current_year = timezone.localdate().year
-            first_year = min({current_year} | {value.year for value in records.dates("created_at", "year")})
+            observed_years = {current_year}
+            # The picker spans a continuous range, so eight extrema in one
+            # query are sufficient. Four separate dates() queries added three
+            # unnecessary reads to every report. Joins cannot inflate extrema.
+            fields = ("created_at", "first_received_at", "completed_at", "routing_steps__received_at")
+            boundaries = records.aggregate(**{
+                f"{edge}_{index}": aggregate(field)
+                for index, field in enumerate(fields)
+                for edge, aggregate in (("first", Min), ("last", Max))
+            })
+            observed_years.update(
+                year for value in boundaries.values() if value is not None
+                for year in [timezone.localdate(value).year]
+                if 2 <= year <= current_year
+            )
+            first_year = min(observed_years)
             # A document can finish in a year when no new documents were created.
-            years = list(range(current_year, first_year - 1, -1))
+            years = list(range(max(observed_years), first_year - 1, -1))
             raw_year = self.request.GET.get("trend_year", str(timezone.localdate().year))
             year = int(raw_year) if raw_year.isascii() and raw_year.isdigit() and len(raw_year) == 4 else None
             if year not in years:
@@ -1595,7 +1673,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                             "turnaround_trend_points": drawing._trend_points(trend),
                             "turnaround_trend_geometry": drawing._trend_geometry(trend),
                             "turnaround_table_series": [{"key": key, "label": label} for key, label, *_ in drawing.TREND_SERIES],
-                            "turnaround_table_rows": [{**row, "values": [row[key] for key, *_ in drawing.TREND_SERIES]} for row in trend["rows"]],
+                            "turnaround_table_rows": drawing._turnaround_table_rows(trend["rows"], drawing.TREND_SERIES),
                             "turnaround_show_on_time": True})
         return context
 
@@ -1605,7 +1683,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         base_url = reverse("core:repository_reports" if repository else "core:reports")
         office = filters["office"]
         params = {"office": office.pk if office else None}
-        reset = core_filters.link(base_url, **params) + "#report-records"
+        reset_params = {**params, "trend_year": self.request.GET.get("trend_year") if not repository else None,
+                        "per_page": self.request.GET.get("per_page")}
+        reset = core_filters.link(base_url, **reset_params) + "#report-records"
         types = list(records.order_by().values("document_type_id", "document_type__name").distinct())
         choices = [{"value": str(row["document_type_id"] or "none"),
                     "label": row["document_type__name"] or "Unclassified"} for row in types]
@@ -2211,6 +2291,7 @@ class NotificationListView(AppLoginRequiredMixin, View):
         if active_filter == "unread":
             notification_query = notification_query.filter(resolved_at__isnull=True, is_read=False)
         elif active_filter not in {"all", "unread"}:
+            messages.warning(request, "Unknown notification view. Showing all notifications.")
             active_filter = "all"
 
         active_kind = request.GET.get("kind", "")
@@ -2826,6 +2907,7 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         if event in {choice for choice in access_events}:
             entries = entries.filter(event=event)
         else:
+            self.unrecognised = self.unrecognised or bool(event)
             event = ""
         since, until = self.date_range("access_since", "access_until")
         if since:
@@ -2899,7 +2981,9 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         if self.request.user.is_system_admin:
             offices = Office.active.all().order_by("name")
             raw_office = self.request.GET.get("office", "").strip()
-            office = raw_office if raw_office.isdigit() else ""
+            office = raw_office if raw_office.isascii() and raw_office.isdigit() and len(raw_office) <= 19 else ""
+            if office and not offices.filter(pk=office).exists():
+                office = ""
             self.unrecognised = self.unrecognised or bool(raw_office and not office)
             if office:
                 entries = entries.filter(actor__office_id=office)

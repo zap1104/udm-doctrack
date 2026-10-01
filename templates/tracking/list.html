@@ -116,7 +116,9 @@
       <span class="tracking-filter-label" id="filter-as-office-label">Viewing as</span>
       <form class="dashboard-scope" method="get" action="{% url 'tracking:list' %}">
         {% if request.GET.scope %}<input type="hidden" name="scope" value="{{ request.GET.scope }}">{% endif %}
-        {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+        {% for stage in selected_statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
+        {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}">{% endif %}
+        {% if request.GET.q %}<input type="hidden" name="q" value="{{ request.GET.q }}">{% endif %}
         {% if request.GET.owner %}<input type="hidden" name="owner" value="{{ request.GET.owner }}">{% endif %}
         {% if request.GET.overdue %}<input type="hidden" name="overdue" value="{{ request.GET.overdue }}">{% endif %}
         {% comment %}

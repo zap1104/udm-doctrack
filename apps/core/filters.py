@@ -165,7 +165,7 @@ def _office_by_pk_or_code(raw: str) -> Office | None:
     raw = (raw or "").strip()
     if not raw or len(raw) > 64:
         return None
-    if raw.isdigit():
+    if raw.isascii() and raw.isdigit():
         return Office.active.filter(pk=raw).first()
     return Office.active.filter(code__iexact=raw).first()
 

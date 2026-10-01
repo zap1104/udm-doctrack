@@ -1,58 +1,9 @@
 <section class="trend-summary dashboard-turnaround-summary" aria-label="Turnaround figures for the selected month">
   <div class="trend-summary-head">{{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}</div>
-  <p class="dashboard-turnaround-guide" data-help-title="Turnaround time">
-    Working time counts office hours only; one working day is {{ turnaround.working_day_hours|floatformat:"-2" }} hours.
-    Elapsed time includes nights, weekends and holidays.
-    The three time spans overlap; do not add them. In Process can include work across several offices.
-    Fastest and Slowest compare working time. Records entirely outside office hours count as zero in the average and are excluded from Fastest.
-  </p>
+  {% include "core/_turnaround_explanation.html" %}
   <div class="dashboard-turnaround-stages">
     {% for stage in turnaround.stages %}
-      <section class="dashboard-turnaround-stage dashboard-turnaround-stage--{{ stage.key }}" aria-labelledby="turnaround-stage-{{ stage.key }}">
-        <div class="dashboard-turnaround-stage-head">
-          <h3 id="turnaround-stage-{{ stage.key }}">{{ stage.label }}</h3>
-          <span class="dashboard-turnaround-samples">{{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }}</span>
-        </div>
-        <p class="dashboard-turnaround-measure">
-          {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → work completed{% else %}Created → work completed{% endif %}
-        </p>
-        {% if stage.excluded %}
-          <p class="dashboard-turnaround-calculation">{{ stage.excluded }} {{ stage.noun }}{{ stage.excluded|pluralize }} excluded because required timestamps are missing or out of order.</p>
-        {% endif %}
-        {% if stage.samples %}
-          <dl class="dashboard-turnaround-averages">
-            <div>
-              <dt>Average working time</dt>
-              <dd class="dashboard-turnaround-primary num">{{ stage.average_label }}</dd>
-            </div>
-            <div>
-              <dt>Average elapsed time</dt>
-              <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar }}</dd>
-            </div>
-          </dl>
-          {% if stage.samples > 1 %}
-            <dl class="dashboard-turnaround-extremes" aria-label="Fastest and slowest records for {{ stage.label }}">
-              <div>
-                <dt>Fastest working time</dt>
-                {% if stage.fastest %}
-                  <dd><strong class="num">{{ stage.fastest.office_label }}</strong><a href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><span>{{ stage.fastest.calendar_label }} elapsed</span></dd>
-                {% else %}
-                  <dd class="dashboard-turnaround-empty">No office-hours sample</dd>
-                {% endif %}
-              </div>
-              <div>
-                <dt>Slowest working time</dt>
-                <dd><strong class="num">{{ stage.slowest.office_label }}</strong><a href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><span>{{ stage.slowest.calendar_label }} elapsed</span></dd>
-              </div>
-            </dl>
-          {% endif %}
-          {% if stage.outside_office_hours %}
-            <p data-help-title="Turnaround time"><strong>{{ stage.label }}:</strong> {{ stage.outside_office_hours }} of {{ stage.samples }} {{ stage.noun }}{{ stage.samples|pluralize }} occurred entirely outside office hours. They count as zero working time in the average and are excluded from Fastest.</p>
-          {% endif %}
-        {% else %}
-          <p class="dashboard-turnaround-empty">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %} this month.</p>
-        {% endif %}
-      </section>
+      {% include "core/_turnaround_stage.html" with id_prefix="turnaround-stage" %}
     {% endfor %}
   </div>
   {% if turnaround.has_on_time %}
@@ -67,4 +18,5 @@
   {% elif turnaround.show_deadline_summary %}
     <p class="dashboard-turnaround-empty">No completed documents with a valid timeline and a deadline this month.</p>
   {% endif %}
+  {% if turnaround.show_waiting_summary %}{% include "core/_turnaround_waiting.html" %}{% endif %}
 </section>

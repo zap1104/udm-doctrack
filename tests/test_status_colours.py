@@ -22,32 +22,35 @@ from __future__ import annotations
 import itertools
 import math
 import pathlib
-import re
 
 import pytest
 
 from apps.core.colors import STATUS_COLOURS, STATUS_PILLS, STATUS_TOKENS
 from apps.core.templatetags.doctrack import status_pill_class
 from apps.tracking.models import Status
+from tests.test_dark_mode import _print_block
+from tests.test_theme_contrast import DARK, LIGHT, _decomment, _resolve, _token_block
 
 CSS = pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
-TOKEN_LINE = re.compile(
-    r"--status-(\w+): (#[0-9a-f]{6}); --status-\1-soft: (#[0-9a-f]{6}); --status-\1-ink: (#[0-9a-f]{6});"
-)
+
+
+def _themes():
+    """Resolve the declared palettes regardless of whitespace and formatting."""
+    css = _decomment(CSS)
+    light = _token_block(css, LIGHT)
+    dark = {**light, **_token_block(css, DARK)}
+    return {"light": light, "dark": dark, "print": {**dark, **_print_block(css)}}
 
 
 def _blocks():
-    """The status tokens as declared: light (:root), dark, and the print reset."""
-    found = TOKEN_LINE.findall(CSS)
-    size = len(STATUS_TOKENS)
-    blocks = [found[i:i + size] for i in range(0, len(found), size)]
     return {
-        name: {token: (mark, soft, ink) for token, mark, soft, ink in block}
-        for name, block in zip(("light", "dark", "print"), blocks, strict=True)
+        name: {token: tuple(_resolve(f"var(--status-{token}{suffix})", table)
+                           for suffix in ("", "-soft", "-ink")) for token in STATUS_TOKENS.values()}
+        for name, table in _themes().items()
     }
 
 
-SURFACE = {"light": "#ffffff", "dark": "#17212c"}
+SURFACE = {name: _resolve("var(--udm-surface)", table) for name, table in _themes().items()}
 
 #: Pairs of statuses drawn touching: the tracking ring's slices, the three
 #: turnaround lines. Everywhere else a status sits in its own labelled row.

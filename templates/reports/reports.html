@@ -49,7 +49,7 @@
   office, which is the only one it could describe.
 {% endcomment %}
 {% if filters.can_pick %}
-  <section class="card-udm mb-4 no-print" aria-labelledby="report-filters-title">
+  <section class="card-udm report-scope-card mb-4 no-print" aria-labelledby="report-filters-title">
     <div class="card-udm-head">
       <div>
         <h2 id="report-filters-title">Report scope</h2>
@@ -60,7 +60,8 @@
       {% endif %}
     </div>
     <div class="card-udm-body">
-      <form method="get" class="row g-2 align-items-end">
+      <form method="get" class="report-scope-picker">
+        {% query_fields "office" %}
         {% comment %}
           The report's point of view, not merely a filter: every direction and
           accountability figure below is measured from whatever is chosen here.
@@ -115,7 +116,7 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
+  <div class="report-metrics">
     <div class="col-6 col-lg-3">
       <a class="stat-card navy" href="{{ report_records_url }}">
         <div class="label">Tracked documents</div>
@@ -134,13 +135,7 @@
       <a class="stat-card red" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_overdue=yes#report-records">
         <div class="label">Overdue</div>
         <div class="value">{{ overdue_all }}</div>
-        {% if scope_office %}
-          <div class="hint">
-            {{ overdue }} awaiting action from {{ scope_office.code }}; all overdue documents in this scope are counted
-          </div>
-        {% else %}
-          <div class="hint">Past deadline and not completed</div>
-        {% endif %}
+        <div class="hint">Past deadline and not completed{% if scope_office %}<span class="report-metric-note">{{ overdue }} need action from {{ scope_office.code }}.</span>{% endif %}</div>
       </a>
     </div>
     <div class="col-6 col-lg-3">
@@ -233,10 +228,10 @@
     <div class="col-12">
       <section class="card-udm" aria-labelledby="annual-turnaround-title">
         <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly working-time averages for this report’s office scope. Months without dots have no observations.</p></div>
-          <form method="get" class="d-flex gap-2 align-items-end no-print">
-            {% if filters.office %}<input type="hidden" name="office" value="{{ filters.office.pk }}">{% endif %}
+          <form method="get" action="#annual-turnaround-title" class="report-year-picker no-print">
+            {% query_fields "trend_year" %}
             <div><label for="trend-year" class="form-label">Year</label><select id="trend-year" name="trend_year" class="form-select">{% for year in trend_years %}<option value="{{ year }}"{% if year == trend_year %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></div>
-            <button class="btn btn-udm" type="submit">Apply</button>
+            <button class="btn btn-udm" type="submit">Show year</button>
           </form>
         </div><div class="card-udm-body">{% include "core/_turnaround_chart.html" %}</div>
       </section>
@@ -248,8 +243,7 @@
           <div>
             <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
             <div class="report-caption">
-              {% if turnaround.is_current %}The month so far. {% endif %}Each stage's average,
-              fastest and slowest, in office hours; calendar time is beneath each average.
+              Working time and actual elapsed time for the selected month.
             </div>
           </div>
           {% include "core/_month_picker.html" with picker=month_picker picker_id="report-turnaround-month" %}
@@ -263,8 +257,8 @@
             actually waited, which is the fair way to answer them. Either one
             alone misleads, in opposite directions.
           {% endcomment %}
+          {% include "core/_turnaround_explanation.html" %}
           {% include "core/_turnaround_stages.html" %}
-          <p class="form-text mt-2 mb-0" data-help-title="Working time">{{ turnaround.office_hours_caveat }}</p>
 
           {% comment %}
             Only when something in the month had a deadline: 0% for a month in
@@ -291,12 +285,7 @@
             counted every unconfirmed step ever written, finished documents and
             superseded hops included, which will never be confirmed.
           {% endcomment %}
-          {% if turnaround.awaiting_confirmation %}
-            <p class="form-text mt-3 mb-0">
-              Not yet in the receipt average: {{ turnaround.awaiting_confirmation }}
-              handover{{ turnaround.awaiting_confirmation|pluralize }} still waiting for the receiving office to confirm.
-            </p>
-          {% endif %}
+          {% include "core/_turnaround_waiting.html" %}
         </div>
       </div>
     </div>
@@ -534,7 +523,7 @@
     which include "Unclassified" and an "Other (n types)" line — so it was
     neither the number of types nor anything a reader acted on.
   {% endcomment %}
-  <div class="row g-3 mb-4">
+  <div class="report-metrics">
     <div class="col-6 col-lg-3">
       <a class="stat-card green" href="{{ retention.all_url }}">
         <div class="label">Repository documents</div>
@@ -571,7 +560,7 @@
       and an office clerk shown "12 failed extractions" has nothing to do with it.
     {% endcomment %}
     <div class="report-section-subhead">Repository upkeep · administrators</div>
-    <div class="row g-3 mb-4">
+    <div class="report-metrics">
       <div class="col-6 col-lg-3">
         <div class="stat-card">
           <div class="label">Without tags</div>

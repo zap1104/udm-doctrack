@@ -29,6 +29,7 @@
     {% endcomment %}
     {% if scope.can_pick %}
       <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
+        {% query_fields "office" "ring" "turnaround_window" %}
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office"
                 data-auto-submit>

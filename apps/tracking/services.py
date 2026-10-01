@@ -1306,12 +1306,12 @@ def scope_office(user, requested):
         return None
     if raw == "all":
         return ALL_OFFICES if getattr(user, "is_system_admin", False) else None
-    if not raw.isdigit():
+    if not raw.isascii() or not raw.isdigit() or len(raw) > 19:
         return None
 
     from apps.accounts.models import Office
 
-    return Office.objects.filter(pk=raw).first()
+    return Office.active.filter(pk=raw).first()
 
 
 def office_queue(records, scope, user, office=None):
