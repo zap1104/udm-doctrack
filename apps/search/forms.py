@@ -102,8 +102,12 @@ class SearchForm(BootstrapFormMixin, forms.Form):
     )
     show_all = forms.BooleanField(required=False, label="Include results below the threshold")
 
-    def __init__(self, *args, years=None, **kwargs):
+    def __init__(self, *args, years=None, visible=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if visible is not None:
+            self.fields["office"].queryset = Office.active.filter(documents__in=visible).distinct()
+            self.fields["document_type"].queryset = DocumentType.objects.filter(documents__in=visible).distinct()
+            self.fields["tag"].queryset = Tag.active.filter(documents__in=visible).distinct()
         self.fields["year"].choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]
         self.fields["min_relevance"].initial = settings.SEARCH_MIN_RELEVANCE_DEFAULT
 

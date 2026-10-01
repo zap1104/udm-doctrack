@@ -43,6 +43,13 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Turnaround chart interaction tests
+        run: node --test tests/js/test_turnaround_chart.cjs
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

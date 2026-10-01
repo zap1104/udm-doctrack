@@ -264,7 +264,7 @@ def badge_palette(base: str) -> tuple[str, str]:
 
 
 #: The dark theme's card, which a dark badge sits on (--udm-surface in dark).
-DARK_SURFACE = "#17212c"
+DARK_SURFACE = "#1a2920"
 
 
 def badge_palette_dark(base: str) -> tuple[str, str]:

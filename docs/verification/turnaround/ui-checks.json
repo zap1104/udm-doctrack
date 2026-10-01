@@ -1,0 +1,203 @@
+{
+  "responsive": [
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "dark",
+      "width": 390,
+      "yearWidth": 156
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "light",
+      "width": 390,
+      "yearWidth": 156
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "dark",
+      "width": 768,
+      "yearWidth": 128
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "light",
+      "width": 768,
+      "yearWidth": 128
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "dark",
+      "width": 1440,
+      "yearWidth": 128
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "reports",
+      "theme": "light",
+      "width": 1440,
+      "yearWidth": 128
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "dark",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 390
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "light",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 390
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "dark",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 768
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "light",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 768
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "dark",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 1440
+    },
+    {
+      "cards": 3,
+      "counts": [
+        "16 confirmed handovers across 16 documents",
+        "5 completed documents",
+        "5 completed documents"
+      ],
+      "overflow": false,
+      "page": "dashboard",
+      "theme": "light",
+      "waiting": "Waiting now, all months: 24 handovers across 21 documents.\n13 Pending Receipt documents; 8 in other stages await additional recipients. Waiting handovers are excluded from averages until confirmed.",
+      "width": 1440
+    }
+  ],
+  "stageFilters": [
+    {
+      "overflow": false,
+      "stage": "receipt",
+      "visibleStages": [
+        "Pending Receipt"
+      ],
+      "waitingVisible": true
+    },
+    {
+      "overflow": false,
+      "stage": "processing",
+      "visibleStages": [
+        "In Process"
+      ],
+      "waitingVisible": false
+    },
+    {
+      "overflow": false,
+      "stage": "lifetime",
+      "visibleStages": [
+        "Total lifetime"
+      ],
+      "waitingVisible": false
+    },
+    {
+      "overflow": false,
+      "stage": "all",
+      "visibleStages": [
+        "Pending Receipt",
+        "In Process",
+        "Total lifetime"
+      ],
+      "waitingVisible": true
+    }
+  ],
+  "yearSelection": true,
+  "annualTableAgrees": true,
+  "tooltipOrder": [
+    "Total lifetime",
+    "In Process",
+    "Pending Receipt"
+  ]
+}

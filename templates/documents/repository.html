@@ -39,16 +39,26 @@
     <form method="get" class="repository-filters card-udm" aria-label="Filter repository records">
       {% if folder_office_id %}<input type="hidden" name="office" value="{{ folder_office_id }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
       <input type="hidden" name="per_page" value="{{ page_size }}">
-      <div class="repository-search"><div><label for="{{ form.q.id_for_label }}">{% if pending_view %}Search subject or tracking number{% else %}Search title, reference, or document text{% endif %}</label>{{ form.q }}</div><button class="btn btn-udm" type="submit">Search</button><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>
+      <div class="repository-search"><div><label for="{{ form.q.id_for_label }}">{% if pending_view %}Subject or tracking number{% else %}Title, reference, or document text{% endif %}</label>{{ form.q }}{{ form.q.errors }}</div><button class="btn btn-udm" type="submit">Apply filters</button><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>
       <div class="repository-filter-grid">
-        <div><label for="{{ form.document_type.id_for_label }}">Document type</label>{{ form.document_type }}</div>
-        <div><label for="{{ form.year.id_for_label }}">{% if pending_view %}Completion year{% else %}Year{% endif %}</label>{{ form.year }}</div>
-        <div><label for="{{ form.month.id_for_label }}">{% if pending_view %}Completion month{% else %}Month{% endif %}</label>{{ form.month }}</div>
-        {% if not pending_view %}<div><label for="{{ form.tag.id_for_label }}">Tag</label>{{ form.tag }}</div><div><label for="{{ form.source.id_for_label }}">Document origin</label>{{ form.source }}</div><div><label for="{{ form.retention.id_for_label }}">Retention review</label>{{ form.retention }}</div>{% endif %}
-      </div><button class="btn btn-sm btn-udm-outline repository-apply" type="submit">Apply filters</button>
+        <div><label for="{{ form.document_type.id_for_label }}">Document type</label>{{ form.document_type }}{{ form.document_type.errors }}</div>
+        <div><label for="{{ form.year.id_for_label }}">{% if pending_view %}Completion year{% else %}Document year{% endif %}</label>{{ form.year }}{{ form.year.errors }}</div>
+        <div><label for="{{ form.month.id_for_label }}">{% if pending_view %}Completion month{% else %}Document month{% endif %}</label>{{ form.month }}{{ form.month.errors }}</div>
+      </div>
+      {% if not pending_view %}
+      <details class="repository-more-filters"{% if more_filters_open %} open{% endif %}>
+        <summary>More filters <span>Tags, origin, and retention</span></summary>
+        <div class="repository-filter-grid">
+          <div><label for="{{ form.tag.id_for_label }}">Tag</label>{{ form.tag }}{{ form.tag.errors }}</div>
+          <div><label for="{{ form.source.id_for_label }}">Document origin</label>{{ form.source }}{{ form.source.errors }}</div>
+          <div><label for="{{ form.retention.id_for_label }}">Retention review</label>{{ form.retention }}{{ form.retention.errors }}</div>
+        </div>
+        {% if type_folders %}<nav class="repository-type-folders" aria-label="Browse by document type"><span>By type</span>{% for folder in type_folders %}<a href="{{ folder.url }}"{% if folder.selected %} class="is-selected" aria-current="true"{% endif %}>{{ folder.document_type__name }} <span class="num">{{ folder.total }}</span></a>{% endfor %}</nav>{% endif %}
+        {% if popular_tags %}<nav class="repository-tags" aria-label="Tags in this folder"><span>Tags</span>{% for tag in popular_tags %}<a href="{% filter_url 'tag' tag.pk %}">{{ tag.name }} <span class="num">{{ tag.visible_usage }}</span></a>{% endfor %}</nav>{% endif %}
+      </details>
+      {% endif %}
     </form>
-    {% if type_folders %}<nav class="repository-type-folders" aria-label="Browse by document type"><span>By type</span>{% for folder in type_folders %}<a href="{{ folder.url }}"{% if folder.selected %} class="is-selected" aria-current="true"{% endif %}>{{ folder.document_type__name }} <span class="num">{{ folder.total }}</span></a>{% endfor %}</nav>{% endif %}
-    {% if popular_tags and not pending_view %}<nav class="repository-tags" aria-label="Tags in this folder"><span>Tags</span>{% for tag in popular_tags %}<a href="{% filter_url 'tag' tag.pk %}">{{ tag.name }} <span class="num">{{ tag.visible_usage }}</span></a>{% endfor %}</nav>{% endif %}
+    {% if selected_filters %}<nav class="active-filters" aria-label="Applied filters"><span>Filtered by</span>{% for filter in selected_filters %}<a href="{{ filter.url }}" aria-label="Remove {{ filter.label }} filter: {{ filter.value }}"><span>{{ filter.label }}: <strong>{{ filter.value }}</strong></span><span aria-hidden="true">×</span></a>{% endfor %}</nav>{% endif %}
     {% if retention_due and not pending_view %}<aside class="repository-retention"><div><strong>{{ retention_due_count }} document{{ retention_due_count|pluralize }} due for retention review</strong><span>Review the retention decision; documents are never deleted automatically.</span></div><a class="btn btn-sm btn-udm-outline" href="{% filter_url 'retention' 'due' %}">Review documents</a></aside>{% endif %}
     <div class="repository-results"><span>{{ total }} {% if pending_view %}pending record{% else %}document{% endif %}{{ total|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>{% pager section="size" %}</div>
     {% if pending_view %}<div class="card-udm repository-pending-list">{% include "documents/_repository_pending.html" %}</div>

@@ -205,8 +205,12 @@ def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_f
     assert figures["receipt_samples"] == RoutingStep.objects.filter(received_at__gte=this_month).count()
     assert figures["processing_samples"] == 1, "only the document finished this month"
     assert figures["lifetime_samples"] == 1
-    assert f'{figures["receipt_samples"]} handovers' in body
-    assert "created → completed &middot; 1 document" in body
+    receipt = next(stage for stage in figures["stages"] if stage["key"] == "receipt")
+    handovers = "handover" if receipt["samples"] == 1 else "handovers"
+    documents = "document" if receipt["documents"] == 1 else "documents"
+    assert f'{receipt["samples"]} confirmed {handovers} across {receipt["documents"]} {documents}' in body
+    assert "Created → work completed" in body
+    assert "1 completed document" in body
     assert "that had a deadline" in body or figures["on_time_total"] == 0
 
 
@@ -268,6 +272,7 @@ def test_month_popup_follows_the_lines_from_top_to_bottom(values, expected):
     row = {"month": timezone.localdate()}
     for key, value in zip(("receipt", "processing", "lifetime"), values, strict=True):
         row.update({key: value, f"{key}_samples": 1,
+                    f"{key}_documents": 1, f"{key}_zero_working_time": 0,
                     f"{key}_label": "1 day", f"{key}_calendar": "1 day"})
     month = DashboardView()._trend_months({"rows": [row], "ceiling": 4})[0]
 
@@ -350,7 +355,7 @@ def test_the_legend_says_what_each_line_measures(client, users, slow_then_fast):
     body = " ".join(_dashboard(client, users).content.decode().split())
 
     for words in ("Receipt</strong> sent until confirmed",
-                  "In Process</strong> confirmed until completed",
+                  "In Process</strong> first receipt until completed",
                   "Total lifetime</strong> created until completed"):
         assert words in body
 

@@ -1,0 +1,1 @@
+{% if item.key == "receipt" %}{{ item.samples }} confirmed handover{{ item.samples|pluralize }} across {{ item.documents }} document{{ item.documents|pluralize }}{% else %}{{ item.samples }} completed document{{ item.samples|pluralize }}{% endif %}

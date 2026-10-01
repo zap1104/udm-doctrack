@@ -56,9 +56,9 @@ class SearchView(AppLoginRequiredMixin, View):
     def _repository(self, request) -> dict:
         """Unchanged from before the toggle existed, so `/search/` with no mode
         behaves exactly as every existing bookmark expects."""
-        visible = Document.objects.visible_to(request.user)
+        visible = Document.objects.visible_to(request.user).filter(is_active=True)
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
-        form = SearchForm(request.GET or None, years=years)
+        form = SearchForm(request.GET or None, years=years, visible=visible)
 
         # Relevance-ranked results are a top-N, not a paged list: page four of
         # a ranking is a worse answer than page one, and the reader who wants

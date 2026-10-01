@@ -160,3 +160,60 @@ def test_a_period_costs_the_same_few_queries_however_much_is_in_it(
     """Holidays, handovers, documents, and the live waiting count."""
     with django_assert_num_queries(4):
         analytics.turnaround(TrackingRecord.objects.all(), month=date(2026, 8, 1))
+
+
+@pytest.mark.django_db
+def test_short_waits_keep_precision_and_count_handovers_separately(users, offices, memo_type):
+    day = date(2026, 8, 10)
+    record = _finished(
+        users, offices, memo_type, created=_at(day, 8), sent=_at(day, 8),
+        received=_at(day, 8, 15), completed=_at(day, 10),
+    )
+    original = record.routing_steps.first()
+    RoutingStep.objects.create(
+        record=record, sequence=original.sequence + 1, batch=original.batch,
+        from_office=offices["SUP"], to_office=offices["MED"], sent_by=users["sup"],
+        sent_at=_at(day, 9), received_at=_at(day, 9, 5),
+    )
+    records = TrackingRecord.objects.filter(pk=record.pk)
+    month = date(2026, 8, 1)
+    receipt = _stage(analytics.turnaround(records, month), "receipt")
+    assert receipt["samples"] == 2 and receipt["documents"] == 1
+    assert receipt["average_seconds"] == 600
+    assert receipt["average_label"] == "10 mins"
+    daily = next(row for row in analytics.turnaround_by_day(records, month)["rows"] if row["month"] == day)
+    monthly = analytics.turnaround_by_month(records, year=2026)["rows"][7]
+    for row in (daily, monthly):
+        assert row["receipt"] == 600 / analytics.working_day_seconds()
+        assert row["receipt"] > 0
+        assert row["receipt_samples"] == 2 and row["receipt_documents"] == 1
+
+
+@pytest.mark.django_db
+def test_instant_confirmation_is_zero_and_not_an_outside_hours_interval(users, offices, memo_type):
+    monday = date(2026, 8, 10)
+    record = _finished(
+        users, offices, memo_type, created=_at(monday, 8), sent=_at(monday, 8),
+        received=_at(monday, 8), completed=_at(monday, 8),
+    )
+    receipt = _stage(analytics.turnaround(TrackingRecord.objects.filter(pk=record.pk)), "receipt")
+    assert receipt["average_label"] == receipt["average_calendar"] == "0 mins"
+    assert receipt["zero_working_time"] == receipt["instantaneous"] == 1
+    assert receipt["outside_office_hours"] == 0 and receipt["fastest"] is None
+
+
+@pytest.mark.django_db
+def test_future_events_are_excluded_from_summary_charts_and_export(users, offices, memo_type):
+    now = _at(date(2026, 8, 10), 12)
+    record = _finished(
+        users, offices, memo_type, created=now, sent=now,
+        received=_at(date(2026, 8, 11), 9), completed=_at(date(2026, 8, 11), 17),
+    )
+    records = TrackingRecord.objects.filter(pk=record.pk)
+    month = date(2026, 8, 1)
+    assert all(stage["samples"] == 0 for stage in analytics.turnaround(records, month, now=now)["stages"])
+    assert analytics.turnaround_by_day(records, month, now=now)["has_data"] is False
+    assert analytics.turnaround_by_month(records, year=2026, now=now)["has_data"] is False
+    assert analytics.record_durations(record, record.routing_steps.all(), now=now) == {
+        "receipt": None, "processing": None, "lifetime": None,
+    }

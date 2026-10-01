@@ -125,18 +125,6 @@ class RepositoryView(AppLoginRequiredMixin, View):
         pending_visible = pending_upload_for(request.user).filter(is_archived=False)
         pending_view = request.GET.get("view") == "pending"
         folders_view = request.GET.get("view") == "folders"
-        options = self._options(visible)
-        if pending_view:
-            options.update(
-                years=sorted({year for year in pending_visible.annotate(completion_year=ExtractYear("completed_at")).values_list("completion_year", flat=True) if year}, reverse=True),
-                months=set(pending_visible.values_list("completed_at__month", flat=True)),
-                document_types=DocumentType.objects.filter(tracking_records__in=pending_visible).distinct(),
-                tags=Tag.active.none(), sources=set(),
-            )
-        form = RepositoryFilterForm(request.GET or None, **options)
-        if pending_view:
-            form.fields["q"].widget.attrs["placeholder"] = "Search subject or tracking number…"
-
         # Through the shared resolver, so `office` is a primary key here as it
         # is on every other page. It read a *code*, from `Office.objects` rather
         # than `Office.active` — so an archived office went on filtering — and an
@@ -167,6 +155,27 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "It may have been archived.",
             )
 
+        folder_pending = pending_visible
+        if denied_folder:
+            folder_pending = folder_pending.none()
+        elif selected_office:
+            folder_pending = folder_pending.filter(originating_office=selected_office)
+        options = self._options(documents)
+        if pending_view:
+            options.update(
+                years=sorted({year for year in folder_pending.annotate(completion_year=ExtractYear("completed_at")).values_list("completion_year", flat=True) if year}, reverse=True),
+                months=set(folder_pending.values_list("completed_at__month", flat=True)),
+                document_types=DocumentType.objects.filter(tracking_records__in=folder_pending).distinct(),
+                tags=Tag.active.none(), sources=set(),
+            )
+        form = RepositoryFilterForm(request.GET or None, **options)
+        if pending_view:
+            form.fields["q"].widget.attrs["placeholder"] = "Search subject or tracking number…"
+            for field in ("tag", "source", "retention"):
+                form.fields.pop(field)
+            if any(request.GET.get(field) for field in ("tag", "source", "retention")):
+                messages.warning(request, "Tags, origin, and retention apply only to filed documents. They were ignored for pending uploads.")
+
         # Apply every filter that validated, not the all-or-nothing case. The
         # whole block used to hang off `if form.is_valid()`, so one unrecognised
         # value — a stale bookmark, a tag since deleted — silently dropped
@@ -195,12 +204,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
 
         # This is a separate queue, not part of the filed-document total.
         # Start with the tracking visibility rule before counts or filters.
-        pending = pending_visible
-        if denied_folder:
-            pending = pending.none()
-        elif selected_office:
-            pending = pending.filter(originating_office=selected_office)
-        folder_pending = pending
+        pending = folder_pending
         pending_count = pending.count()
         if pending_view:
             pending = self._filter_pending(pending, data)
@@ -256,12 +260,21 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # Keep a denied folder in tab/form URLs: dropping it would turn a
         # zero-count tab into a link to every accessible record instead.
         folder_params = {"office": folder_office_id}
+        selected_filters = []
+        filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "retention": "Retention"}
+        for name, label in filter_labels.items():
+            value = data.get(name)
+            if value:
+                choices = dict(form.fields[name].choices) if hasattr(form.fields[name], "choices") and name not in {"document_type", "tag"} else {}
+                selected_filters.append({"label": label, "value": choices.get(value, choices.get(str(value), str(value))), "url": core_filters.link(base_url, request, **{name: None, "page": None})})
 
         return render(
             request,
             self.template_name,
             {
                 "form": form,
+                "selected_filters": selected_filters,
+                "more_filters_open": bool(any(data.get(name) for name in ("tag", "source", "retention")) or form.errors),
                 **page_context,
                 "documents": [] if pending_view else page.object_list,
                 "pending_view": pending_view,

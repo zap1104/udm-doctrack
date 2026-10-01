@@ -45,6 +45,8 @@ def filter_report_records(records, request, *, repository=False, type_values=Non
     if month:
         try:
             chosen = datetime.strptime(month, "%Y-%m").date()
+            if len(month) != 7 or not month.isascii() or not 2 <= chosen.year <= 9998:
+                raise ValueError("Month is outside the supported date range")
         except ValueError:
             messages.warning(request, "Invalid record month. Showing all months.")
             month = ""

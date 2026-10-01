@@ -193,39 +193,53 @@ class Audit:
         if cache_key in self.sample_cache:
             return self.sample_cache[cache_key]
         holidays = load_holidays()
+        now = timezone.now()
         samples = {"receipt": [], "processing": [], "lifetime": []}
         for step in steps:
-            if step["received_at"] and step["received_at"] >= step["sent_at"]:
-                samples["receipt"].append((timezone.localdate(step["received_at"]), business_seconds_between(step["sent_at"], step["received_at"], holidays)))
+            if step["sent_at"] and step["received_at"] and step["sent_at"] <= step["received_at"] <= now:
+                samples["receipt"].append((timezone.localdate(step["received_at"]), business_seconds_between(step["sent_at"], step["received_at"], holidays), step["record_id"], (step["received_at"] - step["sent_at"]).total_seconds()))
         for row in records:
             end = row["completed_at"]
-            if row["status"] in COMPLETED_STATUSES and end and end >= row["created_at"]:
-                samples["lifetime"].append((timezone.localdate(end), business_seconds_between(row["created_at"], end, holidays)))
+            if row["status"] in COMPLETED_STATUSES and end and row["created_at"] <= end <= now:
+                samples["lifetime"].append((timezone.localdate(end), business_seconds_between(row["created_at"], end, holidays), row["pk"], (end - row["created_at"]).total_seconds()))
                 if row["first_received_at"] and row["created_at"] <= row["first_received_at"] <= end:
-                    samples["processing"].append((timezone.localdate(end), business_seconds_between(row["first_received_at"], end, holidays)))
+                    samples["processing"].append((timezone.localdate(end), business_seconds_between(row["first_received_at"], end, holidays), row["pk"], (end - row["first_received_at"]).total_seconds()))
         self.sample_cache[cache_key] = samples
         return samples
 
     def turnaround(self, panel, records, steps):
         samples = self.samples(records, steps)
         for stage in panel["stages"]:
-            values = [seconds for day, seconds in samples[stage["key"]] if day.replace(day=1) == panel["month"]]
+            selected = [sample for sample in samples[stage["key"]] if sample[0].replace(day=1) == panel["month"]]
+            values = [sample[1] for sample in selected]
             self.equal("monthly turnaround sample count", stage["samples"], len(values))
+            self.equal("monthly unique documents", stage["documents"], len({sample[2] for sample in selected}))
+            self.equal("monthly zero observations", stage["zero_working_time"], sum(value == 0 for value in values))
+            self.equal("monthly instant observations", stage["instantaneous"], sum(sample[3] == 0 for sample in selected))
+            self.equal("monthly outside office hours", stage["outside_office_hours"], sum(sample[1] == 0 and sample[3] > 0 for sample in selected))
             self.equal("monthly turnaround mean", stage["average_seconds"], sum(values) / len(values) if values else None)
-        closed = [row for row in records if row["status"] in COMPLETED_STATUSES and row["completed_at"] and row["due_at"] and row["completed_at"] >= row["created_at"] and timezone.localdate(row["completed_at"]).replace(day=1) == panel["month"]]
+            self.equal("monthly elapsed mean", stage["average_calendar_seconds"], sum(sample[3] for sample in selected) / len(selected) if selected else None)
+        closed = [row for row in records if row["status"] in COMPLETED_STATUSES and row["completed_at"] and row["due_at"] and row["created_at"] <= row["completed_at"] <= panel["as_of"] and timezone.localdate(row["completed_at"]).replace(day=1) == panel["month"]]
         self.equal("on-time denominator", panel["on_time_total"], len(closed))
         self.equal("on-time numerator", panel["on_time"], sum(row["completed_at"] <= row["due_at"] for row in closed))
         batches = {row["pk"]: row for row in records}
-        outstanding = sum(step["received_at"] is None and step["batch"] == batches[step["record_id"]]["current_batch"] and batches[step["record_id"]]["status"] not in COMPLETED_STATUSES for step in steps)
-        self.equal("outstanding handovers", panel["awaiting_confirmation"], outstanding)
+        outstanding = [step for step in steps if step["received_at"] is None and step["sent_at"] <= panel["as_of"] and step["batch"] == batches[step["record_id"]]["current_batch"] and batches[step["record_id"]]["status"] not in COMPLETED_STATUSES]
+        self.equal("outstanding handovers", panel["awaiting_confirmation"], len(outstanding))
+        self.equal("documents awaiting receipt", panel["awaiting_confirmation_documents"], len({step["record_id"] for step in outstanding}))
+        pending_ids = {step["record_id"] for step in outstanding if batches[step["record_id"]]["status"] == Status.PENDING_RECEIPT}
+        self.equal("waiting Pending Receipt documents", panel["awaiting_confirmation_pending_documents"], len(pending_ids))
+        self.equal("waiting additional recipients", panel["awaiting_confirmation_other_documents"], len({step["record_id"] for step in outstanding} - pending_ids))
 
     def trend(self, chart, records, steps, daily=False):
         samples = self.samples(records, steps)
         for row in chart["rows"]:
             for key in samples:
-                values = [seconds for day, seconds in samples[key] if (day if daily else day.replace(day=1)) == row["month"]]
+                selected = [sample for sample in samples[key] if (sample[0] if daily else sample[0].replace(day=1)) == row["month"]]
+                values = [sample[1] for sample in selected]
                 self.equal("trend sample count", row[key + "_samples"], len(values))
-                self.equal("trend working-day average", row[key], round(sum(values) / len(values) / working_day_seconds(), 1) if values else None)
+                self.equal("trend unique documents", row[key + "_documents"], len({sample[2] for sample in selected}))
+                self.equal("trend zero observations", row[key + "_zero_working_time"], sum(value == 0 for value in values))
+                self.equal("trend working-day average", row[key], sum(values) / len(values) / working_day_seconds() if values else None)
 
     def repository(self, url):
         context = self.get(url).context

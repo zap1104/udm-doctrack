@@ -108,16 +108,17 @@ def test_printing_from_dark_prints_the_light_palette():
     assert not missing, f"the print block does not reset: {missing}"
 
     # And resets them to what light mode prints, not to something of its own.
-    # The page itself is the exception: paper is white rather than the canvas grey.
+    # Printed pages and cards use white paper, while screen surfaces stay khaki.
     table = {**light, **dark, **printed}
     drifted = sorted(
         name for name in printed
-        if name != "--udm-canvas"
+        if name not in {"--udm-canvas", "--udm-surface"}
         and (_resolve(printed[name], table) or printed[name].strip()).lower()
         != (_resolve(light[name], light) or light[name].strip()).lower()
     )
     assert not drifted, f"print differs from light for: {drifted}"
     assert _resolve(printed["--udm-canvas"], table) == "#ffffff"
+    assert _resolve(printed["--udm-surface"], table) == "#ffffff"
     assert "color-scheme: light" in re.search(r"@media print\s*\{\s*" + DARK + r"\s*\{(.*?)\}", css, re.S).group(1)
 
 
@@ -173,13 +174,21 @@ def test_bootstraps_link_rgb_matches_the_teal_it_stands_for():
     css = _css()
     themes = _themes()
     dark_body = next(body for selector, body in _rules(css) if selector == ':root[data-theme="dark"] body')
-    blocks = {"light": _token_block(css, LIGHT), "dark": dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", dark_body))}
+    blocks = {"light": _token_block(css, LIGHT),
+              "dark": {**themes["dark"], **dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", dark_body))}}
 
     for theme, block in blocks.items():
         for triple, token in (("--bs-link-color-rgb", "--udm-teal"), ("--bs-link-hover-color-rgb", "--udm-teal-ink")):
             hex_value = _resolve(f"var({token})", themes[theme]).lstrip("#")
             expected = ", ".join(str(int(hex_value[i:i + 2], 16)) for i in (0, 2, 4))
-            assert block[triple].strip() == expected, f"{theme}: {triple} is {block[triple]}, {token} is {expected}"
+            actual = block[triple].strip()
+            # Bootstrap's RGB values can share the role token by indirection.
+            for _ in range(8):
+                alias = re.fullmatch(r"var\((--[\w-]+)\)", actual)
+                if not alias:
+                    break
+                actual = themes[theme][alias.group(1)].strip()
+            assert actual == expected, f"{theme}: {triple} resolves to {actual}, {token} is {expected}"
 
 
 # --- the rules -------------------------------------------------------------------

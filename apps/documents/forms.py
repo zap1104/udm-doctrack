@@ -192,7 +192,7 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
     """
 
     q = forms.CharField(
-        required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search metadata, tags, office or text…"})
+        required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search title, reference, metadata or document text…"})
     )
     document_type = forms.ModelChoiceField(
         required=False, label="", queryset=DocumentType.active.none(), empty_label="All types"
