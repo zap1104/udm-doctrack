@@ -109,8 +109,13 @@ def _token_block(text: str, pattern: str) -> dict[str, str]:
     # stylesheet does not begin at ":root". Without it the match fails, the
     # table comes back empty, and every rule silently resolves to None — an
     # audit that passes because it checked nothing.
-    m = re.search(pattern + r"\s*\{(.*?)\n\}", text, re.S | re.M)
-    return dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", m.group(1))) if m else {}
+    # A later design layer can override the palette. Read all screen blocks
+    # in cascade order, keeping the print reset separate from the dark theme.
+    screen = _strip_blocks(text, r"@media print\s*\{")
+    table = {}
+    for match in re.finditer(pattern + r"\s*\{(.*?)\n\}", screen, re.S | re.M):
+        table.update(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", match.group(1)))
+    return table
 
 
 def _resolve(value: str | None, table: dict[str, str], depth: int = 0) -> str | None:
@@ -284,7 +289,9 @@ def test_the_text_token_never_took_over_navys_background_job():
     css = _decomment(CSS.read_text(encoding="utf-8"))
 
     misused = re.findall(r"([-\w]+)\s*:\s*var\(--udm-navy-text\)", css)
-    assert set(misused) <= {"color"}, f"navy-text used for {sorted(set(misused) - {'color'})}"
+    # Bootstrap's active-color variable also paints foreground text.
+    text_properties = {"color", "--bs-btn-active-color"}
+    assert set(misused) <= text_properties, f"navy-text used for {sorted(set(misused) - text_properties)}"
 
     # And navy itself must still be doing that background job somewhere.
     assert re.search(r"background(?:-color)?:\s*var\(--udm-navy\)", css)
