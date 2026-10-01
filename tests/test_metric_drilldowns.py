@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 import pytest
 from django.utils import timezone
 
-from apps.core.analytics import overdue_by_office, overdue_summary
+from apps.core.analytics import overdue_offices, overdue_summary
 from apps.core.models import Tag
 from apps.documents.models import HISTORICAL_FILTER, Document
 from apps.search.services import search_documents
@@ -148,7 +148,7 @@ def test_office_count_includes_each_office_in_the_remainder(users, offices, memo
         record = create_draft_record(user=users[name], subject="Late audit", instructions="x", document_type=memo_type)
         TrackingRecord.objects.filter(pk=record.pk).update(status=Status.IN_PROCESS, due_at=timezone.now() - timedelta(days=1))
     records = TrackingRecord.objects.visible_to(users["admin"])
-    rows = overdue_by_office(records, limit=limit)
+    rows = overdue_offices(records, limit=limit)
     assert overdue_summary(records, rows, records.count())["office_count"] == 3
 
 
