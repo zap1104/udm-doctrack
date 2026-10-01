@@ -16,6 +16,10 @@
   </form>
 
   <div class="ms-auto d-flex align-items-center gap-3">
+    <button class="page-help-launch" type="button" data-page-help-open hidden
+            aria-controls="page-help-panel" aria-label="Open page guide">
+      {% include "partials/_help_icon.html" %}<span class="d-none d-sm-inline">Help</span>
+    </button>
     {% comment %}
       Dark mode, inside the app only. The icon and the label both name what
       pressing it switches *to*, rather than what is currently on — a toggle

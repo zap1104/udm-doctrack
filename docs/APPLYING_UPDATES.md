@@ -156,7 +156,7 @@ Your traceback showed you are running **Python 3.14**. Django 5.0 does not suppo
 
 `psycopg[binary]==3.2.3` had no wheel for your Python and stopped the install dead. Every dependency now uses a range, so pip picks a build that works on each machine. Two exceptions are pinned deliberately, with the reason in a comment — `django-csp<4.0`, because version 4 renamed every CSP setting and would silently stop sending security headers.
 
-### MED is now Mechanical and Engineering
+### MED is Maintenance and Engineering Department
 
 Office name, head, `med.staff`'s position, the `engineering` tag, the tag rule keywords (electrical, mechanical, plumbing, aircon, generator), and all sample records.
 

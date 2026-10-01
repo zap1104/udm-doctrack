@@ -64,7 +64,7 @@ def page_size_url(context, value, param: str = "per_page", page_param: str = "pa
 
 
 @register.inclusion_tag("partials/_pagination.html", takes_context=True)
-def pager(context, data=None, section: str = "both") -> dict:
+def pager(context, data=None, section: str = "both", anchor: str = "") -> dict:
     """Render the rows-per-page control, the Previous/Next steps, or both.
 
     Called bare — `{% pager %}` — it reads the page out of the surrounding
@@ -106,6 +106,8 @@ def pager(context, data=None, section: str = "both") -> dict:
     }
     rendered["show_size"] = section in {"both", "size"}
     rendered["show_steps"] = section in {"both", "steps"}
+    # Keep long reports positioned at their record list when paging.
+    rendered["page_anchor"] = f"#{anchor}" if anchor else ""
     # Named defaults rather than `{% firstof %}` in the template: firstof
     # stringifies whatever it assigns, which is right for these two and wrong
     # for the page object and the choice list beside them.

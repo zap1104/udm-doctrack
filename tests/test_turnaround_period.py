@@ -117,7 +117,8 @@ def test_the_picker_offers_the_charted_months_and_keeps_the_office(client, users
     assert [option["selected"] for option in picker["options"]][0] is True
     assert ("office", str(office)) in picker["keep"]
     assert f'<input type="hidden" name="office" value="{office}">' in body
-    assert 'name="month" data-auto-submit' in body
+    assert 'id="turnaround-month" name="month"' in body
+    assert 'type="submit" class="btn btn-sm btn-udm">Apply</button>' in body
 
 
 @pytest.mark.django_db

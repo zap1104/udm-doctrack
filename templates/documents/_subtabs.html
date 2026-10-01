@@ -1,0 +1,4 @@
+<nav class="subtabs no-print" aria-label="Document Repository">
+  <a class="subtab{% if active == 'repository' %} is-active{% endif %}" href="{% url 'documents:repository' %}"{% if active == 'repository' %} aria-current="page"{% endif %}>Repository</a>
+  <a class="subtab{% if active == 'reports' %} is-active{% endif %}" href="{% url 'core:repository_reports' %}"{% if active == 'reports' %} aria-current="page"{% endif %}>Reports</a>
+</nav>

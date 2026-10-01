@@ -1,3 +1,115 @@
+/* Explanatory copy lives in one right-side guide. Keep the original inline
+   content when Bootstrap is unavailable, including when JavaScript is off. */
+(function () {
+  "use strict";
+  var panel = document.getElementById("page-help-panel");
+  if (!panel || !window.bootstrap || !window.bootstrap.Offcanvas) return;
+  var select = panel.querySelector("[data-page-help-topic]");
+  var content = panel.querySelector("[data-page-help-content]");
+  var launch = document.querySelector("[data-page-help-open]");
+  var groups = [];
+  var sequence = 0;
+  var opener = null;
+
+  function choose(id) {
+    var chosen = groups.find(function (group) { return group.id === id; }) || groups[0];
+    if (!chosen) return;
+    select.value = chosen.id;
+    groups.forEach(function (group) { group.section.hidden = group !== chosen; });
+    panel.querySelector(".offcanvas-body").scrollTop = 0;
+  }
+
+  function open(group, trigger) {
+    opener = trigger;
+    choose(group ? group.id : select.value);
+    window.bootstrap.Offcanvas.getOrCreateInstance(panel).show(trigger);
+  }
+
+  function enhance() {
+    // HTMX may replace the original panel. Remove detached topics and keep
+    // existing ones rather than duplicating help on every queue update.
+    groups = groups.filter(function (group) {
+      group.items = group.items.filter(function (item) {
+        if (item.anchor.isConnected) return true;
+        item.source.remove();
+        return false;
+      });
+      if (group.items.length) return true;
+      group.section.remove();
+      if (group.button) group.button.remove();
+      if (group.head) group.head.classList.remove("has-page-help");
+      return false;
+    });
+    document.querySelectorAll("details.chart-note, [data-help-title]").forEach(function (source) {
+      if (panel.contains(source)) return;
+      // A whole overview can contain several explanations; move it once.
+      if (source.parentElement.closest("details.chart-note, [data-help-title]")) return;
+      var card = source.closest(".card-udm");
+      var owner = card || source;
+      var group = groups.find(function (entry) { return entry.owner === owner; });
+      if (!group) {
+        var heading = card && card.querySelector("h2, h3");
+        var summary = source.querySelector(".disclosure-title");
+        var title = heading ? heading.textContent.trim() :
+          source.dataset.helpTitle || (summary && summary.textContent.trim()) || "About this page";
+        var section = document.createElement("section");
+        var id = "page-help-section-" + (++sequence);
+        section.id = id;
+        section.className = "page-help-section";
+        var label = document.createElement("h3");
+        label.id = id + "-title";
+        label.textContent = title;
+        section.setAttribute("aria-labelledby", label.id);
+        section.appendChild(label);
+        content.appendChild(section);
+        group = {id: id, title: title, owner: owner, section: section, items: []};
+        groups.push(group);
+        var head = card && card.querySelector(".card-udm-head");
+        if (head) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.className = "page-help-info no-print";
+          var icon = document.getElementById("page-help-icon-template");
+          button.appendChild(icon.content.firstElementChild.cloneNode(true));
+          button.setAttribute("aria-label", "About " + title);
+          button.setAttribute("aria-controls", panel.id);
+          button.title = "About " + title;
+          button.addEventListener("click", function () { open(group, button); });
+          head.appendChild(button);
+          head.classList.add("has-page-help");
+          group.head = head;
+          group.button = button;
+        }
+      }
+      var anchor = document.createElement("span");
+      anchor.hidden = true;
+      source.replaceWith(anchor);
+      if (source.matches("details")) source.open = true;
+      source.querySelectorAll("details").forEach(function (detail) { detail.open = true; });
+      group.section.appendChild(source);
+      group.items.push({anchor: anchor, source: source});
+    });
+    var previous = select.value;
+    select.replaceChildren();
+    groups.forEach(function (group) {
+      var option = document.createElement("option");
+      option.value = group.id;
+      option.textContent = group.title;
+      select.appendChild(option);
+    });
+    choose(previous);
+    if (launch) launch.hidden = groups.length === 0;
+  }
+
+  select.addEventListener("change", function () { choose(select.value); });
+  if (launch) launch.addEventListener("click", function () { open(null, launch); });
+  panel.addEventListener("hidden.bs.offcanvas", function () {
+    if (opener && opener.isConnected) opener.focus();
+  });
+  document.addEventListener("htmx:afterSwap", enhance);
+  enhance();
+})();
+
 /* UDM DocTrack — small, dependency-free helpers.
    Everything here is progressive enhancement: if this file fails to load,
    every form still works as a plain HTML form. */
@@ -1247,10 +1359,26 @@
     return Array.prototype.slice.call(box.querySelectorAll("[data-trend-month]"));
   }
 
+  function fitTip(box, month) {
+    var tip = month && month.querySelector(".trend-tip");
+    if (!tip) return;
+    var plot = box.getBoundingClientRect();
+    var hit = month.getBoundingClientRect();
+    var centre = hit.left + hit.width / 2;
+    var preferred = month.classList.contains("trend-hit--left")
+      ? centre - tip.offsetWidth - 12 : centre + 12;
+    // Short windows have wider month targets. Keep their popup inside the
+    // plot too, especially when only one or three months fit on a phone.
+    var left = Math.max(plot.left, Math.min(preferred, plot.right - tip.offsetWidth));
+    tip.style.left = (left - hit.left) + "px";
+    tip.style.right = "auto";
+  }
+
   function show(box, month) {
     monthsOf(box).forEach(function (each) {
       each.classList.toggle("is-active", each === month);
     });
+    fitTip(box, month);
     var live = box.querySelector("[data-trend-announce]");
     if (live) live.textContent = month ? month.getAttribute("aria-label") : "";
   }
@@ -1279,6 +1407,15 @@
     if (event.pointerType !== "mouse") return;
     var box = event.target.closest && event.target.closest("[data-trend-hover]");
     if (box && box.querySelector(".is-active")) show(box, null);
+    var month = event.target.closest && event.target.closest("[data-trend-month]");
+    if (box && month) fitTip(box, month);
+  });
+
+  window.addEventListener("resize", function () {
+    document.querySelectorAll("[data-trend-hover]").forEach(function (box) {
+      var month = box.querySelector(".is-active, .trend-hit:hover");
+      if (month) fitTip(box, month);
+    });
   });
 
   document.addEventListener("keydown", function (event) {

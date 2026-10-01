@@ -121,7 +121,7 @@ def test_the_summary_shows_the_month_it_is_headed_with(client, users, slow_then_
     client.force_login(users["admin"])
     response = client.get("/")
     context = response.context
-    latest = context["turnaround_trend"]["latest"]
+    latest = analytics.turnaround_by_month(TrackingRecord.objects.visible_to(users["admin"]))["latest"]
     month = context["turnaround"]
     body = " ".join(response.content.decode().split())
 
@@ -231,7 +231,7 @@ def test_every_month_has_a_hover_target_placed_on_its_dots(client, users, slow_t
     height = geometry["height"]
     months = geometry["months"]
 
-    assert len(months) == len(context["turnaround_trend"]["rows"]) == 12
+    assert len(months) == len(context["turnaround_trend"]["rows"]) == timezone.localdate().day
     for series in context["turnaround_trend_points"]:
         drawn = [round(100 * dot["y"] / height, 1) for dot in series["dots"]]
         marked = [
@@ -241,18 +241,47 @@ def test_every_month_has_a_hover_target_placed_on_its_dots(client, users, slow_t
         assert drawn == marked, series["label"]
 
 
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        ((0.2, 1.9, 2.4), ["Total lifetime", "In Process", "Receipt"]),
+        ((3.0, 1.0, 2.0), ["Receipt", "Total lifetime", "In Process"]),
+        ((1.0, 3.0, 2.0), ["In Process", "Total lifetime", "Receipt"]),
+        ((2.0, 2.0, 2.0), ["Receipt", "In Process", "Total lifetime"]),
+        ((None, 1.0, 2.0), ["Total lifetime", "In Process"]),
+        ((1.00001, 1.00002, None), ["In Process", "Receipt"]),
+        ((None, None, None), []),
+    ],
+)
+def test_month_popup_follows_the_lines_from_top_to_bottom(values, expected):
+    from apps.core.views import DashboardView
+
+    row = {"month": timezone.localdate()}
+    for key, value in zip(("receipt", "processing", "lifetime"), values, strict=True):
+        row.update({key: value, f"{key}_samples": 1,
+                    f"{key}_label": "1 day", f"{key}_calendar": "1 day"})
+    month = DashboardView()._trend_months({"rows": [row], "ceiling": 4})[0]
+
+    assert [point["label"] for point in month["points"]] == expected
+    # The keyboard announcement follows the same order as the visible popup.
+    positions = [month["summary"].index(label) for label in expected]
+    assert positions == sorted(positions)
+
+
 @pytest.mark.django_db
 def test_a_month_reads_out_in_words_with_what_it_is_averaged_over(client, users, slow_then_fast):
     response = _dashboard(client, users)
     body = " ".join(response.content.decode().split())
-    latest = response.context["turnaround_trend"]["latest"]
-    month = response.context["turnaround_trend_geometry"]["months"][-1]
+    rows = response.context["turnaround_trend"]["rows"]
+    index = next(i for i, row in enumerate(rows) if row["lifetime_samples"])
+    latest = rows[index]
+    month = response.context["turnaround_trend_geometry"]["months"][index]
 
-    assert month["label"] == f'{latest["month"]:%B %Y}'
+    assert month["label"] == latest["period_label"]
     lifetime = next(point for point in month["points"] if point["label"] == "Total lifetime")
     assert lifetime["text"] == latest["lifetime_label"]
     assert lifetime["unit"] == "document" and lifetime["samples"] == 1
-    assert f'{latest["month"]:%B %Y}: ' in month["summary"]
+    assert latest["period_label"] + ": " in month["summary"]
     assert "Nothing received or completed" in body, "an empty month says so"
 
 
@@ -270,7 +299,7 @@ def test_the_chart_is_one_tab_stop_with_a_label_for_every_month(client, users, s
 
     assert body.count("data-trend-hover") == 1
     assert 'tabindex="0" role="group" data-trend-hover' in body
-    assert layer.count("data-trend-month") == 12
+    assert layer.count("data-trend-month") == timezone.localdate().day
     assert "data-trend-announce" in layer, "the arrow keys are read out"
 
 

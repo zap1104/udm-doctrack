@@ -40,7 +40,8 @@ def test_reports_highlights_document_tracking_and_its_own_tab(client, users, rol
     body = client.get("/tracking/reports/").content.decode()
 
     sidebar = body[body.index('aria-label="Main navigation"'):body.index("</nav>", body.index('aria-label="Main navigation"'))]
-    assert ">Reports</a>" not in sidebar, "no sidebar item of its own"
+    assert 'href="/tracking/reports/"' in sidebar
+    assert 'href="/documents/reports/"' in sidebar
     assert re.search(r'href="/tracking/"\s*aria-current="page"', sidebar), "Document Tracking is the section"
     assert '<a class="subtab is-active" href="/tracking/reports/" aria-current="page">Reports</a>' in body
 

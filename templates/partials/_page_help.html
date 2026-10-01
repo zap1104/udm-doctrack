@@ -1,0 +1,12 @@
+<aside class="offcanvas offcanvas-end page-help-panel no-print" tabindex="-1" id="page-help-panel" aria-labelledby="page-help-title">
+  <template id="page-help-icon-template">{% include "partials/_help_icon.html" %}</template>
+  <div class="offcanvas-header">
+    <h2 class="offcanvas-title h5" id="page-help-title">Page guide</h2>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close page guide"></button>
+  </div>
+  <div class="offcanvas-body">
+    <label for="page-help-topic" class="form-label">About</label>
+    <select id="page-help-topic" class="form-select mb-4" data-page-help-topic></select>
+    <div data-page-help-content></div>
+  </div>
+</aside>

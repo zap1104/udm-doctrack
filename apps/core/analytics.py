@@ -21,7 +21,7 @@ Two rules hold throughout:
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from math import cos, pi, sin
 
 from django.db.models import Count, F, Q
@@ -29,7 +29,6 @@ from django.db.models.functions import TruncMonth
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import Office
 from apps.documents.models import COMPLETED_SOURCE
 from apps.tracking.models import ACTIVE_STATUSES, COMPLETED_STATUSES, RoutingStep, Status, overdue_q
 
@@ -54,6 +53,18 @@ REPORT_MONTHS = 12
 # ---------------------------------------------------------------------------
 def percent(part: int, whole: int) -> int:
     return int(round(100 * part / whole)) if whole else 0
+
+
+def percent_split(counts):
+    """Whole percentage shares whose sum is exactly 100 for a nonempty whole."""
+    total = sum(counts)
+    if not total:
+        return [0] * len(counts)
+    shares = [100 * count // total for count in counts]
+    order = sorted(range(len(counts)), key=lambda i: 100 * counts[i] % total, reverse=True)
+    for index in order[:100 - sum(shares)]:
+        shares[index] += 1
+    return shares
 
 
 def bar(part: int, whole: int) -> int:
@@ -405,13 +416,9 @@ VOLUME_SERIES = (
 def monthly_volume(records) -> dict:
     """Created, transferred-or-endorsed and completed — cumulative.
 
-    Three series, and each one runs as a running total from the start of records
-    rather than resetting every month. The monthly-reset version answered "how
-    busy was March", which is a question about staffing; the cumulative version
-    answers "is the backlog growing", which is the question the pairing exists
-    for — Created is the tracking side, Completed is the repository side, and
-    the gap between the two curves is the work still in the building. On a
-    monthly reset that gap is invisible.
+    Each series accumulates from the start of the visible tracking history.
+    These totals are activity measures, not a backlog or repository count.
+    Use the live tracking queues to determine what currently needs action.
 
     Transferred-or-endorsed counts routing steps rather than records, since one
     document endorsed onward four times is four transfers of work.
@@ -522,6 +529,7 @@ def _turnaround_samples(records, since=None, until=None, holidays=None) -> dict:
         done = done.filter(completed_at__lt=until)
 
     samples = {key: [] for key, *_ in TURNAROUND_STAGES}
+    excluded = {key: 0 for key, *_ in TURNAROUND_STAGES}
     deadlines = []
 
     def sample(start, end, record_id, tracking_number):
@@ -537,20 +545,28 @@ def _turnaround_samples(records, since=None, until=None, holidays=None) -> dict:
     for sent_at, received_at, record_id, number in steps.order_by().values_list(
         "sent_at", "received_at", "record_id", "record__tracking_number"
     ):
-        samples["receipt"].append(sample(sent_at, received_at, record_id, number))
+        if sent_at and received_at >= sent_at:
+            samples["receipt"].append(sample(sent_at, received_at, record_id, number))
+        else:
+            excluded["receipt"] += 1
 
     for record_id, number, created_at, first_received_at, completed_at, due_at in (
         done.order_by().values_list(
             "pk", "tracking_number", "created_at", "first_received_at", "completed_at", "due_at"
         ).distinct()
     ):
-        samples["lifetime"].append(sample(created_at, completed_at, record_id, number))
-        if first_received_at:
+        if completed_at >= created_at:
+            samples["lifetime"].append(sample(created_at, completed_at, record_id, number))
+        else:
+            excluded["lifetime"] += 1
+        if first_received_at and created_at <= first_received_at <= completed_at:
             samples["processing"].append(sample(first_received_at, completed_at, record_id, number))
-        if due_at:
+        else:
+            excluded["processing"] += 1
+        if due_at and completed_at >= created_at:
             deadlines.append((_month_of(completed_at), completed_at <= due_at))
 
-    return {"samples": samples, "deadlines": deadlines}
+    return {"samples": samples, "deadlines": deadlines, "excluded": excluded}
 
 
 def _mean(values):
@@ -629,6 +645,8 @@ def turnaround(records, month=None) -> dict:
         _stage(key, label, measures, noun, collected["samples"][key])
         for key, label, measures, noun in TURNAROUND_STAGES
     ]
+    for stage in stages:
+        stage["excluded"] = collected["excluded"][stage["key"]]
     closed = len(collected["deadlines"])
     on_time = sum(1 for _month, kept in collected["deadlines"] if kept)
 
@@ -753,7 +771,7 @@ def record_durations(record, steps, holidays=None) -> dict:
     }
 
 
-def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
+def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None) -> dict:
     """The three turnaround averages, one point per month.
 
     `turnaround()` answers for one period, which cannot show whether an office
@@ -762,7 +780,12 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     point on this chart and that month's `turnaround()` are the same figure.
     """
     months, since = month_window(months_back)
-    collected = _turnaround_samples(records, since=since)
+    until = None
+    if year is not None:
+        months = [date(year, month, 1) for month in range(1, 13)]
+        since = timezone.make_aware(datetime(year, 1, 1))
+        until = timezone.make_aware(datetime(year + 1, 1, 1))
+    collected = _turnaround_samples(records, since=since, until=until)
 
     buckets = {month: {key: [] for key, *_ in TURNAROUND_STAGES} for month in months}
     for key, samples in collected["samples"].items():
@@ -826,65 +849,59 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS) -> dict:
     }
 
 
-def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
-    """What each office put into the repository this month.
-
-    One combined figure per office, because from the repository's side there is
-    no difference worth splitting: a document uploaded directly and a tracked
-    record completed and filed are both an office adding to the record. Two
-    separate rankings would make an office that does one of each look half as
-    productive as one that does two of the same.
-
-    This month only. A cumulative version would rank offices by how long they
-    have existed, which Reports' office-volume panel already covers and which
-    is not a thing anybody can act on today.
-    """
-    months, _ = month_window()
-    current_month = months[-1] if months else timezone.localdate().replace(day=1)
-    since = timezone.make_aware(
-        datetime.combine(current_month, time.min), timezone.get_current_timezone()
-    )
-
-    # `.order_by()` before each grouping: both querysets arrive `.distinct()`
-    # from the dashboard, and a distinct queryset puts its Meta.ordering columns
-    # in the GROUP BY — one row per document, each counting 1, and the dict kept
-    # the last. Every office read 1.
-    uploaded = {
-        row["office__code"]: row["total"]
-        for row in documents.filter(created_at__gte=since)
-        .order_by()
-        .values("office__code")
-        .annotate(total=Count("id", distinct=True))
-        if row["office__code"]
-    }
-    filed = {
-        row["current_office__code"]: row["total"]
-        for row in records.filter(status__in=COMPLETED_STATUSES, completed_at__gte=since)
-        .order_by()
-        .values("current_office__code")
-        .annotate(total=Count("id", distinct=True))
-        if row["current_office__code"]
-    }
-
-    names = {
-        office.code: office.name
-        for office in Office.objects.filter(Q(code__in=uploaded) | Q(code__in=filed))
-    }
-
+def turnaround_by_day(records, month) -> dict:
+    """Daily averages in one month, using the summary's exact sample population."""
+    since = timezone.make_aware(datetime.combine(month, time.min))
+    next_month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    until = timezone.make_aware(datetime.combine(next_month, time.min))
+    collected = _turnaround_samples(records, since=since, until=until)
+    last = min(next_month - timedelta(days=1), timezone.localdate())
+    days = [month + timedelta(days=i) for i in range(max(0, (last - month).days + 1))]
+    buckets = {day: {key: [] for key, *_ in TURNAROUND_STAGES} for day in days}
+    for key, samples in collected["samples"].items():
+        for sample in samples:
+            day = timezone.localdate(sample["ended"])
+            if day in buckets:
+                buckets[day][key].append(sample)
     rows = []
-    for code in set(uploaded) | set(filed):
-        total = uploaded.get(code, 0) + filed.get(code, 0)
-        if not total:
-            continue
-        rows.append(
-            {
-                "code": code,
-                "name": names.get(code, code),
-                "uploaded": uploaded.get(code, 0),
-                "filed": filed.get(code, 0),
-                "total": total,
-            }
-        )
+    for day, stages in buckets.items():
+        row = {"month": day, "period_label": day.strftime("%d %B %Y"),
+               "axis_label": str(day.day) if day.day == 1 or day.day % 5 == 0 or day == last else ""}
+        for key, samples in stages.items():
+            average = _mean([sample["office"] for sample in samples])
+            calendar = _mean([sample["calendar"] for sample in samples])
+            row[key] = None if average is None else round(average / working_day_seconds(), 1)
+            row[f"{key}_label"] = humanise_business_seconds(average)
+            row[f"{key}_calendar"] = humanise_duration(None if calendar is None else timedelta(seconds=calendar))
+            row[f"{key}_samples"] = len(samples)
+        rows.append(row)
+    measured = [row[key] for row in rows for key, *_ in TURNAROUND_STAGES if row[key] is not None]
+    ceiling = max(1, int(max(measured, default=0)) + 1)
+    return {"rows": rows, "latest": rows[-1] if rows else None, "ceiling": ceiling,
+            "ticks": axis_ticks(ceiling), "has_data": bool(measured), "daily": True,
+            "office_hours_caveat": office_hours_caveat(), "working_day_hours": working_day_hours()}
+
+
+def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
+    """Count active repository documents added this month, once each.
+
+    Completion is not filing. The records argument remains for callers but
+    contributes no repository counts. Both sources use the same population.
+    """
+    current_month = timezone.localdate().replace(day=1)
+    since, until = _month_bounds(current_month)
+    grouped = (
+        documents.filter(is_active=True, created_at__gte=since, created_at__lt=until)
+        .order_by().values("office__code", "office__name")
+        .annotate(total=Count("pk", distinct=True),
+                  filed=Count("pk", filter=Q(source=COMPLETED_SOURCE), distinct=True))
+    )
+    rows = [
+        {"code": row["office__code"], "name": row["office__name"],
+         "total": row["total"], "filed": row["filed"],
+         "uploaded": row["total"] - row["filed"]}
+        for row in grouped
+    ]
     # Name as the tiebreak so a redeploy cannot reorder equal rows; ascending
     # by name within a descending sort, hence the two-pass ordering.
     rows.sort(key=lambda row: row["name"])
@@ -922,6 +939,10 @@ def uploads_by_office(documents, records, limit: int = TOP_N) -> dict:
                 "is_remainder": True,
             }
         )
+
+    for row, share in zip(rows, percent_split([row["total"] for row in rows]), strict=True):
+        row["percent"] = share
+        row["bar_percent"] = 100 * row["total"] / grand_total if grand_total else 0
 
     # Named only when one office is genuinely ahead. Calling a tie "the top
     # office" hands out a distinction the numbers did not award.

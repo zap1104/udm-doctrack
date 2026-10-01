@@ -111,7 +111,7 @@ def _column_groups(body):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
+@pytest.mark.parametrize("page", ["/", "/documents/reports/"])
 def test_every_column_carries_its_own_value(client, users, charted, page):
     """One number per bar, not one per month. A single number said nothing
     about the two columns it did not sit on, and on a phone there is no hover,
@@ -129,7 +129,7 @@ def test_every_column_carries_its_own_value(client, users, charted, page):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
+@pytest.mark.parametrize("page", ["/", "/documents/reports/"])
 def test_an_empty_month_has_no_columns_and_no_labels(client, users, charted, page):
     client.force_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
@@ -182,7 +182,7 @@ def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
 def test_the_repository_chart_labels_both_of_its_bars(client, users, charted):
     client.force_login(users["admin"])
 
-    rows = client.get("/tracking/reports/").context["document_months"]["rows"]
+    rows = client.get("/documents/reports/").context["document_months"]["rows"]
 
     for row in rows:
         assert [column["label"] for column in row["columns"]] == ["Completed", "Historical"]
@@ -202,7 +202,7 @@ def _axis_values(body):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("page, charts", [("/", 1), ("/tracking/reports/", 1)])
+@pytest.mark.parametrize("page, charts", [("/", 1), ("/documents/reports/", 1)])
 def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     client, users, charted, page, charts
 ):
@@ -216,7 +216,7 @@ def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     # Reports draws only its repository chart: the running totals are the
     # dashboard's, and Reports no longer repeats them.
     ceilings = (
-        [context["document_months"]["ceiling"]] if page == "/tracking/reports/"
+        [context["document_months"]["ceiling"]] if page == "/documents/reports/"
         else [context["monthly"]["ceiling"]]
     )
     for values, ceiling in zip(axes, ceilings, strict=True):
@@ -265,7 +265,7 @@ def test_the_series_label_column_fits_awaiting_receipt():
 
 # --- legible at every width ---------------------------------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("page", ["/", "/tracking/reports/"])
+@pytest.mark.parametrize("page", ["/", "/documents/reports/"])
 def test_every_column_chart_is_sized_by_its_own_width(client, users, charted, page):
     """Each chart, its scale line and its table sit inside one frame, because
     the frame is what the width queries measure and what the narrow tier opens
@@ -310,7 +310,7 @@ def test_a_chart_table_is_not_held_to_the_record_list_minimum_width():
 @pytest.mark.django_db
 def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted):
     client.force_login(users["admin"])
-    body = client.get("/tracking/reports/").content.decode()
+    body = client.get("/documents/reports/").content.decode()
 
     # One monthly table since Reports stopped repeating the dashboard's chart.
     assert body.count('class="chart-month-short"') == body.count('class="chart-month-long"') >= 12
@@ -591,7 +591,7 @@ def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
     simply be missing from the month. The fixture's month has a scan and no
     document filed from tracking."""
     client.force_login(users["admin"])
-    body = client.get("/tracking/reports/").content.decode()
+    body = client.get("/documents/reports/").content.decode()
 
     repository = body[body.index("Documents filed each month"):body.index("Documents by type")]
     month = _column_groups(repository)[-1]

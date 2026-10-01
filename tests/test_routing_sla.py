@@ -270,16 +270,20 @@ def test_no_deadline_still_resolves_to_nothing(db):
     assert _form(deadline_choice=DEADLINE_NONE, due_time="10:00").deadline_datetime() is None
 
 
-def test_a_time_that_has_already_passed_today_is_refused(db):
+def test_a_time_that_has_already_passed_today_is_refused(db, monkeypatch):
     """Checking the date alone let "today at 09:00" through at 4pm and wrote a
     record that was overdue the instant it was created."""
+    now = timezone.localtime().replace(hour=12, minute=0)
+    monkeypatch.setattr(timezone, "now", lambda: now)
     form = _form(due_date=timezone.localdate().isoformat(), due_time="00:01")
 
     assert "due_time" in form.errors
 
 
-def test_a_later_time_today_is_still_allowed(db):
+def test_a_later_time_today_is_still_allowed(db, monkeypatch):
     """The past-check must not reject the whole of today."""
+    now = timezone.localtime().replace(hour=12, minute=0)
+    monkeypatch.setattr(timezone, "now", lambda: now)
     late = (timezone.localtime() + timedelta(hours=2)).strftime("%H:%M")
     form = _form(due_date=timezone.localdate().isoformat(), due_time=late)
 
