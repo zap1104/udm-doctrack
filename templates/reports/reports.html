@@ -17,7 +17,7 @@
       all totals respect the signed-in user’s document and office permissions.
     </p>
   </div>
-  <div class="d-flex flex-wrap gap-2 no-print">
+  <div class="page-actions no-print">
     <a class="btn btn-udm-outline" href="#report-records">View report records</a>
     <button class="btn btn-udm-outline" type="button" data-print-trigger>Print Report</button>
     {% comment %}
@@ -27,7 +27,7 @@
       filename that did not say so either.
     {% endcomment %}
     {% if not is_repository_report %}<a class="btn btn-udm"
-       href="{% url 'core:report_export' %}{% if filters.office %}?office={{ filters.office.pk }}{% endif %}">Export CSV</a>{% endif %}
+       href="{{ report_export_url }}">Export records CSV</a>{% endif %}
   </div>
 </div>
 {% if is_repository_report %}{% include "documents/_subtabs.html" with active="reports" %}{% else %}{% include "tracking/_subtabs.html" with active="reports" %}{% endif %}
@@ -123,47 +123,20 @@
         <div class="hint">Active and completed records you can see</div>
       </a>
     </div>
-    {% comment %}
-      Both cards split by who owes the next move once the page has a point of
-      view. "Sent but not yet acknowledged" and "past deadline" each covered two
-      populations that need opposite actions: one is a to-do list for this
-      office, the other a chase list for somebody else. A single number is
-      neither, and it is the same conflation that had the overdue panel accusing
-      the office that had already done its part.
-    {% endcomment %}
     <div class="col-6 col-lg-3">
-      <a class="stat-card gold" href="{% url 'tracking:list' %}?scope=pending-receipt{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
+      <a class="stat-card gold" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_status=PENDING_RECEIPT#report-records">
         <div class="label">{{ "PENDING_RECEIPT"|status_label }}</div>
-        <div class="value">{% if scope_office %}{{ awaiting_split.ours }}{% else %}{{ awaiting_receipt }}{% endif %}</div>
-        {% if scope_office %}
-          <div class="hint">
-            Waiting for {{ scope_office.code }} to receive{% if awaiting_split.theirs %} ·
-            {{ awaiting_split.theirs }} waiting on another office{% endif %}
-          </div>
-        {% else %}
-          <div class="hint">Sent but not yet acknowledged</div>
-        {% endif %}
-        {% comment %}
-          Named rather than dropped. These are unconfirmed steps from batches the
-          record has already moved past — a receipt nobody will ever give. They
-          used to be inside the headline, which is why it never matched the split
-          beneath it; counting them as live work was wrong, and removing them
-          without a word would take a number a reader had been watching and give
-          no account of where it went.
-        {% endcomment %}
-        {% if stale_receipts %}
-          <div class="hint">{{ stale_receipts }} earlier hop{{ stale_receipts|pluralize }} never confirmed</div>
-        {% endif %}
+        <div class="value">{{ pending_receipt }}</div>
+        <div class="hint">Documents currently in this stage</div>
       </a>
     </div>
     <div class="col-6 col-lg-3">
-      <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope_office %}&office={{ scope_office.pk }}{% endif %}">
+      <a class="stat-card red" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_overdue=yes#report-records">
         <div class="label">Overdue</div>
-        <div class="value">{{ overdue }}</div>
+        <div class="value">{{ overdue_all }}</div>
         {% if scope_office %}
           <div class="hint">
-            {{ scope_office.code }} owes the next move{% if overdue_elsewhere %} ·
-            +{{ overdue_elsewhere }} waiting on another office to receive{% endif %}
+            {{ overdue }} awaiting action from {{ scope_office.code }}; all overdue documents in this scope are counted
           </div>
         {% else %}
           <div class="hint">Past deadline and not completed</div>
@@ -250,6 +223,9 @@
           {% empty %}
             <div class="report-empty">No records match these filters.</div>
           {% endfor %}
+          {% if partial_receipts %}
+            <p class="report-caption mt-3 mb-0">{{ partial_receipts }} Received or In Process document{{ partial_receipts|pluralize }} still await another recipient’s confirmation. They remain counted in their current stage.</p>
+          {% endif %}
         </div>
       </div>
     </div>

@@ -57,6 +57,7 @@ from .models import (
     TagRule,
 )
 from .pagination import DEFAULT_PAGE_SIZE, paginate
+from .report_filters import filter_report_records
 from .utils import log_action
 
 NOTIFICATION_KIND_META = {
@@ -1487,7 +1488,11 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         # confirmed. The headline was therefore always ≥ ours + theirs, with the
         # gap unexplained.
         awaiting_qs = tracking_services.awaiting_receipt(records, user)
-        awaiting = awaiting_qs.distinct().count()
+        awaiting_counts = awaiting_qs.aggregate(
+            total=Count("pk", distinct=True),
+            partial=Count("pk", filter=~Q(status=Status.PENDING_RECEIPT), distinct=True),
+        )
+        awaiting = awaiting_counts["total"]
         # The rows the batch scope removes: an unconfirmed step, but not in the
         # batch the record is actually on. Not an error — a batch can be
         # superseded before every recipient signs — but it is a receipt nobody
@@ -1544,6 +1549,14 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "university_wide": university_wide,
             }
         )
+        # Pending Receipt is a document stage, not the broader queue of any
+        # outstanding recipient. Partly confirmed multi-office batches remain
+        # Received / In Process and must not inflate the stage's headline.
+        context["pending_receipt"] = next(
+            (row["total"] for row in context["by_status"] if row["status"] == Status.PENDING_RECEIPT),
+            0,
+        )
+        context["partial_receipts"] = awaiting_counts["partial"]
         # Rankings of offices only where the report covers every office. For one
         # office the other rows were built from the documents that office
         # touched, so each read as another office's figure while counting a
@@ -1600,43 +1613,15 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         remainder = next((row for row in chart_types if row.get("is_remainder")), None) if repository else None
         if remainder:
             choices.append({"value": "other", "label": remainder["label"]})
-        status = self.request.GET.get("record_status", "")
-        kind = self.request.GET.get("record_type", "")
-        month = self.request.GET.get("record_month", "")
-        query = self.request.GET.get("record_q", "").strip()
-        if status and not repository:
-            if status in Status.values:
-                records = records.filter(status=status)
-            else:
-                messages.warning(self.request, "Unknown record status. Showing all statuses.")
-                status = ""
-        if kind:
-            if kind in {row["value"] for row in choices}:
-                if kind == "other":
-                    ids = remainder["type_ids"]
-                    match = Q(document_type_id__in=[pk for pk in ids if pk is not None])
-                    if None in ids:
-                        match |= Q(document_type__isnull=True)
-                    records = records.filter(match)
-                else:
-                    records = records.filter(document_type_id=None if kind == "none" else int(kind))
-            else:
-                messages.warning(self.request, "Unknown document type. Showing all types.")
-                kind = ""
-        if month:
-            try:
-                chosen = datetime.strptime(month, "%Y-%m").date()
-            except ValueError:
-                messages.warning(self.request, "Invalid record month. Showing all months.")
-                month = ""
-            else:
-                records = records.filter(created_at__year=chosen.year, created_at__month=chosen.month)
-        if query:
-            records = records.filter(Q(title__icontains=query) | Q(reference_number__icontains=query)) if repository else records.filter(Q(subject__icontains=query) | Q(tracking_number__icontains=query))
+        records, selected = filter_report_records(
+            records, self.request, repository=repository,
+            type_values={row["value"] for row in choices}, remainder=remainder,
+        )
         page = paginate(self.request, records.select_related("office", "document_type").order_by("-created_at", "-pk") if repository else records.with_related().order_by("-created_at", "-pk"))
         return {**page, "report_records_count": page["page_obj"].paginator.count,
                 "report_record_types": choices, "report_record_statuses": Status.choices,
-                "record_status": status, "record_type": kind, "record_month": month, "record_q": query,
+                **selected,
+                "report_export_url": core_filters.link(reverse("core:report_export"), **params, **selected),
                 "report_records_url": reset, "report_records_office": office}
 
     def _office_activity(self, records, office):
@@ -2397,11 +2382,12 @@ _DIRECTION_WORDS = {
 
 
 class ReportExportView(AppLoginRequiredMixin, View):
-    """CSV of the active tracking queue — useful evidence for the defence."""
+    """CSV of the same lifetime tracking records and filters as the report list."""
 
     def get(self, request):
         filters = report_filters_from_request(request)
-        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().distinct().order_by("-created_at")
+        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().distinct().order_by("-created_at", "-pk")
+        records, selected = filter_report_records(records, request)
         # The same point of view the page uses, so the Direction column means
         # what the screen it was exported from meant.
         scope_office = report_scope_office(request, filters)
@@ -2431,6 +2417,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
             ["Direction measured from", scope_office.name if scope_office else "no office — Direction not available"]
         )
         writer.writerow(["Exported rows", min(total, cap), "Row cap", cap, "Total matching rows", total])
+        writer.writerow(["Record filters", *(f"{key}={value}" for key, value in selected.items() if value)])
         # The basis of the three duration columns, which are plain numbers of
         # office hours so a spreadsheet can sort and add them.
         writer.writerow(["Durations", office_hours_caveat()])
@@ -2533,7 +2520,7 @@ MASTER_DATA = {
         "label": "Tags",
         "singular": "tag",
         "fields": ["name", "category", "description", "is_active"],
-        "columns": [("name", "Tag"), ("category", "Category"), ("usage_count", "Used on"), ("is_active", "Active")],
+        "columns": [("name", "Tag"), ("category", "Category"), ("visible_usage", "Visible documents"), ("is_active", "Active")],
         "help": "Shared vocabulary for filing. Keep tags short and lower-case.",
     },
     "metadata-rules": {
@@ -2682,6 +2669,14 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
         config = self.config_or_404(slug)
         model = config["model"]
         objects = model.objects.all()
+        if model is Tag:
+            visible_documents = Document.objects.visible_to(request.user).filter(is_active=True)
+            # The stored usage counter includes retired documents and can
+            # become stale after direct m2m edits. Display a live count scoped
+            # to records this administrator can actually open.
+            objects = objects.annotate(
+                visible_usage=Count("documents", filter=Q(documents__in=visible_documents), distinct=True)
+            ).order_by("name", "pk")
         query = request.GET.get("q", "").strip()
         if query:
             # Every text column on screen, not only the first: a search for a

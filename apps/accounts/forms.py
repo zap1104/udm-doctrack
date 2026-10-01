@@ -4,7 +4,13 @@ from urllib.parse import urlsplit
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
 
 from apps.core.forms import BootstrapFormMixin, ColourInput
 from apps.core.models import NotificationPreference
@@ -31,7 +37,7 @@ class SignInForm(BootstrapFormMixin, AuthenticationForm):
     }
 
 
-class VerifiedEmailPasswordResetForm(PasswordResetForm):
+class VerifiedEmailPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
     def get_users(self, email):
         return (user for user in super().get_users(email) if user.email_is_verified)
 
@@ -40,6 +46,14 @@ class VerifiedEmailPasswordResetForm(PasswordResetForm):
             kwargs["domain_override"] = urlsplit(settings.SITE_BASE_URL).netloc
             kwargs["use_https"] = True
         return super().save(**kwargs)
+
+
+class AccountPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
+    """Keep Django's password validation and use the shared form widgets."""
+
+
+class AccountSetPasswordForm(BootstrapFormMixin, SetPasswordForm):
+    """Password recovery uses the same widgets as the signed-in account forms."""
 
 
 def _offices_for(actor):

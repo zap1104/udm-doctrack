@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load doctrack static %}
+{% load doctrack %}
 {% block title %}Document Repository · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="repository-page">
@@ -7,9 +7,10 @@
     <div><div class="eyebrow">Office records</div><h1>Document Repository</h1><p class="sub">Find filed documents by office, or review completed records waiting to be filed.</p></div>
     {% if can_start_work %}<a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload a document</a>{% endif %}
   </div>
-  {% include "documents/_subtabs.html" with active="repository" %}
-  <details class="repository-folders card-udm" data-repository-folders data-repository-folder-selected="{% if selected_office %}true{% else %}false{% endif %}" open>
-    <summary class="repository-section-head"><span><strong id="repository-folders-title">Office Folders</strong><span class="repository-folder-hint">{% if selected_office %}Current folder: {{ selected_office.name }}{% else %}Only folders and records available to your account.{% endif %}</span></span><span class="repository-folder-toggle"></span></summary>
+  {% if folders_view %}{% include "documents/_subtabs.html" with active="folders" %}{% else %}{% include "documents/_subtabs.html" with active="repository" %}{% endif %}
+  {% if folders_view %}
+  <section class="repository-folders card-udm" aria-labelledby="repository-folders-title">
+    <div class="repository-section-head"><div><h2 id="repository-folders-title">Office Folders</h2><p>Choose an office to open its documents. Only records available to your account are counted.</p></div></div>
     <div class="repository-folder-grid" style="--folder-columns:{{ folder_columns }};">
       <a class="repository-folder{% if not selected_office %} is-selected{% endif %}" href="{{ all_folders_url }}"{% if not selected_office %} aria-current="true"{% endif %}>
         {% include "documents/_folder_icon.html" %}<span class="repository-folder-copy"><strong>All available offices</strong><span>{{ all_count }} filed{% if pending_all_count %} · {{ pending_all_count }} pending upload{% endif %}</span></span>
@@ -20,9 +21,10 @@
       </a>
       {% endfor %}
     </div>
-  </details>
+  </section>
+  {% else %}
   <section class="repository-workspace" aria-label="Documents in the selected folder">
-    <nav class="repository-breadcrumb" aria-label="Repository location"><a href="{{ all_folders_url }}">All available offices</a>{% if selected_office %}<span aria-hidden="true">/</span><strong>{{ selected_office.name }}</strong>{% endif %}</nav>
+    <nav class="repository-breadcrumb" aria-label="Repository location"><a href="{{ all_folders_url }}">All available offices</a>{% if folder_unavailable %}<span aria-hidden="true">/</span><strong>Unavailable folder</strong>{% elif selected_office %}<span aria-hidden="true">/</span><strong>{{ selected_office.name }}</strong>{% endif %}</nav>
     <nav class="repository-views" aria-label="Repository lists">
       <a href="{{ filed_url }}" class="repository-view{% if not pending_view %} is-active{% endif %}"{% if not pending_view %} aria-current="page"{% endif %}>Filed documents <span class="num">{{ filed_count }}</span></a>
       <a href="{{ pending_url }}" class="repository-view{% if pending_view %} is-active{% endif %}"{% if pending_view %} aria-current="page"{% endif %}>Pending upload <span class="num">{{ pending_count }}</span></a>
@@ -35,7 +37,7 @@
     {% endif %}
     <div class="repository-list-head"><div><h2>{% if pending_view %}Pending upload{% elif selected_office %}{{ selected_office.code }} documents{% else %}Filed documents{% endif %}</h2><p>{% if pending_view %}Completed records awaiting approval. They are counted separately from filed documents.{% else %}Approved tracking records, historical uploads, and scanned documents.{% endif %}</p></div>{% if not pending_view %}<a href="{% url 'search:index' %}?mode=repository">Advanced search</a>{% endif %}</div>
     <form method="get" class="repository-filters card-udm" aria-label="Filter repository records">
-      {% if selected_office %}<input type="hidden" name="office" value="{{ selected_office.pk }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
+      {% if folder_office_id %}<input type="hidden" name="office" value="{{ folder_office_id }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
       <input type="hidden" name="per_page" value="{{ page_size }}">
       <div class="repository-search"><div><label for="{{ form.q.id_for_label }}">{% if pending_view %}Search subject or tracking number{% else %}Search title, reference, or document text{% endif %}</label>{{ form.q }}</div><button class="btn btn-udm" type="submit">Search</button><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>
       <div class="repository-filter-grid">
@@ -60,6 +62,6 @@
     </div>{% endif %}
     {% pager section="steps" %}
   </section>
+  {% endif %}
 </div>
 {% endblock %}
-{% block extra_scripts %}<script src="{% static 'js/repository.js' %}"></script>{% endblock %}

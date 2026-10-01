@@ -74,8 +74,8 @@ def test_an_office_administrator_is_not_offered_the_offices_screen(client, users
 def test_a_system_administrator_is_offered_the_offices_screen(client, users):
     client.force_login(users["admin"])
 
-    for page in (HOME, "/accounts/users/"):
-        assert 'href="/accounts/offices/"' in client.get(page).content.decode(), page
+    assert 'href="/administration/offices/?status=active"' in client.get(HOME).content.decode()
+    assert 'href="/accounts/offices/"' in client.get("/accounts/users/").content.decode()
 
 
 # --- accounts: role, status, email -------------------------------------------

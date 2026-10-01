@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Verify email · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Verify email address</h1></div>
+<div class="page-head"><div><div class="eyebrow">Account</div><h1>Verify email address</h1><p class="sub">Confirm your email for account recovery.</p></div></div>
 <div class="card-udm"><div class="card-udm-body">
 {% if validlink %}
 <p>Confirm that {{ user.email }} belongs to you.</p>

@@ -89,6 +89,8 @@ class SearchResponse:
     results: list[SearchResult] = field(default_factory=list)
     hidden_count: int = 0
     total_matches: int = 0
+    evaluated_count: int = 0
+    truncated: bool = False
     duration_ms: int = 0
     query: str = ""
     used_fuzzy: bool = False
@@ -139,13 +141,16 @@ def search_documents(
 
     # ---- browse mode: filters only, no query text -------------------------
     if not raw_query:
-        documents = list(base.order_by("-document_date", "-created_at")[:limit])
+        total = base.distinct().count()
+        documents = list(base.distinct().order_by("-document_date", "-created_at", "-pk")[:limit])
         response = SearchResponse(
             results=[
                 SearchResult(document=document, relevance=0, text_score=0, fuzzy_score=0, field_score=0)
                 for document in documents
             ],
-            total_matches=len(documents),
+            total_matches=total,
+            evaluated_count=len(documents),
+            truncated=total > len(documents),
             query="",
             explanation="Showing the newest records that match the filters.",
         )
@@ -177,19 +182,21 @@ def search_documents(
         queryset = (
             base.annotate(**annotations)
             .filter(conditions)
-            .order_by("-rank", "-similarity", "-document_date")[: limit * 2]
+            .distinct().order_by("-rank", "-similarity", "-document_date", "-pk")
         )
-        candidates = list(queryset)
+        total = queryset.count()
+        candidates = list(queryset[:limit * 2])
     except DatabaseError as exc:  # e.g. pg_trgm dropped after the process started
         logger.warning("Search fell back to plain matching: %s", exc)
         _TRIGRAM_STATE["value"] = False
-        candidates = list(
-            base.filter(
+        fallback = base.filter(
                 Q(index_title__icontains=raw_query)
                 | Q(index_meta__icontains=raw_query)
                 | Q(ocr_text__icontains=raw_query)
-            ).order_by("-document_date")[:limit]
-        )
+                | Q(reference_number__icontains=raw_query)
+            ).distinct().order_by("-document_date", "-pk")
+        total = fallback.count()
+        candidates = list(fallback[:limit])
         for candidate in candidates:
             candidate.rank = 0.0
             candidate.similarity = 0.0
@@ -224,14 +231,15 @@ def search_documents(
         )
 
     results.sort(key=lambda item: (-item.relevance, -(item.document.document_date.toordinal() if item.document.document_date else 0)))
-    total = len(results)
     visible = results if show_below_threshold else [item for item in results if item.relevance >= min_relevance]
-    hidden = 0 if show_below_threshold else total - len(visible)
+    hidden = 0 if show_below_threshold else len(results) - len(visible)
 
     response = SearchResponse(
         results=visible[:limit],
         hidden_count=hidden,
         total_matches=total,
+        evaluated_count=len(candidates),
+        truncated=total > len(candidates),
         query=raw_query,
         used_fuzzy=use_fuzzy,
         duration_ms=int((time.perf_counter() - started) * 1000),

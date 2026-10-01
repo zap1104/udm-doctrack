@@ -85,11 +85,10 @@ class SearchView(AppLoginRequiredMixin, View):
             )
 
         # Sliced here rather than passed into `search_documents` as its limit:
-        # that limit also sizes the candidate window the ranking is drawn from
-        # and feeds `total_matches` and `hidden_count`, so narrowing it to the
-        # display size would quietly change the answers as well as the length of
-        # the list. SEARCH_RESULT_LIMIT stays the ceiling on what is scored;
-        # this is only how much of that scoring is put on the page.
+        # that limit also sizes the candidate window the ranking is drawn from.
+        # Total matches count the complete query; below-threshold matches count
+        # only evaluated candidates. SEARCH_RESULT_LIMIT stays the ceiling on
+        # what is scored; this is only how much of it is put on the page.
         results = response.results[:shown] if response else []
 
         return {

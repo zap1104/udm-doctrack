@@ -21,3 +21,15 @@ Screenshots use synthetic demo data and are saved under:
 C:/Users/USER/.codex/visualizations/2026/09/28/01a0e731-ab88-7a12-b339-04f3266711b3/repository-ui/
 
 No schema migration is needed for this repository redesign. Deployment must collect static files to include the new repository script. No commit or push was requested.
+
+## Update — 1 October 2026: separate folder tab
+
+Office folders now live in a separate **Browse folders** tab. **All documents** opens the record list directly, with filed and pending-upload lists still available. Choosing an office folder opens its scoped record list. The old folder-collapse script has been removed because navigation works with ordinary links.
+
+Removed the repository's centered 1440-pixel width limit. At a 1900-pixel browser viewport, both Tracking and Repository headings were at x=262, exactly 26 pixels inside the shared content area. Phone margins continue to use the shared 14-pixel spacing.
+
+Verified the document list, folder tab, office selection, and pending-upload navigation in the in-app browser. The MED folder displayed 31 filed / 3 pending, matching its list tabs and three pending rows. No horizontal overflow was observed at 320, 390, 768, 1440, or 1900 CSS pixels. Checked light and dark folder views; physical devices and other browser engines were not tested.
+
+All 77 template checks, the changed Python files' Ruff checks, and Git whitespace checks passed. Pytest was not rerun for this layout-only update, following the preference to run it when pushing. Existing folder-rendering test expectations were updated to request the folder tab. This update has not been pushed.
+
+Updated screenshots: `folders-tab-desktop.jpg`, `folders-tab-mobile.jpg`, and `documents-tab-desktop.jpg` in the screenshot directory above. Browser verification used a disposable database and synthetic records.

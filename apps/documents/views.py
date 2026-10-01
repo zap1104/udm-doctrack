@@ -54,6 +54,44 @@ class RepositoryView(AppLoginRequiredMixin, View):
     template_name = "documents/repository.html"
 
     @staticmethod
+    def _filter_documents(documents, data, *, omit=None):
+        """A counted facet omits only the filter its link replaces."""
+        data = {key: value for key, value in data.items() if key != omit}
+        if data.get("q"):
+            query = data["q"]
+            documents = documents.filter(
+                Q(title__icontains=query) | Q(reference_number__icontains=query)
+                | Q(index_meta__icontains=query) | Q(ocr_text__icontains=query)
+            )
+        for key, field in (("year", "year"), ("month", "document_date__month"),
+                           ("document_type", "document_type"), ("tag", "tags")):
+            if data.get(key):
+                documents = documents.filter(**{field: data[key]})
+        if data.get("source") == HISTORICAL_FILTER:
+            documents = documents.exclude(source=COMPLETED_SOURCE)
+        elif data.get("source"):
+            documents = documents.filter(source=data["source"])
+        today = timezone.localdate()
+        if data.get("retention") == "due":
+            documents = documents.due_for_retention_review(today)
+        elif data.get("retention") == "soon":
+            documents = documents.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
+        elif data.get("retention") == "unscheduled":
+            documents = documents.filter(retention_until__isnull=True)
+        return documents.distinct()
+
+    @staticmethod
+    def _filter_pending(records, data, *, omit=None):
+        data = {key: value for key, value in data.items() if key != omit}
+        if data.get("q"):
+            records = records.filter(Q(subject__icontains=data["q"]) | Q(tracking_number__icontains=data["q"]))
+        for key, field in (("year", "completed_at__year"), ("month", "completed_at__month"),
+                           ("document_type", "document_type")):
+            if data.get(key):
+                records = records.filter(**{field: data[key]})
+        return records.distinct()
+
+    @staticmethod
     def _options(visible):
         """The filter choices that can actually return one of `visible`.
 
@@ -70,7 +108,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 for value in visible.values_list("document_date__month", flat=True)
                 if value
             },
-            "document_types": DocumentType.active.filter(documents__in=visible).distinct(),
+            # Retiring a type prevents new filing under it; existing records
+            # must remain filterable and their type badges must still open them.
+            "document_types": DocumentType.objects.filter(documents__in=visible).distinct(),
             # Most-used first: with a shared vocabulary the useful tags are the
             # common ones, and alphabetical order buries them under one-offs.
             "tags": Tag.active.filter(documents__in=visible).annotate(
@@ -84,12 +124,13 @@ class RepositoryView(AppLoginRequiredMixin, View):
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
         pending_visible = pending_upload_for(request.user).filter(is_archived=False)
         pending_view = request.GET.get("view") == "pending"
+        folders_view = request.GET.get("view") == "folders"
         options = self._options(visible)
         if pending_view:
             options.update(
                 years=sorted({year for year in pending_visible.annotate(completion_year=ExtractYear("completed_at")).values_list("completion_year", flat=True) if year}, reverse=True),
                 months=set(pending_visible.values_list("completed_at__month", flat=True)),
-                document_types=DocumentType.active.filter(tracking_records__in=pending_visible).distinct(),
+                document_types=DocumentType.objects.filter(tracking_records__in=pending_visible).distinct(),
                 tags=Tag.active.none(), sources=set(),
             )
         form = RepositoryFilterForm(request.GET or None, **options)
@@ -110,6 +151,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # for anybody who was not an administrator.
         resolved = core_filters.resolve(request, allow_office=True, gate_office=False)
         selected_office = resolved.as_office
+        folder_office_id = selected_office.pk if selected_office else None
         allowed_offices = set(visible.values_list("office_id", flat=True)) | set(pending_visible.values_list("originating_office_id", flat=True))
         denied_folder = selected_office is not None and selected_office.pk not in allowed_offices
         if denied_folder:
@@ -133,34 +175,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
 
-        query = data.get("q")
-        if query:
-            documents = documents.filter(
-                Q(title__icontains=query)
-                | Q(reference_number__icontains=query)
-                | Q(index_meta__icontains=query)
-                | Q(ocr_text__icontains=query)
-            )
-        if data.get("year"):
-            documents = documents.filter(year=data["year"])
-        if data.get("month"):
-            documents = documents.filter(document_date__month=data["month"])
-        if data.get("document_type"):
-            documents = documents.filter(document_type=data["document_type"])
-        if data.get("tag"):
-            documents = documents.filter(tags=data["tag"])
-        if data.get("source") == HISTORICAL_FILTER:
-            documents = documents.exclude(source=COMPLETED_SOURCE)
-        elif data.get("source"):
-            documents = documents.filter(source=data["source"])
-        retention = data.get("retention")
+        folder_documents = documents
+        documents = self._filter_documents(folder_documents, data)
         today = timezone.localdate()
-        if retention == "due":
-            documents = documents.due_for_retention_review(today)
-        elif retention == "soon":
-            documents = documents.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
-        elif retention == "unscheduled":
-            documents = documents.filter(retention_until__isnull=True)
 
         if form.errors:
             messages.warning(
@@ -183,16 +200,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
             pending = pending.none()
         elif selected_office:
             pending = pending.filter(originating_office=selected_office)
+        folder_pending = pending
         pending_count = pending.count()
         if pending_view:
-            if query:
-                pending = pending.filter(Q(subject__icontains=query) | Q(tracking_number__icontains=query))
-            if data.get("document_type"):
-                pending = pending.filter(document_type=data["document_type"])
-            if data.get("year"):
-                pending = pending.filter(completed_at__year=data["year"])
-            if data.get("month"):
-                pending = pending.filter(completed_at__month=data["month"])
+            pending = self._filter_pending(pending, data)
         pending = pending.annotate(file_count=Count("attachments", distinct=True)).order_by("completed_at", "pk")
         if pending_view:
             page_context = paginate(request, pending, PAGE_SIZE)
@@ -223,16 +234,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
             folder["pending_count"] = entry["total"]
         smart_folders = sorted(folder_map.values(), key=lambda folder: folder["office__name"])
         for folder in smart_folders:
-            folder["url"] = core_filters.link(base_url, request, office=folder["office__id"], page=None)
-        folder_documents = visible.filter(office=selected_office) if selected_office else visible
-        if denied_folder:
-            folder_documents = folder_documents.none()
-        type_base = folder_documents
-        if pending_view:
-            type_base = pending_visible.filter(originating_office=selected_office) if selected_office else pending_visible
-        if denied_folder:
-            type_base = type_base.none()
-        type_folders = list(type_base.values("document_type_id", "document_type__name").annotate(total=Count("pk", distinct=True)).order_by("document_type__name"))
+            # Badges count whole folders, so opening one clears list filters.
+            folder["url"] = core_filters.link(base_url, office=folder["office__id"])
+        type_base = self._filter_pending(folder_pending, data, omit="document_type") if pending_view else self._filter_documents(folder_documents, data, omit="document_type")
+        type_folders = list(type_base.order_by().values("document_type_id", "document_type__name").annotate(total=Count("pk", distinct=True)).order_by("document_type__name"))
         # Unclassified remains visible in the list; only selectable types become folders.
         type_folders = [folder for folder in type_folders if folder["document_type_id"]]
         for folder in type_folders:
@@ -240,9 +245,17 @@ class RepositoryView(AppLoginRequiredMixin, View):
             folder["selected"] = bool(data.get("document_type") and data["document_type"].pk == folder["document_type_id"])
 
         # Retention reviews cover only filed documents in the selected folder.
-        retention_due_query = folder_documents.due_for_retention_review(today).with_related().order_by("retention_until")
+        retention_base = self._filter_documents(folder_documents, data, omit="retention")
+        retention_due_query = retention_base.due_for_retention_review(today).with_related().order_by("retention_until")
         retention_due_count = retention_due_query.count()
         retention_due = list(retention_due_query[:RETENTION_DUE_SHOWN])
+        tag_base = self._filter_documents(folder_documents, data, omit="tag")
+        popular_tags = Tag.active.filter(documents__in=tag_base).annotate(
+            visible_usage=Count("documents", filter=Q(documents__in=tag_base), distinct=True)
+        ).order_by("-visible_usage", "name")[:8]
+        # Keep a denied folder in tab/form URLs: dropping it would turn a
+        # zero-count tab into a link to every accessible record instead.
+        folder_params = {"office": folder_office_id}
 
         return render(
             request,
@@ -252,12 +265,14 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 **page_context,
                 "documents": [] if pending_view else page.object_list,
                 "pending_view": pending_view,
+                "folders_view": folders_view,
+                "folders_url": core_filters.link(base_url, request, view="folders", page=None),
                 "pending_upload": pending_rows,
                 "pending_count": pending_count,
                 "pending_all_count": pending_visible.count(),
-                "pending_url": core_filters.link(base_url, request, view="pending", tag=None, source=None, retention=None, page=None),
-                "filed_url": core_filters.link(base_url, request, view=None, page=None),
-                "all_folders_url": core_filters.link(base_url, request, office=None, document_type=None, page=None),
+                "pending_url": core_filters.link(base_url, **folder_params, view="pending"),
+                "filed_url": core_filters.link(base_url, **folder_params),
+                "all_folders_url": base_url,
                 "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, tag=None, source=None, year=None, month=None, retention=None, page=None),
                 "type_folders": type_folders,
                 "filed_count": folder_documents.count(),
@@ -267,6 +282,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "can_start_work": request.user.can_start_work,
                 "smart_folders": smart_folders,
                 "selected_office": selected_office,
+                "folder_office_id": folder_office_id,
+                "folder_unavailable": denied_folder,
                 # The paginator has already counted this queryset; .count()
                 # would run the same DISTINCT-over-joins query a second time on
                 # every page load.
@@ -279,9 +296,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "retention_due_count": retention_due_count,
                 "retention_due_more": max(0, retention_due_count - len(retention_due)),
                 "years": years,
-                "popular_tags": Tag.active.filter(documents__in=folder_documents).annotate(
-                    visible_usage=Count("documents", filter=Q(documents__in=folder_documents), distinct=True)
-                ).order_by("-visible_usage", "name")[:8],
+                "popular_tags": popular_tags,
             },
         )
 

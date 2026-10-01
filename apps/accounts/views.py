@@ -28,6 +28,8 @@ from apps.core.utils import client_ip, log_action
 
 from .email_verification import email_verification_token
 from .forms import (
+    AccountPasswordChangeForm,
+    AccountSetPasswordForm,
     AdminSetPasswordForm,
     AdminUserCreateForm,
     AdminUserUpdateForm,
@@ -106,6 +108,7 @@ class PasswordResetDonePage(PasswordResetAvailableMixin, PasswordResetDoneView):
 
 
 class PasswordResetConfirmPage(PasswordResetAvailableMixin, PasswordResetConfirmView):
+    form_class = AccountSetPasswordForm
     template_name = "accounts/password_reset_confirm.html"
 
     def form_valid(self, form):
@@ -136,6 +139,7 @@ class SignOutView(LogoutView):
 
 
 class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
+    form_class = AccountPasswordChangeForm
     template_name = "accounts/password_change.html"
     success_url = reverse_lazy("core:dashboard")
 

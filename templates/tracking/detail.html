@@ -14,7 +14,7 @@
       {% if record.priority == "URGENT" %}<span class="pill pill-overdue">Urgent</span>{% endif %}
     </p>
   </div>
-  <div class="d-flex gap-2 no-print">
+  <div class="page-actions no-print">
     {% if record.has_tracking_number %}
       <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
     {% endif %}
@@ -132,7 +132,7 @@
         </ul>
 
         <hr>
-        <h3 style="font-size:15px;">Activity log</h3>
+        <h3 class="section-heading">Activity log</h3>
         {% if older_activities %}
           <details class="fold" open>
             <summary class="disclosure-control">
@@ -151,7 +151,7 @@
     </div>
 
     {% if record.status == "DRAFT" and record.created_by_id == user.pk %}
-      <div class="card-udm mt-4"><div class="card-udm-body d-flex justify-content-between align-items-center">
+      <div class="card-udm mt-4"><div class="card-udm-body d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div><strong>This record is still a draft.</strong><div class="text-muted small">Nobody else can see it until it is routed.</div></div>
         <a class="btn btn-udm" href="{% url 'tracking:review' record.pk %}">Continue to review</a>
       </div></div>
@@ -161,7 +161,7 @@
       <div class="card-udm mt-4 no-print">
         <div class="card-udm-head"><h2>Confirm Document Receipt</h2></div>
         <div class="card-udm-body">
-          <p class="text-muted" style="font-size:14px;">
+          <p class="text-muted body-copy">
             This records that <strong>{{ user.office.name }}</strong> has taken custody of
             <span class="mono">{{ record.display_tracking_number }}</span>. The server writes the exact date and time —
             not a value you type.
@@ -255,7 +255,7 @@
       <div class="card-udm mt-4 no-print">
         <div class="card-udm-head"><h2>This record is completed but not yet approved</h2></div>
         <div class="card-udm-body">
-          <p class="text-muted" style="font-size:14px;">
+          <p class="text-muted body-copy">
             The work is finished. Until an administrator approves it, the record stays in
             the <strong>{{ "COMPLETED_PENDING_UPLOAD"|status_label }}</strong> queue on the Document Tracking
             page — still tracked, not yet searchable as a repository document.
@@ -268,7 +268,7 @@
           {% endif %}
           {% if can_reopen %}
             <hr>
-            <p class="text-muted" style="font-size:14px;">
+            <p class="text-muted body-copy">
               Completed by mistake? Send it back to active tracking. Nothing is erased —
               the completion stays in the history with this reason beneath it.
             </p>

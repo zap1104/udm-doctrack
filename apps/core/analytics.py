@@ -363,6 +363,7 @@ def overdue_offices(records, limit: int = TOP_N) -> list[dict]:
             {
                 "code": "",
                 "name": f"Other ({len(cut)} office{'' if len(cut) == 1 else 's'})",
+                "office_count": len(cut),
                 "total": cut_total,
                 "percent": bar(cut_total, everywhere),
                 "bar_percent": bar(cut_total, everywhere),
@@ -392,7 +393,7 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
         "total": total,
         "oldest_days": max([row["oldest_days"] for row in rows], default=0),
         "percent_of_all": percent(total, total_documents),
-        "office_count": len([row for row in rows if row["total"]]),
+        "office_count": sum(row.get("office_count", 1) for row in rows if row["total"]),
     }
 
 

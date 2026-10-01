@@ -12,7 +12,7 @@
       {% if document.reference_number %}· <span class="mono">{{ document.reference_number }}</span>{% endif %}
     </p>
   </div>
-  <div class="d-flex gap-2">
+  <div class="page-actions">
     {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit Metadata</a>{% endif %}
     {% if document.primary_file %}
       <a class="btn btn-udm" href="{% url 'documents:file_download' document.primary_file.pk %}">Download</a>
@@ -53,7 +53,7 @@
         </div>
 
         {% if metadata_values %}
-          <h3 style="font-size:15px;margin-top:6px;">Office fields</h3>
+          <h3 class="section-heading mt-3">Office fields</h3>
           <table class="table table-sm table-stacked">
             {% for value in metadata_values %}
               <tr><th class="text-muted fw-normal" style="min-width:160px;max-width:220px;">{{ value.field.label }}</th><td>{{ value.value }}</td></tr>
@@ -61,7 +61,7 @@
           </table>
         {% endif %}
 
-        <h3 style="font-size:15px;">Tags</h3>
+        <h3 class="section-heading">Tags</h3>
         <div>
           {% for tag in document.tags.all %}
             <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }}</a>
@@ -71,8 +71,8 @@
         </div>
 
         {% if document.description %}
-          <h3 style="font-size:15px;margin-top:16px;">Abstract</h3>
-          <p style="font-size:14.5px;">{{ document.description|linebreaksbr }}</p>
+          <h3 class="section-heading mt-3">Abstract</h3>
+          <p class="body-copy">{{ document.description|linebreaksbr }}</p>
         {% endif %}
       </div>
     </div>
@@ -107,8 +107,8 @@
           <div class="file-chip mb-2">
             <span class="ext">{{ file.extension|default:"FILE" }}</span>
             <div class="flex-grow-1" style="min-width:0;">
-              <a href="{% url 'documents:file_download' file.pk %}" style="font-size:14px;">{{ file.original_name }}</a>
-              <div class="text-muted" style="font-size:12px;">{{ file.size|human_size }}{% if file.page_count %} · {{ file.page_count }} page{{ file.page_count|pluralize }}{% endif %}</div>
+              <a href="{% url 'documents:file_download' file.pk %}" class="body-copy">{{ file.original_name }}</a>
+              <div class="text-muted supporting-copy">{{ file.size|human_size }}{% if file.page_count %} · {{ file.page_count }} page{{ file.page_count|pluralize }}{% endif %}</div>
             </div>
           </div>
         {% empty %}<p class="text-muted mb-0">No files attached.</p>{% endfor %}
@@ -127,9 +127,9 @@
       <div class="card-udm mt-4">
         <div class="card-udm-head"><h2>Origin</h2></div>
         <div class="card-udm-body">
-          <p style="font-size:14px;">Archived from tracking record</p>
+          <p class="body-copy">Archived from tracking record</p>
           <a class="mono" href="{{ document.tracking_record.get_absolute_url }}">{{ document.tracking_record.display_tracking_number }}</a>
-          <div class="text-muted" style="font-size:12.5px;">
+          <div class="text-muted supporting-copy">
             Completed {{ document.tracking_record.completed_at|date:"d M Y, g:i A" }}
           </div>
         </div>
@@ -139,7 +139,7 @@
     {% if suggestion %}
       <div class="card-udm mt-4">
         <div class="card-udm-head"><h2>Suggestion audit</h2></div>
-        <div class="card-udm-body" style="font-size:13.5px;">
+        <div class="card-udm-body supporting-copy">
           <div>Engine: <strong>{{ suggestion.engine }} v{{ suggestion.engine_version }}</strong></div>
           <div>Reviewed by: {{ suggestion.reviewed_by.display_name|default:"not reviewed yet" }}</div>
           <div>Edited by the user: {{ suggestion.was_edited|yesno:"yes,no" }}</div>
