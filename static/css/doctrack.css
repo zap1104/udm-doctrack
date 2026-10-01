@@ -3080,6 +3080,483 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 :root[data-theme="dark"] .theme-toggle .theme-icon-light { display: none; }
 :root[data-theme="dark"] .theme-toggle .theme-icon-dark { display: inline; }
 
+/* ================================================================
+   2026 design decision panel direction
+   Instrument panel + Green Ledger + Human-centered stewardship
+
+   The selected direction is intentionally expressed as a shared layer. The
+   Django templates already share these primitives, so one token pass keeps
+   Dashboard, Tracking, Repository, Reports, Search, and Administration in the
+   same visual language without changing their data contracts.
+   ================================================================ */
+:root {
+  --udm-navy: #174a37;
+  --udm-navy-700: #103326;
+  --udm-navy-600: #286b45;
+  --udm-navy-text: #183126;
+  --udm-gold: #d5b86a;
+  --udm-gold-soft: #f4ecd8;
+  --udm-teal: #286b45;
+  --udm-teal-soft: #e5f1e7;
+  --udm-green: #4d824e;
+  --udm-green-soft: #e5f1e7;
+  --udm-red: #b44b4b;
+  --udm-red-600: #8f3838;
+  --udm-red-soft: #fbe7e5;
+  --udm-canvas: #fbf8f1;
+  --udm-surface: #ffffff;
+  --udm-line: #d8e2e0;
+  --udm-line-strong: #b8cbc1;
+  --udm-line-soft: #e5ece8;
+  --udm-label-ink: #365146;
+  --udm-ink: #183126;
+  --udm-muted: #68796c;
+  --udm-slate-text: #4f6358;
+  --udm-slate-soft: #eef4ec;
+  --udm-slate-ink: #53685b;
+  --udm-green-ink: #1f5a42;
+  --udm-gold-ink: #725616;
+  --udm-gold-ink-dark: #59420f;
+  --udm-gold-border: #b9923e;
+  --udm-gold-tint: #fffaf0;
+  --udm-gold-tint-strong: #f1dfad;
+  --udm-teal-ink: #1f5a42;
+  --udm-teal-ink-dark: #174a37;
+  --udm-red-ink: #8f3838;
+  --udm-primary: #286b45;
+  --udm-primary-hover: #1d5034;
+  --udm-primary-ink: #ffffff;
+  --udm-selected-bg: #286b45;
+  --udm-selected-bg-hover: #1d5034;
+  --udm-selected-ink: #ffffff;
+  --udm-on-accent: #ffffff;
+  --udm-on-gold: #241f1b;
+  --udm-row-line: #edf2ee;
+  --udm-surface-sunk: #f4f7f2;
+  --udm-track: #e6eee8;
+  --udm-highlight: #f7efd9;
+  --udm-note-bg: #fffdf6;
+  --udm-note-ink: #5a4a20;
+  --sidebar-width: 236px;
+  --radius: 4px;
+  --shadow-card: none;
+}
+
+body {
+  background: var(--udm-canvas);
+  color: var(--udm-ink);
+  font-family: "DM Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+}
+
+h1, h2, h3, h4, h5, .display-face {
+  font-family: "Space Grotesk", "DM Sans", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+a { color: var(--udm-teal); }
+a:hover { color: var(--udm-teal-ink-dark); }
+
+.app-shell { background: var(--udm-canvas); }
+.app-sidebar {
+  width: var(--sidebar-width);
+  background: #174a37;
+  border-right: 1px solid #285d43;
+  box-shadow: none;
+}
+.sidebar-brand-icon { filter: saturate(.75) brightness(1.1); }
+.wordmark--light .udm { color: #d5b86a; }
+.wordmark--light .doctrack { color: #f7fbf3; }
+.nav-section {
+  color: #9fbb9f;
+  letter-spacing: .14em;
+  font-size: 10px;
+}
+.app-sidebar .nav-item {
+  border-radius: 2px;
+  color: #bfd1bc;
+  min-height: 40px;
+  transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
+}
+.app-sidebar .nav-item .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.app-sidebar .nav-item:hover,
+.app-sidebar .nav-item:focus-visible,
+.app-sidebar .nav-item.active {
+  background: #28563d;
+  color: #ffffff;
+  border-left-color: #d5b86a;
+}
+.app-sidebar .nav-item.active .dot { background: #d5b86a; border-color: #d5b86a; }
+.app-sidebar .nav-item--child { color: #a8c4ad; }
+.sidebar-office { border-color: #426b50; background: #1a4330; border-radius: 2px; }
+
+.app-topbar {
+  min-height: 68px;
+  background: rgba(251, 248, 241, .96);
+  border-bottom: 1px solid var(--udm-line);
+  box-shadow: none;
+}
+.topbar-search input,
+.topbar-search .form-control {
+  background: #f1f5f4;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px;
+}
+.topbar-search input:focus { border-bottom-color: var(--udm-teal); box-shadow: none; }
+.app-content { max-width: none; padding: 32px clamp(20px, 3vw, 48px) 56px; }
+.app-footer { background: var(--udm-canvas); color: var(--udm-muted); border-top-color: var(--udm-line); }
+
+.page-head {
+  border-bottom: 1px solid var(--udm-line);
+  padding-bottom: 24px;
+  margin-bottom: 28px;
+}
+.page-head h1 { font-weight: 800; }
+.eyebrow { color: var(--udm-green-ink); letter-spacing: .14em; font-weight: 800; }
+.sub, .form-text, .text-muted { color: var(--udm-muted) !important; }
+
+.card-udm,
+.stat-card,
+.report-panel,
+.search-panel,
+.admin-panel,
+.detail-panel,
+.folder-tile,
+.table-wrap,
+.filter-bar,
+.dashboard-context {
+  border: 1px solid var(--udm-line);
+  border-radius: 4px;
+  box-shadow: none;
+  background: var(--udm-surface);
+}
+.card-udm-head,
+.card-udm-body { border-color: var(--udm-line); }
+.card-udm-head { background: var(--udm-surface); }
+.stat-card:hover,
+.folder-tile:hover { transform: none; border-color: var(--udm-teal); box-shadow: none; }
+.stat-card .value { font-weight: 800; }
+.dashboard-side-head { border-bottom: 2px solid var(--udm-navy); }
+.dashboard-side-title { color: var(--udm-navy-text); font-weight: 800; }
+
+.btn,
+.btn-udm,
+.btn-udm-outline,
+.btn-dashboard-action,
+.page-help-launch,
+.theme-toggle {
+  border-radius: 4px;
+  min-height: 40px;
+  font-weight: 700;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+.btn-udm,
+.btn-dashboard-action { background: var(--udm-primary); border-color: var(--udm-primary); color: #fff; }
+.btn-udm:hover,
+.btn-dashboard-action:hover { background: var(--udm-primary-hover); border-color: var(--udm-primary-hover); color: #fff; }
+.btn-udm-outline { background: transparent; border-color: var(--udm-primary); color: var(--udm-primary); }
+.btn-udm-outline:hover { background: var(--udm-teal-soft); border-color: var(--udm-primary); color: var(--udm-primary-hover); }
+.segmented { border-radius: 4px; border: 1px solid var(--udm-line-strong); padding: 3px; background: var(--udm-surface-sunk); }
+.segmented-option { border-radius: 2px; }
+.segmented-option.is-active { background: var(--udm-selected-bg); color: var(--udm-selected-ink); }
+
+.form-control,
+.form-select,
+textarea,
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="time"] {
+  background-color: #f1f5f4;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  min-height: 40px;
+  color: var(--udm-ink);
+}
+.form-control:focus,
+.form-select:focus,
+textarea:focus,
+input:focus {
+  background-color: #ffffff;
+  border-color: var(--udm-teal);
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #275dcc;
+}
+.filter-bar { background: var(--udm-surface-sunk); }
+
+.table-udm { border-color: var(--udm-line); }
+.table-udm thead th { background: #eef4ec; color: var(--udm-label-ink); border-bottom: 2px solid var(--udm-line-strong); }
+.table-udm tbody tr:hover { background: #f7fbf7; }
+.table-udm td, .table-udm th { border-color: var(--udm-row-line); }
+
+.status-pill, .badge, .office-badge, .overdue-tag { border-radius: 999px; }
+.subtabs { border-bottom-color: var(--udm-line); }
+.subtab { border-radius: 2px 2px 0 0; }
+.subtab.is-active { color: var(--udm-primary); border-bottom-color: var(--udm-gold); }
+
+:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px #275dcc;
+}
+
+@media (max-width: 767.98px) {
+  .app-content { padding: 24px 16px 40px; }
+  .page-head { margin-bottom: 22px; }
+  .dashboard-sides { display: flex; flex-direction: column; }
+  .dashboard-side--tracking { order: 1; }
+  .dashboard-side--repository { order: 2; }
+  .dashboard-head-actions { align-items: stretch; }
+  .dashboard-head-actions > * { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Dashboard workload cards: metric first, explanation second, action visible. */
+.stat-card {
+  position: relative;
+  min-height: 150px;
+  padding-right: 34px;
+}
+.stat-card .label {
+  color: var(--udm-label-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.stat-card .hint { max-width: 25ch; }
+.stat-card-arrow,
+.tracking-secondary-arrow {
+  color: var(--udm-teal);
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 120ms ease-out, color 120ms ease-out;
+}
+.stat-card-arrow {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+}
+.stat-card:hover .stat-card-arrow,
+.tracking-secondary-metric:hover .tracking-secondary-arrow { color: var(--udm-primary-hover); transform: translateX(3px); }
+.stat-card.red { background: #fff7f5; border-color: #d99891; }
+.stat-card.red .label,
+.stat-card.red .value { color: #8f3838; }
+.stat-card.is-disabled { opacity: .7; }
+
+.tracking-secondary-metric {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  margin: -8px 0 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--udm-gold-border);
+  border-left: 4px solid var(--udm-gold);
+  border-radius: 4px;
+  background: var(--udm-gold-tint);
+  color: var(--udm-ink);
+  text-decoration: none;
+}
+.tracking-secondary-metric:hover { color: var(--udm-ink); border-color: var(--udm-gold-ink); text-decoration: none; }
+.tracking-secondary-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--udm-gold-soft);
+  color: var(--udm-gold-ink);
+  font-weight: 800;
+}
+.tracking-secondary-metric > span:nth-child(2) { display: grid; gap: 2px; }
+.tracking-secondary-metric > span:nth-child(2) > span { color: var(--udm-muted); font-size: 12px; }
+.tracking-secondary-value { color: var(--udm-gold-ink); font-size: 20px; }
+
+@media (max-width: 575.98px) {
+  .tracking-secondary-metric { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tracking-secondary-arrow { display: none; }
+  .tracking-secondary-value { grid-column: 2; grid-row: 2; justify-self: start; }
+}
+
+/* The selected Green Ledger direction still supports the existing dark-mode
+   preference. These rules override the light-only surface choices above so
+   newly added dashboard components do not flash back to paper colours. */
+:root[data-theme="dark"] .app-topbar,
+:root[data-theme="dark"] .app-footer {
+  background: rgba(23, 33, 44, .96);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .stat-card,
+:root[data-theme="dark"] .card-udm,
+:root[data-theme="dark"] .dashboard-context,
+:root[data-theme="dark"] .tracking-secondary-metric {
+  background: var(--udm-surface);
+  color: var(--udm-ink);
+}
+:root[data-theme="dark"] .stat-card.red {
+  background: #442724;
+  border-color: #ff8a7a;
+}
+:root[data-theme="dark"] .stat-card.red .label,
+:root[data-theme="dark"] .stat-card.red .value,
+:root[data-theme="dark"] .stat-card.red .hint {
+  color: #fac6bf;
+}
+:root[data-theme="dark"] .table-udm thead th {
+  background: #1f2b36;
+  color: var(--udm-label-ink);
+  border-color: var(--udm-line-strong);
+}
+:root[data-theme="dark"] .table-udm tbody tr:hover { background: #131c26; }
+:root[data-theme="dark"] .tracking-secondary-metric {
+  background: var(--udm-gold-tint);
+  border-color: var(--udm-gold-border);
+}
+:root[data-theme="dark"] .tracking-secondary-metric > span:nth-child(2) > span { color: var(--udm-muted); }
+:root[data-theme="dark"] .tracking-secondary-icon { background: var(--udm-gold-soft); color: var(--udm-gold-ink); }
+
+/* Sidebar hierarchy and office identity. */
+.app-sidebar { display: flex; flex-direction: column; }
+.app-sidebar nav { flex: 0 0 auto; }
+.nav-section {
+  margin-top: 24px;
+  padding: 0 12px 8px;
+  color: #9fbb9f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.nav-section--first { margin-top: 22px; }
+.app-sidebar .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+.app-sidebar .nav-item > span:last-child { min-width: 0; }
+.nav-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 1px solid rgba(213, 184, 106, .42);
+  border-radius: 3px;
+  color: #d5b86a;
+  font-size: 13px;
+  line-height: 1;
+}
+.app-sidebar .nav-item .dot { display: none; }
+.app-sidebar .nav-item--child {
+  margin-left: 22px;
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-left: 1px solid #426b50;
+  border-radius: 0 2px 2px 0;
+  color: #a8c4ad;
+  font-size: 12px;
+}
+.app-sidebar .nav-item--child .nav-icon { width: 18px; height: 18px; flex-basis: 18px; font-size: 11px; }
+.app-sidebar .nav-item.active .nav-icon,
+.app-sidebar .nav-item:hover .nav-icon,
+.app-sidebar .nav-item:focus-visible .nav-icon { background: #d5b86a; border-color: #d5b86a; color: #174a37; }
+.sidebar-office-wrap { margin-top: auto; }
+.sidebar-office {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 10px 8px;
+  padding: 10px;
+}
+.sidebar-office-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 1px solid #d5b86a;
+  border-radius: 4px;
+  color: #d5b86a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.sidebar-office-name,
+.sidebar-office-role { display: block; }
+
+/* Sign-in refresh: same institutional palette, with a clearer first-visit
+   hierarchy and a compact workflow cue instead of extra decoration. */
+.login-wrap { background: #fbf8f1; }
+.login-art {
+  background: #174a37;
+  border-right: 1px solid #285d43;
+}
+.login-art h1 { max-width: 13ch; font-weight: 800; letter-spacing: 0; }
+.login-art .rule { width: 72px; height: 3px; border-radius: 0; }
+.login-kicker {
+  display: block;
+  margin-bottom: 14px;
+  color: #d5b86a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.login-workflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 42ch;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.login-workflow li { display: grid; gap: 3px; padding-top: 9px; border-top: 1px solid rgba(213, 184, 106, .58); }
+.login-workflow strong { color: #fff; font-size: 12px; }
+.login-workflow span { color: rgba(255, 255, 255, .68); font-size: 11px; line-height: 1.3; }
+.login-form { background: #fffdf8; }
+.login-form .inner { max-width: 390px; padding: 8px 0; }
+.login-form-heading { margin-bottom: 24px; }
+.login-form-heading h2 { font-weight: 800; }
+.login-security-note { border-radius: 0 4px 4px 0; background: #fff7e6; }
+.login-form .btn-udm { min-height: 44px; }
+
+@media (max-width: 767.98px) {
+  .login-workflow { max-width: none; }
+  .login-form .inner { padding: 0; }
+}
+
+/* Sign-in is a paper surface by design, even when the authenticated app is
+   remembered in dark mode. Keep its text and action tokens paired with that
+   light surface rather than inheriting dark app tokens through the root. */
+:root[data-theme="dark"] .login-wrap {
+  --udm-ink: #183126;
+  --udm-navy-text: #183126;
+  --udm-muted: #68796c;
+  --udm-primary: #286b45;
+  --udm-primary-hover: #1d5034;
+  --udm-teal: #286b45;
+  --udm-teal-ink: #1f5a42;
+  --udm-line: #d8e2e0;
+}
+.login-form { color: #183126; }
+.login-form h2 { color: #183126; }
+.login-form .btn-udm { background: #286b45; border-color: #286b45; color: #ffffff; }
+.login-form .btn-udm:hover { background: #1d5034; border-color: #1d5034; color: #ffffff; }
+
 /* Shared typography also applies when record details are printed. */
 .section-heading { margin: 0 0 12px; font-size: 16px; font-weight: 600; line-height: 1.4; }
 .body-copy { font-size: 14px; line-height: 1.6; }

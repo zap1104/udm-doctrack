@@ -131,9 +131,10 @@
   {% endcomment %}
   <div class="col-6 col-md-3">
     <a class="stat-card navy" href="{{ tracking_total_url }}" data-tracking-total>
-      <div class="label">Total documents in tracking</div>
+      <div class="label">Tracking workload</div>
       <div class="value">{{ tracking_total_count }}</div>
-      <div class="hint">Currently Tracking Documents + Completed Pending Upload Documents · {{ scope.label }}</div>
+      <div class="hint">Active routes and pending filing · {{ scope.label }}</div>
+      <span class="stat-card-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
   {% if scope.all_offices %}
@@ -163,6 +164,7 @@
         number the card was not showing.
       {% endcomment %}
       <div class="hint">{{ incoming_new_today }} moved today · addressed to your office</div>
+      <span class="stat-card-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
   <div class="col-6 col-md-3">
@@ -170,6 +172,7 @@
       <div class="label">Outgoing</div>
       <div class="value">{{ outgoing_count }}</div>
       <div class="hint">Sent by this office · unfinished</div>
+      <span class="stat-card-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
   {% endif %}
@@ -185,10 +188,20 @@
     <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope.office %}&office={{ scope.office.pk }}{% endif %}">
       <div class="label">Overdue</div>
       <div class="value">{{ overdue_count }}</div>
-      <div class="hint">Past the action deadline in this view</div>
+      <div class="hint">Past the action deadline · needs attention</div>
+      <span class="stat-card-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
 </div>
+<a class="tracking-secondary-metric" href="{{ tracking_rings.pending_upload.url }}">
+  <span class="tracking-secondary-icon" aria-hidden="true">&#8599;</span>
+  <span>
+    <strong>Pending filing</strong>
+    <span>Completed records waiting to move into the Document Repository</span>
+  </span>
+  <strong class="tracking-secondary-value">{{ tracking_rings.pending_upload.total }}</strong>
+  <span class="tracking-secondary-arrow" aria-hidden="true">&rarr;</span>
+</a>
     <p class="form-text" data-help-title="Tracking totals">These cards overlap. Do not add them. Incoming and Outgoing need not add up to Total.</p>
     <div class="card-udm h-100" data-ring-card>
       <div class="card-udm-head">

@@ -7,15 +7,21 @@
     <button class="sidebar-close" type="button" data-sidebar-close aria-label="Close navigation">×</button>
   </div>
   <nav aria-label="Main navigation">
-    <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}><span class="dot"></span> Dashboard</a>
-    <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}><span class="dot"></span> Search</a>
-    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="dot"></span> Document Tracking</a>
+    <div class="nav-section nav-section--first">Workspace</div>
+    <a class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}" {% if nav_active == 'dashboard' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#9638;</span><span>Dashboard</span></a>
+    <a class="nav-item {% if nav_active == 'search' %}active{% endif %}" href="{% url 'search:index' %}" {% if nav_active == 'search' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#8981;</span><span>Search</span></a>
+    <div class="nav-section">Documents</div>
+    <a class="nav-item {% if nav_active == 'tracking' %}active{% endif %}" href="{% url 'tracking:list' %}" {% if nav_active == 'tracking' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#8644;</span><span>Document Tracking</span></a>
     <a class="nav-item nav-item--child{% if nav_active == 'tracking_reports' %} active{% endif %}" href="{% url 'core:reports' %}"{% if nav_active == 'tracking_reports' %} aria-current="page"{% endif %}>Reports<span class="visually-hidden"> — Document Tracking</span></a>
-    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="dot"></span> Document Repository</a>
+    <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#9641;</span><span>Document Repository</span></a>
     <a class="nav-item nav-item--child{% if nav_active == 'repository_reports' %} active{% endif %}" href="{% url 'core:repository_reports' %}"{% if nav_active == 'repository_reports' %} aria-current="page"{% endif %}>Reports<span class="visually-hidden"> — Document Repository</span></a>
-    {# Office administrators reach the administration area too, scoped to their own office. #}
-    {% if user.is_office_admin %}<a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="dot"></span> Administration</a>{% endif %}
+    {% if user.is_office_admin %}
+      <div class="nav-section">System</div>
+      <a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#9881;</span><span>Administration</span></a>
+    {% endif %}
   </nav>
-  <div class="nav-section">Your Office</div>
-  <div class="sidebar-office"><div class="sidebar-office-name">{{ user.office.name|default:"No office assigned" }}</div><div class="sidebar-office-role">{{ user.get_role_display }}</div></div>
+  <div class="sidebar-office-wrap">
+    <div class="nav-section">Your Office</div>
+    <div class="sidebar-office"><span class="sidebar-office-mark" aria-hidden="true">{{ user.office.code|default:"--" }}</span><span><span class="sidebar-office-name">{{ user.office.name|default:"No office assigned" }}</span><span class="sidebar-office-role">{{ user.get_role_display }}</span></span></div>
+  </div>
 </aside>
