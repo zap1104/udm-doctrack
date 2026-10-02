@@ -549,6 +549,44 @@
         <a class="btn btn-udm-outline btn-sm mt-3" href="{% url 'core:repository_reports' %}?record_month={{ uploads_by_office.month|date:'Y-m' }}{% if scope.office %}&amp;office={{ scope.office.pk }}{% endif %}#report-records">View this month's repository records</a>
       </div>
     </div>
+    <section class="card-udm office-directory" aria-labelledby="office-directory-title" data-office-directory>
+      <div class="card-udm-head">
+        <div>
+          <h2 id="office-directory-title">Office directory</h2>
+          <div class="card-udm-caption">Contact details for every active office.</div>
+        </div>
+      </div>
+      <div class="card-udm-body">
+        <label class="visually-hidden" for="office-directory-search">Search office contacts</label>
+        <input class="form-control form-control-sm office-directory-search" id="office-directory-search" type="search" placeholder="Search offices, people or contact details" autocomplete="off" data-office-directory-search>
+        <p class="office-directory-count" aria-live="polite" data-office-directory-count>{{ directory_offices|length }} offices</p>
+        <div class="office-directory-list" data-office-directory-list>
+          {% for office in directory_offices %}
+            <article class="office-directory-item" data-office-directory-item data-office-search="{{ office.code }} {{ office.name }} {{ office.head_name }} {{ office.email }} {{ office.location }}">
+              <div class="office-directory-identity">
+                <span class="office-directory-code">{% include "partials/_office_badge.html" with office=office %}</span>
+                <strong>{{ office.name }}</strong>
+              </div>
+              <div class="office-directory-details">
+                {% if office.head_name %}<span>Contact: {{ office.head_name }}</span>{% endif %}
+                {% if office.location %}<span>{{ office.location }}</span>
+                {% else %}<span class="office-directory-sample">Sample location: Main Building, Room {{ forloop.counter|add:200 }}</span>{% endif %}
+                {% if office.email %}<a href="mailto:{{ office.email }}">{{ office.email }}</a>
+                {% else %}<span class="office-directory-sample">Sample email: {{ office.code|lower }}@example.com</span>{% endif %}
+              </div>
+              {% if user.is_system_admin %}
+                <a class="office-directory-records" href="{% url 'tracking:list' %}?office={{ office.pk }}">View records <span aria-hidden="true">&rarr;</span></a>
+              {% elif user.office_id == office.pk %}
+                <a class="office-directory-records" href="{% url 'tracking:list' %}">View your office records <span aria-hidden="true">&rarr;</span></a>
+              {% endif %}
+            </article>
+          {% empty %}
+            <p class="report-empty">No active offices are listed.</p>
+          {% endfor %}
+          <p class="report-empty office-directory-empty" hidden data-office-directory-empty>No offices match that search.</p>
+        </div>
+      </div>
+    </section>
     </div>
   </section>
 </div>

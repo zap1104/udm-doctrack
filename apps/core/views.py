@@ -717,6 +717,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "overdue_count": overdue_count,
                 **action_centre,
                 "recent_records": recent,
+                "directory_offices": Office.active.all().order_by("sort_order", "name"),
                 "greeting": _greeting(),
                 "can_start_work": user.can_start_work,
                 "breakdown": breakdown,

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load doctrack %}
+{% load humanize doctrack %}
 {% block title %}Document Tracking · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -310,11 +310,6 @@
   column's heading repeats its own definition on hover. The note under the
   table defined one of the three, a scroll away from the rows it explained.
 {% endcomment %}
-<dl class="office-terms">
-  <div><dt>Originating office</dt><dd>raised the document. It never changes; it is under each subject.</dd></div>
-  <div><dt>Current office</dt><dd>holds it now: the last office to confirm receipt. While a handover waits to be confirmed, that is still the sender.</dd></div>
-  <div><dt>Receiving office</dt><dd>where it was last sent. The document is theirs once they confirm receipt; until then it is {{ "PENDING_RECEIPT"|status_label }}.</dd></div>
-</dl>
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
   <div class="card-udm-head">
@@ -322,21 +317,19 @@
     <a class="small" href="{% url 'core:report_export' %}">Export CSV</a>
   </div>
   <div class="card-udm-body p-0 table-responsive">
-    <table class="table-udm">
+    <table class="table-udm tracking-records-table{% if can_bulk_receive %} tracking-records-table--selectable{% endif %}">
       <thead>
         <tr>
-          {# Current and receiving both: where it is, and who owes the next act. #}
-          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col" title="Holds it now: the last office to confirm receipt.">Current office</th><th scope="col" title="Where it was last sent; it must confirm receipt.">Receiving office</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
+          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Document</th><th scope="col">Route</th><th scope="col">Last updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
         </tr>
       </thead>
       <tbody>
         {% for record in records %}
           <tr>
             {% if can_bulk_receive %}<td>{% if record.can_confirm_now %}<input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}" aria-label="Select {{ record.display_tracking_number }} for receipt">{% endif %}</td>{% endif %}
-            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
             <td>
-              {{ record.subject|truncatechars:60 }}
-              <div class="text-muted" style="font-size:12.5px;">
+              <a class="tracking-subject" href="{{ record.get_absolute_url }}">{{ record.subject|truncatechars:60 }}</a>
+              <div class="tracking-document-meta">
                 {% include "partials/_direction_tag.html" with direction=record.direction %}
                 {{ record.document_type.name|default:"No type" }} ·
                 {% comment %}
@@ -352,23 +345,31 @@
                 merely passing through it. The row now uses the filter's word
                 and the detail page's word, so all three name the same thing.
                 {% endcomment %}
-                Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
+                <span>From</span> {% include "partials/_office_badge.html" with office=record.originating_office %}
+              </div>
+              <div class="tracking-number mono">{{ record.display_tracking_number }}</div>
+            </td>
+            <td class="tracking-route-cell">
+              <span class="tracking-cell-label">Route</span>
+              <div class="tracking-route">
+                {% include "partials/_office_badge.html" with office=record.current_office %}
+                <span class="tracking-route-arrow" aria-hidden="true">&rarr;</span>
+              {% include "partials/_office_badges.html" with offices=record.receiving_offices_shown more=record.receiving_more %}
               </div>
             </td>
-            <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
-            <td class="office-cell">
-              {% include "partials/_office_badges.html" with offices=record.receiving_offices_shown more=record.receiving_more %}
+            <td class="tracking-updated-cell">
+              <span class="tracking-cell-label">Updated {{ record.last_movement_at|timesince }} ago</span>
+              <time datetime="{{ record.last_movement_at|date:'c' }}">{{ record.last_movement_at|date:"d M Y, g:i A" }}</time>
             </td>
-            <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
           <td>
               {% comment %}
                 Two pills, because they answer different questions: the stage
                 says what to do next, the tag says how urgent it is. They used
                 to be one, and the stage was the half that lost.
               {% endcomment %}
-              <div class="pill-stack">
+              <div class="tracking-status-stack">
                 {% include "partials/_status_pill.html" with status=record.status %}
-                {% include "partials/_overdue_tag.html" with state=record.deadline_state %}
+                {% if record.deadline_state == "overdue" %}<span class="tracking-urgency tracking-urgency--overdue">{{ record.due_at|timesince }} overdue</span>{% elif record.deadline_state == "due_soon" %}<span class="tracking-urgency tracking-urgency--soon">Due soon</span>{% endif %}
                 {% comment %}
                   The date itself, under the pills that depend on it. Inline
                   rather than a ninth column: this table is already seven wide
@@ -379,9 +380,7 @@
                   and a reader who doubts one should not have to look across the
                   row to check it.
                 {% endcomment %}
-                {% if record.due_at %}
-                  <div class="deadline-when-cell">Due {{ record.due_at|date:"d M Y, g:i A" }}</div>
-                {% endif %}
+                {% if record.due_at and record.deadline_state != "overdue" and record.deadline_state != "due_soon" %}<span class="deadline-when-cell">Due {{ record.due_at|date:"d M Y, g:i A" }}</span>{% endif %}
               </div>
             </td>
             <td class="text-end">
@@ -391,7 +390,7 @@
                       <span>Confirm Receipt</span>
                     </a>
               {% else %}
-                <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
+                <a class="btn btn-udm-outline btn-sm tracking-view-action" href="{{ record.get_absolute_url }}">View</a>
               {% endif %}
             </td>
           </tr>
@@ -402,7 +401,7 @@
             "Incoming" and "Created by me" can never both hold. Saying so beats
             an empty table the reader reads as a broken filter.
           {% endcomment %}
-          <tr><td colspan="{% if can_bulk_receive %}8{% else %}7{% endif %}">
+          <tr><td colspan="{% if can_bulk_receive %}7{% else %}6{% endif %}">
             <div class="empty-state">
               <h3>No active records match this view</h3>
               {% if impossible_reason %}

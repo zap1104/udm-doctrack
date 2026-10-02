@@ -1447,4 +1447,23 @@
     var box = event.target.matches && event.target.matches("[data-trend-hover]") ? event.target : null;
     if (box && !box.contains(event.relatedTarget)) show(box, null);
   });
+
+  document.addEventListener("input", function (event) {
+    var input = event.target.closest && event.target.closest("[data-office-directory-search]");
+    if (!input) return;
+    var directory = input.closest("[data-office-directory]");
+    if (!directory) return;
+    var query = input.value.trim().toLocaleLowerCase();
+    var items = directory.querySelectorAll("[data-office-directory-item]");
+    var visible = 0;
+    items.forEach(function (item) {
+      var matches = !query || (item.getAttribute("data-office-search") || "").toLocaleLowerCase().indexOf(query) !== -1;
+      item.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    var count = directory.querySelector("[data-office-directory-count]");
+    var empty = directory.querySelector("[data-office-directory-empty]");
+    if (count) count.textContent = visible + (visible === 1 ? " office" : " offices");
+    if (empty) empty.hidden = visible > 0;
+  });
 })();

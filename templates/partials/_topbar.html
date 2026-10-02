@@ -12,7 +12,7 @@
 
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
     <label class="visually-hidden" for="topbar-search-input">Search records</label>
-    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search archive..." aria-label="Search the document archive" autocomplete="off">
+    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search tracking number, subject or office" aria-label="Search tracking number, subject or office" autocomplete="off">
   </form>
 
   <div class="topbar-controls ms-auto d-flex align-items-center">
@@ -36,7 +36,7 @@
         <span class="avatar">{{ user.initials }}</span>
         <span class="topbar-account-copy d-none d-md-flex">
           <span class="topbar-account-name">{{ user.short_display }}</span>
-          <span class="topbar-account-office">{{ user.office_label }}</span>
+          <span class="topbar-account-office" title="{{ user.office_label }}">{{ user.office_label }}</span>
         </span>
         <span class="topbar-account-arrow d-none d-md-inline" aria-hidden="true">&#9662;</span>
       </button>

@@ -35,6 +35,7 @@
       {% include "documents/_repository_pending.html" %}
     </section>
     {% endif %}
+<<<<<<< HEAD
     <div class="repository-list-head"><div><h2>{% if pending_view %}Pending upload{% elif selected_office %}{{ selected_office.code }} documents{% else %}Filed documents{% endif %}</h2><p>{% if pending_view %}Completed records awaiting approval. They are counted separately from filed documents.{% else %}Approved tracking records, historical uploads, and scanned documents.{% endif %}</p></div>{% if not pending_view %}<a href="{% url 'search:index' %}?mode=repository">Advanced search</a>{% endif %}</div>
     <form method="get" class="repository-filters card-udm" aria-label="Filter repository records">
       {% if folder_office_id %}<input type="hidden" name="office" value="{{ folder_office_id }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
@@ -60,6 +61,71 @@
         <a class="btn btn-sm btn-udm-outline repository-open" href="{{ document.get_absolute_url }}" aria-label="Open {{ document.title }}">Open</a>
       </article>{% empty %}<div class="card-udm empty-state"><h3>No documents found</h3><p>Try another folder or clear the filters to see available documents.</p><a class="btn btn-udm-outline" href="{{ folder_reset_url }}">Clear filters</a></div>{% endfor %}
     </div>{% endif %}
+=======
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="text-muted" style="font-size:13.5px;">
+        {{ total }} record{{ total|pluralize }}{% if selected_office %} in {{ selected_office.name }}{% endif %}
+      </span>
+      {# This page's search is the repository half of the unified search page. #}
+      <a class="small" href="{% url 'search:index' %}?mode=repository">Advanced relevance search →</a>
+    </div>
+
+    {% comment %}
+      Above the grid, beside the count it belongs to. Under a full page of tiles
+      the control is a scroll away, which is the wrong end of a list somebody is
+      trying to make shorter.
+    {% endcomment %}
+    {% pager section="size" %}
+
+    <div class="row g-3">
+      {% for document in documents %}
+        <div class="col-md-6 col-xl-4">
+          <a class="doc-tile" href="{{ document.get_absolute_url }}">
+            <div class="doc-tile-head">
+              <span class="doc-type">
+                <span class="doc-type-icon" aria-hidden="true">&#9641;</span>
+                <span>{{ document.document_type.name|default:"Unclassified"|truncatechars:18 }}</span>
+              </span>
+              <span class="doc-status {% if document.source == 'DTS' %}doc-status--completed{% else %}doc-status--historical{% endif %}">
+                <span class="doc-status-dot" aria-hidden="true"></span>
+                {% if document.source == 'DTS' %}Completed{% else %}Historical{% endif %}
+              </span>
+            </div>
+            <h3 class="doc-title">{{ document.title|truncatechars:64 }}</h3>
+            <div class="doc-meta">
+              <div class="doc-office-date">
+                {% include "partials/_office_badge.html" with office=document.office %}
+                <span>{{ document.document_date|default:document.created_at|date:"d M Y" }}</span>
+              </div>
+              {% if document.reference_number %}<span class="doc-reference mono">{{ document.reference_number }}</span>{% endif %}
+            </div>
+            <div class="doc-tags">
+              {% for tag in document.tags.all|slice:":3" %}<span class="tag-chip">{{ tag.name }}</span>{% endfor %}
+            </div>
+            <div class="doc-card-foot">
+            {% if document.retention_is_due %}<span class="doc-note doc-note--due">Retention review due {{ document.retention_until|date:"d M Y" }}</span>{% elif document.retention_is_due_soon %}<span class="doc-note">Retention review by {{ document.retention_until|date:"d M Y" }}</span>{% endif %}
+            {% if not document.has_text %}
+              <div class="text-muted" style="font-size:12px;">No extracted text — searchable by metadata only</div>
+            {% endif %}
+              <span class="doc-arrow" aria-hidden="true">&rarr;</span>
+            </div>
+          </a>
+        </div>
+      {% empty %}
+        <div class="col-12">
+          <div class="card-udm"><div class="card-udm-body empty-state">
+            <h3>No documents match this view</h3>
+            <p>Clear the filters or upload a historical office document.</p>
+            {% if can_start_work %}
+              <a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload Document</a>
+            {% endif %}
+          </div></div>
+        </div>
+      {% endfor %}
+    </div>
+
+>>>>>>> 7269690 (UI-change-2)
     {% pager section="steps" %}
   </section>
   {% endif %}
