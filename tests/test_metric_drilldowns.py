@@ -42,8 +42,8 @@ def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(clien
     assert context["pending_receipt"] == 1
     assert context["partial_receipts"] == 2
     assert context["awaiting_receipt"] == 3
-    listed = client.get("/tracking/reports/?record_status=PENDING_RECEIPT").context
-    assert listed["report_records_count"] == context["pending_receipt"]
+    listed = client.get(context["report_pending_receipt_url"]).context
+    assert listed["total"] == context["pending_receipt"]
     assert {row.pk for row in listed["page_obj"]} == {partly_received[0].pk}
     assert client.get("/tracking/?status=PENDING_RECEIPT").context["total"] == 1
     assert "still await another recipient" in response.content.decode()
@@ -64,7 +64,7 @@ def test_office_overdue_headline_opens_all_overdue_records_in_its_scope(client, 
     match = re.search(r'class="stat-card red" href="([^"]+)"', response.content.decode())
     target = urljoin(url, unescape(match[1]))
     listed = client.get(target).context
-    assert listed["report_records_count"] == 3
+    assert listed["total"] == 3
     assert {row.pk for row in listed["page_obj"]} == {row.pk for row in partly_received}
 
 
@@ -72,13 +72,15 @@ def test_office_overdue_headline_opens_all_overdue_records_in_its_scope(client, 
 @pytest.mark.parametrize("stage", [Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS])
 def test_export_uses_the_report_record_filters(client, users, partly_received, stage):
     client.force_login(users["admin"])
-    response = client.get(f"/tracking/reports/?record_status={stage}&record_q=Count%20audit&record_overdue=yes")
-    report = response.context
-    rows = list(csv.reader(io.StringIO(client.get(report["report_export_url"]).content.decode())))
+    response = client.get("/tracking/reports/export/", {
+        "record_status": stage, "record_q": "Count audit", "record_overdue": "yes",
+    })
+    rows = list(csv.reader(io.StringIO(response.content.decode())))
     header = next(index for index, row in enumerate(rows) if row and row[0] == "Tracking number")
     actual = rows[header + 1:]
-    assert len(actual) == report["report_records_count"] == 1
-    assert {row[0] for row in actual} == {row.tracking_number for row in report["page_obj"]}
+    expected = {row.tracking_number for row in partly_received if row.status == stage}
+    assert len(actual) == len(expected) == 1
+    assert {row[0] for row in actual} == expected
 
 
 def replace_filter(url, **changes):

@@ -562,6 +562,8 @@ a:hover { text-decoration: underline; }
 .deadline-option:has(input:checked) { border-color: var(--udm-teal); background: var(--udm-teal-soft); }
 .deadline-date { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--udm-line); max-width: 320px; }
 .deadline-date[hidden] { display: none; }
+.deadline-clear-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.deadline-clear-actions[hidden] { display:none; }
 
 /* ------------------------------------------------- tracking slip: create/review */
 .phase2-card-caption { margin-top: 2px; color: var(--udm-muted); font-size: 12.5px; }
@@ -3635,7 +3637,8 @@ input:focus {
 .report-scope-card .card-udm-body { flex: 1 1 380px; padding: 16px 20px; }
 .report-scope-picker { display: flex; align-items: end; gap: 10px; }
 .report-scope-picker > div { width: auto; min-width: 0; }
-.report-scope-picker > div:first-of-type { flex: 1 1 auto; }
+.report-scope-picker > div:first-of-type { flex: 1 1 0; }
+.report-scope-picker > div:last-of-type { flex: 0 0 auto; }
 .report-scope-picker .form-label { font-size: 13px; margin-bottom: 4px; }
 .report-scope-picker .btn { white-space: nowrap; }
 .form-select { padding-right: 2.5rem; text-overflow: ellipsis; }
@@ -3654,7 +3657,7 @@ input:focus {
   .report-year-picker { width: 100%; }
   .report-year-picker > div { flex: 1 1 8rem; }
   .report-year-picker .form-select { width: 100%; }
-  #annual-turnaround-title, #report-records { scroll-margin-top: 150px; }
+  #annual-turnaround-title { scroll-margin-top: 150px; }
   .report-scope-card .card-udm-head { padding: 15px 15px 0; }
   .report-scope-card .card-udm-body { padding: 10px 15px 15px; }
   .report-metrics .stat-card { padding: 13px; }

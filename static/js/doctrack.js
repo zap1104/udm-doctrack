@@ -410,6 +410,11 @@
   document.querySelectorAll("[data-deadline-field]").forEach(function (field) {
     var panel = field.querySelector("[data-deadline-panel]");
     var dateInput = field.querySelector("[data-deadline-date]");
+    var timeInput = field.querySelector("[data-deadline-time]");
+    var clearActions = field.querySelector("[data-deadline-clear-actions]");
+    var clearDeadline = field.querySelector("[data-clear-deadline]");
+    var clearTime = field.querySelector("[data-clear-deadline-time]");
+    var noDeadline = field.querySelector('[data-deadline-choice][value="none"]');
     var radios = field.querySelectorAll("[data-deadline-choice]");
     if (!panel || !radios.length) return;
 
@@ -429,11 +434,32 @@
         if (!wantsDate) dateInput.value = "";
         if (wantsDate && focusDate) dateInput.focus();
       }
+      if (timeInput && !wantsDate) timeInput.value = "";
+      if (clearDeadline) clearDeadline.disabled = !wantsDate;
+      if (clearTime) clearTime.disabled = !wantsDate || !timeInput || !timeInput.value;
     }
 
+    if (clearDeadline && noDeadline) {
+      clearDeadline.addEventListener("click", function () {
+        noDeadline.checked = true;
+        noDeadline.dispatchEvent(new Event("change", {bubbles: true}));
+        noDeadline.focus();
+      });
+    }
+    if (clearTime && timeInput) {
+      clearTime.addEventListener("click", function () {
+        timeInput.value = "";
+        timeInput.dispatchEvent(new Event("input", {bubbles: true}));
+        timeInput.dispatchEvent(new Event("change", {bubbles: true}));
+        timeInput.focus();
+      });
+      timeInput.addEventListener("input", function () { sync(false); });
+      timeInput.addEventListener("change", function () { sync(false); });
+    }
     radios.forEach(function (radio) {
       radio.addEventListener("change", function () { sync(true); });
     });
+    if (clearActions) clearActions.hidden = false;
     sync(false);
   });
 

@@ -1,4 +1,4 @@
-"""Record-list filters shared by report drilldowns and their CSV export."""
+"""Legacy record filters retained for permission-scoped tracking CSV exports."""
 
 from datetime import datetime
 

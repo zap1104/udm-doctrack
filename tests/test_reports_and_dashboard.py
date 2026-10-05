@@ -400,15 +400,15 @@ def test_the_report_filters_down_to_the_office_only(client, users):
 
 
 @pytest.mark.django_db
-def test_the_export_button_carries_the_office_it_was_pressed_under(
+def test_the_report_opens_tracking_with_the_selected_office(
     client, finished_record, users, offices
 ):
-    """A bare URL meant the export re-read its filters from its own empty query
-    string, so exporting a one-office report handed back everything."""
+    """Reports keep statistics; opening current work preserves the office scope."""
     client.force_login(users["admin"])
     body = client.get(f"{REPORTS}?office={offices['SUP'].pk}").content.decode()
 
-    assert f"/tracking/reports/export/?office={offices['SUP'].pk}" in body
+    assert f"/tracking/?office={offices['SUP'].pk}" in body
+    assert "Export records CSV" not in body
 
 
 @pytest.mark.django_db

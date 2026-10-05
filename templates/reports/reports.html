@@ -18,16 +18,8 @@
     </p>
   </div>
   <div class="page-actions no-print">
-    <a class="btn btn-udm-outline" href="#report-records">View report records</a>
+    <a class="btn btn-udm-outline" href="{{ report_workspace_url }}">{% if is_repository_report %}Open Repository{% else %}Open Tracking{% endif %}</a>
     <button class="btn btn-udm-outline" type="button" data-print-trigger>Print Report</button>
-    {% comment %}
-      The office rides along. This was a bare URL, so the export re-read its
-      filters from its own empty query string: exporting from a report narrowed
-      to one office handed back every record the exporter could see, under a
-      filename that did not say so either.
-    {% endcomment %}
-    {% if not is_repository_report %}<a class="btn btn-udm"
-       href="{{ report_export_url }}">Export records CSV</a>{% endif %}
   </div>
 </div>
 {% if is_repository_report %}{% include "documents/_subtabs.html" with active="reports" %}{% else %}{% include "tracking/_subtabs.html" with active="reports" %}{% endif %}
@@ -118,21 +110,21 @@
 
   <div class="report-metrics">
     <div class="col-6 col-lg-3">
-      <a class="stat-card navy" href="{{ report_records_url }}">
+      <div class="stat-card navy">
         <div class="label">Tracked documents</div>
         <div class="value">{{ total_records }}</div>
-        <div class="hint">Active and completed records you can see</div>
-      </a>
+        <div class="hint">Current work and filed tracking history you can see</div>
+      </div>
     </div>
     <div class="col-6 col-lg-3">
-      <a class="stat-card gold" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_status=PENDING_RECEIPT#report-records">
+      <a class="stat-card gold" href="{{ report_pending_receipt_url }}">
         <div class="label">{{ "PENDING_RECEIPT"|status_label }}</div>
         <div class="value">{{ pending_receipt }}</div>
         <div class="hint">Documents currently in this stage</div>
       </a>
     </div>
     <div class="col-6 col-lg-3">
-      <a class="stat-card red" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_overdue=yes#report-records">
+      <a class="stat-card red" href="{{ report_overdue_url }}">
         <div class="label">Overdue</div>
         <div class="value">{{ overdue_all }}</div>
         <div class="hint">Past deadline and not completed{% if scope_office %}<span class="report-metric-note">{{ overdue }} need action from {{ scope_office.code }}.</span>{% endif %}</div>
@@ -203,7 +195,7 @@
             <div class="status-row">
               <div class="status-row-label">{% include "partials/_status_pill.html" with status=row.status %}</div>
               <div class="report-bar"><i style="width:{{ row.bar_percent }}%;background:{{ row.colour }}"></i></div>
-              <a class="num report-count-link" href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_status={{ row.status }}#report-records" aria-label="View {{ row.total }} {{ row.status|status_label }} records">{{ row.total }}</a>
+              {% if row.workspace_url %}<a class="num report-count-link" href="{{ row.workspace_url }}" aria-label="View {{ row.total }} {{ row.status|status_label }} records in Tracking">{{ row.total }}</a>{% else %}<strong class="num">{{ row.total }}</strong>{% endif %}
               <span class="status-share num">{% share row.total total_records %}</span>
             </div>
             {% if scope_office %}
@@ -648,7 +640,7 @@
                 <tbody>
                   {% for row in document_months.rows %}
                     <tr>
-                      <td><a href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_month={{ row.month|date:'Y-m' }}#report-records"><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></a></td>
+                      <td><span class="chart-month-long">{{ row.month|date:"F Y" }}</span><span class="chart-month-short">{{ row.month|date:"M Y" }}</span></td>
                       <td class="text-end num">{{ row.completed }}</td>
                       <td class="text-end num">{{ row.historical }}</td>
                       <td class="text-end num">{{ row.total }}</td>
@@ -681,7 +673,7 @@
           {% endcomment %}
           {% for row in document_types %}
             <div class="report-series-item report-series-item--wide report-series-item--share{% if row.is_remainder %} report-series-item--remainder{% endif %}">
-              <a href="?{% if filters.office %}office={{ filters.office.pk }}&amp;{% endif %}record_type={{ row.type_value }}#report-records">{{ row.label }}</a>
+              {% if row.workspace_url %}<a href="{{ row.workspace_url }}">{{ row.label }}</a>{% else %}<span>{{ row.label }}</span>{% endif %}
               <div class="report-bar"><i class="bar-neutral" style="width:{{ row.bar_percent }}%"></i></div>
               <strong class="num">{{ row.total }}</strong>
               <span class="status-share num">{% share row.total total_documents %}</span>
@@ -697,7 +689,6 @@
 </section>
 
 {% endif %}
-{% include "reports/_records.html" %}
 
 <footer class="report-print-footer">
   <span>{{ SITE_LONG_NAME }}</span>

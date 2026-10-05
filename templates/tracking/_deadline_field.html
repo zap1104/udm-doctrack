@@ -36,6 +36,10 @@
         {{ form.due_time }}
       </div>
     </div>
+    <div class="deadline-clear-actions" data-deadline-clear-actions hidden>
+      <button type="button" class="btn btn-sm btn-udm-outline" data-clear-deadline>Clear deadline</button>
+      <button type="button" class="btn btn-sm btn-udm-outline" data-clear-deadline-time>Clear time</button>
+    </div>
     <div class="form-text">
       {{ form.due_date.help_text }} Today or later, and no more than a year ahead.
       {{ form.due_time.help_text }}

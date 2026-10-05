@@ -432,7 +432,8 @@ DASHBOARD_QUERIES = 51
 #: 45: the same six, on the same service.
 #: 39: the running-totals chart left Reports, which repeated the dashboard's.
 # Annual trend and paginated drilldown replace the repository panel rendering.
-REPORTS_QUERIES = 47
+#: Removing the report's type choices, pagination and record rows saves three reads.
+REPORTS_QUERIES = 44
 
 
 def _assert_one_office_schedule_query(captured):
@@ -476,7 +477,7 @@ DASHBOARD_OFFICE_QUERIES = 54
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 48
+REPORTS_OFFICE_QUERIES = 45
 
 
 @pytest.mark.django_db

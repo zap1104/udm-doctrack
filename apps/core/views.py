@@ -29,6 +29,7 @@ from apps.documents.models import (
 )
 from apps.tracking import services as tracking_services
 from apps.tracking.models import (
+    ACTIVE_STATUSES,
     COMPLETED_STATUSES,
     QUIET_EVENTS,
     RecordActivity,
@@ -1621,7 +1622,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         context.update({"report_domain": self.report_domain, "is_repository_report": repository,
                         "report_title": "Document Repository Reports" if repository else "Document Tracking Reports",
                         "report_url": reverse("core:repository_reports" if repository else "core:reports")})
-        context.update(self._records_context(documents if repository else records, filters, context["document_types"]))
+        context.update(self._workspace_context(filters, context))
         if not repository:
             current_year = timezone.localdate().year
             observed_years = {current_year}
@@ -1658,32 +1659,38 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                             "turnaround_show_on_time": True})
         return context
 
-    def _records_context(self, records, filters, chart_types):
-        """Drill into the same scoped records counted by this report's charts."""
+    def _workspace_context(self, filters, context):
+        """Open the existing workspaces without building another record list.
+
+        Tracking's completed, filed history is part of the report but no longer
+        belongs in its live workspace. Only live stage counts link to Tracking;
+        lifetime totals remain figures. Repository type links use its native
+        filter, so unclassified and grouped types remain informational.
+        """
         repository = self.report_domain == "documents"
-        base_url = reverse("core:repository_reports" if repository else "core:reports")
         office = filters["office"]
-        params = {"office": office.pk if office else None}
-        reset_params = {**params, "trend_year": self.request.GET.get("trend_year") if not repository else None,
-                        "per_page": self.request.GET.get("per_page")}
-        reset = core_filters.link(base_url, **reset_params) + "#report-records"
-        types = list(records.order_by().values("document_type_id", "document_type__name").distinct())
-        choices = [{"value": str(row["document_type_id"] or "none"),
-                    "label": row["document_type__name"] or "Unclassified"} for row in types]
-        choices.sort(key=lambda row: row["label"])
-        remainder = next((row for row in chart_types if row.get("is_remainder")), None) if repository else None
-        if remainder:
-            choices.append({"value": "other", "label": remainder["label"]})
-        records, selected = filter_report_records(
-            records, self.request, repository=repository,
-            type_values={row["value"] for row in choices}, remainder=remainder,
-        )
-        page = paginate(self.request, records.select_related("office", "document_type").order_by("-created_at", "-pk") if repository else records.with_related().order_by("-created_at", "-pk"))
-        return {**page, "report_records_count": page["page_obj"].paginator.count,
-                "report_record_types": choices, "report_record_statuses": Status.choices,
-                **selected,
-                "report_export_url": core_filters.link(reverse("core:report_export"), **params, **selected),
-                "report_records_url": reset, "report_records_office": office}
+        office_value = office.pk if office else ("all" if self.request.user.is_system_admin else None)
+        params = {"office": office_value}
+        base_url = reverse("documents:repository" if repository else "tracking:list")
+        if repository:
+            for row in context["document_types"]:
+                row["workspace_url"] = (
+                    core_filters.link(base_url, **params, document_type=row["document_type_id"])
+                    if row.get("document_type_id") else None
+                )
+        else:
+            for row in context["by_status"]:
+                row["workspace_url"] = (
+                    core_filters.link(base_url, **params, status=row["status"])
+                    if row["status"] in ACTIVE_STATUSES else None
+                )
+        links = {"report_workspace_url": core_filters.link(base_url, **params)}
+        if not repository:
+            links.update({
+                "report_pending_receipt_url": core_filters.link(base_url, **params, status=Status.PENDING_RECEIPT),
+                "report_overdue_url": core_filters.link(base_url, **params, overdue="yes"),
+            })
+        return links
 
     def _office_activity(self, records, office):
         """What one office itself received and sent, counted in handovers.
@@ -2455,7 +2462,7 @@ _DIRECTION_WORDS = {
 
 
 class ReportExportView(AppLoginRequiredMixin, View):
-    """CSV of the same lifetime tracking records and filters as the report list."""
+    """Permission-scoped tracking CSV, including filed history and legacy filters."""
 
     def get(self, request):
         filters = report_filters_from_request(request)
