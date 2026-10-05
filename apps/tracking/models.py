@@ -48,7 +48,7 @@ class Status(models.TextChoices):
     #: The office has finished its work, but an administrator has not yet
     #: approved the record into the Document Repository. The record stays in
     #: Tracking for this stage — see ACTIVE_STATUSES.
-    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Pending filing"
+    COMPLETED_PENDING_UPLOAD = "COMPLETED_PENDING_UPLOAD", "Completed - Pending Filing"
     #: Approved into the repository. A record only reaches this once a Document
     #: exists for it, so COMPLETED now means "filed", not merely "finished".
     COMPLETED = "COMPLETED", "Completed"

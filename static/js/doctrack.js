@@ -368,7 +368,7 @@
   document.querySelectorAll("form[action*='/complete/']").forEach(function (form) {
     /* The status name comes from the page, rendered through the same filter as
        every pill, so this dialog cannot call the status something else. */
-    var status = form.getAttribute("data-completed-status") || "Pending filing";
+    var status = form.getAttribute("data-completed-status") || "Completed - Pending Filing";
     form.addEventListener("submit", function (event) {
       var ok = window.confirm(
         "Mark this document as completed?\n\n" +

@@ -183,7 +183,7 @@ def test_a_viewer_cannot_change_the_status(sent_record, users):
 def test_the_labels_are_the_consultation_wording():
     assert [label for _value, label in Status.choices] == [
         "Draft", "Pending Receipt", "Received", "In Process",
-        "Pending filing", "Completed",
+        "Completed - Pending Filing", "Completed",
     ]
 
 

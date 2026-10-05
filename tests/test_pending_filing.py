@@ -56,7 +56,7 @@ def test_the_record_stays_in_tracking_until_it_is_approved(completed_unfiled, us
 
     assert completed_unfiled.status == Status.COMPLETED_PENDING_UPLOAD
     assert completed_unfiled.status == "COMPLETED_PENDING_UPLOAD", "stored workflow code stays compatible"
-    assert completed_unfiled.get_status_display() == "Pending filing"
+    assert completed_unfiled.get_status_display() == "Completed - Pending Filing"
     assert completed_unfiled in active_for(users["sup"]), "still in Tracking"
     assert not Document.objects.filter(tracking_record=completed_unfiled).exists(), "not in the repository"
     assert completed_unfiled in TrackingRecord.objects.visible_to(users["sup"]).pending_filing()
@@ -89,7 +89,7 @@ def test_the_queue_appears_on_the_tracking_page(client, completed_unfiled, users
     client.force_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
-    assert "Pending filing" in body
+    assert "Completed - Pending Filing" in body
     assert completed_unfiled.tracking_number in body
 
 

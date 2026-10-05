@@ -359,7 +359,7 @@ def test_the_page_has_no_search_box(client, users):
     for label in ("All in Tracking", "Incoming", "Outgoing"):
         assert label in queue_nav, label
     for label in ("Pending Receipt", "Received", "In Process",
-                  "Pending filing", "Overdue"):
+                  "Completed - Pending Filing", "Overdue"):
         assert label in body, label
         assert label not in queue_nav, f"{label} belongs in its own row"
 
