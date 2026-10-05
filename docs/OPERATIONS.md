@@ -169,7 +169,7 @@ The **Sort** row above the table offers three orders:
 
 | Pill | Order |
 |---|---|
-| Recently updated | Most recently moved first — the page's default |
+| Recently updated | Most recent tracking activity first — the page's default |
 | Deadline — soonest first | Earliest deadline at the top |
 | Deadline — latest first | Latest deadline at the top |
 

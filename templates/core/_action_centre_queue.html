@@ -1,6 +1,6 @@
 {% load doctrack %}
 {% comment %}
-  The Action Centre's queue: its chips, the queue picked and its first rows.
+  The tracking queue panel's queue: its chips, the queue picked and its first rows.
   Rendered inside the dashboard, and alone when a chip is clicked with HTMX
   (DashboardView.get, HX-Target "action-centre-queue"), so the swap and the
   full page are one template.
@@ -14,7 +14,7 @@
 <div id="{{ desk_target }}" class="desk-queue">
   <div class="card-udm-head action-centre-head">
     <div>
-      <h2>Action Centre</h2>
+      <h2>Tracking queues</h2>
       <div class="card-udm-caption">{% if user.is_viewer %}Review permitted documents by queue.{% else %}Review documents by queue and confirm receipts.{% endif %}</div>
     </div>
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
@@ -23,7 +23,7 @@
       <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
-  <nav class="desk-chips" aria-label="Action Centre queues">
+  <nav class="desk-chips" aria-label="Tracking queues">
     {% for queue in desk_queues %}
       {% if queue.disabled %}
         <span class="pill-toggle is-disabled" aria-disabled="true"
@@ -38,12 +38,12 @@
     {% endfor %}
     {% if desk_queue.slug != "pending-receipt" %}
       <a class="pill-toggle desk-chip-clear" href="{{ desk_clear_href }}"
-         hx-get="{{ desk_clear_href }}" hx-target="#{{ desk_target }}" hx-swap="outerHTML" hx-push-url="true">Clear</a>
+         hx-get="{{ desk_clear_href }}" hx-target="#{{ desk_target }}" hx-swap="outerHTML" hx-push-url="true">Reset queue</a>
     {% endif %}
   </nav>
 
       {% comment %}
-        The form wraps the Needs-action block only. Recently moved is read-only, and
+        The form wraps the selected queue only. Latest tracking activity is read-only, and
         a form spanning both would put rows nobody can act on inside the thing that
         submits.
 
@@ -71,7 +71,7 @@
                 <thead>
                   <tr>
                     {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
-                    <th>Tracking number</th><th>Subject</th><th>From</th><th>Awaiting</th><th></th>
+                    <th>Tracking number</th><th>Subject</th><th>Originating office</th><th>Receiving offices</th><th></th>
                   </tr>
                 </thead>
               {% endif %}
@@ -110,7 +110,7 @@
                       {# Same cap as the records-staff view above, one column wider. #}
                       <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                       <div class="text-muted" style="font-size:12.5px;">
-                        From {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                        Originating office: {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
                       </div>
                     </td>
                   {% endif %}

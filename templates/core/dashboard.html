@@ -266,7 +266,7 @@
         </div>
         <a class="tracking-pending-upload" href="{{ tracking_rings.pending_upload.url }}" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
           <i class="breakdown-swatch" aria-hidden="true"></i>
-          <span>Completed – Pending Upload<small>Included in Total Documents · shown separately from the chart</small></span>
+          <span>Completed – Pending Upload<small>Included in the tracking total · shown separately from the chart</small></span>
           <strong class="num">{{ tracking_rings.pending_upload.total }}</strong>
         </a>
         {% comment %}
@@ -287,7 +287,7 @@
       </div>
     </div>
     {% comment %}
-          Action Centre. Two questions that were two panels: what needs doing, and what
+          Tracking queues. Two questions that were two panels: what needs doing, and what
           moved lately. They were "Pending Receipt" and "Recent Tracking Activity",
           sitting in different rows and answering versions of the same question, so the
           reader had to look in two places to know whether the desk was clear.
@@ -303,14 +303,14 @@
       {% include "core/_action_centre_queue.html" %}
 
       <div class="desk-block desk-block--secondary">
-        <h3 class="desk-block-title">Recent document updates</h3>
-        <p class="desk-block-caption">Latest activity on active tracking documents, newest first.</p>
+        <h3 class="desk-block-title">Latest tracking activity</h3>
+        <p class="desk-block-caption">Most recent activity on tracking records, newest first. Includes completed records awaiting filing.</p>
         <div class="card-udm-body p-0 table-responsive">
           <table class="table-udm">
             {% if show_office_columns %}
               <thead>
                 <tr>
-                  <th>Tracking number</th><th>Subject</th><th>From</th><th>To</th><th class="text-end">Status</th>
+                  <th>Tracking number</th><th>Subject</th><th>Originating office</th><th>Receiving offices</th><th class="text-end">Status</th>
                 </tr>
               </thead>
             {% endif %}
@@ -386,7 +386,7 @@
             </p>
             <p>
               Created and Completed count documents. Their difference is not the live
-              work queue; use the tracking cards and Action Centre for that. Handovers count moves between offices, so one
+              work queue; use the tracking cards and Tracking queues for that. Handovers count moves between offices, so one
               document endorsed four times adds four &mdash; which is why that bar is
               usually the tallest and why it is not a count of documents. Each bar
               carries its own number so the three are never mistaken for one another.

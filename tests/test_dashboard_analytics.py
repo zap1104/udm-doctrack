@@ -1153,7 +1153,7 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     assert "Newest in the Document Repository" not in body, "removed in the consultation"
-    for heading in ("Action Centre",
+    for heading in ("Tracking queues",
                     "Created, handed over and completed &mdash; running totals",
                     "Turnaround Time for the Month of"):
         assert f"<h2>{heading}" in body, heading
@@ -1163,7 +1163,7 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     assert body.index("Turnaround Time for the Month of") < body.index('id="dashboard-memo"')
 
 
-# ============================================================== Action Centre
+# ============================================================== Tracking queues
 @pytest.fixture
 def awaiting_receipt(users, offices, memo_type):
     """Three documents routed to SUP and waiting for it to confirm receipt."""
@@ -1186,7 +1186,7 @@ def test_the_two_desk_panels_became_one(client, users, awaiting_receipt):
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "<h2>Action Centre</h2>" in body
+    assert "<h2>Tracking queues</h2>" in body
     assert "<h2>Pending Receipt</h2>" not in body
     assert "<h2>Recent Tracking Activity</h2>" not in body
 
@@ -1204,8 +1204,8 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
 
     queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
     assert queue
-    assert "Recent document updates" in body
-    assert queue.start() < body.index("Recent document updates")
+    assert "Latest tracking activity" in body
+    assert queue.start() < body.index("Latest tracking activity")
 
 
 @pytest.mark.django_db
@@ -1218,7 +1218,7 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
     import re
 
     assert re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
-    assert '<h3 class="desk-block-title">Recent document updates</h3>' in body
+    assert '<h3 class="desk-block-title">Latest tracking activity</h3>' in body
 
 
 @pytest.mark.django_db
@@ -1290,7 +1290,7 @@ def test_the_two_blocks_carry_different_colours():
     import re as _re
 
     css = _pathlib.Path("static/css/doctrack.css").read_text(encoding="utf-8")
-    block = css[css.index("/* ------------------------------------------------------------ Action Centre */"):
+    block = css[css.index("/* ------------------------------------------------------------ Tracking queues */"):
                 css.index("/* --------------------------------------------------------- scope picker */")]
 
     def rule(selector):
@@ -1325,7 +1325,7 @@ def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awai
 
 @pytest.mark.django_db
 def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, offices, memo_type):
-    """Recent document updates carried eight rows against Needs action's five and the
+    """Latest tracking activity carried eight rows against Needs action's five and the
     Repository panel's five. The three sit in a two-column row, so the tall one
     dragged the card beside it out with it and the row was always ragged."""
     for index in range(9):
@@ -1394,7 +1394,7 @@ def test_the_desk_comes_before_the_memo_dialog(client, users, awaiting_receipt):
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert body.index("Action Centre") < body.index('id="dashboard-memo"')
+    assert body.index("Tracking queues") < body.index('id="dashboard-memo"')
 
 
 # ------------------------------------------------------------ quick actions
@@ -1511,7 +1511,7 @@ def test_the_custody_box_is_required_not_pre_ticked(client, users, awaiting_rece
 
 @pytest.mark.django_db
 def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaiting_receipt):
-    """Recent document updates is read-only. A form spanning both would put rows nobody
+    """Latest tracking activity is read-only. A form spanning both would put rows nobody
     can act on inside the thing that submits."""
     import re
 
@@ -1521,7 +1521,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
     form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
     assert form, "no bulk receipt form rendered"
     assert 'class="desk-block desk-block--primary"' in form.group(0)
-    assert "Recent document updates" not in form.group(0)
+    assert "Latest tracking activity" not in form.group(0)
     assert "csrfmiddlewaretoken" in form.group(0)
 
 
@@ -1604,7 +1604,7 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: Document Repository the right. The page ran as full-width rows before, with
 #: the one repository chart between two tracking charts, so a figure's module
 #: could not be told from where it sat.
-TRACKING_SIDE = ["Tracking", "Action Centre", "Created, handed over and completed", "Turnaround Time"]
+TRACKING_SIDE = ["Tracking", "Tracking queues", "Created, handed over and completed", "Turnaround Time"]
 REPOSITORY_SIDE = ["Repository", "Added to the repository"]
 
 

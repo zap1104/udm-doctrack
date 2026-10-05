@@ -67,14 +67,14 @@ def test_picking_a_queue_shows_its_rows_and_marks_its_chip(client, users, traffi
     active = re.search(r'<a class="pill-toggle[^"]*is-active"[^>]*aria-current="true"', body)
     assert active, "the picked chip says so to assistive technology"
     if slug == "pending-receipt":
-        assert ">Clear</a>" not in body, "nothing to clear on the default queue"
+        assert ">Reset queue</a>" not in body, "nothing to reset on the default queue"
     else:
-        assert ">Clear</a>" in body
+        assert ">Reset queue</a>" in body
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("path", "reason"), [
-    ("/?desk=nonsense", "is not one of the Action Centre's queues"),
+    ("/?desk=nonsense", "is not one of the tracking queues"),
     ("/?office=all&desk=incoming", "needs an office"),
 ])
 def test_a_queue_that_cannot_be_opened_falls_back_with_a_note(client, users, traffic, path, reason):  # noqa: F811

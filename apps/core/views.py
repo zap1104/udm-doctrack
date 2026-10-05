@@ -547,7 +547,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         if raw and raw != chosen:
             reason = (
                 "needs an office; pick one to use it"
-                if raw in known else "is not one of the Action Centre's queues"
+                if raw in known else "is not one of the tracking queues"
             )
             messages.warning(
                 self.request, f"Showing {Status.PENDING_RECEIPT.label}: “{raw[:30]}” {reason}."
@@ -2502,7 +2502,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
             # re-run the query. This is the one place the old behaviour
             # destroyed information rather than hiding it.
             ["Tracking number", "Subject", "Type", "Originating office", "Current office",
-             "Status", "Overdue", "Direction", "Created", "Last movement", "Completed",
+             "Status", "Overdue", "Direction", "Created", "Last tracking activity", "Completed",
              "Waiting for receipt (office hrs)", f"{Status.IN_PROCESS.label} (office hrs)", "Lifetime (office hrs)"]
         )
         # One holiday read and one routing-step read for the whole sheet; each

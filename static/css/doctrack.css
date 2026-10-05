@@ -2207,7 +2207,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    palette of its own.
    ================================================================ */
 
-/* ------------------------------------------------------------ Action Centre */
+/* ------------------------------------------------------------ Tracking queues */
 /* Two blocks in one card, and they were reading as one list with a line through
    it: same grey, same weight, same size, so the half that needs doing looked
    like the half that already happened.
@@ -2216,7 +2216,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    stronger line would divide the card more loudly without saying which side to
    read first, which is the only thing the reader actually needs to know here. */
 .desk-block--secondary { margin-top:10px; }
-/* The Action Centre's queue chips: the Tracking page's pills, so a queue looks
+/* The tracking queue panel's queue chips: the Tracking page's pills, so a queue looks
    the same wherever it can be picked, each with its count. They wrap rather than
    scroll: seven pills and a Clear fit two rows on a phone, and a scrolling row
    hides the queues nobody sees. */
@@ -2264,7 +2264,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .desk-block-title + .card-udm-body { padding-top:10px; }
 
 /* ------------------------------------------ fixed-width panel cells */
-/* The two Action Centre tables and the Repository list beside them sit in a
+/* The two Tracking queues tables and the Repository list beside them sit in a
    two-column row, and every one of them is a list of documents whose subject or
    title is written by whoever filed it. Left to size themselves, one long
    subject set the width of a column and therefore of the card, and the card
@@ -2298,7 +2298,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 /* Newest in the Document Repository. A list rather than a table, so the cap is
    the row's own width; the fixed minimum height is what keeps five rows the
    same height whether the titles are short or long, which is what stops this
-   card and the Action Centre disagreeing about how tall their shared row is. */
+   card and the Tracking queues disagreeing about how tall their shared row is. */
 .newest-row { min-height: 62px; }
 .newest-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;

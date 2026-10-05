@@ -179,7 +179,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
             for field in ("tag", "source", "retention"):
                 form.fields.pop(field)
             if any(request.GET.get(field) for field in ("tag", "source", "retention")):
-                messages.warning(request, "Tags, origin, and retention apply only to filed documents. They were ignored for pending uploads.")
+                messages.warning(request, "Tags, origin, and retention apply only to filed documents. They were ignored for records awaiting filing.")
 
         # Apply every filter that validated, not the all-or-nothing case. The
         # whole block used to hang off `if form.is_valid()`, so one unrecognised
