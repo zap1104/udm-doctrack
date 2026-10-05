@@ -1,0 +1,4 @@
+{% comment %}Transparent, fixed-size shapes keep all stage colours visible at a shared coordinate.{% endcomment %}
+<svg class="trend-marker" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+  {% if key == "receipt" %}<circle cx="5" cy="5" r="3"></circle>{% elif key == "processing" %}<path d="M5 0.8 9.2 5 5 9.2 0.8 5Z"></path>{% else %}<path d="M5 0.8V9.2M0.8 5H9.2"></path>{% endif %}
+</svg>

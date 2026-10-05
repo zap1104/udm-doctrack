@@ -183,3 +183,21 @@ test('ten thousand mixed interactions keep selection and announcements consisten
     assert.equal(box.live.textContent, active(box)[0]?.getAttribute('aria-label') || '');
   }
 });
+
+test('mouse movement inside a selected date does not prevent the second click from closing it', () => {
+  for (const length of [1, 2, 12, 31]) {
+    const {box, dispatch} = harness(length);
+    const selected = box.months.at(-1);
+    dispatch('pointerover', selected, {pointerType: 'mouse'});
+    dispatch('pointerdown', selected, {pointerType: 'mouse'});
+    dispatch('focusin', box);
+    dispatch('click', selected);
+    dispatch('pointerover', selected, {pointerType: 'mouse'});
+    dispatch('pointermove', selected, {pointerType: 'mouse'});
+    assert.equal(active(box)[0], selected);
+    dispatch('pointerdown', selected, {pointerType: 'mouse'});
+    dispatch('click', selected);
+    assert.equal(active(box).length, 0);
+    assert.equal(box.classList.contains('is-dismissed'), true);
+  }
+});

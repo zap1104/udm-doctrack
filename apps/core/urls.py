@@ -28,6 +28,7 @@ urlpatterns = [
     path("print-log/", views.PrintLogView.as_view(), name="log_print"),
     path("administration/", views.AdministrationHomeView.as_view(), name="administration"),
     path("administration/audit-log/", views.AuditLogView.as_view(), name="audit_log"),
+    path("administration/office-schedule/", views.OfficeScheduleView.as_view(), name="office_schedule"),
     path("administration/<slug:slug>/", views.MasterDataListView.as_view(), name="masterdata_list"),
     path("administration/<slug:slug>/new/", views.MasterDataEditView.as_view(), name="masterdata_create"),
     path("administration/<slug:slug>/<int:pk>/", views.MasterDataEditView.as_view(), name="masterdata_edit"),

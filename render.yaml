@@ -13,6 +13,9 @@ services:
         generateValue: true
       - key: DJANGO_DEBUG
         value: "False"
+      # Render's proxy sets the scheme header; do not trust it on a directly exposed server.
+      - key: TRUST_PROXY_SSL_HEADER
+        value: "True"
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
       - key: PYTHON_VERSION

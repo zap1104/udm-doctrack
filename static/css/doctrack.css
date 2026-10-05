@@ -2451,14 +2451,13 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    off part way. Readers who ask for less motion get the finished chart at once. */
 .trend-line { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round; }
 .trend-lines { clip-path:inset(0 100% 0 0); animation:trend-reveal 900ms cubic-bezier(.3,.7,.3,1) 80ms forwards; }
-.trend-point { fill:var(--udm-surface); stroke-width:2; opacity:0; animation:trend-fade 280ms ease-out 650ms forwards; }
-.trend-point--overlap { fill:none; }
 @keyframes trend-reveal { to { clip-path:inset(0 0 0 0); } }
-@keyframes trend-fade { to { opacity:1; } }
 
 .trend-key { gap:8px; font-weight:500; }
 .trend-key strong { color:var(--udm-navy-text); font-weight:700; }
-.trend-key-line { flex:0 0 16px; width:16px; height:3px; border-radius:2px; }
+.trend-key-line { position:relative; display:inline-flex; align-items:center; justify-content:center; flex:0 0 20px; width:20px; height:10px; color:var(--dot); }
+.trend-key-line::before { content:""; position:absolute; left:0; right:0; top:4px; height:2px; background:currentColor; }
+.trend-marker { position:relative; display:block; width:10px; height:10px; fill:none; stroke:var(--dot); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; overflow:visible; }
 
 /* The hover layer sits exactly over the SVG: past the axis gutter, the same
    height. Each month's target is a full-height column, so a reader aims at a
@@ -2468,10 +2467,10 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-hit { position:absolute; top:0; bottom:0; cursor:crosshair; }
 .trend-cross { position:absolute; top:var(--plot-top); bottom:var(--plot-bottom); left:50%; width:0;
   border-left:1px solid var(--udm-line-strong); opacity:0; transition:opacity 140ms ease; }
-.trend-dot { position:absolute; left:50%; width:var(--dot-size,13px); height:var(--dot-size,13px); margin:calc(var(--dot-size,13px) / -2) 0 0 calc(var(--dot-size,13px) / -2); border-radius:50%;
-  background:var(--udm-surface); border:3px solid var(--dot); box-shadow:0 0 0 2px var(--udm-surface);
-  opacity:0; transform:scale(.35); transition:transform 180ms cubic-bezier(.2,.9,.3,1.35), opacity 120ms ease; }
-.trend-dot--overlap { background:transparent; box-shadow:none; }
+/* Persistent markers have one ten-pixel footprint, including on hover. The
+   transparent circle, diamond and cross retain their measured centres and
+   expose portions of all three colours even when the measurements coincide. */
+.trend-dot { position:absolute; left:50%; width:10px; height:10px; margin:-5px 0 0 -5px; pointer-events:none; }
 .trend-tip { position:absolute; top:var(--plot-top); z-index:6; min-width:200px; max-width:260px; padding:9px 11px 10px;
   border:1px solid var(--udm-line); border-radius:9px; background:var(--udm-surface);
   box-shadow:0 10px 24px rgba(6,28,52,.16); pointer-events:none;
@@ -2514,7 +2513,6 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .trend-tip-empty { display:block; color:var(--udm-muted); font-size:12.5px; }
 
 .trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
-.trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-dot,.trend-hit.is-active .trend-dot { opacity:1; transform:scale(1); }
 .trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-tip,.trend-hit.is-active .trend-tip {
   opacity:1; visibility:visible; transform:translateY(0); transition-delay:0s; }
 /* While one month is shown, the lines step back so its dots read first. */
@@ -2522,14 +2520,13 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 
 @media (prefers-reduced-motion: reduce) {
   .trend-lines { animation:none; clip-path:none; }
-  .trend-point { animation:none; opacity:1; }
   .trend-dot,.trend-tip,.trend-cross { transition:none; }
 }
 @media print {
   .trend-lines { animation:none; clip-path:none; }
   .trend-line { opacity:1 !important; }
-  .trend-point { animation:none; opacity:1; }
-  .trend-hover { display:none; }
+  .trend-hover { display:block; pointer-events:none; box-shadow:none; }
+  .trend-tip,.trend-cross { display:none; }
 }
 .trend-summary-figures .report-metric > span small { display:block; font-size:11px; font-weight:500; }
 .trend-grid { stroke:var(--chart-grid); stroke-width:1; }
@@ -2565,7 +2562,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround .trend-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; }
 .dashboard-turnaround { scroll-margin-top:90px; }
 .dashboard-turnaround-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--udm-line); }
-.dashboard-turnaround-filters > div { flex:1 1 145px; min-width:0; }
+.dashboard-turnaround-filters > div { flex:1 1 190px; min-width:0; }
 .dashboard-turnaround-filters label { display:block; margin-bottom:4px; color:var(--udm-slate-text); font-size:12px; font-weight:600; }
 .dashboard-turnaround-filters .form-select { width:100%; }
 .dashboard-turnaround-filters .dashboard-turnaround-filter-actions { flex:0 1 auto; display:flex; gap:8px; }
@@ -2590,6 +2587,15 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround-samples { color:var(--udm-slate-text); font-size:14px; white-space:nowrap; }
 .dashboard-turnaround-measure { margin:3px 0; color:var(--udm-slate-text); font-size:14px; }
 .turnaround-period-note { margin:0 0 12px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
+.turnaround-time-guide { margin:0 0 12px; padding:10px 12px; border-left:3px solid var(--udm-teal); background:var(--udm-surface); color:var(--udm-slate-text); font-size:13px; line-height:1.6; }
+.turnaround-time-guide p { margin:0; }
+.turnaround-time-guide p + p { margin-top:5px; }
+.turnaround-time-guide strong { color:var(--udm-navy-text); }
+.turnaround-time-guide .turnaround-rounding-note { font-size:12px; }
+.turnaround-calculation-control { grid-column:1 / -1; margin-top:10px; padding-top:8px; border-top:1px solid var(--udm-line); }
+.turnaround-equation { padding:10px 12px; background:var(--udm-surface); border:1px solid var(--udm-line); border-radius:6px; color:var(--udm-navy-text); font-size:15px; line-height:1.7; overflow-wrap:anywhere; }
+.trend-tip-row .trend-tip-equation { padding-top:3px; color:var(--udm-slate-text); border-top:1px solid var(--udm-line); }
+.trend-tip-formula-key { margin:0 0 7px; color:var(--udm-slate-text); font-size:11px; line-height:1.45; }
 .turnaround-sample-basis { margin:0 0 10px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
 .turnaround-zero-note { margin:8px 0 0; color:var(--udm-slate-text); font-size:12.5px; line-height:1.5; }
 .turnaround-waiting-note { margin:12px 0 0; padding-top:10px; border-top:1px solid var(--udm-line); color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
@@ -2621,6 +2627,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .dashboard-turnaround-stage { display:grid; grid-template-columns:minmax(160px,.65fr) minmax(0,2fr); column-gap:20px; }
   .dashboard-turnaround-stage-head,.dashboard-turnaround-measure,.dashboard-turnaround-stage > .turnaround-sample-basis,.dashboard-turnaround-stage > .turnaround-zero-note,.dashboard-turnaround-stage > .dashboard-turnaround-calculation,.dashboard-turnaround-stage > .dashboard-turnaround-empty { grid-column:1 / -1; }
   .dashboard-turnaround-averages { grid-template-columns:minmax(0,1fr); }
+  .dashboard-turnaround-averages--only { grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dashboard-turnaround-extremes { margin:0; padding:0 0 0 20px; border-top:0; border-left:1px solid var(--udm-line); }
 }
 @media (pointer:coarse) {
@@ -3272,7 +3279,7 @@ input:focus {
 }
 .stat-card .hint { max-width: 25ch; }
 .stat-card-arrow,
-.tracking-secondary-arrow {
+.repository-pending-filing-arrow {
   color: var(--udm-teal);
   font-size: 20px;
   line-height: 1;
@@ -3284,18 +3291,18 @@ input:focus {
   bottom: 16px;
 }
 .stat-card:hover .stat-card-arrow,
-.tracking-secondary-metric:hover .tracking-secondary-arrow { color: var(--udm-teal-ink); transform: translateX(3px); }
+.repository-pending-filing:hover .repository-pending-filing-arrow { color: var(--udm-teal-ink); transform: translateX(3px); }
 .stat-card.red { background: var(--udm-red-soft); border-color: var(--udm-red); }
 .stat-card.red .label,
 .stat-card.red .value { color: var(--udm-red-ink); }
 .stat-card.is-disabled { opacity: .7; }
 
-.tracking-secondary-metric {
+.repository-pending-filing {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  margin: -8px 0 12px;
+  margin: 0;
   padding: 12px 16px;
   border: 1px solid var(--udm-gold-border);
   border-left: 4px solid var(--udm-gold);
@@ -3304,8 +3311,8 @@ input:focus {
   color: var(--udm-ink);
   text-decoration: none;
 }
-.tracking-secondary-metric:hover { color: var(--udm-ink); border-color: var(--udm-gold-ink); text-decoration: none; }
-.tracking-secondary-icon {
+.repository-pending-filing:hover { color: var(--udm-ink); border-color: var(--udm-gold-ink); text-decoration: none; }
+.repository-pending-filing-icon {
   display: grid;
   place-items: center;
   width: 28px;
@@ -3315,14 +3322,14 @@ input:focus {
   color: var(--udm-gold-ink);
   font-weight: 800;
 }
-.tracking-secondary-metric > span:nth-child(2) { display: grid; gap: 2px; }
-.tracking-secondary-metric > span:nth-child(2) > span { color: var(--udm-muted); font-size: 12px; }
-.tracking-secondary-value { color: var(--udm-gold-ink); font-size: 20px; }
+.repository-pending-filing > span:nth-child(2) { display: grid; gap: 2px; }
+.repository-pending-filing > span:nth-child(2) > span { color: var(--udm-muted); font-size: 12px; }
+.repository-pending-filing-value { color: var(--udm-gold-ink); font-size: 20px; }
 
 @media (max-width: 575.98px) {
-  .tracking-secondary-metric { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .tracking-secondary-arrow { display: none; }
-  .tracking-secondary-value { grid-column: 2; grid-row: 2; justify-self: start; }
+  .repository-pending-filing { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .repository-pending-filing-arrow { display: none; }
+  .repository-pending-filing-value { grid-column: 2; grid-row: 2; justify-self: start; }
 }
 
 /* The selected Green Ledger direction still supports the existing dark-mode
@@ -3336,7 +3343,7 @@ input:focus {
 :root[data-theme="dark"] .stat-card,
 :root[data-theme="dark"] .card-udm,
 :root[data-theme="dark"] .dashboard-context,
-:root[data-theme="dark"] .tracking-secondary-metric {
+:root[data-theme="dark"] .repository-pending-filing {
   background: var(--udm-surface);
   color: var(--udm-ink);
 }
@@ -3355,12 +3362,12 @@ input:focus {
   border-color: var(--udm-line-strong);
 }
 :root[data-theme="dark"] .table-udm tbody tr:hover { background: var(--udm-surface-sunk); }
-:root[data-theme="dark"] .tracking-secondary-metric {
+:root[data-theme="dark"] .repository-pending-filing {
   background: var(--udm-gold-tint);
   border-color: var(--udm-gold-border);
 }
-:root[data-theme="dark"] .tracking-secondary-metric > span:nth-child(2) > span { color: var(--udm-muted); }
-:root[data-theme="dark"] .tracking-secondary-icon { background: var(--udm-gold-soft); color: var(--udm-gold-ink); }
+:root[data-theme="dark"] .repository-pending-filing > span:nth-child(2) > span { color: var(--udm-muted); }
+:root[data-theme="dark"] .repository-pending-filing-icon { background: var(--udm-gold-soft); color: var(--udm-gold-ink); }
 
 /* Sidebar hierarchy and office identity. */
 .app-sidebar { display: flex; flex-direction: column; }

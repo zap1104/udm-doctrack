@@ -185,11 +185,12 @@ def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(of
     # must still count each completion once and every actual handover once.
     joined = TrackingRecord.objects.filter(routing_steps__received_at__isnull=False)
     assert joined.count() == 5000
-    with django_assert_num_queries(4):
+    # One additional schedule snapshot per calculation, independent of row count.
+    with django_assert_num_queries(5):
         summary = analytics.turnaround(joined, month=day.replace(day=1))
-    with django_assert_num_queries(3):
+    with django_assert_num_queries(4):
         daily = analytics.turnaround_by_day(joined, day.replace(day=1))
-    with django_assert_num_queries(3):
+    with django_assert_num_queries(4):
         annual = analytics.turnaround_by_month(joined, year=2026)["rows"][7]
     point = next(row for row in daily["rows"] if row["month"] == day)
     for key, count, seconds in [("receipt", 5000, 60), ("processing", 1000, 7 * 3600), ("lifetime", 1000, 8 * 3600)]:

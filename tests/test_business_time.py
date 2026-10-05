@@ -259,8 +259,10 @@ def test_a_holiday_does_not_shorten_the_working_day():
 
 def test_many_intervals_ask_the_holiday_table_once(django_assert_num_queries):
     pairs = [(at(2026, 8, day, 9), at(2026, 8, day, 11)) for day in (24, 25, 26, 27, 28)]
-    with django_assert_num_queries(1):
+    with django_assert_num_queries(2) as captured:
         assert average_business_seconds(pairs) == 2 * HOUR
+    assert sum('"core_holiday"' in query["sql"] for query in captured.captured_queries) == 1
+    assert sum('"core_officeschedule"' in query["sql"] for query in captured.captured_queries) == 1
 
 
 def test_a_caller_can_pass_the_holidays_it_already_loaded(django_assert_num_queries):

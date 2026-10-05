@@ -172,8 +172,9 @@ def test_tag_usage_is_live_and_permission_scoped(client, users, offices):
         document = Document.objects.create(title="Tagged", office=offices[office], is_active=active)
         document.tags.add(tag)
     client.force_login(users["med_admin"])
-    context = client.get("/administration/tags/").context
-    assert next(row for row in context["objects"] if row.pk == tag.pk).visible_usage == 1
+    assert client.get("/administration/tags/").status_code == 403
+    context = client.get("/documents/").context
+    assert next(row for row in context["popular_tags"] if row.pk == tag.pk).visible_usage == 1
     client.force_login(users["admin"])
     context = client.get("/administration/tags/").context
     assert next(row for row in context["objects"] if row.pk == tag.pk).visible_usage == 2

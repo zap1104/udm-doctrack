@@ -369,7 +369,14 @@ def test_the_motion_is_skipped_for_readers_who_ask_and_never_printed():
                if ".trend-lines" in block[:400]]
     assert reduced, "a reduced-motion rule for the chart"
     assert ".trend-lines { animation:none; clip-path:none; }" in reduced[0][:400]
-    assert ".trend-hover { display:none; }" in css
+    printed = [block for block in re.split(r"@media print", css)[1:]
+               if ".trend-lines" in block[:400]]
+    assert printed, "a print rule for the chart"
+    assert ".trend-lines { animation:none; clip-path:none; }" in printed[0][:400]
+    # Markers now share the coordinate overlay. Printing must retain them so
+    # isolated observations do not disappear, while removing popup controls.
+    assert ".trend-hover { display:block; pointer-events:none; box-shadow:none; }" in printed[0][:400]
+    assert ".trend-tip,.trend-cross { display:none; }" in printed[0][:400]
 
 
 def test_touch_and_keyboard_are_handled_by_one_delegated_listener():

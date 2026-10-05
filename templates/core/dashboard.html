@@ -194,15 +194,6 @@
     </a>
   </div>
 </div>
-<a class="tracking-secondary-metric" href="{{ tracking_rings.pending_upload.url }}">
-  <span class="tracking-secondary-icon" aria-hidden="true">&#8599;</span>
-  <span>
-    <strong>Pending filing</strong>
-    <span>Completed records waiting to move into the Document Repository</span>
-  </span>
-  <strong class="tracking-secondary-value">{{ tracking_rings.pending_upload.total }}</strong>
-  <span class="tracking-secondary-arrow" aria-hidden="true">&rarr;</span>
-</a>
     <p class="form-text" data-help-title="Tracking totals">These cards overlap. Do not add them. Incoming and Outgoing need not add up to Total.</p>
     <div class="card-udm h-100" data-ring-card>
       <div class="card-udm-head">
@@ -488,6 +479,15 @@
       <div class="dashboard-side-caption">What has been filed, and which office added it.</div>
     </header>
     <div class="dashboard-side-stack">
+    <a class="repository-pending-filing" href="{{ tracking_rings.pending_upload.url }}">
+      <span class="repository-pending-filing-icon" aria-hidden="true">&#8599;</span>
+      <span>
+        <strong>Pending filing</strong>
+        <span>Completed in Tracking · not yet filed.</span>
+      </span>
+      <strong class="repository-pending-filing-value">{{ tracking_rings.pending_upload.total }}</strong>
+      <span class="repository-pending-filing-arrow" aria-hidden="true">&rarr;</span>
+    </a>
     <div class="card-udm h-100">
       <div class="card-udm-head">
         <div>

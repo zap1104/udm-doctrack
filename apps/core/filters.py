@@ -18,7 +18,7 @@ be confused again:
     as_office   "show me this page as that office" — the queue answers for it,
                 and a queue that has no office to answer for narrows by the
                 originating-or-current pairing instead. Always a primary key,
-                always gated on `is_office_admin`.
+                always gated on `is_system_admin`.
     raised_by   "documents that office started" — originating office only, a
                 list, open to everybody. This is the checkbox row on Tracking.
 
@@ -215,7 +215,12 @@ def resolve(
     all_offices = bool(picker and not raw_office and getattr(user, "is_system_admin", False))
     if picker and not raw_office and not all_offices:
         as_office = getattr(user, "office", None)
-    if raw_office and allow_office and not gate_office:
+    if allow_office and user.is_office_admin and not user.is_system_admin:
+        # Content/folder filters cannot change an administrator's office.
+        as_office = user.office
+        if raw_office and (as_office is None or raw_office not in {str(as_office.pk), as_office.code}):
+            invalid.append("office")
+    elif raw_office and allow_office and not gate_office:
         # Open to everybody: `visible_to` is the bound, not the picker.
         as_office = _office_by_pk_or_code(raw_office)
         if as_office is None:
@@ -300,7 +305,7 @@ def resolve(
 
 
 def _may_pick(user) -> bool:
-    return bool(getattr(user, "is_office_admin", False))
+    return bool(getattr(user, "is_system_admin", False))
 
 
 def link(base: str, request=None, **overrides) -> str:

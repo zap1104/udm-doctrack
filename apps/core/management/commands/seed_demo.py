@@ -395,8 +395,8 @@ class Command(BaseCommand):
         self.stdout.write("   4. Sign in as med.head, open Administration: MED's accounts only.")
         self.stdout.write("      Then as admin, the same screen carries every office.")
         self.stdout.write("      lnd.former is suspended, and reactivating is one click.")
-        self.stdout.write("   5. Open Reports as med.head — the office picker is an")
-        self.stdout.write("      administrator's control; med.staff goes straight to MED.")
+        self.stdout.write("   5. Open Reports as med.head or med.staff — both stay in MED.")
+        self.stdout.write("      Only admin (SYSTEM_ADMIN) can switch the office view.")
         self.stdout.write("   6. Sign in as admin and search for 'electrical supplies'.")
         self.stdout.write("   7. Open the dashboard as admin — a year of traffic behind the charts.")
 
@@ -566,7 +566,7 @@ class Command(BaseCommand):
                         )
                     if index >= 6:
                         tracking_services.complete_record(record, user=receiver, note="Action completed and filed.")
-                        archive_tracking_record(record, user=receiver)
+                        archive_tracking_record(record, user=users["admin"])
 
                     # The services stamp receipt and completion with server
                     # time, which is right everywhere except here: leaving them
@@ -741,7 +741,7 @@ class Command(BaseCommand):
                         # Most filed, a few left waiting for approval so the
                         # awaiting-upload slice is not empty.
                         if rng.random() < 0.82:
-                            archive_tracking_record(record, user=receiver)
+                            archive_tracking_record(record, user=users["admin"])
                     elif rng.random() < 0.4:
                         tracking_services.mark_in_process(record, user=receiver)
 

@@ -13,6 +13,7 @@ Django>=5.2.17,<6.0
 psycopg[binary]>=3.2.10,<3.4     # PostgreSQL driver
 python-dotenv>=1.2.2,<2.0        # reads the .env file
 sqlparse>=0.6.0,<1.0            # patched Django SQL parsing dependency
+urllib3>=2.8.0,<3.0             # patched storage/HTTP client dependency
 whitenoise>=6.7.0,<7.0           # serves static files in production
 
 # --- Security --------------------------------------------------------------

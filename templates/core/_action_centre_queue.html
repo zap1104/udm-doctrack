@@ -15,7 +15,7 @@
   <div class="card-udm-head action-centre-head">
     <div>
       <h2>Action Centre</h2>
-      <div class="card-udm-caption">Review documents by queue and confirm receipts.</div>
+      <div class="card-udm-caption">{% if user.is_viewer %}Review permitted documents by queue.{% else %}Review documents by queue and confirm receipts.{% endif %}</div>
     </div>
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
        aria-label="Open {{ desk_queue.label }} in Tracking{% if desk_queue.count %}, {{ desk_queue.count }} documents{% endif %}">

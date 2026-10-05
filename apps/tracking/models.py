@@ -195,11 +195,25 @@ class RoutingSLA(TimeStampedModel):
 class TrackingRecordQuerySet(models.QuerySet):
     def visible_to(self, user):
         """Records the user is allowed to see at all."""
-        if not user.is_authenticated or not user.is_active:
+        if (not user.is_authenticated or not user.is_active
+                or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
             return self.none()
         if user.is_system_admin:
             return self
         office_id = user.office_id
+        if not office_id:
+            return self.none()
+        if user.is_office_admin:
+            if not office_id:
+                return self.none()
+            # Shared access alone does not grant an office administrator a
+            # view into another office. Real routing to/from their office
+            # remains visible so inter-office work can still be handled.
+            return self.filter(
+                Q(originating_office_id=office_id) | Q(current_office_id=office_id)
+                | Q(routing_steps__to_office_id=office_id)
+                | Q(routing_steps__from_office_id=office_id)
+            ).exclude(~Q(created_by=user), status=Status.DRAFT).distinct()
         conditions = Q(created_by=user) | Q(grants__user=user)
         if office_id:
             conditions |= (
@@ -504,12 +518,14 @@ class TrackingRecord(TimeStampedModel):
 
     def can_user_act(self, user) -> bool:
         """Can this user add remarks / forward / complete right now?"""
-        if not user.is_authenticated or self.status in COMPLETED_STATUSES:
+        if not user.is_authenticated or not user.can_start_work or self.status in COMPLETED_STATUSES:
             return False
         if user.is_viewer:
             return False
         if user.is_system_admin:
             return True
+        if not self.can_user_view(user):
+            return False
         if self.status == Status.DRAFT:
             return self.created_by_id == user.pk or (
                 user.is_records_staff and user.office_id == self.originating_office_id
@@ -517,7 +533,9 @@ class TrackingRecord(TimeStampedModel):
         return bool(user.office_id) and self.has_custody(user.office)
 
     def can_user_grant_access(self, user) -> bool:
-        if not user.is_authenticated or not user.is_active or user.is_viewer:
+        if not user.is_authenticated or not user.can_start_work:
+            return False
+        if user.is_office_admin and not user.is_system_admin and not self.can_user_view(user):
             return False
         if user.is_system_admin or self.created_by_id == user.pk:
             return True
@@ -526,7 +544,7 @@ class TrackingRecord(TimeStampedModel):
         )
 
     def can_user_confirm_receipt(self, user) -> bool:
-        if not user.is_authenticated or not user.office_id or user.is_viewer:
+        if not user.is_authenticated or not user.can_start_work or not user.office_id:
             return False
         return self.pending_step_for_office(user.office) is not None
 
@@ -558,7 +576,7 @@ class TrackingRecord(TimeStampedModel):
         record and the audit entry names a self-approval as such, so the cases
         where nobody independent looked are visible rather than prevented.
         """
-        if not user.is_authenticated or user.is_viewer:
+        if not user.is_authenticated or not user.can_start_work:
             return False
         if self.status != Status.COMPLETED_PENDING_UPLOAD:
             return False
@@ -590,7 +608,7 @@ class TrackingRecord(TimeStampedModel):
         office that completed it can correct its own mistake, and an
         administrator can correct anyone's.
         """
-        if not user.is_authenticated or user.is_viewer:
+        if not user.is_authenticated or not user.can_start_work:
             return False
         # Only from the pending-upload stage. Once approved the record is part
         # of the repository, and withdrawing it from there is a different act.
@@ -598,6 +616,10 @@ class TrackingRecord(TimeStampedModel):
             return False
         if user.is_system_admin:
             return True
+        if user.is_office_admin and user.office_id not in {
+            self.originating_office_id, self.current_office_id,
+        }:
+            return False
         if self.completed_by_id == user.pk:
             return True
         if user.is_office_admin and user.office_id in {

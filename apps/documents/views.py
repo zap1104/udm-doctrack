@@ -40,7 +40,10 @@ RETENTION_DUE_SHOWN = 8
 
 
 def _get_document(request, pk) -> Document:
-    document = get_object_or_404(Document.objects.with_related(), pk=pk)
+    documents = Document.objects.with_related()
+    if request.user.is_office_admin and not request.user.is_system_admin:
+        documents = documents.visible_to(request.user)
+    document = get_object_or_404(documents, pk=pk)
     if not document.can_user_view(request.user):
         raise PermissionDenied(
             "This record belongs to another office and has not been shared with your account."
@@ -123,6 +126,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
         documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
         pending_visible = pending_upload_for(request.user).filter(is_archived=False)
+        if request.user.is_office_admin and not request.user.is_system_admin:
+            pending_visible = pending_visible.filter(originating_office_id=request.user.office_id) if request.user.office_id else pending_visible.none()
         pending_view = request.GET.get("view") == "pending"
         folders_view = request.GET.get("view") == "folders"
         # Through the shared resolver, so `office` is a primary key here as it
@@ -400,7 +405,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                 "suggestion": suggestion,
                 "confidence": suggestion.get("confidence", {}),
                 "text_preview": (document.ocr_text or "")[:4000],
-                "all_tags": Tag.active.order_by("-usage_count")[:50],
+                "all_tags": services.suggested_tags_for(request.user)[:50],
             },
         )
 
@@ -422,7 +427,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                     "suggestion": suggestion,
                     "confidence": suggestion.get("confidence", {}),
                     "text_preview": (document.ocr_text or "")[:4000],
-                    "all_tags": Tag.active.order_by("-usage_count")[:50],
+                    "all_tags": services.suggested_tags_for(request.user)[:50],
                 },
             )
 
@@ -533,7 +538,10 @@ class AddFilesView(OfficeAssignedMixin, View):
 
 class DocumentFileDownloadView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
-        document_file = get_object_or_404(DocumentFile.objects.select_related("document"), pk=pk)
+        files = DocumentFile.objects.select_related("document")
+        if request.user.is_office_admin and not request.user.is_system_admin:
+            files = files.filter(document__in=Document.objects.visible_to(request.user))
+        document_file = get_object_or_404(files, pk=pk)
         if not document_file.document.can_user_view(request.user):
             raise PermissionDenied("You do not have access to this document.")
         log_action(
@@ -560,57 +568,24 @@ class ReExtractView(OfficeAssignedMixin, View):
         document = _get_document(request, pk)
         if not document.can_user_edit(request.user):
             raise PermissionDenied("Only the owning office can re-run extraction.")
-        primary = document.primary_file
-        if not primary:
-            messages.error(request, "This record has no file to read.")
-            return redirect(document.get_absolute_url())
-        from .extraction import extract_document_text
         from .models import OcrStatus
 
-        if settings.ENABLE_BACKGROUND_TASKS:
-            document.ocr_status = OcrStatus.PENDING
-            document.save(update_fields=["ocr_status", "updated_at"])
-            services._enqueue_extraction(document, user_id=request.user.pk, file_ids=[primary.pk], replace=True)
+        try:
+            result = services.re_extract_document(document, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect(document.get_absolute_url())
+        if result["status"] == OcrStatus.PENDING:
             messages.success(request, "Reading the document in the background. This page will update when it is ready.")
-            return redirect(document.get_absolute_url())
-
-        # The download views already answer a vanished file with a 404; this one
-        # opened it bare, so a record whose file had gone missing from storage
-        # turned the button into a 500 instead of saying what was wrong.
-        try:
-            primary.file.open("rb")
-        except (FileNotFoundError, OSError):
-            messages.error(
+        elif result["failures"]:
+            messages.warning(request, "Some files could not be read: " + "; ".join(result["failures"][:3]))
+        elif result["status"] in {OcrStatus.FAILED, OcrStatus.SKIPPED}:
+            messages.warning(request, "Text extraction did not finish. See the extraction notes before retrying.")
+        else:
+            messages.success(
                 request,
-                f"“{primary.original_name}” is missing from storage, so there is nothing to read. "
-                "Upload the file again to restore it.",
+                f"Text extraction finished ({document.ocr_engine}): {result['characters']} characters. Search index refreshed.",
             )
-            return redirect(document.get_absolute_url())
-        try:
-            result = extract_document_text(
-                primary.file,
-                primary.original_name,
-                language_hint=document.ocr_language,
-                allow_external_ocr=document.allow_external_ocr,
-            )
-        finally:
-            primary.file.close()
-        document.ocr_text = result.text
-        document.ocr_status = getattr(OcrStatus, result.status, OcrStatus.EMPTY)
-        document.ocr_engine = result.engine[:32]
-        document.ocr_confidence = result.confidence
-        document.ocr_notes = "\n".join(result.notes)[:4000]
-        document.page_count = result.pages or document.page_count
-        document.save(
-            update_fields=[
-                "ocr_text", "ocr_status", "ocr_engine", "ocr_confidence", "ocr_notes", "page_count", "updated_at"
-            ]
-        )
-        document.rebuild_index()
-        messages.success(
-            request,
-            f"Text extraction finished ({result.engine}): {result.char_count} characters. Search index refreshed.",
-        )
         return redirect(document.get_absolute_url())
 
 
@@ -623,5 +598,5 @@ class ExtractionStatusView(AppLoginRequiredMixin, View):
 class TagSuggestJsonView(AppLoginRequiredMixin, View):
     def get(self, request):
         prefix = request.GET.get("q", "").strip().lower()
-        tags = Tag.active.filter(name__icontains=prefix).order_by("-usage_count", "name")[:10]
+        tags = services.suggested_tags_for(request.user).filter(name__icontains=prefix)[:10]
         return JsonResponse({"results": [tag.name for tag in tags]})

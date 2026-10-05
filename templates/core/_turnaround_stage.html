@@ -1,4 +1,5 @@
 <section class="dashboard-turnaround-stage dashboard-turnaround-stage--{{ stage.key }}{% if report_stage %} turnaround-stage{% endif %}" aria-labelledby="{{ id_prefix }}-{{ stage.key }}">
+  {% load doctrack %}
   <div class="dashboard-turnaround-stage-head">
     <h3 id="{{ id_prefix }}-{{ stage.key }}">{{ stage.label }}</h3>
   </div>
@@ -10,35 +11,42 @@
     <p class="dashboard-turnaround-calculation">{{ stage.excluded }} {{ stage.noun }}{{ stage.excluded|pluralize }} excluded because required timestamps are missing or out of order.</p>
   {% endif %}
   {% if stage.samples %}
-    <dl class="dashboard-turnaround-averages">
+    <dl class="dashboard-turnaround-averages{% if stage.samples == 1 %} dashboard-turnaround-averages--only{% endif %}">
       <div>
-        <dt>Average working time</dt>
-        <dd class="dashboard-turnaround-primary num">{{ stage.average_label }}</dd>
+        <dt>Average within office hours</dt>
+        <dd class="dashboard-turnaround-primary num">{{ stage.average_seconds|duration_hours }}</dd>
       </div>
       <div>
-        <dt>Average elapsed time</dt>
-        <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar }}</dd>
+        <dt>Average total wait</dt>
+        <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar_seconds|duration_hours }}</dd>
       </div>
     </dl>
     {% if stage.samples > 1 %}
       <dl class="dashboard-turnaround-extremes" aria-label="Fastest and slowest records for {{ stage.label }}">
         <div>
-          <dt>Fastest working time</dt>
+          <dt>Fastest within office hours</dt>
           {% if stage.fastest %}
-            <dd><strong class="num">{{ stage.fastest.office_label }}</strong><a href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><span>{{ stage.fastest.calendar_label }} elapsed</span></dd>
+            <dd><strong class="num">{{ stage.fastest.office_seconds|duration_hours }}</strong><a href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><span>{{ stage.fastest.calendar_seconds|duration_hours }} total wait</span></dd>
           {% else %}
             <dd class="dashboard-turnaround-empty">No positive working time</dd>
           {% endif %}
         </div>
         <div>
-          <dt>Slowest working time</dt>
-          <dd><strong class="num">{{ stage.slowest.office_label }}</strong><a href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><span>{{ stage.slowest.calendar_label }} elapsed</span></dd>
+          <dt>Slowest within office hours</dt>
+          <dd><strong class="num">{{ stage.slowest.office_seconds|duration_hours }}</strong><a href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><span>{{ stage.slowest.calendar_seconds|duration_hours }} total wait</span></dd>
         </div>
       </dl>
     {% endif %}
     {% if stage.zero_working_time %}
-      <p class="turnaround-zero-note">{{ stage.zero_working_time }} of {{ stage.samples }} {{ stage.zero_working_time|pluralize:"has,have" }} 0 working mins; included in the average.</p>
+      <p class="turnaround-zero-note">{{ stage.zero_working_time }} of {{ stage.samples }} {{ stage.zero_working_time|pluralize:"has,have" }} 0 mins within office hours; included in the average.</p>
     {% endif %}
+    <div class="turnaround-calculation-control">
+      <button type="button" class="btn btn-udm-outline btn-sm" data-bs-toggle="modal" data-bs-target="#turnaround-calculation-dialog"
+              data-turnaround-calculation data-stage-label="{{ stage.label }}"
+              data-equation="{{ stage.average_calendar_seconds|duration_hours }} total wait − {{ stage.average_outside_seconds|duration_hours }} excluded ≈ {{ stage.average_seconds|duration_hours }} within office hours."
+              data-average-equation="{{ stage.total_office_seconds|duration_hours }} counted ÷ {{ stage.samples }} {% if stage.key == 'receipt' %}confirmed handover{{ stage.samples|pluralize }}{% else %}completed document{{ stage.samples|pluralize }}{% endif %} ≈ {{ stage.average_seconds|duration_hours }}."
+              aria-label="View calculation for {{ stage.label }}">View calculation</button>
+    </div>
   {% else %}
     <p class="dashboard-turnaround-empty">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %} this month.</p>
   {% endif %}

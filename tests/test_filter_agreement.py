@@ -1092,7 +1092,7 @@ def test_the_pending_upload_pill_agrees_with_its_dashboard_slice(client, users, 
 
 
 @pytest.mark.django_db
-def test_only_an_administrator_is_offered_the_office_picker(client, users):
+def test_only_a_system_administrator_is_offered_the_office_picker(client, users):
     """The control is a convenience, not the permission: `?office=` was already
     refused for everybody else by scope_office, which is what decides here too,
     so the two cannot drift into disagreeing."""
@@ -1100,6 +1100,9 @@ def test_only_an_administrator_is_offered_the_office_picker(client, users):
     assert 'id="tracking-as-office"' not in client.get(TRACKING).content.decode()
 
     client.force_login(users["med_admin"])
+    assert 'id="tracking-as-office"' not in client.get(TRACKING).content.decode()
+
+    client.force_login(users["admin"])
     assert 'id="tracking-as-office"' in client.get(TRACKING).content.decode()
 
 
@@ -1388,16 +1391,15 @@ def test_a_system_administrator_defaults_to_every_office(client, users, traffic,
 
 @pytest.mark.django_db
 def test_an_office_administrator_defaults_to_their_own_office(client, users, traffic):
-    """Their scope is their office, so that is the default — and it is selected
-    in the picker by name rather than through a "Your office" entry duplicating
-    a row already in the list."""
+    """Their assigned office is fixed; there is no office-switching control."""
     client.force_login(users["med_admin"])
     context = client.get(DASHBOARD).context
     body = client.get(TRACKING).content.decode()
 
     assert context["scope"]["all_offices"] is False
-    assert context["scope"]["label"] == users["med_admin"].office.name
-    assert f'value="{users["med_admin"].office.pk}"' in body
+    assert context["scope"]["display"] == users["med_admin"].office.name
+    assert context["scope"]["can_pick"] is False
+    assert 'id="tracking-as-office"' not in body
 
 
 @pytest.mark.django_db

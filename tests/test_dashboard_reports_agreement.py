@@ -423,14 +423,20 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 # Daily samples and the linked tracking total add four fixed queries.
 # Repository additions now use one grouped query; the tracking-total summary
 # adds one aggregate, reducing the all-office page by one query overall.
-DASHBOARD_QUERIES = 50
+# The editable office schedule adds one shared snapshot read per page, not
+# one per interval or chart. The assertions below verify that exact read.
+DASHBOARD_QUERIES = 51
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
 #: 45: the same six, on the same service.
 #: 39: the running-totals chart left Reports, which repeated the dashboard's.
 # Annual trend and paginated drilldown replace the repository panel rendering.
-REPORTS_QUERIES = 46
+REPORTS_QUERIES = 47
+
+
+def _assert_one_office_schedule_query(captured):
+    assert sum('"core_officeschedule"' in query["sql"] for query in captured.captured_queries) == 1
 
 
 @pytest.mark.django_db
@@ -440,8 +446,9 @@ def test_the_dashboard_query_count_is_pinned(
     client.force_login(users["admin"])
     client.get(f"{REPORTS}?office=all")  # session and permission caches warm
 
-    with django_assert_num_queries(DASHBOARD_QUERIES):
+    with django_assert_num_queries(DASHBOARD_QUERIES) as captured:
         client.get(f"{DASHBOARD}?office=all")
+    _assert_one_office_schedule_query(captured)
 
 
 @pytest.mark.django_db
@@ -451,8 +458,9 @@ def test_the_reports_query_count_is_pinned(
     client.force_login(users["admin"])
     client.get(f"{DASHBOARD}?office=all")
 
-    with django_assert_num_queries(REPORTS_QUERIES):
+    with django_assert_num_queries(REPORTS_QUERIES) as captured:
         client.get(f"{REPORTS}?office=all")
+    _assert_one_office_schedule_query(captured)
 
 
 #: All four fell by one on the turnaround fixes: the average receipt time and the
@@ -463,12 +471,12 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 53
+DASHBOARD_OFFICE_QUERIES = 54
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three
 #: retention counts are added.
-REPORTS_OFFICE_QUERIES = 47
+REPORTS_OFFICE_QUERIES = 48
 
 
 @pytest.mark.django_db
@@ -480,8 +488,9 @@ def test_the_dashboard_query_count_is_pinned_for_an_office(
     pk = offices["SUP"].pk
     client.get(f"{REPORTS}?office={pk}")
 
-    with django_assert_num_queries(DASHBOARD_OFFICE_QUERIES):
+    with django_assert_num_queries(DASHBOARD_OFFICE_QUERIES) as captured:
         client.get(f"{DASHBOARD}?office={pk}{ring}")
+    _assert_one_office_schedule_query(captured)
 
 
 @pytest.mark.django_db
@@ -492,8 +501,9 @@ def test_the_reports_query_count_is_pinned_for_an_office(
     pk = offices["SUP"].pk
     client.get(f"{DASHBOARD}?office={pk}")
 
-    with django_assert_num_queries(REPORTS_OFFICE_QUERIES):
+    with django_assert_num_queries(REPORTS_OFFICE_QUERIES) as captured:
         client.get(f"{REPORTS}?office={pk}")
+    _assert_one_office_schedule_query(captured)
 
 
 @pytest.mark.django_db

@@ -135,8 +135,8 @@ class Command(BaseCommand):
         sender_office, receiver_office = offices[0], offices[1]
 
         def get_users():
-            sender = User.objects.filter(office=sender_office, is_active=True).first()
-            receiver = User.objects.filter(office=receiver_office, is_active=True).first()
+            sender = User.objects.filter(office=sender_office, is_active=True, role__in=["USER", "ADMIN", "SYSTEM_ADMIN"]).first()
+            receiver = User.objects.filter(office=receiver_office, is_active=True, role__in=["USER", "ADMIN", "SYSTEM_ADMIN"]).first()
             if not sender or not receiver:
                 raise RuntimeError(
                     f"Need an active user in both {sender_office.code} and {receiver_office.code}. "
@@ -270,7 +270,7 @@ class Command(BaseCommand):
 
         document = self.step(
             "Archive it into the document repository",
-            lambda: archive_tracking_record(record, user=sender),
+            lambda: archive_tracking_record(record, user=User.objects.filter(role="SYSTEM_ADMIN", is_active=True).first()),
         )
 
         def check_archived():

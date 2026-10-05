@@ -327,7 +327,7 @@ def test_the_two_report_sections_are_named_exactly(client, users):
 
 # --- who gets the filter at all ---------------------------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("who", ["admin", "med_admin"])
+@pytest.mark.parametrize("who", ["admin"])
 def test_an_administrator_gets_the_office_filter(client, users, who):
     client.force_login(users[who])
     body = client.get(REPORTS).content.decode()
@@ -340,7 +340,7 @@ def test_an_administrator_gets_the_office_filter(client, users, who):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("who", ["med", "viewer"])
+@pytest.mark.parametrize("who", ["med", "viewer", "med_admin"])
 def test_an_ordinary_account_goes_straight_to_its_own_office(client, users, who):
     """No filter row at all. The dropdown they used to be shown went through
     `scope_office`, which drops a pick from an account without the picker — so

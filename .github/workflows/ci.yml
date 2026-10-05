@@ -47,8 +47,8 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Turnaround chart interaction tests
-        run: node --test tests/js/test_turnaround_chart.cjs
+      - name: Browser security and turnaround interaction tests
+        run: node --test tests/js/test_turnaround_chart.cjs tests/js/test_browser_security.cjs
 
       - name: Install dependencies
         run: |
@@ -84,6 +84,9 @@ jobs:
 
       - name: Run tests
         run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60
+
+      - name: Background processing and maintenance regressions
+        run: ENABLE_BACKGROUND_TASKS=True pytest -q tests/test_processing_regressions.py tests/test_security_maintenance.py tests/test_queued_extraction_security.py
 
       - name: Prepare verification database
         run: |

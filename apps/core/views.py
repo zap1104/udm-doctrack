@@ -6,8 +6,9 @@ from datetime import date, datetime, time, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import FieldDoesNotExist, PermissionDenied
+from django.db import transaction
 from django.db.models import CharField, Count, Exists, F, Max, Min, OuterRef, Q, TextField
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import Cast, TruncMonth
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -42,10 +43,10 @@ from .analytics import bar as _bar
 from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
-from .business_time import load_holidays, office_hours_caveat
+from .business_time import humanise_hours, load_holidays, office_hours_caveat, saved_schedule
 from .colors import STATUS_COLOURS
-from .forms import BootstrapFormMixin
-from .mixins import AdminRequiredMixin, AppLoginRequiredMixin
+from .forms import BootstrapFormMixin, OfficeScheduleForm
+from .mixins import AdminRequiredMixin, AppLoginRequiredMixin, SystemAdminRequiredMixin
 from .models import (
     AuditLog,
     DocumentType,
@@ -53,6 +54,7 @@ from .models import (
     MetadataFieldDefinition,
     Notification,
     NotificationRead,
+    OfficeSchedule,
     Tag,
     TagRule,
 )
@@ -135,10 +137,8 @@ class DashboardMemoMixin:
         page to one of them. Everybody else gets their own office and no
         control, exactly as before.
 
-        Gated on `is_office_admin` — the property behind AdminRequiredMixin's
-        ("ADMIN", "SYSTEM_ADMIN") — not on `is_records_staff`, which is everyone
-        except a viewer and would hand the picker to the ordinary office users
-        it is not for.
+        Only `is_system_admin` may select another office's view. Account
+        administration within one office does not grant a wider view.
 
         The chosen office is applied *on top of* `visible_to(user)`, never
         instead of it, so `?office=` can only ever narrow what somebody is
@@ -146,7 +146,7 @@ class DashboardMemoMixin:
         their own office, therefore gains nothing by naming a different one.
         """
         user = self.request.user
-        if not user.is_office_admin:
+        if not user.is_system_admin:
             # `label` is what the picker would have been called; `display` is
             # what to print. They differ only here, and only because "Your
             # office" answers a reader looking at their own screen and answers
@@ -1084,7 +1084,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         rows = trend["rows"]
         if not rows or trend.get("has_data") is False:
             return []
-        markers = self._trend_markers(trend)
         ceiling = trend["ceiling"] or 1
         plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
         width = 100 / len(rows)
@@ -1109,12 +1108,15 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                         "colour": STATUS_COLOURS[status],
                         "text": row[f"{key}_label"],
                         "calendar": row[f"{key}_calendar"],
+                        "office_seconds": row.get(f"{key}_office_seconds"),
+                        "calendar_seconds": row.get(f"{key}_calendar_seconds"),
+                        "outside_seconds": (row[f"{key}_calendar_seconds"] - row[f"{key}_office_seconds"]
+                                            if row.get(f"{key}_calendar_seconds") is not None else None),
                         "samples": samples,
                         "documents": row[f"{key}_documents"],
                         "zero_working_time": row[f"{key}_zero_working_time"],
                         "unit": unit + ("" if samples == 1 else "s"),
                         "top_percent": 100 * y / self.TREND_HEIGHT,
-                        **markers[index, key],
                     }
                 )
             month = row.get("period_label", f"{row['month']:%B %Y}")
@@ -1124,7 +1126,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 if point["key"] == "receipt":
                     document_unit = "document" if point["documents"] == 1 else "documents"
                     count = f"{point['samples']} confirmed {point['unit']} across {point['documents']} {document_unit}"
-                summary = f"{point['label']} {point['text']} working time, {point['calendar']} elapsed, over {count}"
+                office_text = humanise_hours(point["office_seconds"]) if point["office_seconds"] is not None else point["text"]
+                calendar_text = humanise_hours(point["calendar_seconds"]) if point["calendar_seconds"] is not None else point["calendar"]
+                summary = f"{point['label']} {office_text} within office hours, {calendar_text} total wait, over {count}"
                 if point["zero_working_time"]:
                     summary += f"; {point['zero_working_time']} with zero working time"
                 summaries.append(summary)
@@ -1142,30 +1146,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             )
         return months
 
-    def _trend_markers(self, trend):
-        """Concentric rings keep stages visible when their rendered points coincide.
-
-        Group by the actual SVG coordinate, including values that round onto
-        the same point. Keep the measured position and tooltip value unchanged.
-        """
-        markers = {}
-        plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
-        ceiling = trend["ceiling"] or 1
-        for index, row in enumerate(trend["rows"]):
-            groups = {}
-            for key, *_ in self.TREND_SERIES:
-                if row[key] is not None:
-                    y = round(self.TREND_PAD_TOP + (1 - row[key] / ceiling) * plot_h, 1)
-                    groups.setdefault(y, []).append(key)
-            for keys in groups.values():
-                for rank, key in enumerate(keys):
-                    markers[index, key] = {
-                        "radius": 3 + 3 * rank,
-                        "marker_size": 13 + 8 * rank,
-                        "overlap": len(keys) > 1,
-                    }
-        return markers
-
     @staticmethod
     def _turnaround_table_rows(rows, series):
         """Readable time and denominators beside the unrounded plotting values."""
@@ -1177,6 +1157,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     {
                         "key": key, "label": row[f"{key}_label"],
                         "calendar": row[f"{key}_calendar"],
+                        "office_seconds": row.get(f"{key}_office_seconds"),
+                        "calendar_seconds": row.get(f"{key}_calendar_seconds"),
                         "samples": row[f"{key}_samples"],
                         "documents": row[f"{key}_documents"],
                         "zero_working_time": row[f"{key}_zero_working_time"],
@@ -1201,7 +1183,6 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         plot_h = self.TREND_HEIGHT - self.TREND_PAD_TOP - self.TREND_PAD_BOTTOM
         step = plot_w / len(rows)
         ceiling = trend["ceiling"] or 1
-        markers = self._trend_markers(trend)
 
         def place(index, value):
             x = self.TREND_PAD_LEFT + (index + 0.5) * step
@@ -1230,7 +1211,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     "colour": colour,
                     "polyline": " ".join(f"{x},{y}" for x, y in points),
                     "dots": [
-                        {"x": x, "y": y, **markers[index, key]}
+                        {"x": x, "y": y}
                         for index, row in enumerate(rows) if row[key] is not None
                         for x, y in [place(index, row[key])]
                     ],
@@ -1349,7 +1330,7 @@ def report_filters_from_request(request):
     by status and by type, so setting one filtered a chart into agreeing with
     itself.
 
-    Gated on `is_office_admin`. Naming *another* office is an administrator's
+    Gated on `is_system_admin`. Naming another office is a system administrator's
     control; everybody else gets their own office, which is the only one their
     report could describe.
 
@@ -1363,7 +1344,7 @@ def report_filters_from_request(request):
     reader already sees.
     """
     params = request.GET
-    can_pick = bool(getattr(request.user, "is_office_admin", False))
+    can_pick = bool(getattr(request.user, "is_system_admin", False))
     picked = tracking_services.scope_office(request.user, params.get("office"))
     # The sentinel means "every office", not an office. Handing it to a lookup
     # is the bug the Tracking page and the search page each had once; Reports
@@ -1379,7 +1360,7 @@ def report_filters_from_request(request):
     # the whole university.
     user = request.user
     defaulted = (
-        office is None and not all_offices and can_pick
+        office is None and not all_offices and user.is_office_admin
         and not user.is_system_admin and bool(user.office_id)
     )
     if defaulted:
@@ -2283,7 +2264,7 @@ class NotificationListView(AppLoginRequiredMixin, View):
         user = request.user
         read_subquery = NotificationRead.objects.filter(notification_id=OuterRef("pk"), user=user)
         notification_query = (
-            Notification.objects.filter(office_id=user.office_id)
+            Notification.objects.visible_to(user)
             .select_related("tracking_record", "document")
             .annotate(is_read=Exists(read_subquery))
         )
@@ -2354,7 +2335,7 @@ class NotificationReadView(AppLoginRequiredMixin, View):
     def post(self, request, pk):
         from .notifications import mark_read
 
-        notification = get_object_or_404(Notification, pk=pk, office_id=request.user.office_id)
+        notification = get_object_or_404(Notification.objects.visible_to(request.user), pk=pk)
         if not mark_read(notification, request.user):
             raise Http404
         if request.headers.get("HX-Request") == "true":
@@ -2422,13 +2403,24 @@ class PrintLogView(AppLoginRequiredMixin, View):
     def post(self, request):
         label = (request.POST.get("label") or "a page").strip()[: self.MAX_LABEL]
         reference = (request.POST.get("reference") or "").strip()[: self.MAX_LABEL]
+        target_type = request.POST.get("target_type", "").strip()
+        target_id = request.POST.get("target_id", "").strip()
+        target = None
+        if target_type or target_id:
+            targets = {
+                "TrackingRecord": TrackingRecord.objects.visible_to(request.user),
+                "Document": Document.objects.visible_to(request.user).filter(is_active=True),
+            }
+            if (target_type not in targets or not target_id.isascii() or not target_id.isdigit()
+                    or len(target_id) > 19 or int(target_id) > 2**63 - 1):
+                return JsonResponse({"logged": False}, status=400)
+            target = get_object_or_404(targets[target_type], pk=target_id)
         summary = f"Printed {label}" + (f" ({reference})" if reference else "")
         log_action(
             AuditLog.Action.PRINT,
             summary,
             actor=request.user,
-            target_type=request.POST.get("target_type", "")[:64],
-            target_id=request.POST.get("target_id", "")[:64],
+            target=target,
             extra={"label": label, "reference": reference},
             request=request,
         )
@@ -2589,6 +2581,7 @@ MASTER_DATA = {
         "system_admin_only": True,
     },
     "document-types": {
+        "system_admin_only": True,
         "model": DocumentType,
         "label": "Document types",
         "singular": "document type",
@@ -2597,6 +2590,7 @@ MASTER_DATA = {
         "help": "Memorandum, letter, work order… Types drive filing, filters and search weighting.",
     },
     "tags": {
+        "system_admin_only": True,
         "model": Tag,
         "label": "Tags",
         "singular": "tag",
@@ -2605,6 +2599,7 @@ MASTER_DATA = {
         "help": "Shared vocabulary for filing. Keep tags short and lower-case.",
     },
     "metadata-rules": {
+        "system_admin_only": True,
         "model": TagRule,
         "label": "Metadata rules",
         "singular": "metadata rule",
@@ -2617,6 +2612,7 @@ MASTER_DATA = {
                 "Rules are how the archive gets smarter without any AI training.",
     },
     "metadata-fields": {
+        "system_admin_only": True,
         "model": MetadataFieldDefinition,
         "label": "Metadata fields",
         "singular": "metadata field",
@@ -2668,7 +2664,8 @@ class MasterDataAccessMixin:
         config = MASTER_DATA.get(slug)
         if not config:
             raise Http404("Unknown master data section")
-        if config.get("system_admin_only") and not self.request.user.is_system_admin:
+        if (config.get("system_admin_only") and self.request.user.is_authenticated
+                and not self.request.user.is_system_admin):
             raise PermissionDenied(
                 f"Only system administrators can change {config['label'].lower()}."
             )
@@ -2682,7 +2679,7 @@ ACCESS_EVENTS = frozenset(set(QUIET_EVENTS) | {RecordActivity.Event.PRINTED})
 def audit_entries_for(user):
     """`AuditLog`, narrowed to what this administrator may see.
 
-    Scoped by the actor's office for anyone but a system administrator. The log
+    Scoped by immutable office snapshots and the target's access rules. The log
     screen used to be reachable only by the global ADMIN role, so the unscoped
     queryset was correct; opening it to office administrators is what makes it
     a leak, and it is the same leak the account screens had — a role that
@@ -2697,11 +2694,55 @@ def audit_entries_for(user):
     document titles.
     """
     entries = AuditLog.objects.select_related("actor")
+    if not user.is_authenticated or not user.is_active:
+        return entries.none()
     if user.is_system_admin:
         return entries
     if not user.office_id:
         return entries.none()
-    return entries.filter(actor__office_id=user.office_id)
+    from apps.accounts.models import User
+
+    def ids(queryset):
+        return queryset.order_by().annotate(audit_pk=Cast("pk", output_field=CharField())).values("audit_pk")
+
+    own_actor = Q(extra__audit_actor_office_id=user.office_id)
+    own_target = Q(extra__audit_target_office_id=user.office_id)
+    allowed_target = (
+        Q(target_type="", target_id="") & own_actor
+        | Q(target_type="User", target_id__in=ids(User.objects.administrable_by(user)))
+        | Q(target_type="TrackingRecord", target_id__in=ids(TrackingRecord.objects.visible_to(user)))
+        | Q(target_type="Document", target_id__in=ids(Document.objects.visible_to(user)))
+        | Q(target_type="Office", target_id=str(user.office_id))
+    )
+    # Legacy rows have no verifiable office snapshot. Keep them available to
+    # system administrators, rather than guessing from an actor's new office.
+    return entries.filter(own_actor | own_target).filter(allowed_target)
+
+
+class OfficeScheduleView(SystemAdminRequiredMixin, View):
+    template_name = "administration/office_schedule.html"
+
+    def get(self, request):
+        values = saved_schedule()
+        return render(request, self.template_name, {
+            "form": OfficeScheduleForm(instance=OfficeSchedule(pk=1, **values)), "tab": "schedule",
+        })
+
+    def post(self, request):
+        form = OfficeScheduleForm(request.POST, instance=OfficeSchedule(pk=1, **saved_schedule()))
+        if form.is_valid():
+            before = saved_schedule()
+            fields = ("opens_at", "closes_at", "break_start", "break_end", "working_days")
+            values = {name: form.cleaned_data[name] for name in fields}
+            with transaction.atomic():
+                schedule, _created = OfficeSchedule.objects.update_or_create(pk=1, defaults=values)
+                log_action(AuditLog.Action.UPDATE, target=schedule, request=request,
+                           summary="Updated office hours and daily break schedule",
+                           extra={"before": {key: str(value) for key, value in before.items()},
+                                  "after": {key: str(value) for key, value in values.items()}})
+            messages.success(request, "Office schedule saved. Turnaround figures now use this schedule.")
+            return redirect("core:office_schedule")
+        return render(request, self.template_name, {"form": form, "tab": "schedule"}, status=400)
 
 
 class AdministrationHomeView(AdminRequiredMixin, TemplateView):
@@ -2715,9 +2756,7 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
         # The accounts this administrator can open, not every account in the
         # university: the card links to the Users screen, which is office-scoped,
         # so an office administrator read "Users 16" over a list of 4.
-        accounts = User.objects.filter(is_active=True)
-        if not user.is_system_admin:
-            accounts = accounts.filter(office_id=user.office_id) if user.office_id else accounts.none()
+        accounts = User.objects.administrable_by(user).filter(is_active=True)
         context.update(
             {
                 "user_count": accounts.count(),
@@ -2726,10 +2765,6 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
                 "office_count": (
                     Office.objects.filter(is_active=True).count() if user.is_system_admin else None
                 ),
-                "type_count": DocumentType.objects.filter(is_active=True).count(),
-                "tag_count": Tag.objects.filter(is_active=True).count(),
-                "rule_count": TagRule.objects.filter(is_active=True).count(),
-                "field_count": MetadataFieldDefinition.objects.filter(is_active=True).count(),
                 "recent_audit": audit_entries_for(user)[:10],
                 "master_data": master_data_for(self.request.user),
             }
@@ -2738,6 +2773,12 @@ class AdministrationHomeView(AdminRequiredMixin, TemplateView):
         # and hidden: a figure that is not theirs to see should not be sitting
         # in their context either.
         if self.request.user.is_system_admin:
+            context.update({
+                "type_count": DocumentType.objects.filter(is_active=True).count(),
+                "tag_count": Tag.objects.filter(is_active=True).count(),
+                "rule_count": TagRule.objects.filter(is_active=True).count(),
+                "field_count": MetadataFieldDefinition.objects.filter(is_active=True).count(),
+            })
             context["top_searches"] = top_searches()
             context["search_analytics"] = search_analytics()
         return context
@@ -2804,9 +2845,9 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
     template_name = "administration/masterdata_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        # Resolved before dispatch so both GET and POST are gated by one check.
-        # AdminRequiredMixin runs first (it is later in the MRO), so an
-        # unauthenticated request is still redirected rather than 404'd.
+        # Guard authenticated requests before opening the section. Privileged
+        # POSTs recheck it after AdminRequiredMixin refreshes the actor.
+        # Anonymous requests continue to the sign-in redirect.
         if request.user.is_authenticated:
             self.config = self.config_or_404(kwargs.get("slug"))
         return super().dispatch(request, *args, **kwargs)
@@ -2825,6 +2866,9 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         )
 
     def post(self, request, slug, pk=None):
+        # RoleRequiredMixin reloads/locks the actor after our dispatch hook.
+        # Recheck the section against that current actor before saving.
+        self.config = self.config_or_404(slug)
         instance = self._instance(pk)
         form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(request.POST, instance=instance)

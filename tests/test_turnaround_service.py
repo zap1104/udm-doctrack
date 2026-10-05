@@ -157,8 +157,8 @@ def test_an_empty_month_says_so_rather_than_inventing_a_figure(users):
 def test_a_period_costs_the_same_few_queries_however_much_is_in_it(
     august, django_assert_num_queries
 ):
-    """Holidays, handovers, documents, and the live waiting count."""
-    with django_assert_num_queries(4):
+    """One schedule snapshot, holidays, handovers, documents, and waiting count."""
+    with django_assert_num_queries(5):
         analytics.turnaround(TrackingRecord.objects.all(), month=date(2026, 8, 1))
 
 

@@ -10,11 +10,19 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import connection, transaction
 from django.shortcuts import redirect
 
 
 class AppLoginRequiredMixin(LoginRequiredMixin):
     """Login required + a clear message instead of a silent redirect."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and (
+            not request.user.is_active or request.user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}
+        ):
+            raise PermissionDenied("Your account does not have access. Contact the system administrator.")
+        return super().dispatch(request, *args, **kwargs)
 
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
@@ -29,8 +37,28 @@ class RoleRequiredMixin(AppLoginRequiredMixin):
     permission_message = "Your account does not have access to this page."
 
     def dispatch(self, request, *args, **kwargs):
+        # Account/settings writes must use the current role and office, even
+        # when this request loaded its user before another admin changed it.
+        if request.user.is_authenticated and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            from apps.accounts.models import User
+
+            with transaction.atomic():
+                if getattr(self, "serialize_account_changes", False):
+                    # Account-wide invariants need one transaction lock before
+                    # actor/target locks. Two system admins must not both pass
+                    # the last-active-admin check using the other's old role.
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_xact_lock(%s)", [0x55444D414343])
+                actor = User.objects.select_for_update().filter(pk=request.user.pk, is_active=True).first()
+                if actor is None:
+                    raise PermissionDenied(self.permission_message)
+                request.user = actor
+                return self._dispatch_for_role(request, *args, **kwargs)
+        return self._dispatch_for_role(request, *args, **kwargs)
+
+    def _dispatch_for_role(self, request, *args, **kwargs):
         if request.user.is_authenticated and self.allowed_roles:
-            if request.user.role not in self.allowed_roles and not request.user.is_superuser:
+            if request.user.role not in self.allowed_roles and not request.user.is_system_admin:
                 raise PermissionDenied(self.permission_message)
         return super().dispatch(request, *args, **kwargs)
 
@@ -80,7 +108,7 @@ class WriteAccessRequiredMixin(AppLoginRequiredMixin):
     )
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated and request.user.is_viewer:
+        if request.user.is_authenticated and not request.user.is_records_staff:
             raise PermissionDenied(self.permission_message)
         return super().dispatch(request, *args, **kwargs)
 
@@ -94,7 +122,7 @@ class OfficeAssignedMixin(WriteAccessRequiredMixin):
     """
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated and request.user.office_id is None and not request.user.is_superuser:
+        if request.user.is_authenticated and request.user.office_id is None and not request.user.is_system_admin:
             messages.warning(
                 request,
                 "Your account is not assigned to an office yet. Ask the system administrator to set one.",

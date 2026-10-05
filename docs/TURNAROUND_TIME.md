@@ -19,7 +19,37 @@ Working time excludes weekends, the configured lunch break, and active holidays
 entered under Administration. By default, a working day is eight office hours
 (8 AM to 5 PM, excluding lunch from noon to 1 PM). The labels and graph scale
 follow the configured schedule. An elapsed day is always 24 hours and includes
-all time the requester waited.
+all time the requester waited. Dashboard and Reports now display both clocks in
+total hours and minutes, so readers do not have to compare eight-hour working
+days with 24-hour elapsed days. The graph's y-axis also displays office hours.
+
+The visible guide shows the configured schedule and an ordinary open-day
+example. For the default schedule, 8 AM to 5 PM is nine elapsed hours minus
+one lunch hour, leaving eight office hours. Eight hours is not a fixed deduction:
+Monday 4 PM to Tuesday 9 AM is 17 elapsed hours minus 15 closed hours, leaving
+two office hours (assuming neither day is a configured holiday).
+
+Each stage's **View calculation** popup shows its actual average total wait minus average excluded time,
+and total counted office time divided by the observation count. These values
+use the same valid samples as the graph and cards. They measure elapsed time
+inside the schedule, not how long staff actively worked on a document.
+
+System administrators can change working days, opening/closing times and the
+daily break under **Administration → Office schedule**. They can add, edit or
+retire full-day holidays under **Administration → Holidays**. Breaks must be
+inside a positive office window and cannot consume the whole day. Turning the
+break off counts the full office window. Every saved schedule change is audited.
+Until a schedule is saved, the deployment's configured defaults apply.
+Changes affect both historical and current turnaround figures; timestamps and
+total wait remain unchanged. A lazy snapshot keeps a request's cards, graphs,
+exports and time labels on one schedule, with one schedule query per calculation.
+
+Graph popups show total wait minus excluded time for that date. Small markers
+use a yellow circle for Pending Receipt, a pink diamond for In Process and a
+green cross for Total lifetime, matching the legend. Their transparent shapes
+share a fixed ten-pixel footprint at every screen width and do not enlarge on
+hover. Their centres and underlying values are not moved or rounded to zero.
+When values overlap, the popup and table show each stage's exact displayed time.
 
 The average is the sum of valid working durations divided by their count.
 Monthly summaries use individual handovers or documents, not an unweighted
@@ -27,7 +57,10 @@ average of daily dots. For example, one document taking one hour on Monday and
 three taking three hours on Tuesday have a monthly average of 2.5 hours, not
 two hours. Daily and yearly chart points retain their precision; short positive
 waits are not rounded to zero working days before plotting. Display labels
-show up to two nonzero units and whole minutes, or “under a minute.”
+show total hours and whole minutes, or “under a minute.” Labels round down to
+whole minutes; calculations retain exact seconds. The approximately-equal sign
+in the displayed formulas allows for that rounding. Existing CSV duration
+labels retain working-day units.
 
 Zero working minutes is a valid measurement. An instant confirmation and an
 interval entirely outside office hours both contribute zero to the average.
@@ -67,11 +100,24 @@ observations, and means across office and user scopes. The second verifies
 known intervals inside a rolled-back transaction. Neither audit replaces the
 full pytest suite required before pushing.
 
-Verified on 1 October 2026: 5,631 live comparisons across six office/user
-scopes and 44 known-interval checks passed with no mismatches. No verification
-records were retained. Dashboard and Reports were checked at 390, 768, and
-1440 pixels in both themes, with no page overflow. All four stage selections,
-the empty current month, year selection, annual table agreement, and descending
-tooltip order were also checked. Responsive evidence is saved under
-`docs/verification/turnaround/`. Ruff, all 84 templates, and Django's system
-check passed. Pytest was not run in this turn; it remains required before push.
+Verified on 3 October 2026: 5,639 live comparisons across six office/user
+scopes and 44 known-interval checks passed with no mismatches. The rolled-back
+workflow check passed all 21 steps; 244 pages were checked as four roles.
+No verification records were retained.
+
+Dashboard and Reports were checked at 320, 390, 768 and 1440 pixels in both
+themes, with no page overflow. Markers stayed ten pixels wide and aligned
+with their measured coordinates (less than 0.1 pixel of rounding difference).
+All four stage selections, both available report years, sparse observations,
+and the calculation popup were checked. Repeated clicks now close a selected
+date even when the mouse moves slightly within it. Printed charts retain the
+markers and omit interactive popups; reduced-motion settings skip the reveal.
+
+The regression runs covered all 6,310 Python cases: 6,309 passed and one
+fixture-specific case was skipped, with 77.59% combined code coverage against
+CI's 60% requirement. These include 4,263 graph stress cases for
+coincident, near-zero, absent and extreme measurements, calendar lengths and
+locale-safe rendering. All 125 JavaScript chart checks passed, including
+10,000 mixed interactions. Ruff, all 87 templates, Django's system and deployment
+checks, and migration consistency passed. The production-settings test runs
+use CI's demo-seeding flag only inside the isolated test process.

@@ -1635,6 +1635,9 @@ def test_every_panel_sits_on_its_own_side(client, users, filed_record):
 
     assert _side(body, "tracking")[1] == TRACKING_SIDE
     assert _side(body, "repository")[1] == REPOSITORY_SIDE
+    assert "Pending filing" not in _side(body, "tracking")[0]
+    assert "Pending filing" in _side(body, "repository")[0]
+    assert "Completed in Tracking · not yet filed." in _side(body, "repository")[0]
     assert body.index("dashboard-side--tracking") < body.index("dashboard-side--repository"), (
         "tracking first, so it leads when the sides stack on a narrow screen"
     )

@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import AuditLog, MetadataFieldDefinition, Tag
+from apps.core.permissions import active_writer, locked_mutation
 from apps.core.utils import checksum_of, log_action, normalise_text, validate_upload
 from apps.tracking.models import RecordActivity, Status
 from apps.tracking.services import add_activity
@@ -30,6 +31,17 @@ from .suggestions import Suggestion, suggest_metadata
 logger = logging.getLogger("doctrack")
 
 
+def suggested_tags_for(user):
+    """Tag suggestions must not disclose another office's document keywords."""
+    tags = Tag.active.all()
+    if not user.is_authenticated or not user.is_active:
+        return tags.none()
+    if user.is_system_admin:
+        return tags.order_by("-usage_count", "name")
+    documents = Document.objects.visible_to(user).filter(is_active=True)
+    return tags.filter(documents__in=documents).distinct().order_by("name")
+
+
 # ---------------------------------------------------------------------------
 # Upload → text → suggestion (step 1 of the upload wizard)
 # ---------------------------------------------------------------------------
@@ -44,6 +56,7 @@ def ingest_upload(
     is not enabled. Production workers never hold the upload transaction open
     while a third-party OCR request runs.
     """
+    user = active_writer(user)
     validate_upload(uploaded_file)
     office = office or user.office
     if not user.is_authenticated or not user.is_active or user.is_viewer:
@@ -153,7 +166,7 @@ def duplicate_of(uploaded_file, *, user=None) -> Document | None:
 # ---------------------------------------------------------------------------
 # Metadata review (step 2 of the upload wizard)
 # ---------------------------------------------------------------------------
-@transaction.atomic
+@locked_mutation
 def save_document_metadata(document: Document, *, user, data: dict, tag_names, metadata_values: dict,
                            accepted_from_suggestion: dict | None = None) -> Document:
     if not document.can_user_edit(user):
@@ -236,7 +249,7 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
             DocumentMetadata.objects.filter(document=document, field=definition).delete()
 
 
-@transaction.atomic
+@locked_mutation
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
     if not document.can_user_edit(user):
         raise PermissionDenied("Only the owning office can add files.")
@@ -279,13 +292,34 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
             update_fields=["ocr_text", "ocr_status", "ocr_confidence", "ocr_notes", "updated_at"]
         )
         document.rebuild_index()
+    document.page_count = document.file_page_count
+    document.save(update_fields=["page_count", "updated_at"])
     return document_file
+
+
+@locked_mutation
+def re_extract_document(document: Document, *, user) -> dict:
+    """Retry all attachments with current authorization in either runtime mode."""
+    if not document.can_user_edit(user):
+        raise PermissionDenied("Only the owning office can re-run extraction.")
+    if not document.files.exists():
+        raise ValidationError("This record has no file to read.")
+    if settings.ENABLE_BACKGROUND_TASKS:
+        document.ocr_status = OcrStatus.PENDING
+        document.save(update_fields=["ocr_status", "updated_at"])
+        _enqueue_extraction(document, user_id=user.pk, replace=True)
+        return {"status": OcrStatus.PENDING, "failures": []}
+    from .tasks import extract_document_task
+
+    result = extract_document_task(document.pk, user_id=user.pk, replace=True)
+    document.refresh_from_db()
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Archiving a completed tracking record
 # ---------------------------------------------------------------------------
-@transaction.atomic
+@locked_mutation
 def archive_tracking_record(record, *, user, tag_names=None, description="") -> Document:
     """Approve a finished DTS record into the repository, keeping its identity.
 
@@ -295,10 +329,10 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
     optional afterthought, so "completed" told a reader nothing about whether
     the document had actually reached the repository.
 
-    Call it through `apps.tracking.services.approve_upload`, which applies the
-    permission rule. This function checks the record's state, not the user's
-    rights — the tracking layer owns who may approve.
+    The approval permission applies here too, including callers outside views.
     """
+    if not record.can_user_approve_upload(user):
+        raise PermissionDenied("Only an administrator for this document's office can approve filing.")
     if record.status == Status.COMPLETED:
         raise ValidationError("This record has already been approved into the repository.")
     if record.status != Status.COMPLETED_PENDING_UPLOAD:
@@ -331,12 +365,14 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
     created_file_ids = []
     for attachment in record.attachments.all():
         try:
-            attachment.file.open("rb")
-            payload = attachment.file.read()
-            attachment.file.close()
-        except Exception as exc:  # pragma: no cover - a storage hiccup must not block archiving
+            with attachment.file.open("rb") as source_file:
+                payload = source_file.read()
+        except Exception as exc:
             logger.warning("Could not read attachment %s: %s", attachment.pk, exc)
-            continue
+            raise ValidationError(
+                "Filing stopped because an attachment could not be read from storage. "
+                "Restore the missing file and retry; this record is still waiting to be filed."
+            ) from exc
 
         document_file = DocumentFile(
             document=document,
@@ -369,7 +405,8 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
     document.ocr_text = normalise_text("\n\n".join(part for part in text_parts if part))[:200000]
     document.ocr_status = OcrStatus.PENDING if settings.ENABLE_BACKGROUND_TASKS else (OcrStatus.DONE if document.ocr_text else OcrStatus.EMPTY)
     document.ocr_engine = "pending" if settings.ENABLE_BACKGROUND_TASKS else "archive-merge"
-    document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "updated_at"])
+    document.page_count = document.file_page_count
+    document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "updated_at"])
 
 
     if settings.ENABLE_BACKGROUND_TASKS:

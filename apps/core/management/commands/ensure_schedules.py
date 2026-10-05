@@ -12,13 +12,14 @@ class Command(BaseCommand):
 
         from django_q.models import Schedule
 
-        # Both run daily. The chase has to be a schedule rather than a signal:
+        # All run daily. The chase has to be a schedule rather than a signal:
         # "still not received after two days" and "past its deadline" become
         # true by time passing, not by anybody doing something there is a hook
         # to hang off.
         wanted = [
             ("notification-pruning", "apps.core.tasks.prune_notifications"),
             ("notification-chase", "apps.core.tasks.chase_unreceived_and_overdue"),
+            ("security-throttle-pruning", "apps.core.tasks.prune_security_throttles"),
         ]
         for name, func in wanted:
             schedule, created = Schedule.objects.update_or_create(

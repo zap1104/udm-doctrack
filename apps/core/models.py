@@ -6,8 +6,11 @@ document types, tags, tag rules and custom metadata fields.
 
 from __future__ import annotations
 
+from datetime import time
+
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils.text import slugify
 
 
@@ -204,6 +207,31 @@ class MetadataFieldDefinition(TimeStampedModel):
         return [choice.strip() for choice in self.choices_csv.split(",") if choice.strip()]
 
 
+class OfficeSchedule(TimeStampedModel):
+    """One university-wide schedule used when counting turnaround time."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    opens_at = models.TimeField(default=time(8))
+    closes_at = models.TimeField(default=time(17))
+    break_start = models.TimeField(default=time(12))
+    break_end = models.TimeField(default=time(13))
+    working_days = models.PositiveSmallIntegerField(default=5)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(id=1), name="one_office_schedule"),
+            models.CheckConstraint(condition=models.Q(working_days__gte=1, working_days__lte=7), name="schedule_valid_week"),
+            models.CheckConstraint(condition=models.Q(closes_at__gt=models.F("opens_at")), name="schedule_positive_day"),
+            models.CheckConstraint(condition=(models.Q(break_start__gte=models.F("opens_at")) &
+                                             models.Q(break_end__lte=models.F("closes_at")) &
+                                             models.Q(break_end__gte=models.F("break_start"))), name="schedule_break_inside_day"),
+            models.CheckConstraint(condition=~models.Q(break_start=models.F("opens_at"), break_end=models.F("closes_at")), name="schedule_has_office_time"),
+        ]
+
+    def __str__(self):
+        return "Office hours and daily break"
+
+
 class Holiday(TimeStampedModel):
     """A day the offices are closed, so it counts no office time.
 
@@ -278,10 +306,23 @@ class AuditLog(models.Model):
 
 
 class NotificationQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        if not getattr(user, "is_authenticated", False) or not user.is_active or not user.office_id:
+            return self.none()
+        notifications = self.filter(office_id=user.office_id)
+        if user.is_office_admin and not user.is_system_admin:
+            from apps.documents.models import Document
+            from apps.tracking.models import TrackingRecord
+
+            notifications = notifications.filter(
+                Q(tracking_record__isnull=True) | Q(tracking_record__in=TrackingRecord.objects.visible_to(user))
+            ).filter(Q(document__isnull=True) | Q(document__in=Document.objects.visible_to(user)))
+        return notifications
+
     def unread_for(self, user):
         if not getattr(user, "is_authenticated", False) or not user.office_id:
             return self.none()
-        return self.filter(office_id=user.office_id, resolved_at__isnull=True).exclude(reads__user=user)
+        return self.visible_to(user).filter(resolved_at__isnull=True).exclude(reads__user=user)
 
 
 class Notification(models.Model):

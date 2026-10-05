@@ -30,11 +30,14 @@ def chart(values, length=1):
             row.update({key: value, f"{key}_samples": samples,
                         f"{key}_documents": samples, f"{key}_zero_working_time": samples if value == 0 else 0,
                         f"{key}_label": humanise_business_seconds(None if value is None else value * 28800),
-                        f"{key}_calendar": "1 day"})
+                        f"{key}_calendar": "1 day",
+                        f"{key}_office_seconds": None if value is None else value * 28800,
+                        f"{key}_calendar_seconds": None if value is None else 86400})
         rows.append(row)
     present = [row[key] for row in rows for key in KEYS if row[key] is not None]
     ceiling = max(1, int(max(present, default=0)) + 1)
-    return {"rows": rows, "ceiling": ceiling, "has_data": bool(present), "ticks": analytics.axis_ticks(ceiling)}
+    return {"rows": rows, "ceiling": ceiling, "has_data": bool(present), "ticks": analytics.axis_ticks(ceiling),
+            "working_day_hours": 8}
 
 
 @pytest.mark.parametrize("values", list(product(VALUES, repeat=3)))
@@ -74,12 +77,26 @@ def test_geometry_population_order_alignment_and_bounds(values, length):
     assert geometry["grid"][-1]["axis"] is True
 
 
-def test_equal_values_remain_visible_as_distinct_concentric_markers():
+def test_equal_values_keep_their_shared_coordinate_without_enlargement():
     trend = chart((1, 1, 1), 2)
     lines = DashboardView()._trend_points(trend)
-    assert len({line["dots"][0]["radius"] for line in lines}) == 3
-    assert all(line["dots"][0]["overlap"] for line in lines)
     assert len({(line["dots"][0]["x"], line["dots"][0]["y"]) for line in lines}) == 1
+    assert all(set(line["dots"][0]) == {"x", "y"} for line in lines)
+    points = DashboardView()._trend_months(trend)[0]["points"]
+    assert {point["key"] for point in points} == set(KEYS)
+    assert len({point["top_percent"] for point in points}) == 1
+
+
+def test_three_near_zero_values_remain_three_visible_colours():
+    trend = chart((0, 0, 3 / 480), 1)
+    view = DashboardView()
+    lines = view._trend_points(trend)
+    dots = [line["dots"][0] for line in lines]
+    assert len({line["colour"] for line in lines}) == 3
+    assert dots[2]["y"] != dots[0]["y"], "The three-minute measurement must not become zero."
+    points = view._trend_months(trend)[0]["points"]
+    assert {point["key"] for point in points} == set(KEYS)
+    assert points[0]["outside_seconds"] == points[0]["calendar_seconds"] - points[0]["office_seconds"]
 
 
 def test_hover_marker_uses_the_rendered_svg_coordinate_exactly():
@@ -103,9 +120,15 @@ class ChartMarkup(HTMLParser):
         super().__init__()
         self.coordinates = []
         self.percentages = []
+        self.markers = []
+        self.marker_viewboxes = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if "data-trend-stage" in attrs:
+            self.markers.append(attrs)
+        if tag == "svg" and attrs.get("class") == "trend-marker":
+            self.marker_viewboxes.append(attrs["viewbox"])
         if tag in ("circle", "line"):
             self.coordinates.extend(value for key, value in attrs.items() if key in ("cx", "cy", "r", "x1", "x2", "y1", "y2"))
         if tag in ("div", "span") and attrs.get("class", "").startswith("trend-"):
@@ -126,3 +149,39 @@ def test_svg_and_overlay_numbers_remain_valid_in_every_locale(language, length):
     parser.feed(body)
     assert parser.coordinates and parser.percentages
     assert all(isfinite(float(value)) for value in parser.coordinates + parser.percentages)
+
+
+@pytest.mark.parametrize("values", list(product((None, 0, 3 / 480, 1), repeat=3)))
+@pytest.mark.parametrize("length", (1, 31))
+def test_real_markup_has_one_compact_marker_per_observation_without_extra_hover_rings(values, length):
+    trend = chart(values, length)
+    view = DashboardView()
+    geometry = view._trend_geometry(trend)
+    lines = view._trend_points(trend)
+    body = render_to_string("core/_turnaround_chart.html", {
+        "turnaround_trend": trend, "turnaround_trend_geometry": geometry,
+        "turnaround_trend_points": lines, "turnaround_table_rows": [],
+    })
+    parser = ChartMarkup()
+    parser.feed(body)
+    expected = [point for month in geometry["months"] for point in month["points"]]
+    assert len(parser.markers) == len(expected)
+    for marker, point in zip(parser.markers, expected, strict=True):
+        assert marker["data-trend-stage"] == point["key"]
+        style = dict(part.split(":", 1) for part in marker["style"].split(";"))
+        assert float(style["top"].strip("%")) == pytest.approx(point["top_percent"])
+        assert style["--dot"] == point["colour"]
+        assert "--dot-size" not in style
+    assert all(viewbox == "0 0 10 10" for viewbox in parser.marker_viewboxes)
+    assert "trend-point" not in body
+    assert "trend-dot--overlap" not in body
+    assert "Different-size rings" not in body
+
+
+@pytest.mark.parametrize("key,shape", [
+    ("receipt", '<circle cx="5" cy="5" r="3">'),
+    ("processing", '<path d="M5 0.8 9.2 5 5 9.2 0.8 5Z">'),
+    ("lifetime", '<path d="M5 0.8V9.2M0.8 5H9.2">'),
+])
+def test_stage_symbols_are_distinct_in_both_legend_and_plot(key, shape):
+    assert shape in render_to_string("core/_trend_marker.html", {"key": key})

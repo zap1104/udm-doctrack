@@ -38,6 +38,8 @@ from .business_time import (
     humanise_business_seconds,
     load_holidays,
     office_hours_caveat,
+    office_schedule_explanation,
+    with_office_schedule,
     working_day_hours,
     working_day_seconds,
 )
@@ -606,6 +608,8 @@ def _turnaround_row(key, samples, day_seconds) -> dict:
         # Keep precision until SVG geometry is drawn. Rounding to tenths of a
         # working day hid every positive average below 24 minutes as zero.
         key: None if office is None else office / day_seconds,
+        f"{key}_office_seconds": office,
+        f"{key}_calendar_seconds": calendar,
         f"{key}_label": humanise_business_seconds(office),
         f"{key}_calendar": humanise_duration(
             None if calendar is None else timedelta(seconds=calendar)
@@ -620,6 +624,7 @@ def _named(sample) -> dict:
         "office_label": humanise_business_seconds(sample["office"]),
         "calendar_label": humanise_duration(timedelta(seconds=sample["calendar"])),
         "office_seconds": sample["office"],
+        "calendar_seconds": sample["calendar"],
         "tracking_number": sample["tracking_number"],
         "url": reverse("tracking:detail", args=[sample["record_id"]]),
     }
@@ -650,6 +655,8 @@ def _stage(key, label, measures, noun, samples) -> dict:
         **_sample_counts(samples),
         "average_seconds": office,
         "average_calendar_seconds": calendar,
+        "average_outside_seconds": None if calendar is None else calendar - office,
+        "total_office_seconds": sum(s["office"] for s in samples),
         "average_label": humanise_business_seconds(office),
         "average_calendar": humanise_duration(None if calendar is None else timedelta(seconds=calendar)),
         "fastest": _named(fastest) if fastest else None,
@@ -667,6 +674,7 @@ def _month_bounds(month):
     )
 
 
+@with_office_schedule
 def turnaround(records, month=None, *, now=None) -> dict:
     """Turnaround for one period: every stage's average, fastest and slowest.
 
@@ -706,6 +714,7 @@ def turnaround(records, month=None, *, now=None) -> dict:
         "is_current": month == timezone.localdate(now).replace(day=1),
         "as_of": now,
         "stages": stages,
+        "office_schedule": office_schedule_explanation(),
         "office_hours_caveat": office_hours_caveat(),
         "working_day_hours": working_day_hours(),
         "on_time": on_time,
@@ -750,6 +759,7 @@ def _duration(start, end, holidays, live=False) -> dict:
     }
 
 
+@with_office_schedule
 def record_waits(record, steps, holidays=None, now=None) -> dict:
     """Office time at each hop of one record, keyed by routing step.
 
@@ -794,6 +804,7 @@ def record_waits(record, steps, holidays=None, now=None) -> dict:
     return waits
 
 
+@with_office_schedule
 def record_durations(record, steps, holidays=None, *, now=None) -> dict:
     """The three stages for one record, in office seconds, None where the
     stage has not happened: the per-record twin of `turnaround()`, by the same
@@ -828,6 +839,7 @@ def record_durations(record, steps, holidays=None, *, now=None) -> dict:
     }
 
 
+@with_office_schedule
 def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None, now=None) -> dict:
     """The three turnaround averages, one point per month.
 
@@ -895,6 +907,7 @@ def turnaround_by_month(records, months_back: int = REPORT_MONTHS, *, year=None,
     }
 
 
+@with_office_schedule
 def turnaround_by_day(records, month, *, now=None) -> dict:
     """Daily averages in one month, using the summary's exact sample population."""
     since = timezone.make_aware(datetime.combine(month, time.min))

@@ -15,6 +15,9 @@
     </p>
   </div>
   <div class="page-actions no-print">
+    {% if record.status == "DRAFT" %}
+      <a class="btn btn-udm" href="{% url 'tracking:review' record.pk %}">Review and send draft</a>
+    {% endif %}
     {% if record.has_tracking_number %}
       <a class="btn btn-udm-outline" href="{% url 'tracking:routing_slip' record.pk %}" target="_blank" rel="noopener">Print routing slip</a>
     {% endif %}
@@ -220,14 +223,11 @@
               <form method="post" action="{% url 'tracking:complete' record.pk %}" data-completed-status="{{ "COMPLETED_PENDING_UPLOAD"|status_label }}">
                 {% csrf_token %}
                 {% include "partials/_field.html" with field=complete_form.note %}
-                {% comment %}
-                  This checkbox was missing, so CompleteRecordView's archiving
-                  branch could never run: the field defaults to on, but an
-                  unrendered checkbox simply is not posted, which reads as off.
-                  Completing a record left it out of the Document Repository until
-                  somebody noticed the separate Archive button underneath.
-                {% endcomment %}
+                {% if can_complete_and_file %}
                 {% include "partials/_field.html" with field=complete_form.archive_now %}
+                {% else %}
+                  <p class="form-text">Completion finishes the work. An authorized administrator approves filing into the repository.</p>
+                {% endif %}
                 <button class="btn btn-udm-green" type="submit">Mark as Completed</button>
               </form>
             </div>
@@ -244,6 +244,10 @@
           </div>
         </div>
       </div>
+    {% elif record.status == "DRAFT" %}
+      <div class="help-note mt-4">This draft has not been sent. Review and send it before recording receipt or completion.</div>
+    {% elif user.is_viewer %}
+      <div class="help-note mt-4">Your account has read-only access. You can read permitted records and print their routing slips.</div>
     {% elif not can_confirm and record.status != "COMPLETED" %}
       <div class="help-note mt-4">
         Your office is not holding this document right now, so the action panel is hidden.

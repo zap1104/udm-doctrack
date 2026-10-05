@@ -174,6 +174,7 @@ MIDDLEWARE += [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
+    "apps.core.middleware.OfficeScheduleMiddleware",
     # After auth: reads request.user to pick the role's idle window.
     "apps.core.middleware.RoleIdleTimeoutMiddleware",
     # After auth and messages: it reads request.user and adds a message.
@@ -526,6 +527,7 @@ MAX_UPLOAD_ARCHIVE_MEMBERS = env_int("MAX_UPLOAD_ARCHIVE_MEMBERS", 2000)
 PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT", 3600)
 ALLOW_DEMO_SEED = env_bool("ALLOW_DEMO_SEED", DEBUG)
 TRUST_PROXY_HEADERS = env_bool("TRUST_PROXY_HEADERS", False)
+TRUST_PROXY_SSL_HEADER = env_bool("TRUST_PROXY_SSL_HEADER", False)
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +583,7 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS", 31536000)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if TRUST_PROXY_SSL_HEADER else None
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "same-origin"
     X_FRAME_OPTIONS = "DENY"
@@ -642,6 +644,10 @@ OCR_SPACE_ENDPOINT = env("OCR_SPACE_ENDPOINT",
 AZURE_DOCINT_ENDPOINT = env("AZURE_DOCINT_ENDPOINT", "")
 AZURE_DOCINT_KEY = env("AZURE_DOCINT_KEY", "")
 OCR_MAX_CHARS = env_int("OCR_MAX_CHARS", 500_000)
+OCR_MAX_PAGES = env_int("OCR_MAX_PAGES", 200)
+XLSX_MAX_ROWS = env_int("XLSX_MAX_ROWS", 10_000)
+XLSX_MAX_COLUMNS = env_int("XLSX_MAX_COLUMNS", 256)
+XLSX_MAX_CELLS = env_int("XLSX_MAX_CELLS", 100_000)
 OCR_PROVIDER_TIMEOUT_SECONDS = env_int("OCR_PROVIDER_TIMEOUT_SECONDS", 90)
 OCR_PROVIDER_RETRIES = env_int("OCR_PROVIDER_RETRIES", 2)
 OCR_RETRY_BASE_SECONDS = env_int("OCR_RETRY_BASE_SECONDS", 2)

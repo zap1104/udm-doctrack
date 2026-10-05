@@ -84,14 +84,14 @@ ADMIN_PAGES = [
 ]
 
 MASTER_DATA_SLUGS = ["document-types", "tags", "metadata-rules", "metadata-fields"]
-#: Sections only a system administrator may open. Kept apart so the office-admin
-#: pass can exercise the rest without tripping over a deliberate 403.
-SYSTEM_ADMIN_SLUGS = ["offices"]
+# All master data is global and belongs to the system administrator.
+SYSTEM_ADMIN_SLUGS = ["offices", "holidays"]
 
 #: Administration pages an office administrator reaches too, over their own
 #: office. The office screens are not here: offices are system-admin territory.
 OFFICE_ADMIN_PAGES = [
     ("core:administration", ()),
+    ("core:audit_log", ()),
     ("accounts:user_list", ()),
     ("accounts:user_create", ()),
 ]
@@ -162,7 +162,7 @@ def main() -> int:
 def _run() -> int:
     smoke = Smoke()
 
-    admin = pick_user(role="SYSTEM_ADMIN") or User.objects.filter(is_superuser=True).first()
+    admin = User.objects.filter(is_active=True, role="SYSTEM_ADMIN").first()
     office_admin = pick_user(role="ADMIN")
     plain = pick_user(role="USER")
     viewer = pick_user(role="VIEWER")
@@ -212,11 +212,13 @@ def _run() -> int:
             elif person.is_office_admin:
                 for name, args in OFFICE_ADMIN_PAGES:
                     smoke.named(client, name, args, who=label)
-                for slug in MASTER_DATA_SLUGS:
-                    smoke.named(client, "core:masterdata_list", (slug,), who=label)
+                for slug in MASTER_DATA_SLUGS + SYSTEM_ADMIN_SLUGS:
+                    smoke.named(client, "core:masterdata_list", (slug,), who=label, expected=(403,))
+                    smoke.named(client, "core:masterdata_create", (slug,), who=label, expected=(403,))
+                smoke.named(client, "core:office_schedule", who=label, expected=(403,))
                 # Only within their own office — anyone else is a deliberate 404,
                 # which is the behaviour worth exercising here.
-                same_office = User.objects.filter(office_id=person.office_id).exclude(
+                same_office = User.objects.administrable_by(person).exclude(
                     pk=person.pk
                 ).first()
                 if same_office:

@@ -97,7 +97,7 @@ def _validated_role(role, actor):
 def _validated_office(office, actor):
     if actor is None or actor.is_system_admin:
         return office
-    if office is not None and actor.office_id and office.pk != actor.office_id:
+    if office is None or not actor.office_id or office.pk != actor.office_id:
         raise forms.ValidationError("You can only manage accounts in your own office.")
     return office
 
@@ -185,7 +185,7 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         elif (
             role == User.Role.ADMIN
             and self.instance.role == User.Role.SYSTEM_ADMIN
-            and not User.objects.filter(role=User.Role.SYSTEM_ADMIN)
+            and not User.objects.filter(role=User.Role.SYSTEM_ADMIN, is_active=True)
             .exclude(pk=self.instance.pk)
             .exists()
         ):

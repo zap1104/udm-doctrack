@@ -1,4 +1,4 @@
-          {% load l10n %}
+          {% load l10n doctrack %}
           {% if turnaround_trend.has_data %}
             {% comment %}
               The legend sits in the body rather than beside the heading. In the
@@ -7,7 +7,7 @@
               the same few centimetres.
             {% endcomment %}
             {% comment %}
-              A line key, not a square: the legend mirrors the mark it names.
+              The legend mirrors each stage's line and compact marker.
               Each says what its line measures, from which moment to which,
               because "Receipt" alone does not say whether the clock starts when
               a document is sent or when it is opened.
@@ -15,7 +15,7 @@
             <div class="chart-legend trend-legend">
               {% for series in turnaround_trend_points %}
                 <span class="chart-key trend-key">
-                  <i class="trend-key-line" style="background:{{ series.colour }}" aria-hidden="true"></i>
+                  <i class="trend-key-line" style="--dot:{{ series.colour }}" aria-hidden="true">{% include "core/_trend_marker.html" with key=series.key %}</i>
                   <span><strong>{{ series.label }}</strong> {{ series.measures }}</span>
                 </span>
               {% endfor %}
@@ -23,23 +23,21 @@
             <div class="trend-layout">
               <div class="trend-chart">
                 {% comment %}
-                  The y-axis, in working days, beside the SVG rather than inside it:
+                  The y-axis, displayed in office hours, beside the SVG rather than inside it:
                   SVG text scales with the chart and would shrink to nothing at the
                   widths this card is drawn at. Placed by the same geometry as the
                   rules, so a label is level with its rule.
                 {% endcomment %}
                 <div class="trend-plot">
                 <div class="trend-axis-values num" aria-hidden="true">
-                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent|unlocalize }}%">{{ line.value }}</span>{% endif %}{% endfor %}
+                  {% for line in turnaround_trend_geometry.grid %}{% if line.value is not None %}<span style="top:{{ line.top_percent|unlocalize }}%">{{ line.value|office_hours_tick:turnaround_trend.working_day_hours }}</span>{% endif %}{% endfor %}
                 </div>
                 {% comment %}
-                  No preserveAspectRatio="none": it stretches the plot to the column
-                  width, which turns every data point from a circle into an oval.
-                  The default uniform scaling keeps the dots round, and the CSS sizes
-                  the box by the viewBox's own ratio so nothing is letterboxed.
+                  The box uses the viewBox's ratio so SVG lines and the fixed-size
+                  HTML markers share the same coordinates at every screen width.
                 {% endcomment %}
                 <svg class="trend-svg" viewBox="{{ turnaround_trend_geometry.view_box }}" role="img"
-                     aria-label="Line chart of average turnaround in working days {% if turnaround_trend.daily %}per day{% else %}per month{% endif %}. Point at a date for its figures; the table below lists every value.">
+                     aria-label="Line chart of average turnaround within office hours {% if turnaround_trend.daily %}per day{% else %}per month{% endif %}. Point at a date for its figures; the table below lists every value.">
                   {% comment %}
                     Rules and baseline from the same constants that place the
                     data. They were literals here while the plot geometry lived in
@@ -56,8 +54,8 @@
                   {% comment %}
                     Colours through `style`, not the stroke attribute: they are CSS
                     custom properties, which not every browser resolves in a
-                    presentation attribute. Dots are filled with the card's own
-                    surface, not white, so they do not glare on the dark theme.
+                    presentation attribute. Markers live in the HTML layer below
+                    so they stay ten pixels wide on both phones and wide screens.
 
                     The lines are revealed left to right by a clip on their group,
                     not drawn in with a dash. The dash (pathLength="1" and
@@ -74,17 +72,11 @@
                                 style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></polyline>
                     {% endfor %}
                   </g>
-                  {% for series in turnaround_trend_points %}
-                    {% for dot in series.dots %}
-                      <circle class="trend-point{% if dot.overlap %} trend-point--overlap{% endif %}" cx="{{ dot.x|unlocalize }}" cy="{{ dot.y|unlocalize }}" r="{{ dot.radius|unlocalize }}"
-                              style="stroke:{{ series.colour }}" vector-effect="non-scaling-stroke"></circle>
-                    {% endfor %}
-                  {% endfor %}
                 </svg>
                 {% comment %}
                   The hover layer: one target per month, over the plot and aligned
                   to it by the same geometry. Pointing at a month draws a guide
-                  down to the baseline, enlarges that month's dots, and opens a
+                  down to the baseline and opens a
                   card with its three figures in words and what each is averaged
                   over. CSS does the showing, so it works without script; the
                   script adds a tap on a touch screen and the arrow keys for a
@@ -99,16 +91,17 @@
                       <div class="trend-hit trend-hit--{{ month.side }}" data-trend-month
                            style="left:{{ month.left|unlocalize }}%;width:{{ month.width|unlocalize }}%" aria-label="{{ month.summary }}">
                         <span class="trend-cross" aria-hidden="true"></span>
-                        {% for point in month.points %}<span class="trend-dot{% if point.overlap %} trend-dot--overlap{% endif %}" style="top:{{ point.top_percent|unlocalize }}%;--dot:{{ point.colour }};--dot-size:{{ point.marker_size|unlocalize }}px" aria-hidden="true"></span>{% endfor %}
+                        {% for point in month.points %}<span class="trend-dot" data-trend-stage="{{ point.key }}" style="top:{{ point.top_percent|unlocalize }}%;--dot:{{ point.colour }}" aria-hidden="true">{% include "core/_trend_marker.html" with key=point.key %}</span>{% endfor %}
                         <div class="trend-tip" aria-hidden="true">
                           <div class="trend-tip-month">{{ month.label }}</div>
+                          <div class="trend-tip-formula-key">Total wait − excluded ≈ office time<br>h = hours · m = minutes</div>
                           {% for point in month.points %}
                             <div class="trend-tip-row">
                               <i style="background:{{ point.colour }}"></i>
-                              <strong>{{ point.text }}</strong>
-                              <span>{{ point.label }} average</span>
+                              <strong>{% if point.office_seconds is not None %}{{ point.office_seconds|duration_hours }}{% else %}{{ point.text }}{% endif %}</strong>
+                              <span>{{ point.label }} · within office hours</span>
                               <span>{% include "core/_turnaround_sample_count.html" with item=point %}</span>
-                              <span>{{ point.calendar }} elapsed</span>
+                              {% if point.outside_seconds is not None %}<span class="trend-tip-equation">{{ point.calendar_seconds|duration_compact }} − {{ point.outside_seconds|duration_compact }} ≈ {{ point.office_seconds|duration_compact }}</span>{% else %}<span>{{ point.calendar }} total wait</span>{% endif %}
                               {% if point.zero_working_time %}<span>{{ point.zero_working_time }} with 0 working mins</span>{% endif %}
                             </div>
                           {% empty %}
@@ -127,16 +120,15 @@
                   {% endfor %}
                 </div>
                 <div class="chart-scale">
-                  Working days, averaged {% if turnaround_trend.daily %}per day{% else %}per month{% endif %} &middot; one working day is
-                  {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours
+                  Hours within the office schedule, averaged {% if turnaround_trend.daily %}per day{% else %}per month{% endif %} &middot; excludes lunch, closed days and configured holidays
                 </div>
-                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Dots show average working time for handovers confirmed or documents completed on that date. Concentric rings keep overlapping stages visible; the popup lists each exact average. Lines connect available observations; dates without dots have no valid samples. Zero is a recorded measurement. Monthly averages use the individual observations and their counts, so do not average the daily dots. {{ turnaround_trend.office_hours_caveat }}</p>
+                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Markers show average working time for handovers confirmed or documents completed on that date. Pending Receipt uses a yellow circle, In Process a pink diamond, and Total lifetime a green cross, matching the legend. These small shapes can share a position when times are equal or very close; point at the date or use the table to compare exact figures. The popup equation is total wait minus excluded time, approximately equal to office time; display times round down to minutes. Lines connect available observations; dates without markers have no valid samples. Zero is a recorded measurement. Monthly averages use the individual observations and their counts, so do not average the daily markers. {{ turnaround_trend.office_hours_caveat }}</p>
               </div>
             </div>
             <details class="chart-table">
               <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View trend as table" description="Read average times and the number of observations." %}</summary>
               <div class="table-responsive"><table class="table-udm">
-                <caption>Average working time, elapsed time and counts. One working day is {{ turnaround_trend.working_day_hours|floatformat:"-2" }} office hours; one elapsed day is 24 hours. A dash means no valid observations.</caption>
+                <caption>Average time within office hours, total wait and counts. Both times use total hours and minutes. A dash means no valid observations.</caption>
                 <thead><tr>
                   <th>{% if turnaround_trend.daily %}Day{% else %}Month{% endif %}</th>{% for series in turnaround_table_series %}<th class="text-end">{{ series.label }}</th>{% endfor %}
                   {% if turnaround_show_on_time %}<th class="text-end">On time</th>{% endif %}
@@ -147,8 +139,8 @@
                       <td>{% if turnaround_trend.daily %}{{ row.period_label }}{% else %}{{ row.month|date:"F Y" }}{% endif %}</td>
                       {% for cell in row.cells %}<td class="text-end turnaround-table-value">
                         {% if cell.samples %}
-                          <strong class="num">{{ cell.label }}</strong>
-                          <span>{{ cell.calendar }} elapsed</span>
+                          <strong class="num">{% if cell.office_seconds is not None %}{{ cell.office_seconds|duration_hours }}{% else %}{{ cell.label }}{% endif %} within office hours</strong>
+                          <span>{% if cell.calendar_seconds is not None %}{{ cell.calendar_seconds|duration_hours }}{% else %}{{ cell.calendar }}{% endif %} total wait</span>
                           <span>{% include "core/_turnaround_sample_count.html" with item=cell %}</span>
                           {% if cell.zero_working_time %}<span>{{ cell.zero_working_time }} with 0 working mins</span>{% endif %}
                         {% else %}<span aria-label="No valid observations">&mdash;</span>{% endif %}

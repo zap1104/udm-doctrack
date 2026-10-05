@@ -63,14 +63,23 @@ def _extract_pdf(file_obj) -> ExtractionResult:
         reader = PdfReader(file_obj)
         pages = len(reader.pages)
         chunks = []
-        for page in reader.pages:
+        notes = []
+        characters = 0
+        for page in reader.pages[:settings.OCR_MAX_PAGES]:
             try:
-                chunks.append(page.extract_text() or "")
+                chunk = (page.extract_text() or "")[:max(0, settings.OCR_MAX_CHARS - characters)]
+                chunks.append(chunk)
+                characters += len(chunk)
+                if characters >= settings.OCR_MAX_CHARS:
+                    notes.append("Text reached the processing limit. The full original file is still available.")
+                    break
             except Exception:  # a single broken page must not kill the upload
                 continue
+        if pages > settings.OCR_MAX_PAGES:
+            notes.append(f"Only the first {settings.OCR_MAX_PAGES} pages were read. The full original file is still available.")
         text = normalise_text("\n".join(chunks))
         status = "DONE" if len(text) >= MIN_USEFUL_CHARS else "EMPTY"
-        return ExtractionResult(text=text, engine="pdf-text-layer", pages=pages, status=status)
+        return ExtractionResult(text=text, engine="pdf-text-layer", pages=pages, status=status, notes=notes)
     except Exception as exc:
         logger.warning("PDF text extraction failed: %s", exc)
         return ExtractionResult(status="FAILED", notes=[str(exc)[:200]])
@@ -108,15 +117,36 @@ def _extract_xlsx(file_obj) -> ExtractionResult:
         file_obj.seek(0)
         workbook = load_workbook(file_obj, read_only=True, data_only=True)
         parts = []
-        for sheet in workbook.worksheets:
-            parts.append(sheet.title)
-            for row in sheet.iter_rows(values_only=True):
-                values = [str(value) for value in row if value not in (None, "")]
-                if values:
-                    parts.append(" | ".join(values))
-        workbook.close()
+        cells = characters = 0
+        limited = False
+        try:
+            for sheet in workbook.worksheets:
+                parts.append(sheet.title)
+                limited |= (sheet.max_row or 0) > settings.XLSX_MAX_ROWS or (sheet.max_column or 0) > settings.XLSX_MAX_COLUMNS
+                # Sheet dimensions are untrusted XML. Bound traversal even for
+                # a tiny file that advertises millions of empty cells.
+                for row in sheet.iter_rows(max_row=min(sheet.max_row or settings.XLSX_MAX_ROWS, settings.XLSX_MAX_ROWS),
+                                           max_col=min(sheet.max_column or settings.XLSX_MAX_COLUMNS, settings.XLSX_MAX_COLUMNS),
+                                           values_only=True):
+                    cells += len(row)
+                    if cells > settings.XLSX_MAX_CELLS:
+                        limited = True
+                        break
+                    values = [str(value) for value in row if value not in (None, "")]
+                    if values:
+                        line = " | ".join(values)[:max(0, settings.OCR_MAX_CHARS - characters)]
+                        parts.append(line)
+                        characters += len(line)
+                    if characters >= settings.OCR_MAX_CHARS:
+                        limited = True
+                        break
+                if cells > settings.XLSX_MAX_CELLS or characters >= settings.OCR_MAX_CHARS:
+                    break
+        finally:
+            workbook.close()
         text = normalise_text("\n".join(parts))
-        return ExtractionResult(text=text, engine="xlsx", pages=1, status="DONE" if text else "EMPTY")
+        notes = ["Spreadsheet processing limit reached. The full original file is still available."] if limited else []
+        return ExtractionResult(text=text, engine="xlsx", pages=1, status="DONE" if text else "EMPTY", notes=notes)
     except Exception as exc:
         logger.warning("XLSX extraction failed: %s", exc)
         return ExtractionResult(status="FAILED", notes=[str(exc)[:200]])
@@ -341,7 +371,7 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
 
 
 def run_ocr(
-    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = True
+    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False
 ) -> ExtractionResult:
     backend = (settings.OCR_BACKEND or "auto").lower()
     if not allow_external_ocr:
@@ -369,7 +399,7 @@ def run_ocr(
 # Public entry point
 # ---------------------------------------------------------------------------
 def extract_document_text(
-    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = True
+    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False
 ) -> ExtractionResult:
     """Text layer first, OCR only if needed. Never raises."""
     extension = file_extension(filename)
@@ -400,7 +430,7 @@ def extract_document_text(
         return _clip(layer)
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Text extraction crashed for %s", filename)
-        return ExtractionResult(status="FAILED", notes=[str(exc)[:200]])
+        return _clip(ExtractionResult(status="FAILED", notes=[str(exc)[:200]]))
 
 
 def _clip(result: ExtractionResult) -> ExtractionResult:

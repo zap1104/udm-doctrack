@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Office schedule · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Administration</div><h1>Office hours &amp; break</h1>
+  <p class="sub">Set the hours counted in turnaround time for every office.</p></div></div>
+{% include "administration/_tabs.html" %}
+<div class="row g-4"><div class="col-lg-7"><section class="card-udm" aria-labelledby="office-schedule-heading">
+  <div class="card-udm-head"><h2 id="office-schedule-heading">Working schedule</h2></div>
+  <div class="card-udm-body"><form method="post" novalidate>{% csrf_token %}
+    {% include "partials/_form_errors.html" %}
+    <div class="row g-3">{% for field in form %}<div class="{% if field.name == 'working_days' or field.name == 'break_enabled' %}col-12{% else %}col-sm-6{% endif %}">{% include "partials/_field.html" %}</div>{% endfor %}</div>
+    <p class="form-text">Times use the system’s local time zone. Turn off the daily break if none should be excluded.</p>
+    <div class="form-actions"><button class="btn btn-udm" type="submit">Save schedule</button></div>
+  </form></div>
+</section></div><div class="col-lg-5"><section class="card-udm" aria-labelledby="schedule-effect-heading">
+  <div class="card-udm-head"><h2 id="schedule-effect-heading">How this affects the figures</h2></div>
+  <div class="card-udm-body"><p>Office time counts only the selected working days and hours, excluding the daily break and active holidays.</p>
+    <p>Saving changes recalculates past and current turnaround figures using this schedule. It does not change timestamps or the total time a document waited.</p>
+    <p>Full-day holidays and work suspensions are managed separately. Changes are recorded in the audit log.</p>
+    <a class="btn btn-udm-outline" href="{% url 'core:masterdata_list' 'holidays' %}">Manage holidays</a>
+  </div></section></div></div>
+{% endblock %}

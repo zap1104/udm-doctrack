@@ -227,7 +227,7 @@
 
     <div class="col-12">
       <section class="card-udm" aria-labelledby="annual-turnaround-title">
-        <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly working-time averages for this report’s office scope. Months without dots have no observations.</p></div>
+        <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly averages within office hours for this report’s office scope. Months without dots have no observations.</p></div>
           <form method="get" action="#annual-turnaround-title" class="report-year-picker no-print">
             {% query_fields "trend_year" %}
             <div><label for="trend-year" class="form-label">Year</label><select id="trend-year" name="trend_year" class="form-select">{% for year in trend_years %}<option value="{{ year }}"{% if year == trend_year %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></div>

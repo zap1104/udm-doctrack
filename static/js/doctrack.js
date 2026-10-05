@@ -1,3 +1,39 @@
+/* HTMX responses stay on this origin and cannot execute embedded scripts.
+   Use a normal event listener for polling visibility so CSP needs no eval. */
+(function () {
+  "use strict";
+  if (window.htmx && window.htmx.config) {
+    window.htmx.config.allowEval = false;
+    window.htmx.config.allowScriptTags = false;
+    window.htmx.config.selfRequestsOnly = true;
+  }
+  document.addEventListener("htmx:beforeRequest", function (event) {
+    var element = event.detail && event.detail.elt;
+    if (document.visibilityState === "hidden" && element && element.hasAttribute("data-notification-poll")) {
+      event.preventDefault();
+    }
+  });
+})();
+
+/* One calculation dialog outside chart containers, usable by keyboard and touch. */
+(function () {
+  "use strict";
+  var dialog = document.getElementById("turnaround-calculation-dialog");
+  if (!dialog) return;
+  dialog.addEventListener("show.bs.modal", function (event) {
+    var button = event.relatedTarget;
+    if (!button || !button.hasAttribute("data-turnaround-calculation")) return;
+    dialog.querySelector("#turnaround-calculation-title").textContent = button.dataset.stageLabel + " calculation";
+    dialog.querySelector("[data-calculation-equation]").textContent = button.dataset.equation;
+    dialog.querySelector("[data-calculation-average]").textContent = button.dataset.averageEquation;
+    var scope = button.closest(".card-udm") || document;
+    var guide = scope.querySelector(".turnaround-time-guide");
+    var schedule = dialog.querySelector("[data-calculation-schedule]");
+    schedule.replaceChildren();
+    if (guide) schedule.appendChild(guide.cloneNode(true));
+  });
+})();
+
 /* Explanatory copy lives in one right-side guide. Keep the original inline
    content when Bootstrap is unavailable, including when JavaScript is off. */
 (function () {
@@ -1412,14 +1448,15 @@
     show(box, month.classList.contains("is-active") ? null : month);
   });
 
-  /* A mouse needs no help from here; drop anything a tap or a key left
-     showing, so two months are never open at once. */
+  /* Moving to another date releases a selection. Moving inside the selected
+     date keeps it selected so the next click can close it reliably. */
   document.addEventListener("pointerover", function (event) {
     if (event.pointerType !== "mouse") return;
     var box = event.target.closest && event.target.closest("[data-trend-hover]");
-    if (box && box.querySelector(".is-active")) show(box, null);
-    if (box) box.classList.remove("is-dismissed");
     var month = event.target.closest && event.target.closest("[data-trend-month]");
+    var selected = box && box.querySelector(".is-active");
+    if (selected && selected !== month) show(box, null);
+    if (box) box.classList.remove("is-dismissed");
     if (box && month) fitTip(box, month);
   });
 
@@ -1427,9 +1464,10 @@
     if (event.pointerType !== "mouse") return;
     var box = event.target.closest && event.target.closest("[data-trend-hover]");
     if (!box) return;
-    if (box.querySelector(".is-active")) show(box, null);
-    box.classList.remove("is-dismissed");
     var month = event.target.closest && event.target.closest("[data-trend-month]");
+    var selected = box.querySelector(".is-active");
+    if (selected && selected !== month) show(box, null);
+    box.classList.remove("is-dismissed");
     if (month) fitTip(box, month);
   });
 

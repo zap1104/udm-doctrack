@@ -21,10 +21,12 @@ def logged(users):
     AuditLog.objects.create(
         actor=users["med"], actor_label="med", action=AuditLog.Action.UPDATE,
         summary="MED changed its own document",
+        extra={"audit_actor_office_id": users["med"].office_id},
     )
     AuditLog.objects.create(
         actor=users["sup"], actor_label="sup", action=AuditLog.Action.UPDATE,
         summary="SUP changed its own document",
+        extra={"audit_actor_office_id": users["sup"].office_id},
     )
 
 

@@ -31,6 +31,19 @@ class CurrentRequestMiddleware:
             _state.request = None
 
 
+class OfficeScheduleMiddleware:
+    """Keep every time label and calculation on one lazily loaded schedule."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from .business_time import office_schedule_context
+
+        with office_schedule_context():
+            return self.get_response(request)
+
+
 def idle_seconds_for(user) -> int:
     """How long this account may sit idle before it is signed out.
 

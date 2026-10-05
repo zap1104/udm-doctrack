@@ -126,6 +126,15 @@ class UserQuerySet(models.QuerySet):
     def in_office(self, office):
         return self.filter(office=office, is_active=True)
 
+    def administrable_by(self, actor):
+        if not actor.is_authenticated or not actor.is_active or not actor.is_office_admin:
+            return self.none()
+        if actor.is_system_admin:
+            return self
+        if not actor.office_id:
+            return self.none()
+        return self.filter(office_id=actor.office_id, is_superuser=False, is_staff=False).exclude(role="SYSTEM_ADMIN")
+
 
 class UserManagerFromQuerySet(UserManager.from_queryset(UserQuerySet)):
     """UserManager (so create_user/create_superuser/get_by_natural_key work)
@@ -141,6 +150,12 @@ class UserManagerFromQuerySet(UserManager.from_queryset(UserQuerySet)):
     Naming it here gives migrations `apps.accounts.models.UserManagerFromQuerySet`
     to import.
     """
+
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("role", "SYSTEM_ADMIN")
+        if extra_fields["role"] != "SYSTEM_ADMIN":
+            raise ValueError("A superuser must have the system administrator role.")
+        return super().create_superuser(username, email=email, password=password, **extra_fields)
 
 
 class LoginLockout(TimeStampedModel):
@@ -262,7 +277,7 @@ class User(AbstractUser):
     @property
     def is_system_admin(self) -> bool:
         """Reach across every office. The one role that is not office-scoped."""
-        return self.role == self.Role.SYSTEM_ADMIN or self.is_superuser
+        return self.role == self.Role.SYSTEM_ADMIN
 
     @property
     def is_office_admin(self) -> bool:
@@ -279,7 +294,7 @@ class User(AbstractUser):
     @property
     def is_viewer(self) -> bool:
         """Read-only. May open records and print a routing slip, nothing else."""
-        return self.role == self.Role.VIEWER and not self.is_superuser
+        return self.role == self.Role.VIEWER
 
     @property
     def is_records_staff(self) -> bool:
@@ -297,7 +312,7 @@ class User(AbstractUser):
         still compares offices, and the ones that matter do so on the line
         immediately after asking this.
         """
-        return not self.is_viewer
+        return self.is_active and self.role in {self.Role.USER, self.Role.ADMIN, self.Role.SYSTEM_ADMIN}
 
     @property
     def can_start_work(self) -> bool:
@@ -318,9 +333,9 @@ class User(AbstractUser):
         would otherwise be importing from another app's view module for a
         question that needs nothing but the user.
         """
-        if self.is_viewer:
+        if not self.is_records_staff:
             return False
-        return self.office_id is not None or self.is_superuser
+        return self.office_id is not None or self.is_system_admin
 
     def can_administer(self, other) -> bool:
         """May this user create or edit `other`'s account?
@@ -329,11 +344,11 @@ class User(AbstractUser):
         administrator could edit every account in the university, because the
         only check was "is an admin at all".
         """
-        if not self.is_office_admin:
+        if not self.is_active or not self.is_office_admin:
             return False
         if self.is_system_admin:
             return True
-        if other.is_system_admin or other.is_staff:
+        if other.is_system_admin or other.is_staff or other.is_superuser:
             return False
         other_office_id = getattr(other, "office_id", None)
         return bool(self.office_id) and self.office_id == other_office_id
@@ -353,7 +368,7 @@ class User(AbstractUser):
 
     def can_act_for_office(self, office) -> bool:
         """Can this user confirm receipt / forward on behalf of `office`?"""
-        if office is None:
+        if office is None or not self.can_start_work:
             return False
         if self.is_system_admin:
             return True

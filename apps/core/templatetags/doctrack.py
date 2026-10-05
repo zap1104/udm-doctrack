@@ -2,16 +2,51 @@
 
 from __future__ import annotations
 
+from math import isfinite
+
 from django import template
 from django.http import QueryDict
 from django.utils.html import format_html
 
 from apps.core.analytics import share_text
+from apps.core.business_time import humanise_hours
 from apps.core.colors import STATUS_PILLS
 from apps.core.utils import human_size as _human_size
 from apps.tracking.models import Status
 
 register = template.Library()
+
+
+@register.filter
+def duration_hours(value) -> str:
+    return humanise_hours(value)
+
+
+@register.filter
+def duration_compact(value) -> str:
+    """Short, explicitly keyed hours/minutes for narrow graph equations."""
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if not isfinite(seconds) or seconds < 0:
+        return "—"
+    if seconds == 0:
+        return "0m"
+    if seconds < 60:
+        return "<1m"
+    hours, minutes = divmod(int(seconds) // 60, 60)
+    return (f"{hours}h" + (f" {minutes}m" if minutes else "")) if hours else f"{minutes}m"
+
+
+@register.filter
+def office_hours_tick(value, day_hours) -> str:
+    """Convert the working-day geometry's tick label to hours, without moving it."""
+    try:
+        hours = float(value) * float(day_hours)
+    except (TypeError, ValueError):
+        return "—"
+    return f"{hours:.2f}".rstrip("0").rstrip(".") if isfinite(hours) else "—"
 
 
 @register.inclusion_tag("partials/_query_fields.html", takes_context=True)

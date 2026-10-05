@@ -85,10 +85,23 @@ class AccessLevel(models.TextChoices):
 
 class DocumentQuerySet(models.QuerySet):
     def visible_to(self, user):
-        if not user.is_authenticated or not user.is_active:
+        if (not user.is_authenticated or not user.is_active
+                or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
             return self.none()
         if user.is_system_admin:
             return self
+        if not user.office_id:
+            return self.none()
+        if user.is_office_admin:
+            if not user.office_id:
+                return self.none()
+            # Administrative duties never expand the office's repository.
+            # OVPA sharing, grants and a previous uploader identity cannot
+            # turn this office-scoped role into a cross-office reader.
+            return self.filter(office_id=user.office_id).filter(
+                ~Q(access_level=AccessLevel.RESTRICTED) | Q(uploaded_by=user)
+                | Q(grants__user=user) | Q(grants__office_id=user.office_id)
+            ).distinct()
         conditions = Q(access_level=AccessLevel.OVPA) | Q(uploaded_by=user) | Q(grants__user=user)
         if user.office_id:
             office_history = (
@@ -148,7 +161,7 @@ class Document(TimeStampedModel):
     author_name = models.CharField(max_length=150, blank=True, verbose_name="from / author")
     recipient_name = models.CharField(max_length=150, blank=True, verbose_name="to / recipient")
     signatory = models.CharField(max_length=150, blank=True)
-    page_count = models.PositiveSmallIntegerField(default=0)
+    page_count = models.PositiveIntegerField(default=0)
 
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     access_level = models.CharField(max_length=12, choices=AccessLevel.choices, default=AccessLevel.OFFICE)
@@ -160,7 +173,7 @@ class Document(TimeStampedModel):
     ocr_confidence = models.FloatField(null=True, blank=True)
     ocr_language = models.CharField(max_length=8, choices=OcrLanguage.choices, default=OcrLanguage.AUTO)
     allow_external_ocr = models.BooleanField(
-        default=True,
+        default=False,
         help_text="Allow scanned content to be sent to the configured external OCR provider.",
     )
     ocr_notes = models.TextField(blank=True, help_text="Operator-visible extraction and retry notes.")
@@ -272,6 +285,11 @@ class Document(TimeStampedModel):
         return self.files.filter(is_primary=True).first() or self.files.first()
 
     @property
+    def file_page_count(self) -> int:
+        """Known pages across every attachment, including partial extraction jobs."""
+        return self.files.aggregate(total=models.Sum("page_count"))["total"] or 0
+
+    @property
     def tag_names(self) -> list[str]:
         return [tag.name for tag in self.tags.all()]
 
@@ -288,12 +306,14 @@ class Document(TimeStampedModel):
         return Document.objects.filter(pk=self.pk).visible_to(user).exists()
 
     def can_user_edit(self, user) -> bool:
-        if not user.is_authenticated or not user.is_active or user.is_viewer:
+        if not user.is_authenticated or not user.can_start_work:
             return False
         if user.is_system_admin:
             return True
-        if self.uploaded_by_id == user.pk:
-            return True
+        if not self.can_user_view(user):
+            return False
+        # Authorship and grants can preserve read access after a transfer.
+        # They do not give a former owning office permission to change records.
         return bool(user.office_id) and user.office_id == self.office_id and user.is_records_staff
 
 
@@ -305,7 +325,7 @@ class DocumentFile(TimeStampedModel):
     size = models.PositiveBigIntegerField(default=0)
     checksum = models.CharField(max_length=64, blank=True, db_index=True)
     is_primary = models.BooleanField(default=False)
-    page_count = models.PositiveSmallIntegerField(default=0)
+    page_count = models.PositiveIntegerField(default=0)
     extracted_chars = models.PositiveIntegerField(default=0)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="document_files"

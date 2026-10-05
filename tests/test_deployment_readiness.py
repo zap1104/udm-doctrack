@@ -257,7 +257,7 @@ def test_tracking_archive_defaults_to_external_ocr_disabled(users, offices, memo
     tracking_services.route_record(record, [offices["SUP"]], user=users["med"], instructions="For action")
     tracking_services.confirm_receipt(record, user=users["sup"])
     tracking_services.complete_record(record, user=users["sup"], note="Completed")
-    document = document_services.archive_tracking_record(record, user=users["sup"])
+    document = document_services.archive_tracking_record(record, user=users["sup_admin"])
     assert document.allow_external_ocr is False
     assert "disabled by default" in document.ocr_notes
 
@@ -275,7 +275,9 @@ def test_notification_count_returns_swappable_badge_and_respects_read_state(clie
     response = client.get("/notifications/count/")
     body = response.content.decode()
     assert response.status_code == 200
-    assert "every 60s [document.visibilityState=='visible']" in body
+    assert 'hx-trigger="every 60s"' in body
+    assert "data-notification-poll" in body
+    assert "visibilityState" not in body
     assert "hx-swap=\"outerHTML\"" in body
     assert "notification-count" in body
     assert response["Cache-Control"] == "no-store"

@@ -420,6 +420,14 @@ class GrantAccessForm(BootstrapFormMixin, forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="or to user")
     reason = forms.CharField(max_length=255, required=False, label="Reason")
 
+    def __init__(self, *args, actor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if actor is not None and actor.is_office_admin and not actor.is_system_admin:
+            self.fields["office"].queryset = Office.active.filter(pk=actor.office_id)
+            self.fields["user"].queryset = User.objects.filter(
+                office_id=actor.office_id, is_active=True, is_staff=False, is_superuser=False,
+            ).exclude(role=User.Role.SYSTEM_ADMIN) if actor.office_id else User.objects.none()
+
     def clean(self):
         cleaned = super().clean()
         if not cleaned.get("office") and not cleaned.get("user"):

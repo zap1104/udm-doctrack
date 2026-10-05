@@ -7,10 +7,17 @@ could do the same damage two other ways — drop your own role to USER, or clear
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.db import close_old_connections, connections
+from django.test import RequestFactory
 
 from apps.accounts.forms import AdminUserUpdateForm
 from apps.accounts.models import User
+from apps.accounts.views import UserUpdateView
 
 
 def _payload(user, **overrides):
@@ -98,3 +105,38 @@ def test_stepping_down_is_allowed_once_somebody_else_can_take_over(users, office
         _payload(admin, role=User.Role.ADMIN), instance=admin, editing_self=True, actor=admin
     )
     assert form.is_valid() is True, form.errors
+
+
+@pytest.mark.django_db
+def test_an_inactive_system_admin_cannot_take_over(users, offices):
+    actor = users["admin"]
+    User.objects.create_user(username="inactive-sysadmin", password="TestPass123!", office=offices["REC"],
+                             role=User.Role.SYSTEM_ADMIN, is_active=False)
+    form = AdminUserUpdateForm(_payload(actor, role=User.Role.ADMIN), instance=actor, editing_self=True, actor=actor)
+    assert not form.is_valid()
+    assert "role" in form.errors
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_system_admins_cannot_both_step_down_at_the_same_time(users, offices):
+    second = User.objects.create_user(username="second-concurrent-admin", password="TestPass123!",
+                                      office=offices["REC"], role=User.Role.SYSTEM_ADMIN)
+    barrier = Barrier(2)
+
+    def step_down(user_id):
+        close_old_connections()
+        try:
+            actor = User.objects.get(pk=user_id)
+            request = RequestFactory().post(f"/accounts/users/{user_id}/", _payload(actor, role=User.Role.ADMIN))
+            request.user = actor
+            request.session = {}
+            request._messages = FallbackStorage(request)
+            barrier.wait(timeout=10)
+            return UserUpdateView.as_view()(request, pk=user_id).status_code
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        outcomes = list(workers.map(step_down, [users["admin"].pk, second.pk]))
+    assert sorted(outcomes) == [200, 302]
+    assert User.objects.filter(role=User.Role.SYSTEM_ADMIN, is_active=True).count() == 1

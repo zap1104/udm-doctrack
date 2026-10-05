@@ -19,7 +19,7 @@ from django.urls import reverse
 from apps.accounts.email_verification import email_verification_token
 from apps.accounts.forms import VerifiedEmailPasswordResetForm
 from apps.core.security import RedactingFormatter, allow_sensitive_request
-from apps.core.utils import checksum_of, validate_upload
+from apps.core.utils import checksum_of, log_action, validate_upload
 from apps.documents import services
 from apps.documents.forms import DocumentMetadataForm
 from apps.documents.models import AccessLevel, Document, DocumentAccessGrant, DocumentFile
@@ -28,6 +28,24 @@ from apps.documents.models import AccessLevel, Document, DocumentAccessGrant, Do
 @pytest.fixture
 def document(users, offices):
     return Document.objects.create(title="Private Supply record", office=offices["SUP"], uploaded_by=users["sup"], year=2026)
+
+
+@pytest.mark.django_db
+def test_database_audit_rows_redact_nested_secrets_and_preserve_office_snapshots(users, settings):
+    from apps.core.models import AuditLog
+
+    settings.OCR_SPACE_API_KEY = "audit-test-provider-key"
+    request = RequestFactory().get("/", HTTP_USER_AGENT="Test token=short-lived-secret")
+    entry = log_action(AuditLog.Action.UPDATE, "Provider audit-test-provider-key failed", actor=users["med"],
+                       target=users["med"], request=request,
+                       extra={"api_key": "another-secret", "nested": [{"note": "audit-test-provider-key", "count": 3}]})
+    entry.refresh_from_db()
+    assert "audit-test-provider-key" not in entry.summary
+    assert "short-lived-secret" not in entry.user_agent
+    assert entry.extra["api_key"] == "[REDACTED]"
+    assert entry.extra["nested"] == [{"note": "[REDACTED]", "count": 3}]
+    assert entry.extra["audit_actor_office_id"] == users["med"].office_id
+    assert entry.extra["audit_target_office_id"] == users["med"].office_id
 
 
 @pytest.mark.django_db
@@ -300,3 +318,15 @@ def test_demo_seed_is_refused_when_disabled(settings):
     settings.ALLOW_DEMO_SEED = False
     with pytest.raises(CommandError, match="disabled"):
         call_command("seed_demo", records=0)
+
+
+@pytest.mark.parametrize("label", ['" onload="alert(1)', r"Backslash \g<0> literal", "<script>bad</script>"])
+def test_qr_labels_are_escaped_and_backslashes_stay_literal(label):
+    from xml.etree import ElementTree
+
+    from apps.core.utils import qr_svg
+
+    svg = ElementTree.fromstring(qr_svg("https://example.edu/tracking/1/", label=label))
+    assert svg.attrib["aria-label"] == label
+    assert "onload" not in svg.attrib
+    assert not any(element.tag.endswith("script") for element in svg.iter())

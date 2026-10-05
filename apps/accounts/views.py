@@ -221,16 +221,14 @@ class OfficeScopedUserMixin:
     a missed check is a silent hole, whereas a missed queryset is a 404.
     """
 
+    serialize_account_changes = True
+
     def administrable_users(self):
-        users = User.objects.select_related("office")
-        if self.request.user.is_system_admin:
-            return users
-        # An office administrator with no office of their own administers
-        # nobody. `filter(office_id=None)` would instead hand them every
-        # unassigned account in the system.
-        if not self.request.user.office_id:
-            return users.none()
-        return users.filter(office_id=self.request.user.office_id, is_superuser=False, is_staff=False).exclude(role=User.Role.SYSTEM_ADMIN)
+        users = User.objects.administrable_by(self.request.user).select_related("office")
+        if self.request.method not in {"GET", "HEAD", "OPTIONS"}:
+            # Recheck a target's office/role under a lock before editing it.
+            users = users.select_for_update(of=("self",))
+        return users
 
     def selectable_offices(self):
         if self.request.user.is_system_admin:

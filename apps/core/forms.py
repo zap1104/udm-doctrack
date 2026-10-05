@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from django import forms
 
+from .models import OfficeSchedule
+
 TEXT_INPUTS = (
     forms.TextInput,
     forms.EmailInput,
@@ -12,6 +14,7 @@ TEXT_INPUTS = (
     forms.PasswordInput,
     forms.DateInput,
     forms.DateTimeInput,
+    forms.TimeInput,
     forms.Textarea,
 )
 
@@ -41,6 +44,55 @@ class BootstrapFormMixin:
                 widget.attrs["class"] = f"{existing} form-control".strip()
             if field.required:
                 widget.attrs.setdefault("aria-required", "true")
+
+
+class OfficeScheduleForm(BootstrapFormMixin, forms.ModelForm):
+    working_days = forms.TypedChoiceField(coerce=int, label="Working days", choices=[
+        (1, "Monday only"), (2, "Monday to Tuesday"), (3, "Monday to Wednesday"),
+        (4, "Monday to Thursday"), (5, "Monday to Friday"), (6, "Monday to Saturday"), (7, "Every day"),
+    ])
+    break_enabled = forms.BooleanField(required=False, label="Exclude a daily break from office time")
+    break_start = forms.TimeField(required=False, label="Break starts", input_formats=["%H:%M"],
+                                 widget=forms.TimeInput(format="%H:%M", attrs={"type": "time", "step": "60"}))
+    break_end = forms.TimeField(required=False, label="Break ends", input_formats=["%H:%M"],
+                               widget=forms.TimeInput(format="%H:%M", attrs={"type": "time", "step": "60"}))
+
+    class Meta:
+        model = OfficeSchedule
+        fields = ["working_days", "opens_at", "closes_at", "break_enabled", "break_start", "break_end"]
+        labels = {"opens_at": "Office opens", "closes_at": "Office closes"}
+        widgets = {name: forms.TimeInput(format="%H:%M", attrs={"type": "time", "step": "60"})
+                   for name in ("opens_at", "closes_at")}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial.setdefault("break_enabled", self.instance.break_end > self.instance.break_start)
+        for name in ("opens_at", "closes_at"):
+            self.fields[name].input_formats = ["%H:%M"]
+
+    def clean(self):
+        data = super().clean()
+        opens, closes = data.get("opens_at"), data.get("closes_at")
+        if opens and closes and closes <= opens:
+            self.add_error("closes_at", "Closing time must be after opening time on the same day.")
+        if not data.get("break_enabled"):
+            if opens:
+                data["break_start"] = data["break_end"] = opens
+            return data
+        start, end = data.get("break_start"), data.get("break_end")
+        if start is None:
+            self.add_error("break_start", "Enter when the break starts.")
+        if end is None:
+            self.add_error("break_end", "Enter when the break ends.")
+        if start and end and end <= start:
+            self.add_error("break_end", "The break must end after it starts.")
+        if opens and start and start < opens:
+            self.add_error("break_start", "The break must be inside office hours.")
+        if closes and end and end > closes:
+            self.add_error("break_end", "The break must be inside office hours.")
+        if opens and closes and start == opens and end == closes:
+            self.add_error("break_end", "Leave some office time outside the break.")
+        return data
 
 
 class MultipleFileInput(forms.ClearableFileInput):

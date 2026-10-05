@@ -58,7 +58,10 @@ DRAFT_DEADLINE_KEY = "draft_deadline_{pk}"
 
 
 def _get_record(request, pk) -> TrackingRecord:
-    record = get_object_or_404(TrackingRecord.objects.with_related(), pk=pk)
+    records = TrackingRecord.objects.with_related()
+    if request.user.is_office_admin and not request.user.is_system_admin:
+        records = records.visible_to(request.user)
+    record = get_object_or_404(records, pk=pk)
     if not record.can_user_view(request.user):
         raise PermissionDenied(
             "This document has not been routed to your office and nobody has granted you access to it."
@@ -218,7 +221,7 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "resolved": resolved,
                 # The picker is offered to whoever `scope_office` would honour
                 # the parameter for, so the control and the gate cannot drift.
-                "can_pick_office": request.user.is_office_admin,
+                "can_pick_office": request.user.is_system_admin,
                 # Hides the create/upload button from the accounts the
                 # target view would turn away. The view still refuses
                 # them on its own; this only stops offering a dead end.
@@ -417,6 +420,10 @@ class RecordDetailView(AppLoginRequiredMixin, View):
         attachments = list(record.attachments.select_related("uploaded_by"))
         archived_document = getattr(record, "archived_document", None)
         can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
+        # Filing a record handled by this office does not grant access to the
+        # originating office's repository. Keep the tracking history usable.
+        if archived_document is not None and not archived_document.can_user_view(request.user):
+            archived_document = None
         can_reopen = record.can_user_reopen(request.user)
         return render(
             request,
@@ -439,9 +446,14 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "remark_form": RemarkForm(),
                 "route_form": RouteForm(record=record, user=request.user),
                 "complete_form": CompleteForm(),
-                "grant_form": GrantAccessForm(),
+                "grant_form": GrantAccessForm(actor=request.user),
                 "pending_offices": record.pending_receipt_offices(),
-                "can_act": record.can_user_act(request.user),
+                "can_act": record.status != Status.DRAFT and record.can_user_act(request.user),
+                "can_complete_and_file": request.user.is_system_admin or (
+                    request.user.is_office_admin and request.user.office_id in {
+                        record.originating_office_id, record.current_office_id,
+                    }
+                ),
                 "can_confirm": record.can_user_confirm_receipt(request.user),
                 "can_archive_now": can_archive_now,
                 "can_reopen": can_reopen,
@@ -584,9 +596,9 @@ class CompleteRecordView(OfficeAssignedMixin, View):
         if form.cleaned_data.get("archive_now") and record.can_user_approve_upload(request.user):
             try:
                 document = services.approve_upload(record, user=request.user)
-                message += " It is now searchable in the Document Repository."
+                message += " It has been filed in the Document Repository."
                 messages.success(request, message)
-                return redirect(document.get_absolute_url())
+                return redirect(document.get_absolute_url() if document.can_user_view(request.user) else record.get_absolute_url())
             except (ValidationError, PermissionDenied) as exc:
                 messages.warning(
                     request,
@@ -627,6 +639,8 @@ class ApproveUploadView(OfficeAssignedMixin, View):
         )
         if request.POST.get("next") == "queue":
             return redirect(f"{reverse('tracking:list')}?scope={services.SCOPE_PENDING_UPLOAD}")
+        if not document.can_user_view(request.user):
+            return redirect(record.get_absolute_url())
         return redirect(document.get_absolute_url())
 
 
@@ -662,7 +676,7 @@ class GrantAccessView(OfficeAssignedMixin, View):
         record = _get_record(request, pk)
         if not record.can_user_grant_access(request.user):
             raise PermissionDenied("Only the originating or holding office can share this record.")
-        form = GrantAccessForm(request.POST)
+        form = GrantAccessForm(request.POST, actor=request.user)
         if not form.is_valid():
             messages.error(request, "Choose an office or a user.")
             return redirect(record.get_absolute_url())
@@ -729,7 +743,10 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
 class AttachmentDownloadView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
-        attachment = get_object_or_404(Attachment.objects.select_related("record"), pk=pk)
+        attachments = Attachment.objects.select_related("record")
+        if request.user.is_office_admin and not request.user.is_system_admin:
+            attachments = attachments.filter(record__in=TrackingRecord.objects.visible_to(request.user))
+        attachment = get_object_or_404(attachments, pk=pk)
         if not attachment.record.can_user_view(request.user):
             raise PermissionDenied("You do not have access to this document.")
         log_action(

@@ -119,10 +119,14 @@ def test_a_confirmed_record_leaves_the_queue(sent_record, users):
 
 
 @pytest.mark.django_db
-def test_a_completed_record_never_shows_as_pending(sent_record, users):
+def test_a_completed_record_never_shows_as_pending(sent_record, users, offices):
     """A record completed while a recipient never confirmed is finished, not waiting."""
-    from apps.tracking.models import TrackingRecord
+    from apps.tracking.models import RoutingStep, TrackingRecord
 
+    # One recipient has custody; another still owes a receipt when work finishes.
+    RoutingStep.objects.create(record=sent_record, sequence=2, batch=sent_record.current_batch,
+                               from_office=offices["MED"], to_office=offices["HR"], sent_by=users["med"])
+    confirm_receipt(sent_record, user=users["sup"])
     complete_record(sent_record, user=users["admin"])
     sent_record.refresh_from_db()
 

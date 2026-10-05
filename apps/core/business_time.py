@@ -1,7 +1,7 @@
 """Elapsed time counted in office hours rather than in calendar hours.
 
 A document routed at 4PM on Friday and received at 9AM on Monday sat unattended
-for about one working hour, but calendar arithmetic reports "2 days 17 hrs" —
+for two office hours, but calendar arithmetic reports "2 days 17 hrs" —
 which reads as a delay by the receiving office and is really a weekend. Every
 turnaround figure computed on wall-clock time carries that distortion, and it is
 worst exactly where it matters most: the documents that cross a weekend or a
@@ -36,15 +36,69 @@ an office had to act.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from functools import wraps
+from math import isfinite
 
 from django.conf import settings
 from django.utils import timezone
 
+_schedule_scope = ContextVar("office_schedule", default=None)
+SCHEDULE_SETTINGS = {
+    "OFFICE_DAY_START": "opens_at", "OFFICE_DAY_END": "closes_at",
+    "OFFICE_LUNCH_START": "break_start", "OFFICE_LUNCH_END": "break_end",
+    "OFFICE_WEEK_DAYS": "working_days",
+}
+
+
+def configured_schedule() -> dict:
+    return {"opens_at": settings.OFFICE_DAY_START, "closes_at": settings.OFFICE_DAY_END,
+            "break_start": settings.OFFICE_LUNCH_START, "break_end": settings.OFFICE_LUNCH_END,
+            "working_days": settings.OFFICE_WEEK_DAYS}
+
+
+def saved_schedule() -> dict:
+    from apps.core.models import OfficeSchedule
+
+    return OfficeSchedule.objects.filter(pk=1).values(*SCHEDULE_SETTINGS.values()).first() or configured_schedule()
+
+
+def current_schedule() -> dict:
+    scope = _schedule_scope.get()
+    if scope is None:
+        return configured_schedule()
+    if "schedule" not in scope:
+        scope["schedule"] = saved_schedule()
+    return scope["schedule"]
+
+
+@contextmanager
+def office_schedule_context():
+    """One lazy snapshot per request or standalone calculation, never a process cache."""
+    if _schedule_scope.get() is not None:
+        yield
+        return
+    token = _schedule_scope.set({})
+    try:
+        yield
+    finally:
+        _schedule_scope.reset(token)
+
+
+def with_office_schedule(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with office_schedule_context():
+            return function(*args, **kwargs)
+    return wrapped
+
 
 def _setting(name: str, default):
-    return getattr(settings, name, default)
+    field = SCHEDULE_SETTINGS.get(name)
+    return current_schedule()[field] if field else getattr(settings, name, default)
 
 
 @dataclass(frozen=True)
@@ -53,6 +107,7 @@ class Holidays:
 
     dates: frozenset = frozenset()
     every_year: frozenset = frozenset()
+    schedule: dict | None = None
 
     def __contains__(self, day: date) -> bool:
         return day in self.dates or (day.month, day.day) in self.every_year
@@ -71,23 +126,20 @@ def load_holidays() -> Holidays:
             every_year.add((day.month, day.day))
         else:
             dates.add(day)
-    return Holidays(frozenset(dates), frozenset(every_year))
+    schedule = current_schedule() if _schedule_scope.get() is not None else saved_schedule()
+    return Holidays(frozenset(dates), frozenset(every_year), schedule)
 
 
-def office_day_bounds(day: date) -> tuple[time, time]:
+def office_day_bounds(day: date, schedule=None) -> tuple[time, time]:
     """The start and end of the office day, as configured."""
-    return (
-        _setting("OFFICE_DAY_START", time(8, 0)),
-        _setting("OFFICE_DAY_END", time(17, 0)),
-    )
+    schedule = schedule or current_schedule()
+    return schedule["opens_at"], schedule["closes_at"]
 
 
-def lunch_bounds(day: date) -> tuple[time, time]:
+def lunch_bounds(day: date, schedule=None) -> tuple[time, time]:
     """The lunch break, as configured. Equal start and end means no break."""
-    return (
-        _setting("OFFICE_LUNCH_START", time(12, 0)),
-        _setting("OFFICE_LUNCH_END", time(13, 0)),
-    )
+    schedule = schedule or current_schedule()
+    return schedule["break_start"], schedule["break_end"]
 
 
 def _overlap_seconds(start, end, window_start, window_end) -> int:
@@ -97,9 +149,11 @@ def _overlap_seconds(start, end, window_start, window_end) -> int:
 
 def is_working_day(day: date, holidays: Holidays | None = None) -> bool:
     """Monday-Friday, less the holidays."""
-    if day.weekday() >= _setting("OFFICE_WEEK_DAYS", 5):
+    holidays = load_holidays() if holidays is None else holidays
+    schedule = holidays.schedule or current_schedule()
+    if day.weekday() >= schedule["working_days"]:
         return False
-    return day not in (load_holidays() if holidays is None else holidays)
+    return day not in holidays
 
 
 def business_seconds_between(start, end, holidays: Holidays | None = None) -> int:
@@ -119,6 +173,7 @@ def business_seconds_between(start, end, holidays: Holidays | None = None) -> in
 
     if holidays is None:
         holidays = load_holidays()
+    schedule = holidays.schedule or current_schedule()
     tz = timezone.get_current_timezone()
     total = 0
 
@@ -131,8 +186,8 @@ def business_seconds_between(start, end, holidays: Holidays | None = None) -> in
         def at(clock, day=day):
             return timezone.make_aware(datetime.combine(day, clock), tz)
 
-        opens_at, closes_at = office_day_bounds(day)
-        lunch_from, lunch_to = lunch_bounds(day)
+        opens_at, closes_at = office_day_bounds(day, schedule)
+        lunch_from, lunch_to = lunch_bounds(day, schedule)
         opens, closes = at(opens_at), at(closes_at)
         # The break only subtracts what lies inside the office window, so a
         # misconfigured lunch can never make a day count negative.
@@ -172,6 +227,41 @@ def working_day_seconds() -> int:
 def working_day_hours() -> float:
     """`working_day_seconds` in hours, for the sentences that state it."""
     return round(working_day_seconds() / 3600, 2)
+
+
+def humanise_hours(seconds) -> str:
+    """Use total hours for both clocks so a displayed 'day' cannot change units."""
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return "—"
+    if not isfinite(seconds) or seconds < 0:
+        return "—"
+    if seconds == 0:
+        return "0 mins"
+    if seconds < 60:
+        return "under a minute"
+    hours, minutes = divmod(int(seconds) // 60, 60)
+    return _two_units(0, "day", hours, "hr", minutes, "min")
+
+
+def office_schedule_explanation() -> dict:
+    """Visible schedule and a holiday-free example derived from the actual window."""
+    day = date(2000, 1, 3)  # Monday, to illustrate an ordinary open day.
+    opens, closes = office_day_bounds(day)
+    lunch_from, lunch_to = lunch_bounds(day)
+    window = (datetime.combine(day, closes) - datetime.combine(day, opens)).total_seconds()
+    office = working_day_seconds()
+    weekdays = _setting("OFFICE_WEEK_DAYS", 5)
+    last_day = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[weekdays - 1]
+    return {
+        "days": "Every day" if weekdays == 7 else "Monday" if weekdays == 1 else f"Monday–{last_day}",
+        "opens": _clock(opens), "closes": _clock(closes),
+        "lunch": f"{_clock(lunch_from)}–{_clock(lunch_to)}" if lunch_to > lunch_from else "",
+        "example_total_seconds": window,
+        "example_excluded_seconds": window - office,
+        "example_office_seconds": office,
+    }
 
 
 def humanise_business_seconds(seconds) -> str:
@@ -250,8 +340,10 @@ def office_hours_caveat() -> str:
         f", lunch {_clock(lunch_from)}–{_clock(lunch_to)} not counted"
         if lunch_to > lunch_from else ""
     )
+    weekdays = _setting("OFFICE_WEEK_DAYS", 5)
+    closed = "weekends and " if weekdays == 5 else "Sundays and " if weekdays == 6 else "closed weekdays and " if weekdays < 5 else ""
     return (
         f"Turnaround is counted in office hours ({working_day_hours():g} hours = "
-        f"1 working day: {_clock(opens)}–{_clock(closes)}{lunch}), excluding weekends "
-        "and the holidays listed under Administration."
+        f"1 working day: {_clock(opens)}–{_clock(closes)}{lunch}), excluding {closed}"
+        "the holidays listed under Administration."
     )

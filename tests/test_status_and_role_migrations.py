@@ -184,12 +184,13 @@ def test_a_secretary_keeps_every_power_it_actually_had(apps_registry, offices, u
 
     assert secretary.is_records_staff is True
 
-    # 1. may act on a colleague's draft raised by their own office
+    # 1. may prepare their own draft; another person's private draft stays private.
     draft = create_draft_record(
-        user=users["med"], subject="Somebody else's draft", instructions="For action.",
+        user=secretary, subject="Their own draft", instructions="For action.",
         document_type=memo_type,
     )
     assert draft.can_user_act(secretary) is True
+    assert draft.can_user_act(users["med"]) is False
 
     # 2. may edit their own office's repository entries
     document = Document.objects.create(

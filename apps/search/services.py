@@ -392,14 +392,13 @@ def _highlight(text: str, tokens: list[str]) -> str:
 
 def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
     """Tag and title suggestions for the search box."""
-    from apps.core.models import Tag
 
     prefix = (prefix or "").strip().lower()
     if len(prefix) < 2:
         return []
-    tags = list(
-        Tag.active.filter(name__istartswith=prefix).order_by("-usage_count", "name").values_list("name", flat=True)[:limit]
-    )
+    from apps.documents.services import suggested_tags_for
+
+    tags = list(suggested_tags_for(user).filter(name__istartswith=prefix).values_list("name", flat=True)[:limit])
     remaining = limit - len(tags)
     if remaining > 0:
         titles = (

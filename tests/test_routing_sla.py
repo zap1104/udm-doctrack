@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.core.models import DocumentType
 from apps.tracking.models import RoutingSLA, Status
 from apps.tracking.services import (
+    confirm_receipt,
     create_draft_record,
     resolve_sla_due_days,
     route_record,
@@ -150,6 +151,7 @@ def test_every_hop_is_measured_against_the_office_receiving_it(
     record.refresh_from_db()
     assert _days_out(record) == 2
 
+    confirm_receipt(record, user=users["sup"])
     route_record(record, [offices["HR"]], user=users["sup"], action="FORWARD")
     record.refresh_from_db()
 

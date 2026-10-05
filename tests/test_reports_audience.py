@@ -1,7 +1,7 @@
 """Reports shows each reader what their scope can honestly answer.
 
 Four kinds of reader open this page: a system administrator (the university), an
-office administrator (their office, or one they pick), an office user and a
+office administrator (their assigned office), an office user and a
 viewer (their office). Two faults came from giving all of them one layout:
 
 - An office administrator who had picked nothing read a page titled with their
@@ -64,13 +64,14 @@ def test_a_system_administrator_reads_the_university_by_default(client, users, r
 
 
 @pytest.mark.django_db
-def test_an_office_administrator_can_still_pick_another_office(client, users, offices, routed):
+def test_an_office_administrator_cannot_pick_another_office(client, users, offices, routed):
     client.force_login(users["med_admin"])
 
     context = client.get(f"{REPORTS}?office={offices['SUP'].pk}").context
 
-    assert context["scope_office"] == offices["SUP"]
-    assert context["filters"]["defaulted"] is False
+    assert context["scope_office"] == offices["MED"]
+    assert context["filters"]["defaulted"] is True
+    assert context["filters"]["can_pick"] is False
 
 
 # --- rankings for the university, the office's own figures otherwise ------------

@@ -40,6 +40,19 @@ def redact_secrets(value):
     return text
 
 
+def redact_audit_data(value):
+    """Keep credentials out of structured audit rows as well as text logs."""
+    if isinstance(value, dict):
+        sensitive_keys = {"password", "token", "apikey", "api_key", "secret", "signature", "sig", "authorization"}
+        return {
+            key: "[REDACTED]" if str(key).lower().replace("-", "_") in sensitive_keys else redact_audit_data(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [redact_audit_data(item) for item in value]
+    return redact_secrets(value) if isinstance(value, str) else value
+
+
 class RedactingFormatter(logging.Formatter):
     def format(self, record):
         return redact_secrets(super().format(record))

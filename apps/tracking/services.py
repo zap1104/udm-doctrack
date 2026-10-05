@@ -30,6 +30,7 @@ from django.utils import timezone
 from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, notify_offices, resolve_for_record
 from apps.core.pagination import DEFAULT_PAGE_SIZE
+from apps.core.permissions import active_writer, locked_mutation
 from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
@@ -65,14 +66,14 @@ def refuse_viewers(user, action: str) -> None:
     a service function is what every path — view, management command, background
     task — actually goes through.
     """
-    if getattr(user, "is_viewer", False):
+    if not getattr(user, "is_authenticated", False) or not getattr(user, "can_start_work", False):
         raise PermissionDenied(
             f"Your account has view-only access and cannot {action}. "
             "Ask your office administrator if you need to make changes."
         )
 
 
-def ensure_received(record) -> None:
+def ensure_received(record, *, stage_label=Status.IN_PROCESS.label) -> None:
     """Refuse a transition that presumes the document is in somebody's hands.
 
     A document nobody has confirmed receiving is not being worked on, whatever
@@ -83,7 +84,7 @@ def ensure_received(record) -> None:
     if not record.current_step_queryset.filter(received_at__isnull=False).exists():
         raise ValidationError(
             "This document has not been received yet. Confirm receipt before "
-            f"marking it {Status.IN_PROCESS.label}."
+            f"marking it {stage_label}."
         )
 
 
@@ -220,7 +221,10 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
                         classification=None, priority=None, due_at=None, originating_office=None,
                         requested_action=""):
     refuse_viewers(user, "create documents")
+    user = active_writer(user)
     office = originating_office or user.office
+    if not user.is_system_admin and office != user.office:
+        raise PermissionDenied("You can only originate documents for your own office.")
     if office is None:
         raise ValidationError("Your account has no office, so it cannot originate a document.")
 
@@ -262,10 +266,16 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
     return record
 
 
-@transaction.atomic
+@locked_mutation
 def attach_files(record, files, *, user, note="", routing_step=None) -> list[Attachment]:
     if files:
         refuse_viewers(user, "upload files")
+        if not record.can_user_act(user):
+            raise PermissionDenied("Only the office holding the document can add files.")
+        if routing_step is not None and (routing_step.record_id != record.pk or routing_step.batch != record.current_batch):
+            raise ValidationError("The attachment must belong to this record's current routing batch.")
+        if len(files) > settings.MAX_UPLOAD_FILES:
+            raise ValidationError(f"Upload at most {settings.MAX_UPLOAD_FILES} files at a time.")
     created: list[Attachment] = []
     for uploaded in files:
         validate_upload(uploaded)
@@ -316,7 +326,7 @@ def sending_office(record, user):
     return record.current_office or user.office
 
 
-@transaction.atomic
+@locked_mutation
 def route_record(record, offices, *, user, instructions="", action=RoutingStep.Action.SEND,
                  due_days=None, due_at=_UNSET, remark="") -> list[RoutingStep]:
     """Send the record to one or more offices. Creates a new batch of steps.
@@ -326,11 +336,17 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     relative form. `due_at` wins when both are given.
     """
     refuse_viewers(user, "route documents")
-    offices = [office for office in offices if office is not None]
+    if record.status in COMPLETED_STATUSES and record.can_user_view(user):
+        raise ValidationError("This record is completed. Reopen it before routing again.")
+    if not record.can_user_act(user):
+        raise PermissionDenied("Only the office holding the document can route it.")
+    if action not in RoutingStep.Action.values:
+        raise ValidationError("Choose a valid routing action.")
+    offices = list({office.pk: office for office in offices if office is not None}.values())
+    if any(not office.is_active for office in offices):
+        raise ValidationError("Choose an active receiving office.")
     if not offices:
         raise ValidationError("Select at least one receiving office.")
-    if record.status in COMPLETED_STATUSES:
-        raise ValidationError("This record is completed. Reopen it before routing again.")
 
     if action == RoutingStep.Action.SEND:
         if record.status != Status.DRAFT:
@@ -443,12 +459,14 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     return steps
 
 
-@transaction.atomic
+@locked_mutation
 def confirm_receipt(record, *, user, note="") -> RoutingStep:
     """Explicit receipt. Server time only — never a value typed by the user."""
     refuse_viewers(user, "confirm receipt")
     if not user.office_id:
         raise PermissionDenied("Your account has no office, so it cannot receive documents.")
+    if record.status in COMPLETED_STATUSES or record.status == Status.DRAFT:
+        raise ValidationError("Only a document currently awaiting receipt can be received.")
 
     step = (
         RoutingStep.objects.select_for_update()
@@ -520,9 +538,11 @@ def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
     return [confirm_receipt(locked[record_id], user=user, note=note) for record_id in record_ids]
 
 
-@transaction.atomic
+@locked_mutation
 def add_remark(record, *, user, remark) -> RecordActivity:
     refuse_viewers(user, "add remarks")
+    if not record.can_user_act(user):
+        raise PermissionDenied("Only the office holding the document can add remarks.")
     remark = (remark or "").strip()
     if not remark:
         raise ValidationError("Write the remark before saving.")
@@ -545,7 +565,7 @@ def add_remark(record, *, user, remark) -> RecordActivity:
     return activity
 
 
-@transaction.atomic
+@locked_mutation
 def mark_in_process(record, *, user, note="") -> TrackingRecord:
     """Declare that the office holding the document has started work on it.
 
@@ -559,6 +579,8 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     if record.status == Status.DRAFT:
         raise ValidationError(f"A draft has not been sent yet, so it cannot be {Status.IN_PROCESS.label}.")
     ensure_received(record)
+    if not record.can_user_act(user):
+        raise PermissionDenied("Only the office holding the document can change its status.")
 
     if record.status == Status.IN_PROCESS:
         return record
@@ -581,7 +603,7 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     return record
 
 
-@transaction.atomic
+@locked_mutation
 def complete_record(record, *, user, note="") -> TrackingRecord:
     """Finish the work. The record stays in Tracking awaiting approval.
 
@@ -592,7 +614,14 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
     """
     refuse_viewers(user, "complete documents")
     if record.status in COMPLETED_STATUSES:
-        return record
+        if user.is_system_admin or (record.can_user_view(user) and user.office_id == record.current_office_id):
+            return record
+        raise PermissionDenied("Only the office holding the document can complete it.")
+    if not record.can_user_act(user):
+        raise PermissionDenied("Only the office holding the document can complete it.")
+    if record.status == Status.DRAFT:
+        raise ValidationError("Send the draft and confirm receipt before completing it.")
+    ensure_received(record, stage_label="Completed")
     record.status = Status.COMPLETED_PENDING_UPLOAD
     record.completed_at = timezone.now()
     record.completed_by = user
@@ -651,7 +680,7 @@ def approve_upload(record, *, user, tag_names=None, description=""):
     )
 
 
-@transaction.atomic
+@locked_mutation
 def reopen_record(record, *, user, reason="") -> TrackingRecord:
     """Send a completed record back into active tracking. History is kept intact.
 
@@ -685,6 +714,8 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
         )
     if record.status != Status.COMPLETED_PENDING_UPLOAD:
         return record
+    if not record.can_user_reopen(user):
+        raise PermissionDenied("Only the completing office or an authorized administrator can reopen it.")
     record.status = Status.RECEIVED
     record.completed_at = None
     record.completed_by = None
@@ -717,11 +748,18 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
     return record
 
 
-@transaction.atomic
+@locked_mutation
 def grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
     refuse_viewers(user, "share documents")
     if not record.can_user_grant_access(user):
         raise PermissionDenied("Only the originating or holding office can share this record.")
+    if (office is None) == (target_user is None):
+        raise ValidationError("Choose exactly one office or user to grant access to.")
+    if user.is_office_admin and not user.is_system_admin:
+        if not user.office_id or (office is not None and office.pk != user.office_id):
+            raise PermissionDenied("You can only manage access within your own office.")
+        if target_user is not None and not user.can_administer(target_user):
+            raise PermissionDenied("You can only manage access for your own office's accounts.")
     grant, created = RecordAccessGrant.objects.get_or_create(
         record=record,
         office=office,
@@ -1284,8 +1322,8 @@ ALL_OFFICES = "__all__"
 def scope_office(user, requested):
     """Which office the per-office queues answer for.
 
-    None unless an administrator named one. Same gate as the dashboard's scope
-    picker — `is_office_admin` — and defined here so the dashboard and the
+    None unless a system administrator named one. Same gate as the dashboard's
+    scope picker — `is_system_admin` — and defined here so the dashboard and the
     Tracking page cannot answer it differently. Two answers to "whose queue is
     this" is the shape of bug this module has already had once.
 
@@ -1302,7 +1340,7 @@ def scope_office(user, requested):
     not an error.
     """
     raw = str(requested or "").strip()
-    if not getattr(user, "is_office_admin", False):
+    if not getattr(user, "is_system_admin", False):
         return None
     if raw == "all":
         return ALL_OFFICES if getattr(user, "is_system_admin", False) else None

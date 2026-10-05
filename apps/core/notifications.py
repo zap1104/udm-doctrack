@@ -72,7 +72,7 @@ def in_app_enabled(user) -> bool:
 
 
 def mark_read(notification, user):
-    if notification.office_id != user.office_id:
+    if not Notification.objects.visible_to(user).filter(pk=notification.pk).exists():
         return False
     NotificationRead.objects.get_or_create(notification=notification, user=user)
     return True
@@ -81,8 +81,10 @@ def mark_read(notification, user):
 def mark_all_read(user, notifications=None) -> int:
     if not getattr(user, "is_authenticated", False) or not user.office_id:
         return 0
-    queryset = notifications or Notification.objects.filter(office_id=user.office_id)
-    notification_ids = queryset.filter(office_id=user.office_id).values_list("pk", flat=True)
+    queryset = Notification.objects.visible_to(user)
+    if notifications is not None:
+        queryset = queryset.filter(pk__in=notifications.values("pk"))
+    notification_ids = queryset.values_list("pk", flat=True)
     now = timezone.now()
     rows = [NotificationRead(notification_id=pk, user=user, read_at=now) for pk in notification_ids]
     NotificationRead.objects.bulk_create(rows, ignore_conflicts=True)

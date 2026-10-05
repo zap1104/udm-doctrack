@@ -112,7 +112,9 @@ def test_an_office_administrator_cannot_approve_another_offices_document(
     hr_admin.role = hr_admin.Role.ADMIN
     hr_admin.save(update_fields=["role"])
 
-    assert completed_record.can_user_view(hr_admin) is True
+    # An administrative role cannot turn an explicit grant into a view of an
+    # office whose workflow this office has never participated in.
+    assert completed_record.can_user_view(hr_admin) is False
     assert completed_record.can_user_approve_upload(hr_admin) is False
 
 
