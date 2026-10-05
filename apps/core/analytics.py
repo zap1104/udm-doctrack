@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from math import cos, pi, sin
 
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.db.models.functions import TruncMonth
 from django.urls import reverse
 from django.utils import timezone
@@ -529,7 +529,14 @@ def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=N
 
     # Future-dated events cannot contribute to a report of work already done.
     # Use the same cutoff for the month's summary and both trend charts.
-    steps = RoutingStep.objects.filter(record__in=records, received_at__lte=now)
+    # Correlate the already-scoped cohort by record ID. Taking one match handles
+    # duplicate rows from visibility/filter joins without rescanning the whole
+    # cohort for every handover when PostgreSQL has stale row estimates. Read
+    # the number in that same lookup so the outer query needs no record join.
+    visible_number = records.filter(pk=OuterRef("record_id")).order_by().values("tracking_number")[:1]
+    steps = RoutingStep.objects.annotate(
+        turnaround_tracking_number=Subquery(visible_number)
+    ).filter(turnaround_tracking_number__isnull=False, received_at__lte=now)
     done = records.filter(status__in=COMPLETED_STATUSES, completed_at__lte=now)
     if since is not None:
         steps = steps.filter(received_at__gte=since)
@@ -553,7 +560,7 @@ def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=N
         }
 
     for sent_at, received_at, record_id, number in steps.order_by().values_list(
-        "sent_at", "received_at", "record_id", "record__tracking_number"
+        "sent_at", "received_at", "record_id", "turnaround_tracking_number"
     ):
         if sent_at and received_at >= sent_at:
             samples["receipt"].append(sample(sent_at, received_at, record_id, number))

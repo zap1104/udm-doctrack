@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.utils import timezone
 
 from apps.core import analytics
@@ -164,7 +165,8 @@ def test_year_picker_uses_local_dates_and_future_events_cannot_break_it(client, 
 
 
 @pytest.mark.django_db
-def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(offices, django_assert_num_queries):
+@pytest.mark.parametrize("nested_loop_plan", [False, True])
+def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(offices, django_assert_num_queries, nested_loop_plan):
     user = get_user_model().objects.create_user(username="graph-load", office=offices["REC"], role="SYSTEM_ADMIN")
     day = date(2026, 8, 3)
     start, received, completed = at(day, 8), at(day, 9), at(day, 17)
@@ -185,6 +187,18 @@ def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(of
     # must still count each completion once and every actual handover once.
     joined = TrackingRecord.objects.filter(routing_steps__received_at__isnull=False)
     assert joined.count() == 5000
+    # A bad membership plan used to rescan the complete joined population for
+    # every handover. Bound each query so that regression fails promptly instead
+    # of leaving a report or CI waiting for many minutes. PostgreSQL restores
+    # this transaction-local setting when pytest rolls back the test.
+    with connection.cursor() as cursor:
+        cursor.execute("SET LOCAL statement_timeout = '15s'")
+        if nested_loop_plan:
+            # Reproduce the join strategy seen with stale row estimates during
+            # the full suite, as can also happen after a large import.
+            cursor.execute("SET LOCAL enable_hashjoin = off")
+            cursor.execute("SET LOCAL enable_mergejoin = off")
+            cursor.execute("SET LOCAL enable_material = off")
     # One additional schedule snapshot per calculation, independent of row count.
     with django_assert_num_queries(5):
         summary = analytics.turnaround(joined, month=day.replace(day=1))

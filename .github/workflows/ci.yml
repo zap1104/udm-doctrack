@@ -5,9 +5,14 @@ on:
     branches: [main, develop, "codex/**"]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -83,7 +88,7 @@ jobs:
         run: python manage.py collectstatic --noinput
 
       - name: Run tests
-        run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60
+        run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60 -o faulthandler_timeout=120
 
       - name: Background processing and maintenance regressions
         run: ENABLE_BACKGROUND_TASKS=True pytest -q tests/test_processing_regressions.py tests/test_security_maintenance.py tests/test_queued_extraction_security.py

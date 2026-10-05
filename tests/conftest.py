@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 from django.test import Client
 
 from apps.accounts.models import Office
 from apps.core.models import DocumentType, Tag
 
 User = get_user_model()
+
+
+@lru_cache(maxsize=64)
+def _role_fixture_password(hashers, username):
+    """Reuse a real hash per test role and configured hasher set.
+
+    Account creation/password tests still call the unmodified manager and
+    password functions. Only identical role-fixture setup avoids hashing the
+    same known test password thousands of times. Production settings stay intact.
+    """
+    return make_password("TestPass123!")
 
 
 class HttpsClient(Client):
@@ -79,11 +94,12 @@ def users(db, offices):
         ("admin", "REC", "SYSTEM_ADMIN"),
     ]:
         user = User.objects.create_user(
-            username=username, password="TestPass123!", office=offices[code], role=role
+            username=username, password=None, office=offices[code], role=role
         )
+        user.password = _role_fixture_password(tuple(settings.PASSWORD_HASHERS), username)
         if role == "SYSTEM_ADMIN":
             user.is_staff = user.is_superuser = True
-            user.save()
+        user.save()
         made[username] = user
     return made
 
