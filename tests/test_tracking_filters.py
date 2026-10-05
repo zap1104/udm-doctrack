@@ -356,10 +356,10 @@ def test_the_page_has_no_search_box(client, users):
 
     # The queue nav is direction; the rows below carry stage and deadline.
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
-    for label in ("All Active", "Incoming", "Outgoing"):
+    for label in ("All in Tracking", "Incoming", "Outgoing"):
         assert label in queue_nav, label
     for label in ("Pending Receipt", "Received", "In Process",
-                  "Completed - Pending Upload", "Overdue"):
+                  "Pending filing", "Overdue"):
         assert label in body, label
         assert label not in queue_nav, f"{label} belongs in its own row"
 
@@ -746,6 +746,6 @@ def test_changing_a_filter_returns_to_the_first_page(client, users, offices):
     """Page four of the old filter is not page four of the new one."""
     client.force_login(users["admin"])
     body = client.get(f"/tracking/?page=3&offices={offices['MED'].pk}").content.decode()
-    filters = body.split("Originating office", 1)[1].split("active record", 1)[0]
+    filters = body.split("Originating office", 1)[1].split("tracking record", 1)[0]
 
     assert "page=3" not in filters

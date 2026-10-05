@@ -8,7 +8,7 @@
     <h1>{% if is_tracking %}Search document tracking{% else %}Search the repository{% endif %}</h1>
     <p class="sub">
       {% if is_tracking %}
-        Active records still moving between offices. You do not need the tracking number.
+        Tracking records, including drafts and completed work awaiting filing. Search the repository for filed documents.
       {% else %}
         Metadata first, then the words inside the file. You do not need the tracking number.
       {% endif %}
@@ -75,15 +75,15 @@
       {% endcomment %}
       <div class="search-results-head">
         <div class="search-results-summary">
-          <strong>{{ total }}</strong> active record{{ total|pluralize }} matched
-          <span class="text-muted">· Newest movement first</span>
+          <strong>{{ total }}</strong> tracking record{{ total|pluralize }} matched
+          <span class="text-muted">· Latest tracking activity first</span>
         </div>
         {% pager section="size" %}
       </div>
       {% include "search/_results_tracking.html" %}
     {% else %}
       <div class="card-udm"><div class="card-udm-body empty-state">
-        <h3>Search active tracking records</h3>
+        <h3>Search tracking records</h3>
         <p>Try a tracking number, a word from the subject, or an office code.<br>
            Example: <code>UDM-OVPA-MED</code> or <code>purchase request</code>.</p>
       </div></div>
@@ -99,7 +99,7 @@
           {% include "search/_results_repository.html" %}
         {% else %}
           <div class="card-udm"><div class="card-udm-body empty-state">
-            <h3>Search the whole archive</h3>
+            <h3>Search filed documents</h3>
             <p>Try an office code, a subject word, a tag, a year, or a phrase in quotes.<br>
                Example: <code>preventive maintenance MED</code> or <code>"work order"</code>.</p>
           </div></div>

@@ -55,6 +55,8 @@ def test_the_record_stays_in_tracking_until_it_is_approved(completed_unfiled, us
     from apps.documents.models import Document
 
     assert completed_unfiled.status == Status.COMPLETED_PENDING_UPLOAD
+    assert completed_unfiled.status == "COMPLETED_PENDING_UPLOAD", "stored workflow code stays compatible"
+    assert completed_unfiled.get_status_display() == "Pending filing"
     assert completed_unfiled in active_for(users["sup"]), "still in Tracking"
     assert not Document.objects.filter(tracking_record=completed_unfiled).exists(), "not in the repository"
     assert completed_unfiled in TrackingRecord.objects.visible_to(users["sup"]).pending_filing()
@@ -87,18 +89,23 @@ def test_the_queue_appears_on_the_tracking_page(client, completed_unfiled, users
     client.force_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
-    assert "Completed - Pending Upload" in body
+    assert "Pending filing" in body
     assert completed_unfiled.tracking_number in body
 
 
 @pytest.mark.django_db
-def test_the_queue_is_no_longer_on_the_repository_page(client, completed_unfiled, users):
-    """It moved. Leaving a copy behind would mean two places to file from, only
-    one of which the status model now agrees with."""
-    client.force_login(users["sup"])
-    body = client.get("/documents/").content.decode()
+def test_unfiled_work_is_not_a_filed_repository_document(client, completed_unfiled, users):
+    """A pending preview may appear, but completion alone must not file a record."""
+    from apps.documents.models import Document
 
-    assert "Pending filing" not in body
+    client.force_login(users["sup"])
+    response = client.get("/documents/")
+
+    assert response.status_code == 200
+    assert not Document.objects.filter(tracking_record=completed_unfiled).exists()
+    assert all(document.tracking_record_id != completed_unfiled.pk for document in response.context["documents"])
+    completed_unfiled.refresh_from_db()
+    assert completed_unfiled.status == Status.COMPLETED_PENDING_UPLOAD
 
 
 @pytest.mark.django_db

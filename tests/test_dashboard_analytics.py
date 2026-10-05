@@ -1205,7 +1205,7 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
     queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
     assert queue
     assert "Latest tracking activity" in body
-    assert queue.start() < body.index("Latest tracking activity")
+    assert queue.start() < body.index('<h3 class="desk-block-title">Latest tracking activity</h3>')
 
 
 @pytest.mark.django_db
@@ -1386,7 +1386,7 @@ def test_the_desk_keeps_both_empty_states(client, users):
     body = client.get(DASHBOARD).content.decode()
 
     assert "No incoming documents are waiting" in body
-    assert "No active records yet." in body
+    assert "No tracking records to show." in body
 
 
 @pytest.mark.django_db
@@ -1635,8 +1635,8 @@ def test_every_panel_sits_on_its_own_side(client, users, filed_record):
 
     assert _side(body, "tracking")[1] == TRACKING_SIDE
     assert _side(body, "repository")[1] == REPOSITORY_SIDE
-    assert "Pending filing" not in _side(body, "tracking")[0]
-    assert "Pending filing" in _side(body, "repository")[0]
+    assert 'class="repository-pending-filing"' not in _side(body, "tracking")[0]
+    assert 'class="repository-pending-filing"' in _side(body, "repository")[0]
     assert "Completed in Tracking · not yet filed." in _side(body, "repository")[0]
     assert body.index("dashboard-side--tracking") < body.index("dashboard-side--repository"), (
         "tracking first, so it leads when the sides stack on a narrow screen"

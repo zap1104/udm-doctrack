@@ -10,7 +10,7 @@
       the word was describing a filter the page no longer applies.
     {% endcomment %}
     <h1>Document Tracking</h1>
-    <p class="sub">Documents still moving, plus completed work awaiting approval into the Document Repository.</p>
+    <p class="sub">Tracking records, including drafts and completed work awaiting filing in the Document Repository.</p>
   </div>
   {% comment %}
     Hidden from the accounts RecordCreateView would turn away — a viewer, and an
@@ -27,7 +27,7 @@
 <nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
   <div class="tracking-queue-list">
     <a class="pill-toggle{% if not scope and not status %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}">All Active</a>
+       href="{% url 'tracking:list' %}">All in Tracking</a>
     {% comment %}
       Through `filter_url`, like the filter pills below, so a queue keeps the
       filters already applied. They were bare `?scope=` links: a reader with
@@ -320,7 +320,7 @@
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
   <div class="card-udm-head">
-    <h2>{{ total }} active record{{ total|pluralize }}</h2>
+    <h2>{{ total }} tracking record{{ total|pluralize }}</h2>
     <a class="small" href="{% url 'core:report_export' %}">Export CSV</a>
   </div>
   <div class="card-udm-body p-0 table-responsive">
@@ -406,7 +406,7 @@
           {% endcomment %}
           <tr><td colspan="{% if can_bulk_receive %}8{% else %}7{% endif %}">
             <div class="empty-state">
-              <h3>No active records match this view</h3>
+              <h3>No tracking records match this view</h3>
               {% if impossible_reason %}
                 <p>{{ impossible_reason }}</p>
               {% else %}

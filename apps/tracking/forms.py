@@ -583,13 +583,13 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
         # narrower cuts, which stay because dashboard tiles and saved bookmarks
         # still link to them.
         #
-        # The empty choice is "All active", matching the word the workspace's
+        # The empty choice is "All in Tracking", matching the workspace's
         # own queue nav has always used. It read "All I can see" — which is
         # `owner`'s empty label, two fields down — so on the search page, where
         # both rows are rendered as pills, the reader was offered two pills with
         # identical wording answering different questions one row apart.
         choices=[
-            ("", "All active"),
+            ("", "All in Tracking"),
             ("incoming", "Incoming"),
             ("pending-receipt", Status.PENDING_RECEIPT.label),
             ("received", "Received"),

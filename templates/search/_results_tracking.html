@@ -47,12 +47,12 @@
           <tr><td colspan="6">
             <div class="empty-state">
               {% if query %}
-                <h3>No active records matched “{{ query }}”</h3>
+                <h3>No tracking records matched “{{ query }}”</h3>
                 <p>Try the tracking number, a word from the subject, or an office code.
-                   Completed records are in the Document Repository — switch mode above.</p>
+                   Completed records awaiting filing remain in Tracking. Search the Document Repository for filed documents.</p>
               {% else %}
-                <h3>No active records match these filters</h3>
-                <p>Clear a filter, or switch to the Document Repository for completed work.</p>
+                <h3>No tracking records match these filters</h3>
+                <p>Clear a filter, or search the Document Repository for filed documents.</p>
               {% endif %}
             </div>
           </td></tr>

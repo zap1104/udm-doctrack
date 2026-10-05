@@ -183,7 +183,7 @@ def test_a_viewer_cannot_change_the_status(sent_record, users):
 def test_the_labels_are_the_consultation_wording():
     assert [label for _value, label in Status.choices] == [
         "Draft", "Pending Receipt", "Received", "In Process",
-        "Completed - Pending Upload", "Completed",
+        "Pending filing", "Completed",
     ]
 
 
@@ -202,7 +202,7 @@ def test_no_template_or_script_spells_a_status_the_old_way():
     import pathlib
     import re
 
-    old = ("Pending receipt", "In process", "Completed - pending upload")
+    old = ("Pending receipt", "In process", "Completed - pending upload", "Completed - Pending Upload", "Completed – Pending Upload")
     comment = re.compile(r"{% comment %}.*?{% endcomment %}|{#.*?#}|/\*.*?\*/", re.S)
     for path in [*pathlib.Path("templates").rglob("*.html"), pathlib.Path("static/js/doctrack.js")]:
         text = comment.sub("", path.read_text(encoding="utf-8"))

@@ -240,7 +240,7 @@ def test_an_empty_tracking_search_offers_the_prompt_rather_than_everything(
     response = client.get(TRACK)
 
     assert response.context["has_searched"] is False
-    assert "Search active tracking records" in response.content.decode()
+    assert "Search tracking records" in response.content.decode()
 
 
 # --- Group C/D: what each mode renders --------------------------------------
@@ -293,10 +293,10 @@ def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup
     body = client.get(f"{TRACK}&q=electrical").content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
-    for label in ("All active", "Incoming", "Outgoing"):
+    for label in ("All in Tracking", "Incoming", "Outgoing"):
         assert f">{label}</a>" in queue_nav, label
     for elsewhere in ("Pending Receipt", "Received", "In Process",
-                      "Completed - Pending Upload"):
+                      "Pending filing"):
         assert elsewhere not in queue_nav, f"{elsewhere} belongs in the Stage row"
         assert elsewhere in body, elsewhere
     for dropped in ("Waiting for my receipt", "Awaiting anyone", "In my office",
@@ -387,7 +387,7 @@ def test_the_results_head_states_the_count_once(client, med_to_sup, users):
     client.force_login(users["med"])
     body = client.get(f"{TRACK}&q=electrical").content.decode()
 
-    assert "active record" in body
+    assert "tracking record" in body
     assert "page-size-count" not in body, "one page has no position to report"
     head = body[body.index("search-results-head"):body.index("</table>")]
     assert "page-size-options" in head, "the control shares the count's line"
