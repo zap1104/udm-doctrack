@@ -38,7 +38,7 @@ jobs:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
       STORAGE_BACKEND: local
-      ALLOW_DEMO_SEED: "True"
+      ALLOW_DEMO_SEED: "False"
 
     steps:
       - uses: actions/checkout@v4
@@ -94,6 +94,8 @@ jobs:
         run: ENABLE_BACKGROUND_TASKS=True pytest -q tests/test_processing_regressions.py tests/test_security_maintenance.py tests/test_queued_extraction_security.py
 
       - name: Prepare verification database
+        env:
+          ALLOW_DEMO_SEED: "True"
         run: |
           python manage.py migrate --noinput
           python manage.py init_db

@@ -29,7 +29,10 @@ User = get_user_model()
 
 
 @pytest.fixture
-def seeded(db):
+def seeded(db, settings):
+    # Opt in only inside these rolled-back demo tests. Do not depend on DEBUG
+    # or the developer's environment, and keep production seeding disabled.
+    settings.ALLOW_DEMO_SEED = True
     call_command("seed_demo", records=0, verbosity=0)
 
 
