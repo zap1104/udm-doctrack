@@ -28,6 +28,7 @@ screens, permissions, record transitions, account writes and linked lists.
 | Malformed timeout values could break sign-in rendering. | The value is compared with configured windows without parsing an untrusted integer. Administrator idle logout remains 15 minutes; staff/viewer logout remains 30 minutes. |
 | Closed mobile navigation remained keyboard reachable; opening it did not contain focus. | Closed navigation is hidden/inert; opening traps Tab/Shift+Tab and makes background content inert. Escape, close and backdrop restore focus. Desktop resize and the native idle-warning dialog remain usable. |
 | A monthly Repository link pointed at a removed report section and ignored filter. | Removed the redundant false drilldown. Existing Repository navigation remains available. |
+| Windows PowerShell 5.1 misread the startup script's Unicode text and failed to parse it. | Added only the UTF-8 encoding marker to `scripts/start.ps1`. Its source content and setup behavior are unchanged. Both PowerShell 5.1 and PowerShell 7 parse it correctly. |
 
 ## Preserved boundaries
 
@@ -58,6 +59,7 @@ screens, permissions, record transitions, account writes and linked lists.
 | Isolated page smoke checks | 256 requests across four roles; no page errors. |
 | Independent source review | Workflow/account, UI/security, and metrics/query reviews; confirmed findings corrected. |
 | Browser inspection | Principal pages at desktop and 320px; all four roles, office Pending Filing count/link, staff form, viewer detail, mobile navigation focus and light/dark examples. |
+| Windows startup compatibility | Both project PowerShell scripts parse without errors in Windows PowerShell 5.1 and PowerShell 7. The repaired 5.1 preview command opened the dashboard on a temporary port; the temporary preview was then stopped. |
 
 The focused regression cases were run against separate test databases and the
 confirmed defects were reproduced before their fixes. Exact dashboard query
