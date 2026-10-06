@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}{{ report_title }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-reports">
 <div class="page-head reports-page-head">
   <div>
     <div class="eyebrow">{% if is_repository_report %}Document Repository{% else %}Document Tracking{% endif %}</div>
@@ -41,7 +42,7 @@
   office, which is the only one it could describe.
 {% endcomment %}
 {% if filters.can_pick %}
-  <section class="card-udm report-scope-card mb-4 no-print" aria-labelledby="report-filters-title">
+  <section class="card-udm report-scope-card workspace-toolbar mb-4 no-print" aria-labelledby="report-filters-title">
     <div class="card-udm-head">
       <div>
         <h2 id="report-filters-title">Report scope</h2>
@@ -58,16 +59,12 @@
           The report's point of view, not merely a filter: every direction and
           accountability figure below is measured from whatever is chosen here.
 
-          data-auto-submit re-scopes the page on change — the listener is in
-          doctrack.js beside the print trigger, where the dashboard and Tracking
-          pickers already read it, because django-csp allows no inline handler.
-          The Apply button stays: it is the no-JS path, and Firefox fires
-          `change` while arrow-keying through a <select>, so a keyboard user
-          needs a way to finish choosing before the page moves.
+          Apply lets users finish selecting an office before the page changes.
+          The same native form works with or without JavaScript.
         {% endcomment %}
         <div class="col-sm-6 col-lg-6">
           <label class="form-label" for="report-office">Office</label>
-          <select class="form-select" id="report-office" name="office" data-auto-submit>
+          <select class="form-select" id="report-office" name="office">
             {% comment %}
               System administrators only. For an office administrator an empty
               choice is their own office, so this option reloaded the page on the
@@ -698,4 +695,5 @@
 <span hidden data-print-log="the Reports and Analytics page"
       data-print-log-url="{% url 'core:log_print' %}"
       data-print-log-csrf="{{ csrf_token }}"></span>
+</div>
 {% endblock %}

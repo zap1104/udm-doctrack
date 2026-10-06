@@ -52,8 +52,8 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Browser security and turnaround interaction tests
-        run: node --test tests/js/test_turnaround_chart.cjs tests/js/test_browser_security.cjs
+      - name: Browser security and interaction tests
+        run: node --test tests/js/*.cjs
 
       - name: Install dependencies
         run: |

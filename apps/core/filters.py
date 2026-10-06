@@ -382,22 +382,16 @@ def month_picker(request, months, selected) -> dict:
 
 #: Filter pairs that cannot both hold, with the reason in the reader's terms.
 #:
-#: These are empty by construction rather than empty today. `route_record`
-#: refuses to send an office its own document, so "addressed to my office" and
-#: "created by me" cannot both be true; a draft has never been routed, so it has
-#: no direction at all. The page says so instead of showing an empty table and
-#: letting the reader conclude the filter is broken.
+#: These are empty by construction rather than empty today. A draft has never
+#: been routed and completed work cannot remain overdue. Receiving queues can
+#: contain the creator's own document when another office returns it, so an
+#: owner selection is not an impossible pairing with an incoming queue.
 IMPOSSIBLE_PAIRS = [
     (
         {"overdue": {"yes"}, "statuses": {Status.COMPLETED_PENDING_UPLOAD.value,
                                           Status.COMPLETED.value}},
         "A document that has been completed is not late, whatever its deadline "
         "said — nothing is owed on it any more.",
-    ),
-    (
-        {"scope": {"incoming", "received", "pending-receipt", "inbox"}, "owner": {"mine"}},
-        "Documents addressed to your office were created by another office, so "
-        "that queue and “Files created by me only” cannot both apply.",
     ),
     (
         {"scope": {"incoming", "outgoing", "received", "pending-receipt", "inbox", "sent"},

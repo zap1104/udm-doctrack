@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}{{ document.title }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-detail workspace-document-detail">
 <div class="page-head">
   <div>
     <div class="eyebrow">Document Repository</div>
@@ -29,9 +30,9 @@
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-8">
-    <div class="card-udm">
+<div class="row g-4 workspace-columns">
+  <div class="col-lg-8 workspace-primary">
+    <div class="card-udm workspace-panel">
       <div class="card-udm-head"><h2>Document Metadata</h2>
         <span class="pill pill-muted">{{ document.get_access_level_display }}</span>
       </div>
@@ -77,30 +78,11 @@
       </div>
     </div>
 
-    <div class="card-udm mt-4">
-      <div class="card-udm-head">
-        <h2>Extracted Text</h2>
-        <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}{% if document.ocr_confidence != None %} · {{ document.ocr_confidence|floatformat:2 }} confidence{% endif %}</span>
-      </div>
-      <div class="card-udm-body">
-        {% if document.has_text %}
-          <div class="text-preview">{{ document.ocr_text|truncatechars:6000 }}</div>
-        {% else %}
-          <p class="text-muted mb-2">No text was extracted. This record remains searchable by metadata and tags.</p>
-        {% endif %}
-        <p class="small text-muted mt-2 mb-1">Language hint: {{ document.get_ocr_language_display }}. External OCR: {% if document.allow_external_ocr %}allowed when needed{% else %}disabled for this record{% endif %}.</p>
-        {% if document.ocr_notes %}<div class="help-note mt-2" role="status">{{ document.ocr_notes|linebreaksbr }}</div>{% endif %}
-        {% if can_edit %}
-          <form method="post" action="{% url 'documents:re_extract' document.pk %}" class="mt-2">{% csrf_token %}
-            <button class="btn btn-udm-outline btn-sm" type="submit">Run text extraction again</button>
-          </form>
-        {% endif %}
-      </div>
-    </div>
+
   </div>
 
-  <div class="col-lg-4">
-    <div class="card-udm">
+  <div class="col-lg-4 workspace-support">
+    <div class="card-udm workspace-panel">
       <div class="card-udm-head"><h2>Files</h2></div>
       <div class="card-udm-body">
         {% for file in files %}
@@ -116,7 +98,7 @@
         {% if can_edit %}
           <form method="post" action="{% url 'documents:add_files' document.pk %}" enctype="multipart/form-data" class="mt-3">
             {% csrf_token %}
-            {{ add_files_form.files }}
+            {% include "partials/_field.html" with field=add_files_form.files %}
             <button class="btn btn-udm-outline btn-sm mt-2" type="submit">Add files</button>
           </form>
         {% endif %}
@@ -159,5 +141,26 @@
       </div>
     {% endif %}
   </div>
+</div>
+    <div class="card-udm workspace-panel workspace-extracted-text mt-4">
+      <div class="card-udm-head">
+        <h2>Extracted Text</h2>
+        <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}{% if document.ocr_confidence != None %} · {{ document.ocr_confidence|floatformat:2 }} confidence{% endif %}</span>
+      </div>
+      <div class="card-udm-body">
+        {% if document.has_text %}
+          <div class="text-preview">{{ document.ocr_text|truncatechars:6000 }}</div>
+        {% else %}
+          <p class="text-muted mb-2">No text was extracted. This record remains searchable by metadata and tags.</p>
+        {% endif %}
+        <p class="small text-muted mt-2 mb-1">Language hint: {{ document.get_ocr_language_display }}. External OCR: {% if document.allow_external_ocr %}allowed when needed{% else %}disabled for this record{% endif %}.</p>
+        {% if document.ocr_notes %}<div class="help-note mt-2" role="status">{{ document.ocr_notes|linebreaksbr }}</div>{% endif %}
+        {% if can_edit %}
+          <form method="post" action="{% url 'documents:re_extract' document.pk %}" class="mt-2">{% csrf_token %}
+            <button class="btn btn-udm-outline btn-sm" type="submit">Run text extraction again</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
 </div>
 {% endblock %}

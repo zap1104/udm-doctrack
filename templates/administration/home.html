@@ -2,13 +2,14 @@
 {% load doctrack %}
 {% block title %}Administration · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-admin">
 <div class="page-head"><div>
   <div class="eyebrow">Administration</div>
   <h1>Administration</h1>
   <p class="sub">{% if user.is_system_admin %}Accounts and controlled master data.{% else %}Manage accounts, permissions and audit activity for {{ user.office_label }} only.{% endif %} There is no public registration anywhere in the system.</p>
 </div></div>
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 workspace-overview">
   <div class="col-6 col-lg-2"><a class="stat-card navy" href="{% url 'accounts:user_list' %}?status=active"><div class="label">Active users</div><div class="value">{{ user_count }}</div></a></div>
   {% if user.is_system_admin %}<div class="col-6 col-lg-2"><a class="stat-card" href="{% url 'core:masterdata_list' 'offices' %}?status=active"><div class="label">Active offices</div><div class="value">{{ office_count }}</div></a></div>{% endif %}
   {% if user.is_system_admin %}
@@ -19,8 +20,8 @@
   {% endif %}
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-7">
+<div class="row g-4 workspace-columns">
+  <div class="col-lg-7 workspace-primary">
     <div class="card-udm"><div class="card-udm-head"><h2>What lives where</h2></div>
       <div class="card-udm-body">
         {% if user.is_system_admin %}
@@ -40,13 +41,13 @@
       </div>
     </div>
   </div>
-  <div class="col-lg-5">
+  <div class="col-lg-5 workspace-support">
     <div class="card-udm"><div class="card-udm-head"><h2>Latest activity</h2><a class="small" href="{% url 'core:audit_log' %}">All</a></div>
       <div class="card-udm-body">
         {% for entry in recent_audit %}
-          <div class="py-1 {% if not forloop.last %}border-bottom{% endif %}" style="font-size:13.5px;">
-            <div>{{ entry.summary }}</div>
-            <div class="text-muted" style="font-size:12px;">{{ entry.actor_label }} · {{ entry.created_at|date:"d M Y, g:i A" }}</div>
+          <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
+            <div class="body-copy">{{ entry.summary }}</div>
+            <div class="text-muted supporting-copy">{{ entry.actor_label }} · {{ entry.created_at|date:"d M Y, g:i A" }}</div>
           </div>
         {% empty %}<p class="text-muted mb-0">Nothing logged yet.</p>{% endfor %}
       </div>
@@ -98,4 +99,5 @@
     </div>
   </div>
 {% endif %}
+</div>
 {% endblock %}

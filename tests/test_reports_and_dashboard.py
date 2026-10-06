@@ -334,9 +334,10 @@ def test_an_administrator_gets_the_office_filter(client, users, who):
 
     assert 'id="report-office"' in body
     # One control on one parameter: the "…or by name" box that stood beside it
-    # is gone, and the dropdown re-scopes the page on change.
+    # is gone, and Apply re-scopes the page after the selection is finished.
     assert 'id="report-office-name"' not in body
-    assert "data-auto-submit" in body
+    assert "data-auto-submit" not in body
+    assert 'type="submit">Apply</button>' in body
 
 
 @pytest.mark.django_db

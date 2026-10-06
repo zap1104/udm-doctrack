@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Upload Document · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-form workspace-upload">
 <div class="page-head">
   <div>
     <div class="eyebrow">Document Repository · Step 1</div>
@@ -13,19 +14,19 @@
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-7">
+<div class="row g-4 workspace-columns">
+  <div class="col-lg-7 workspace-primary">
     <div class="card-udm"><div class="card-udm-body">
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         {% include "partials/_form_errors.html" %}
-        <div class="mb-3">
-          <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark">*</span></label>
+        <div class="form-field mb-3{% if form.file.errors %} form-field--error{% endif %}">
+          <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></label>
           <div class="phase2-upload-box">
             {{ form.file }}
-            <div class="form-text mt-2">{{ form.file.help_text }}</div>
+            <div class="form-text mt-2" id="{{ form.file.auto_id }}_helptext">{{ form.file.help_text }}</div>
           </div>
-          {% for error in form.file.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+          {% if form.file.errors %}<div class="field-errors" role="alert" id="{{ form.file.auto_id }}_error">{% for error in form.file.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
         </div>
         {% include "partials/_field.html" with field=form.office %}
         {% include "partials/_field.html" with field=form.source %}
@@ -37,18 +38,19 @@
     </div></div>
   </div>
 
-  <div class="col-lg-5">
+  <div class="col-lg-5 workspace-support">
     <div class="card-udm"><div class="card-udm-head"><h2>What Happens Next</h2></div><div class="card-udm-body">
       <ol class="phase2-checklist">
         <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
         <li class="mb-2">Scanned pages use OCR only when a provider is configured and you allow external OCR for this record.</li>
         <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>
-        <li class="mb-0"><strong>You review and correct everything</strong> before it is saved. The system suggests; you decide.</li>
+        <li class="mb-0"><strong>Review and correct the suggested details.</strong> The uploaded file is already saved; the next screen lets you check its metadata.</li>
       </ol>
     </div></div>
     <div class="help-note mt-3">
       Historical paper records are welcome even without an old routing number — leave the reference blank and file them by office, type and year.
     </div>
   </div>
+</div>
 </div>
 {% endblock %}

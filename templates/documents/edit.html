@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Edit Metadata · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-form workspace-edit">
 <div class="page-head"><div>
   <div class="eyebrow">Document Repository</div>
   <h1>Edit Document Metadata</h1>
@@ -10,8 +11,8 @@
 <form method="post" novalidate>
   {% csrf_token %}
   {% include "partials/_form_errors.html" %}
-  <div class="row g-4">
-    <div class="col-lg-8"><div class="card-udm"><div class="card-udm-body">
+  <div class="row g-4 workspace-columns">
+    <div class="col-lg-8 workspace-primary"><div class="card-udm"><div class="card-udm-body">
       {% include "partials/_field.html" with field=form.title %}
       {% include "partials/_field.html" with field=form.description %}
       <div class="row">
@@ -38,11 +39,12 @@
       <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">Cancel</a></div>
     </div></div></div>
 
-    <div class="col-lg-4">
+    <div class="col-lg-4 workspace-support">
       <div class="help-note">
         Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters. Changing OCR privacy or language does not contact a provider until you deliberately run text extraction again.
       </div>
     </div>
   </div>
 </form>
+</div>
 {% endblock %}

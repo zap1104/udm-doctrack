@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import Office
@@ -99,10 +100,13 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
         self.user = user
         self.metadata_definitions = list(MetadataFieldDefinition.active.all())
         super().__init__(*args, **kwargs)
-        self.fields["office"].queryset = Office.active.all()
+        offices = Office.objects.filter(Q(is_active=True) | Q(pk=self.instance.office_id if self.instance.pk else None))
+        self.fields["office"].queryset = offices
         if user is not None and not user.is_system_admin:
-            self.fields["office"].queryset = Office.active.filter(pk=self.instance.office_id or user.office_id)
-        self.fields["document_type"].queryset = DocumentType.active.all()
+            self.fields["office"].queryset = offices.filter(pk=self.instance.office_id or user.office_id)
+        self.fields["document_type"].queryset = DocumentType.objects.filter(
+            Q(is_active=True) | Q(pk=self.instance.document_type_id if self.instance.pk else None)
+        )
         self.fields["document_type"].empty_label = "Not specified"
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})
         self.fields["access_level"].choices = AccessLevel.choices

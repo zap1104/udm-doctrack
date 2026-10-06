@@ -1153,7 +1153,7 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     body = client.get(DASHBOARD).content.decode()
 
     assert "Newest in the Document Repository" not in body, "removed in the consultation"
-    for heading in ("Tracking queues",
+    for heading in ("Currently tracking",
                     "Created, handed over and completed &mdash; running totals",
                     "Turnaround Time for the Month of"):
         assert f"<h2>{heading}" in body, heading
@@ -1186,7 +1186,7 @@ def test_the_two_desk_panels_became_one(client, users, awaiting_receipt):
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "<h2>Tracking queues</h2>" in body
+    assert "<h2>Currently tracking</h2>" in body
     assert "<h2>Pending Receipt</h2>" not in body
     assert "<h2>Recent Tracking Activity</h2>" not in body
 
@@ -1394,7 +1394,7 @@ def test_the_desk_comes_before_the_memo_dialog(client, users, awaiting_receipt):
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert body.index("Tracking queues") < body.index('id="dashboard-memo"')
+    assert body.index("Currently tracking") < body.index('id="dashboard-memo"')
 
 
 # ------------------------------------------------------------ quick actions
@@ -1599,20 +1599,25 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
     assert body.count("onchange=") <= 1
 
 
-# ------------------------------------------------------- the side rule
-#: Each side's panels, top to bottom. Document Tracking is the left, wide side;
-#: Document Repository the right. The page ran as full-width rows before, with
-#: the one repository chart between two tracking charts, so a figure's module
-#: could not be told from where it sat.
-TRACKING_SIDE = ["Tracking", "Tracking queues", "Created, handed over and completed", "Turnaround Time"]
+# ------------------------------------------------------- dashboard composition
+#: Current queues lead at full width. Supporting summaries keep their module
+#: headings; historical Tracking charts follow both summaries at full width.
+TRACKING_SIDE = ["Tracking overview"]
 REPOSITORY_SIDE = ["Repository", "Added to the repository"]
+TRACKING_TRENDS = ["Created, handed over and completed", "Turnaround Time"]
 
 
 def _side(body, name):
-    """The rendered markup of one side, and its panel headings in order."""
+    """The rendered markup of one dashboard section and its panel headings."""
     import re
 
-    marker = f'class="col-xl-{8 if name == "tracking" else 4} dashboard-side dashboard-side--{name}"'
+    markers = {
+        "tracking": 'class="col-xl-8 dashboard-side dashboard-side--tracking"',
+        "repository": 'class="col-xl-4 dashboard-side dashboard-side--repository"',
+        "operational": 'class="dashboard-operational mb-4"',
+        "trends": 'class="dashboard-side dashboard-side--tracking dashboard-trends mt-4"',
+    }
+    marker = markers[name]
     start = body.rindex("<section", 0, body.index(marker))
     depth, end = 0, start
     for tag in re.finditer(r"<section\b|</section>", body[start:]):
@@ -1623,23 +1628,33 @@ def _side(body, name):
     markup = body[start:end]
     headings = [
         re.split(r"&mdash;| — | for the Month of ", re.sub(r"<[^>]+>|\s+", " ", m.group(1)).strip())[0].strip()
-        for m in re.finditer(r"<h2>(.*?)</h2>", markup, re.S)
+        for m in re.finditer(r"<h2\b[^>]*>(.*?)</h2>", markup, re.S)
     ]
     return markup, headings
 
 
 @pytest.mark.django_db
-def test_every_panel_sits_on_its_own_side(client, users, filed_record):
+def test_current_queues_lead_and_supporting_panels_keep_their_modules(client, users, filed_record):
     client.force_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
+    assert _side(body, "operational")[1] == ["Currently tracking", "Completed - Pending Filing"]
     assert _side(body, "tracking")[1] == TRACKING_SIDE
     assert _side(body, "repository")[1] == REPOSITORY_SIDE
+    assert _side(body, "trends")[1] == TRACKING_TRENDS
     assert 'class="repository-pending-filing"' not in _side(body, "tracking")[0]
-    assert 'class="repository-pending-filing"' in _side(body, "repository")[0]
-    assert "Completed in Tracking · not yet filed." in _side(body, "repository")[0]
+    assert body.count('class="repository-pending-filing"') == 1
+    assert body.index('class="repository-pending-filing"') < body.index("dashboard-sides")
+    assert "Completed in Tracking · not yet filed." in body
+    assert "tracking-pending-upload" not in body, "pending filing has one prominent summary"
+    assert body.index("dashboard-operational") < body.index("dashboard-sides"), (
+        "current queues come before supporting summaries"
+    )
     assert body.index("dashboard-side--tracking") < body.index("dashboard-side--repository"), (
-        "tracking first, so it leads when the sides stack on a narrow screen"
+        "Tracking overview precedes Repository when the summaries stack"
+    )
+    assert body.index("dashboard-side--repository") < body.index("dashboard-trends"), (
+        "long historical charts follow both summary modules"
     )
 
 
@@ -1658,19 +1673,28 @@ def test_each_side_is_headed_and_opens_its_module(client, users, offices, filed_
     assert '<div class="eyebrow">tracking</div>' not in body, "the headings replace the old labels"
 
 
-def test_the_sides_split_two_thirds_to_a_third_and_the_charts_are_on_the_wide_one():
-    """The tracking charts need width: they sit on the tracking side,
-    which is the wide one, and size themselves to it (container queries)."""
+def test_operational_queues_split_and_long_charts_keep_full_width_sections():
+    """The operational split is independent of the supporting summary columns."""
     import pathlib
 
     html = pathlib.Path("templates/core/dashboard.html").read_text(encoding="utf-8")
-    tracking = html.index('<section class="col-xl-8 dashboard-side dashboard-side--tracking"')
-    repository = html.index('<section class="col-xl-4 dashboard-side dashboard-side--repository"')
+    operational, _ = _side(html, "operational")
+    tracking, _ = _side(html, "tracking")
+    repository, _ = _side(html, "repository")
+    trends, headings = _side(html, "trends")
 
+    assert '{% include "core/_action_centre_queue.html" %}' in operational
+    assert 'class="dashboard-queue-split"' in operational
+    assert '{% include "core/_pending_filing_queue.html" %}' in operational
+    assert '<details class="fold dashboard-recent-activity" open>' in operational
+    assert "col-xl-" not in operational
+    assert "col-xl-" not in trends
     for chart in ('class="column-chart-frame"', '{% include "core/_turnaround_chart.html" %}'):
-        assert tracking < html.index(chart) < repository, chart
-    last = html.rindex("<h2>", tracking, repository)
-    assert html.startswith("<h2>Turnaround Time for the Month of", last), "turnaround closes its side"
+        assert chart in trends, chart
+        assert chart not in tracking and chart not in repository, chart
+    assert headings == TRACKING_TRENDS, "turnaround follows historical activity"
+    assert 'aria-labelledby="dashboard-trends-title"' in trends
+    assert 'id="dashboard-trends-title">Document Tracking trends</div>' in trends
 
 
 @pytest.mark.django_db

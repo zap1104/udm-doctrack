@@ -188,14 +188,30 @@ class ProfileView(AppLoginRequiredMixin, View):
         return render(request, self.template_name, {"form": ProfileForm(instance=request.user), "preferences_form": NotificationPreferenceForm(instance=preferences)})
 
     def post(self, request):
-        form = ProfileForm(request.POST, instance=request.user)
-        preferences, _ = NotificationPreference.objects.get_or_create(user=request.user)
-        preferences_form = NotificationPreferenceForm(request.POST, instance=preferences)
-        if form.is_valid() and preferences_form.is_valid():
-            form.save()
-            preferences_form.save()
-            messages.success(request, "Profile and notification preferences updated.")
-            return redirect("accounts:profile")
+        preferences = NotificationPreference.objects.filter(user=request.user).first()
+        if preferences is None:
+            preferences = NotificationPreference(user=request.user)
+        form = ProfileForm(instance=request.user)
+        preferences_form = NotificationPreferenceForm(instance=preferences)
+        action = request.POST.get("action")
+        if action == "profile":
+            form = ProfileForm(request.POST, instance=request.user)
+            if form.is_valid():
+                # Personal details must not overwrite a concurrent password
+                # reset, suspension, office transfer, or role change.
+                profile = form.save(commit=False)
+                profile.save(update_fields=ProfileForm.Meta.fields)
+                messages.success(request, "Profile updated.")
+                return redirect("accounts:profile")
+        elif action == "preferences":
+            preferences_form = NotificationPreferenceForm(request.POST, instance=preferences)
+            if preferences_form.is_valid():
+                preferences_form.save()
+                messages.success(request, "Notification preferences updated.")
+                return redirect("accounts:profile")
+        else:
+            messages.error(request, "Choose a profile or notification preferences form to save.")
+            return render(request, self.template_name, {"form": form, "preferences_form": preferences_form}, status=400)
         return render(request, self.template_name, {"form": form, "preferences_form": preferences_form})
 
 

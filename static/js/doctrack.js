@@ -169,12 +169,17 @@
     if (fieldLabel) {
       wrapper.setAttribute("aria-label", fieldLabel.textContent.replace(/\*/g, "").trim());
     }
+    var descriptions = select.getAttribute("aria-describedby");
+    if (descriptions) wrapper.setAttribute("aria-describedby", descriptions);
+    if (select.getAttribute("aria-invalid") === "true") wrapper.setAttribute("aria-invalid", "true");
 
     var filter = document.createElement("input");
     filter.type = "search";
     filter.className = "multiselect-search";
     filter.placeholder = select.dataset.placeholder || "Type to filter offices…";
-    filter.setAttribute("aria-label", "Filter the list");
+    filter.setAttribute("aria-label", fieldLabel ? "Filter " + fieldLabel.textContent.replace(/\*/g, "").trim() : "Filter the list");
+    if (descriptions) filter.setAttribute("aria-describedby", descriptions);
+    if (select.getAttribute("aria-invalid") === "true") filter.setAttribute("aria-invalid", "true");
 
     var list = document.createElement("div");
     list.className = "multiselect-list";
@@ -524,20 +529,6 @@
     if (event.target.closest && event.target.closest("[data-reload]")) {
       window.location.reload();
     }
-  });
-
-  document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
-    select.addEventListener("change", function () {
-      var form = select.form;
-      if (!form) return;
-      /* requestSubmit() over submit(): it runs validation and fires the submit
-         event, where form.submit() skips both. Nothing on these forms validates
-         today, which is precisely why the difference is worth taking now rather
-         than discovering the day one of them gains a required field. Guarded
-         because older WebKit lacks it. */
-      if (typeof form.requestSubmit === "function") form.requestSubmit();
-      else form.submit();
-    });
   });
 
   /* ----------------------------------------------------------------------
@@ -961,20 +952,44 @@
   var sidebarToggle = document.querySelector("[data-sidebar-toggle]");
   var sidebar = document.getElementById("main-sidebar");
   var sidebarClosers = document.querySelectorAll("[data-sidebar-close]");
+  var sidebarMain = document.querySelector(".app-main");
 
-  function setSidebarOpen(open) {
+  function sidebarIsMobile() {
+    return window.matchMedia("(max-width: 900px)").matches;
+  }
+
+  function sidebarFocusables() {
+    return Array.prototype.slice.call(sidebar.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(function (element) { return !element.hidden && element.getClientRects().length; });
+  }
+
+  function setSidebarOpen(open, returnFocus) {
+    var mobile = sidebarIsMobile();
+    var wasOpen = document.body.classList.contains("sidebar-open");
+    open = Boolean(open && mobile);
     document.body.classList.toggle("sidebar-open", open);
     if (sidebarToggle) sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open && sidebar) {
+    if (sidebar) {
+      sidebar.inert = mobile && !open;
+      if (sidebar.inert) sidebar.setAttribute("aria-hidden", "true");
+      else sidebar.removeAttribute("aria-hidden");
+    }
+    if (sidebarMain) sidebarMain.inert = open;
+    if (open && !wasOpen && sidebar) {
       var firstLink = sidebar.querySelector("a, button");
       if (firstLink) window.setTimeout(function () { firstLink.focus(); }, 0);
+    } else if (!open && mobile && sidebarToggle &&
+               (returnFocus || sidebar.contains(document.activeElement))) {
+      sidebarToggle.focus();
     }
   }
 
   if (sidebarToggle && sidebar) {
+    setSidebarOpen(false);
     sidebarToggle.addEventListener("click", function () { setSidebarOpen(true); });
     sidebarClosers.forEach(function (closer) {
-      closer.addEventListener("click", function () { setSidebarOpen(false); });
+      closer.addEventListener("click", function () { setSidebarOpen(false, true); });
     });
     sidebar.querySelectorAll("a").forEach(function (link) {
       link.addEventListener("click", function () {
@@ -982,13 +997,29 @@
       });
     });
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) {
-        setSidebarOpen(false);
-        sidebarToggle.focus();
+      if (!document.body.classList.contains("sidebar-open")) return;
+      // A native idle-warning dialog takes precedence over the drawer.
+      if (event.target && event.target.closest && event.target.closest("dialog[open]")) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSidebarOpen(false, true);
+      } else if (event.key === "Tab") {
+        var items = sidebarFocusables();
+        var first = items[0];
+        var last = items[items.length - 1];
+        if (!first) return;
+        var outside = !sidebar.contains(document.activeElement);
+        if (event.shiftKey && (document.activeElement === first || outside)) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || outside)) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     });
     window.addEventListener("resize", function () {
-      if (!window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
+      setSidebarOpen(document.body.classList.contains("sidebar-open"));
     });
   }
 

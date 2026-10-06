@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}Search · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-search">
 <div class="page-head">
   <div>
     <div class="eyebrow">Search</div>
@@ -43,16 +44,16 @@
   </div>
 </nav>
 
-<form method="get">
+<form method="get" class="workspace-search-form">
   {% include "partials/_form_errors.html" %}
   {# Carried so the mode survives a submit of the search box. #}
   <input type="hidden" name="mode" value="{{ mode }}">
   {# And the page length, which is a property of the reader rather than the query. #}
   <input type="hidden" name="per_page" value="{{ page_size }}">
-  <div class="card-udm mb-4 search-query-card"><div class="card-udm-body">
+  <div class="card-udm mb-4 search-query-card workspace-toolbar"><div class="card-udm-body">
     <div class="row g-2">
       {# Each form's own q carries the placeholder that describes its corpus. #}
-      <div class="col-md-10">{{ form.q }}</div>
+      <div class="col-md-10"><label class="visually-hidden" for="{{ form.q.id_for_label }}">{% if is_tracking %}Search document tracking{% else %}Search the document repository{% endif %}</label>{{ form.q }}</div>
       <div class="col-md-2 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
     </div>
     {% if not is_tracking %}
@@ -89,12 +90,12 @@
       </div></div>
     {% endif %}
   {% else %}
-    <div class="row g-4">
-      <div class="col-lg-3">
+    <div class="row g-4 workspace-search-columns">
+      <div class="col-lg-3 workspace-search-filters">
         {% include "search/_filters_repository.html" %}
       </div>
 
-      <div class="col-lg-9">
+      <div class="col-lg-9 workspace-search-results">
         {% if has_searched %}
           {% include "search/_results_repository.html" %}
         {% else %}
@@ -129,4 +130,5 @@
         data-search-query-id="{{ form.q.id_for_label }}"
         data-search-relevance-id="{{ form.min_relevance.id_for_label }}"></span>
 {% endif %}
+</div>
 {% endblock %}

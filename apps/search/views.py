@@ -184,11 +184,14 @@ class SearchView(AppLoginRequiredMixin, View):
         tracking_services.annotate_direction(page_records, request.user, office=queue_office)
         tracking_services.annotate_receiving_offices(page_records)
 
-        # Searched only once something was asked for. An empty box should offer
-        # the prompt, not a paginated dump of every active record.
+        # Deadline pills and an explicitly selected office are searches too.
+        # Default role scopes do not count as a selection: an empty search
+        # should still offer its prompt rather than every active record.
+        office_selected = bool(request.GET.get("office") and (resolved.as_office or resolved.all_offices))
         asked = bool(
-            data.get("q") or data.get("status") or data.get("scope")
+            data.get("q") or resolved.statuses or data.get("scope")
             or data.get("offices") or data.get("owner")
+            or resolved.overdue or office_selected
         )
         return {
             "form": form,

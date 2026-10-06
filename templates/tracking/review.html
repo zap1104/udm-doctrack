@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}Review {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-form-page workspace-review-page tracking-review-page">
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking · Step 2</div>
@@ -14,8 +15,8 @@
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-8">
+<div class="row g-4 workspace-form-layout">
+  <div class="col-lg-8 workspace-form-main">
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
@@ -38,7 +39,7 @@
                   {% for office in offices %}
                     <span class="tag-chip">{{ office.name }}</span>
                   {% empty %}
-                    <em class="text-danger">Not set — choose below before sending.</em>
+                    <em class="text-danger">{% if receiving_offices_invalid %}Correct the receiving offices before sending.{% else %}Not set. Choose receiving offices before sending.{% endif %}</em>
                   {% endfor %}
                 </td>
               </tr>
@@ -48,7 +49,7 @@
               </tr>
               <tr>
                 <th>Deadline</th>
-                <td>{% if deadline %}{{ deadline|date:"d F Y" }}{% else %}No deadline{% endif %}</td>
+                <td>{% if deadline %}{{ deadline|date:"d F Y" }}, {% if deadline_end_of_day %}end of day{% else %}{{ deadline|date:"g:i A" }}{% endif %}{% elif deadline_input %}{{ deadline_input }}{% else %}No deadline{% endif %}</td>
               </tr>
               <tr>
                 <th>Instructions / Remarks</th>
@@ -61,8 +62,20 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <form method="post" class="mt-3" novalidate>
+  <div class="col-lg-4 workspace-form-aside">
+    <div class="card-udm workspace-review-confirmation">
+      <div class="card-udm-head"><h2>Send Document</h2></div>
+      <div class="card-udm-body">
+        <div class="help-note">
+          Selecting <strong>Send Document</strong> routes the record to the selected office(s) and generates the routing slip.
+          The record remains <strong>{{ "PENDING_RECEIPT"|status_label }}</strong> until the receiving office confirms it.
+        </div>
+
+        <form method="post" class="mt-3 workspace-review-actions" novalidate>
           {% csrf_token %}
           {% include "partials/_form_errors.html" %}
 
@@ -90,7 +103,7 @@
           {% endif %}
 
           <div class="form-actions">
-            <button class="btn btn-udm-outline" type="button" data-back-to-edit>Back to Edit</button>
+            <a class="btn btn-udm-outline" href="{% url 'tracking:create' %}?draft={{ record.pk }}">Back to Edit</a>
             <button class="btn btn-udm" type="submit">Send Document</button>
             <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Keep as Draft</a>
           </div>
@@ -98,12 +111,6 @@
       </div>
     </div>
   </div>
-
-  <div class="col-lg-4">
-    <div class="help-note phase2-sticky-card">
-      Selecting <strong>Send Document</strong> routes the record to the selected office(s) and generates the routing slip.
-      The record remains <strong>{{ "PENDING_RECEIPT"|status_label }}</strong> until the receiving office confirms it.
-    </div>
-  </div>
+</div>
 </div>
 {% endblock %}
