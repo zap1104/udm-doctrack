@@ -119,7 +119,7 @@ def test_tracking_filter_disclosure_exposes_applied_selections_and_keeps_office_
     body = render_page("tracking/list.html", {
         "form": form, "can_pick_office": True,
         "resolved": SimpleNamespace(all_offices=True, overdue=selection.get("overdue", "")),
-        "filter_offices": [SimpleNamespace(pk=2, code="MED", name="Maintenance and Engineering Department")],
+        "filter_offices": [SimpleNamespace(pk=2, code="MED", name="Maintenance and Engineering Division")],
         "status_choices": [("RECEIVED", "Received")], "sort_choices": [("", "Recently updated")],
         **{name: value for name, value in selection.items() if name != "overdue"},
     })

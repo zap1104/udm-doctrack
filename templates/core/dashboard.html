@@ -101,10 +101,10 @@
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
     </a>
-    <a class="repository-pending-filing" id="dashboard-pending-filing" href="{{ pending_filing.repository_url }}">
+    <a class="repository-pending-filing" id="dashboard-pending-filing" href="{{ pending_filing.tracking_url }}">
       <div class="label">Pending filing</div>
-      <div class="value">{{ pending_filing.repository_count }}</div>
-      <div class="hint">{% if scope.office %}Created by {{ scope.office.code }} · awaiting filing.{% elif user.is_office_admin and not user.is_system_admin %}Created by {{ user.office.code }} · awaiting filing.{% else %}Completed in Tracking · not yet filed.{% endif %}</div>
+      <div class="value">{{ pending_filing.count }}</div>
+      <div class="hint">Completed in Tracking · not yet filed.</div>
     </a>
   </div>
 </section>
@@ -166,7 +166,7 @@
       <div class="dashboard-side-title" id="side-tracking-title">Document Tracking</div>
       <a class="btn btn-dashboard-action btn-sm" href="{% url 'tracking:list' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
         <span>Open Tracking</span>
-        <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+        {% include "partials/_dashboard_action_arrow.html" %}
       </a>
       <div class="dashboard-side-caption">What is moving between offices, what needs doing, and how long it takes.</div>
     </header>
@@ -175,7 +175,7 @@
   <a class="stat-card navy" href="{{ tracking_total_url }}" data-tracking-total>
     <div class="label">Tracking workload</div>
     <div class="value">{{ tracking_total_count }}</div>
-    <div class="hint">Includes work awaiting filing</div>
+    <div class="hint"><strong>{{ tracking_current_count }}</strong> currently tracking + <strong>{{ tracking_pending_filing_count }}</strong> pending filing = <strong>{{ tracking_total_count }}</strong> document{{ tracking_total_count|pluralize }}</div>
   </a>
   {% if not scope.all_offices %}
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&amp;office={{ scope.office.pk }}{% endif %}">
@@ -289,7 +289,7 @@
       <div class="dashboard-side-title" id="side-repository-title">Document Repository</div>
       <a class="btn btn-dashboard-action btn-sm" href="{% url 'documents:repository' %}{% if scope.office %}?office={{ scope.office.pk }}{% endif %}">
         <span>Open Repository</span>
-        <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+        {% include "partials/_dashboard_action_arrow.html" %}
       </a>
       <div class="dashboard-side-caption">What has been filed, and which office added it.</div>
     </header>

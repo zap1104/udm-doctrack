@@ -217,7 +217,7 @@ def _one_of(value, choices, field_name: str, default: str) -> str:
 
 
 @transaction.atomic
-def create_draft_record(*, user, subject, instructions, document_type=None, remarks="",
+def create_draft_record(*, user, subject, instructions, document_type=None, document_types=None, remarks="",
                         classification=None, priority=None, due_at=None, originating_office=None,
                         requested_action=""):
     refuse_viewers(user, "create documents")
@@ -227,6 +227,12 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         raise PermissionDenied("You can only originate documents for your own office.")
     if office is None:
         raise ValidationError("Your account has no office, so it cannot originate a document.")
+
+    from apps.core.document_types import resolve_document_types
+    selected, document_type = resolve_document_types(
+        document_types if document_types is not None else ([document_type] if document_type else []),
+        document_type,
+    )
 
     record = TrackingRecord.objects.create(
         # Not a real number yet — `route_record` issues that on send.
@@ -253,6 +259,7 @@ def create_draft_record(*, user, subject, instructions, document_type=None, rema
         current_batch=0,
         due_at=due_at,
     )
+    record.document_types.set(selected)
     add_activity(record, RecordActivity.Event.CREATED, f"Record created by {user.display_name}", actor=user)
     # Named by its subject: a draft has no number yet, and the placeholder it
     # carries until it is sent is not one — written into the append-only audit

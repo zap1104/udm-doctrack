@@ -20,6 +20,7 @@ from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.document_types import DocumentTypesMixin
 from apps.core.models import DocumentType, TimeStampedModel
 
 
@@ -277,7 +278,7 @@ class TrackingRecordManager(models.Manager.from_queryset(TrackingRecordQuerySet)
     """
 
 
-class TrackingRecord(TimeStampedModel):
+class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
     """One document moving through the offices."""
 
     class Priority(models.TextChoices):
@@ -312,6 +313,7 @@ class TrackingRecord(TimeStampedModel):
     document_type = models.ForeignKey(
         DocumentType, null=True, blank=True, on_delete=models.SET_NULL, related_name="tracking_records"
     )
+    document_types = models.ManyToManyField(DocumentType, blank=True, related_name="typed_tracking_records")
     classification = models.CharField(
         max_length=16, choices=Classification.choices, default=Classification.INTERNAL
     )

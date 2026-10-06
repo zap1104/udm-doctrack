@@ -4,6 +4,7 @@ from django import forms
 from django.conf import settings
 
 from apps.accounts.models import Office
+from apps.core.document_types import document_type_options
 from apps.core.forms import BootstrapFormMixin, DateInput
 from apps.core.models import DocumentType, Tag
 from apps.documents.models import Source
@@ -106,7 +107,7 @@ class SearchForm(BootstrapFormMixin, forms.Form):
         super().__init__(*args, **kwargs)
         if visible is not None:
             self.fields["office"].queryset = Office.active.filter(documents__in=visible).distinct()
-            self.fields["document_type"].queryset = DocumentType.objects.filter(documents__in=visible).distinct()
+            self.fields["document_type"].queryset = document_type_options(visible)
             self.fields["tag"].queryset = Tag.active.filter(documents__in=visible).distinct()
         self.fields["year"].choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]
         self.fields["min_relevance"].initial = settings.SEARCH_MIN_RELEVANCE_DEFAULT

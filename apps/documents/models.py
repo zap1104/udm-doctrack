@@ -25,6 +25,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.document_types import DocumentTypesMixin
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag, TimeStampedModel
 
 
@@ -114,7 +115,7 @@ class DocumentQuerySet(models.QuerySet):
 
     def with_related(self):
         return self.select_related("office", "document_type", "uploaded_by", "tracking_record").prefetch_related(
-            "tags"
+            "tags", "document_types"
         )
 
     def due_for_retention_review(self, on_date=None):
@@ -128,7 +129,7 @@ class DocumentManager(models.Manager.from_queryset(DocumentQuerySet)):
     """
 
 
-class Document(TimeStampedModel):
+class Document(DocumentTypesMixin, TimeStampedModel):
     """One archived or imported document with rich, searchable metadata."""
 
     title = models.CharField(max_length=255)
@@ -155,6 +156,7 @@ class Document(TimeStampedModel):
     document_type = models.ForeignKey(
         DocumentType, null=True, blank=True, on_delete=models.SET_NULL, related_name="documents"
     )
+    document_types = models.ManyToManyField(DocumentType, blank=True, related_name="typed_documents")
     document_date = models.DateField(null=True, blank=True, help_text="Date printed on the document.")
     year = models.PositiveSmallIntegerField(db_index=True)
 
@@ -252,7 +254,7 @@ class Document(TimeStampedModel):
                 [
                     self.office.name if self.office_id else "",
                     self.office.code if self.office_id else "",
-                    self.document_type.name if self.document_type_id else "",
+                    self.document_type_names,
                     tags,
                     str(self.year or ""),
                 ],

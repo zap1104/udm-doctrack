@@ -658,8 +658,8 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Documents by type</h2>
-            {% if total_documents %}<div class="report-caption">Each bar is a type's share of all {{ total_documents }} document{{ total_documents|pluralize }}.</div>{% endif %}
+            <h2>Documents by main type</h2>
+            {% if total_documents %}<div class="report-caption">Each document is counted once under its main type. Additional selected types remain available in the repository and search.</div>{% endif %}
           </div>
         </div>
         <div class="card-udm-body">

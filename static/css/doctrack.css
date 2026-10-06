@@ -1814,10 +1814,11 @@ body.sidebar-open { overflow:hidden; }
 }
 
 .btn-dashboard-action-arrow {
-  color: var(--udm-teal);
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: inherit;
   transition: transform 120ms ease;
 }
 
@@ -1980,6 +1981,21 @@ body.sidebar-open { overflow:hidden; }
 
 .multiselect-chip-remove:hover { opacity: 1; }
 .multiselect-chip-remove:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 50%; }
+
+/* Type selections need practical targets for removing or clearing choices. */
+[data-document-type-picker] .multiselect-clear,
+[data-document-type-picker] .multiselect-chip-remove {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (max-width: 575.98px) {
+  [data-document-type-picker] .multiselect-clear,
+  [data-document-type-picker] .multiselect-chip-remove {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 
 .form-field--error .multiselect { border-color: var(--udm-red); }
 

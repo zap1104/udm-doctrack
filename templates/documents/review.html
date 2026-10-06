@@ -45,17 +45,7 @@
 
           <div class="row">
             <div class="col-md-6">
-              <div class="mb-3">
-                <label class="form-label" for="{{ form.document_type.id_for_label }}">
-                  Document type
-                  {% with confidence|dict_get:"document_type" as score %}
-                    {% if score %}<span class="confidence ms-2">{{ score|confidence_label }}</span>{% endif %}
-                  {% endwith %}
-                </label>
-                {{ form.document_type }}
-                {% if form.document_type.help_text %}<div class="form-text" id="{{ form.document_type.auto_id }}_helptext">{{ form.document_type.help_text }}</div>{% endif %}
-                {% if form.document_type.errors %}<div class="field-errors" role="alert" id="{{ form.document_type.auto_id }}_error">{% for error in form.document_type.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
-              </div>
+              {% include "partials/_document_types_field.html" %}
             </div>
             <div class="col-md-6">
               <div class="mb-3">

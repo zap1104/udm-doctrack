@@ -4,12 +4,11 @@ from datetime import datetime, time, timedelta
 
 from django import forms
 from django.core.validators import MaxLengthValidator
-from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import Office, User
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
-from apps.core.models import DocumentType
+from apps.core.type_forms import DocumentTypeSelectionMixin
 
 from .models import (
     ACTIVE_STATUSES,
@@ -171,7 +170,7 @@ class DeadlineMixin:
         )
 
 
-class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
+class CreateRecordForm(DocumentTypeSelectionMixin, DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
     """Step 1 of the tracking slip. The originating office is never chosen by hand."""
 
     receiving_offices = forms.ModelMultipleChoiceField(
@@ -194,7 +193,7 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = TrackingRecord
         fields = (
-            "subject", "document_type", "classification", "priority",
+            "subject", "document_type", "document_types", "classification", "priority",
             "requested_action", "instructions",
         )
         widgets = {
@@ -216,10 +215,6 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
-        self.fields["document_type"].queryset = DocumentType.objects.filter(
-            Q(is_active=True) | Q(pk=self.instance.document_type_id if self.instance.pk else None)
-        )
-        self.fields["document_type"].empty_label = "Not specified"
         self.fields["instructions"].required = True
         # route_record() copies this onto every RoutingStep, where it is cut to
         # MAX_INSTRUCTIONS_CHARS. Capping the box at the same number stops the

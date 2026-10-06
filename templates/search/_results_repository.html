@@ -46,7 +46,7 @@
           <h3><a href="{% if response.log_id %}{% url 'search:click' response.log_id result.document.pk forloop.counter %}{% else %}{{ result.document.get_absolute_url }}{% endif %}">{{ result.document.title }}</a></h3>
           <div class="meta">
             {% include "partials/_office_badge.html" with office=result.document.office %}
-            {{ result.document.document_type.name|default:"Unclassified" }} ·
+            {{ result.document.document_type_names|default:"Unclassified" }} ·
             {{ result.document.document_date|default:result.document.created_at|date:"d M Y" }}
             {% if result.document.reference_number %} · <span class="mono">{{ result.document.reference_number }}</span>{% endif %}
           </div>

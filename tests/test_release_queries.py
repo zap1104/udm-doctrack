@@ -107,7 +107,7 @@ def test_empty_own_receiving_queues_do_not_claim_returns_are_impossible(client, 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "sup_admin", "med_admin", "sup"])
-def test_dashboard_repository_pending_card_matches_its_destination(client, users, offices, memo_type, role):
+def test_dashboard_pending_filing_card_matches_its_destination(client, users, offices, memo_type, role):
     record = create_draft_record(
         user=users["med"], subject="Other office completed our document", instructions="For action",
         document_type=memo_type,

@@ -619,7 +619,7 @@ def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
     client.force_login(users["admin"])
     body = client.get("/documents/reports/").content.decode()
 
-    repository = body[body.index("Documents filed each month"):body.index("Documents by type")]
+    repository = body[body.index("Documents filed each month"):body.index("Documents by main type")]
     month = _column_groups(repository)[-1]
     assert 'class="column-value column-value--zero" style="bottom:0%">0</span>' in month
     assert month.count('class="column column--') == 1, "the zero has no bar"

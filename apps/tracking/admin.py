@@ -29,6 +29,9 @@ class RecordActivityInline(admin.TabularInline):
 
 @admin.register(TrackingRecord)
 class TrackingRecordAdmin(admin.ModelAdmin):
+    from apps.core.type_forms import DocumentTypeAdminForm
+    form = DocumentTypeAdminForm
+    filter_horizontal = ("document_types",)
     list_display = ("tracking_number", "subject", "originating_office", "current_office", "status", "last_movement_at")
     list_filter = ("status", "priority", "classification", "originating_office", "document_type")
     search_fields = ("tracking_number", "subject", "instructions", "remarks")

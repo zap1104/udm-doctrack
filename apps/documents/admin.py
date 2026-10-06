@@ -26,14 +26,20 @@ class DocumentMetadataInline(admin.TabularInline):
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
+    from apps.core.type_forms import DocumentTypeAdminForm
+    form = DocumentTypeAdminForm
     list_display = ("title", "office", "document_type", "year", "source", "ocr_status", "created_at")
     list_filter = ("source", "ocr_status", "access_level", "office", "document_type", "year")
     search_fields = ("title", "description", "reference_number", "author_name", "recipient_name")
     date_hierarchy = "created_at"
-    filter_horizontal = ("tags",)
+    filter_horizontal = ("tags", "document_types")
     readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at")
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        form.instance.rebuild_index()
 
     @admin.action(description="Rebuild the search index for the selected documents")
     def rebuild_search_index(self, request, queryset):

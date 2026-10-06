@@ -20,7 +20,7 @@
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
        aria-label="Open {{ desk_queue.label }} in Tracking{% if desk_queue.count %}, {{ desk_queue.count }} documents{% endif %}">
       <span>{% if desk_queue.count %}View all {{ desk_queue.count }} document{{ desk_queue.count|pluralize }}{% else %}Open Tracking{% endif %}</span>
-      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+      {% include "partials/_dashboard_action_arrow.html" %}
     </a>
   </div>
   <nav class="desk-chips" aria-label="Tracking queues">

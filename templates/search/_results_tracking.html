@@ -31,7 +31,7 @@
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
                 {% include "partials/_direction_tag.html" with direction=record.direction %}
-                {{ record.document_type.name|default:"No type" }} ·
+                {{ record.document_type_names|default:"No type" }} ·
                 {# Same word as the filter row above and the detail page. See tracking/list.html. #}
                 Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>

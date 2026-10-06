@@ -331,6 +331,7 @@ DASHBOARD_CONTEXT = {
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
     "turnaround_panel", "turnaround_filters", "turnaround_table_series",
     "turnaround_table_rows", "turnaround_show_on_time", "tracking_total_count", "tracking_total_url",
+    "tracking_current_count", "tracking_pending_filing_count",
 }
 
 #: Read in Python rather than by a template. `get_memo_context` computes them once
@@ -425,9 +426,9 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 # adds one aggregate, reducing the all-office page by one query overall.
 # The editable office schedule adds one shared snapshot read per page, not
 # one per interval or chart. The assertions below verify that exact read.
-# Tracking and Repository pending cohorts each add one fixed count; drafts
-# add one fixed count so the memo and overdue denominator cover all Tracking.
-DASHBOARD_QUERIES = 54
+# Pending filing shares Tracking's count; the narrower Repository shortcut
+# count is gone. Drafts add one count for the memo and overdue denominator.
+DASHBOARD_QUERIES = 53
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -474,7 +475,7 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 56
+DASHBOARD_OFFICE_QUERIES = 55
 # The incoming movement-today counter is no longer displayed or queried.
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one

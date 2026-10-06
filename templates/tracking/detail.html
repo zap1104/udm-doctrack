@@ -57,7 +57,7 @@
           <tr><th class="text-muted fw-normal">Held by</th>
               <td>{{ record.current_holder.display_name|default:"Nobody yet — awaiting receipt" }}</td></tr>
           <tr><th class="text-muted fw-normal">Created</th><td>{{ record.created_at|date:"d M Y, g:i A" }}</td></tr>
-          <tr><th class="text-muted fw-normal">Type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Document types</th><td>{% include "partials/_document_types_display.html" with item=record %}</td></tr>
           <tr><th class="text-muted fw-normal">Requested action</th>
               <td>{{ record.get_requested_action_display|default:"Not specified" }}</td></tr>
           <tr><th class="text-muted fw-normal">Classification</th><td>{{ record.get_classification_display }}</td></tr>

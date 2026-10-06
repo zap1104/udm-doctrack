@@ -32,7 +32,7 @@
             <h3 id="document-details-heading" class="phase2-section-title">Document details</h3>
             {% include "partials/_field.html" with field=form.subject %}
             <div class="row workspace-field-pair">
-              <div class="col-md-6">{% include "partials/_field.html" with field=form.document_type %}</div>
+              <div class="col-md-6">{% include "partials/_document_types_field.html" %}</div>
               <div class="col-md-6">{% include "partials/_field.html" with field=form.classification %}</div>
             </div>
 

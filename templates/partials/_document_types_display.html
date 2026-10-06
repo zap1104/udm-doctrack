@@ -1,0 +1,2 @@
+{% firstof item.document_type_names empty_label "Not specified" %}
+{% if item.document_type_id and item.selected_document_types|length > 1 %}<span class="d-block small text-muted">Main type: {{ item.document_type.name }}</span>{% endif %}

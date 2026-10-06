@@ -37,6 +37,7 @@ from django.db.models import F, FloatField, Q, Value
 from django.db.models.functions import Greatest
 from django.utils.html import escape
 
+from apps.core.document_types import document_type_match
 from apps.documents.models import Document, SearchQueryLog
 
 logger = logging.getLogger("doctrack")
@@ -129,7 +130,7 @@ def search_documents(
     if office:
         base = base.filter(office=office)
     if document_type:
-        base = base.filter(document_type=document_type)
+        base = base.filter(document_type_match(document_type)).distinct()
     if tag:
         base = base.filter(tags=tag)
     if source:
@@ -296,7 +297,7 @@ def _field_score(document: Document, raw_query: str, tokens: list[str]) -> tuple
     reference = (document.reference_number or "").lower()
     office_code = (document.office.code if document.office_id else "").lower()
     office_name = (document.office.name if document.office_id else "").lower()
-    type_name = (document.document_type.name if document.document_type_id else "").lower()
+    type_name = document.document_type_names.lower()
     tags = [tag.name.lower() for tag in document.tags.all()]
     metadata = (document.index_extra or "").lower()
     body = (document.ocr_text or "").lower()

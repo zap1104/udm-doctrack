@@ -1,13 +1,13 @@
 /* Screen presentation for the existing office workspace. Print uses doctrack.css.
    Color roles, status palettes, controls and their behavior remain shared. */
 .app-shell {
-  --udm-canvas: #f2f5f3;
-  --udm-surface: #ffffff;
-  --udm-surface-sunk: #f2f5f3;
-  --udm-line: #d7dfd9;
-  --udm-line-soft: #e5ebe7;
-  --udm-row-line: #e5ebe7;
-  --udm-slate-soft: #edf2ef;
+  --udm-canvas: #f1eddf;
+  --udm-surface: #f8f5eb;
+  --udm-surface-sunk: #ece8da;
+  --udm-line: #d6d5c4;
+  --udm-line-soft: #dce0d0;
+  --udm-row-line: #e4e3d5;
+  --udm-slate-soft: #e7ebdd;
   --workspace-control-line: #728578;
   --bs-body-bg: var(--udm-surface);
   --bs-body-color: var(--udm-ink);
@@ -49,6 +49,20 @@
 .app-shell .body-copy { font-size: 15px; }
 .app-shell .btn-udm-outline { border-color: var(--workspace-control-line); background: var(--udm-surface); }
 .app-shell .btn-udm-outline:hover { border-color: var(--udm-primary); background: var(--udm-teal-soft); }
+/* Secondary dashboard links stay calm against the warm light palette. */
+:root:not([data-theme="dark"]) .app-shell .btn-dashboard-action {
+  background: var(--udm-surface); color: var(--udm-navy-text);
+  border-color: var(--workspace-control-line); border-radius: 8px;
+  gap: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600;
+  line-height: 1.25; box-shadow: none; transform: none;
+}
+:root:not([data-theme="dark"]) .app-shell .btn-dashboard-action:hover {
+  background: var(--udm-teal-soft); color: var(--udm-teal-ink-dark);
+  border-color: var(--udm-primary); box-shadow: none; transform: none;
+}
+.app-shell .btn-dashboard-action:focus-visible {
+  outline: 2px solid var(--udm-focus); outline-offset: 3px; box-shadow: none;
+}
 .app-shell :is(.form-control, .form-select) {
   background-color: var(--udm-surface); border: 1px solid var(--workspace-control-line);
   font-size: 15px;
@@ -113,6 +127,22 @@
 .app-shell .dashboard-secondary-stats { border-radius: 8px; }
 .app-shell .dashboard-secondary-stats .label { font-size: 14px; }
 .app-shell .dashboard-secondary-stats .hint { font-size: 13px; }
+.app-shell .dashboard-secondary-stats [data-tracking-total] {
+  background: var(--udm-teal-soft); border-left: 4px solid var(--udm-navy-text);
+  padding: 14px 16px; gap: 6px 14px;
+}
+.app-shell .dashboard-secondary-stats [data-tracking-total]:hover {
+  background: var(--udm-surface-sunk);
+}
+.app-shell .dashboard-secondary-stats [data-tracking-total] .label {
+  font-size: 15px; font-weight: 750;
+}
+.app-shell .dashboard-secondary-stats [data-tracking-total] .value {
+  font-size: 28px; font-weight: 800;
+}
+.app-shell .dashboard-secondary-stats [data-tracking-total] .hint {
+  color: var(--udm-navy-text); line-height: 1.6;
+}
 .app-shell .dashboard-recent-activity { padding: 16px var(--panel-padding); }
 .app-shell .dashboard-recent-activity > summary { font-size: 14px; font-weight: 600; }
 

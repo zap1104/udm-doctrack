@@ -46,7 +46,7 @@ DEMO_PASSWORD = "DocTrack2026!"
 
 OFFICES = [
     ("OVPA", "Office of the Vice President for Administration", "OVPA", "Atty. R. Bautista"),
-    ("MED", "Maintenance and Engineering Department", "OVPA", "Engr. L. Fernandez"),
+    ("MED", "Maintenance and Engineering Division", "OVPA", "Engr. L. Fernandez"),
     ("SEC", "Security Services Office", "OVPA", "Mr. A. Dela Cruz"),
     ("SUP", "Supply and Property Management", "OVPA", "Ms. G. Ramos"),
     ("HR", "Human Resource Management Office", "OVPA", "Ms. C. Villanueva"),

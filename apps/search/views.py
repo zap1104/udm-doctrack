@@ -123,7 +123,7 @@ class SearchView(AppLoginRequiredMixin, View):
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
 
-        records = tracking_services.active_for(request.user)
+        records = tracking_services.active_for(request.user).prefetch_related("document_types")
         resolved = core_filters.resolve(request)
         # Said out loud here as well as on the Tracking page. This branch shares
         # every filter with that one and reported none of them, so the same bad

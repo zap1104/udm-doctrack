@@ -64,7 +64,7 @@ def offices(db):
     return {
         code: Office.objects.create(code=code, name=name, cluster="OVPA")
         for code, name in [
-            ("MED", "Maintenance and Engineering Department"),
+            ("MED", "Maintenance and Engineering Division"),
             ("SUP", "Supply and Property Management"),
             ("HR", "Human Resource Management Office"),
             ("REC", "Records Management Office"),

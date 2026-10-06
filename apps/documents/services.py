@@ -173,6 +173,13 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
         raise PermissionDenied("Only the owning office can edit this record.")
     if data.get("office") and not user.is_system_admin and data["office"].pk != document.office_id:
         raise PermissionDenied("Only a system administrator can transfer ownership.")
+    from apps.core.document_types import resolve_document_types
+    previous_types = document.selected_document_types
+    main = data.get("document_type")
+    selected = data.get("document_types")
+    if selected is None:
+        selected = previous_types if main and main.pk == document.document_type_id else ([main] if main else [])
+    selected, main = resolve_document_types(selected, main, existing=previous_types)
     for field_name in (
         "title", "description", "reference_number", "author_name", "recipient_name",
         "signatory", "access_level",
@@ -182,7 +189,7 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
 
     if data.get("office"):
         document.office = data["office"]
-    document.document_type = data.get("document_type")
+    document.document_type = main
     document.document_date = data.get("document_date")
     document.year = data.get("year") or (document.document_date or timezone.localdate()).year
     document.retention_until = data.get("retention_until")
@@ -191,6 +198,7 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
         document.allow_external_ocr = bool(data["allow_external_ocr"])
     document.save()
 
+    document.document_types.set(selected)
     set_tags(document, tag_names, user=user)
     set_metadata_values(document, metadata_values)
 
@@ -361,6 +369,7 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
         ocr_notes="External OCR is disabled by default for records archived from tracking. An authorized editor may opt in and re-run extraction.",
     )
 
+    document.document_types.set(record.selected_document_types)
     text_parts = [record.subject, record.instructions, record.remarks, record.completion_note]
     created_file_ids = []
     for attachment in record.attachments.all():

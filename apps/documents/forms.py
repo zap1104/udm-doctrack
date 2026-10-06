@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.accounts.models import Office
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
+from apps.core.type_forms import DocumentTypeSelectionMixin
 
 from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, Document, OcrLanguage, Source
 
@@ -64,7 +65,7 @@ class TagsField(forms.CharField):
         return seen
 
 
-class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
+class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms.ModelForm):
     """Review screen. Suggested values arrive as `initial`; the user owns the result."""
 
     tags = TagsField(
@@ -77,7 +78,7 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Document
         fields = (
-            "title", "description", "office", "document_type", "document_date", "year",
+            "title", "description", "office", "document_type", "document_types", "document_date", "year",
             "reference_number", "author_name", "recipient_name", "signatory",
             "access_level", "retention_until", "ocr_language", "allow_external_ocr",
         )
@@ -104,10 +105,6 @@ class DocumentMetadataForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["office"].queryset = offices
         if user is not None and not user.is_system_admin:
             self.fields["office"].queryset = offices.filter(pk=self.instance.office_id or user.office_id)
-        self.fields["document_type"].queryset = DocumentType.objects.filter(
-            Q(is_active=True) | Q(pk=self.instance.document_type_id if self.instance.pk else None)
-        )
-        self.fields["document_type"].empty_label = "Not specified"
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})
         self.fields["access_level"].choices = AccessLevel.choices
 
@@ -201,6 +198,7 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
     document_type = forms.ModelChoiceField(
         required=False, label="", queryset=DocumentType.active.none(), empty_label="All types"
     )
+    type_scope = forms.ChoiceField(required=False, choices=[("", "Any selected type"), ("main", "Main type")], widget=forms.HiddenInput)
     tag = forms.ModelChoiceField(required=False, label="", queryset=Tag.active.none(), empty_label="All tags")
     # Named for what the repository actually stores. The old control offered
     # "Completed / Archived / Historical upload", two of which described the

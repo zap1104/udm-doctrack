@@ -610,36 +610,16 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         }
 
     def _pending_filing(self, user, scope):
-        """The completed preview is the existing Tracking pending-filing list.
-
-        Start from the same visible queryset and office predicate as Tracking,
-        rather than the repository's narrower originating-office preview.
-        """
+        """The shortcut and preview share Tracking's pending-filing list."""
         office = tracking_services.ALL_OFFICES if scope["all_offices"] else scope["office"]
         queue = tracking_services.office_queue(
             tracking_services.active_for(user), tracking_services.SCOPE_PENDING_UPLOAD,
             user, office=office,
         ).distinct()
         office_param = "all" if scope["all_offices"] else (scope["office"].pk if scope["office"] else None)
-        # The Repository shortcut opens an originating-office folder, while
-        # the Tracking preview includes every pending record the office touched.
-        # Count the Repository's own narrower cohort for its shortcut.
-        repository_queue = tracking_services.pending_upload_for(user).filter(is_archived=False)
-        if user.is_office_admin and not user.is_system_admin:
-            repository_queue = (
-                repository_queue.filter(originating_office_id=user.office_id)
-                if user.office_id else repository_queue.none()
-            )
-        if scope["office"]:
-            repository_queue = repository_queue.filter(originating_office=scope["office"])
         return {
             "count": queue.count(),
             "records": list(queue[:DASHBOARD_ROWS]),
-            "repository_count": repository_queue.count(),
-            "repository_url": core_filters.link(
-                reverse("documents:repository"), view="pending",
-                office=scope["office"].pk if scope["office"] else None,
-            ),
             "tracking_url": core_filters.link(
                 reverse("tracking:list"), scope=tracking_services.SCOPE_PENDING_UPLOAD, office=office_param,
             ),
@@ -686,6 +666,14 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         incoming = queue(tracking_services.SCOPE_INCOMING) if split else None
         outgoing = queue(tracking_services.SCOPE_OUTGOING) if split else None
         tracking_total = tracking_services.office_queue(desk, "", user, office=scope_office).distinct()
+        # One aggregate keeps the workload equation internally consistent and
+        # retains the same visibility and office scope as its Tracking link.
+        workload = tracking_total.aggregate(
+            total=Count("pk", distinct=True),
+            pending_filing=Count("pk", distinct=True, filter=Q(
+                status=Status.COMPLETED_PENDING_UPLOAD, archived_document__isnull=True,
+            )),
+        )
         tracking_rings = self._tracking_rings(
             scope, {"incoming": incoming, "outgoing": outgoing}, memo_context["breakdown"], tracking_total
         )
@@ -742,7 +730,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # None under every office, where there is no direction to count;
                 # the template omits those summaries rather than empty cards.
                 "incoming_count": tracking_rings["counts"].get("incoming"),
-                "tracking_total_count": tracking_total.count(),
+                "tracking_total_count": workload["total"],
+                "tracking_current_count": workload["total"] - workload["pending_filing"],
+                "tracking_pending_filing_count": workload["pending_filing"],
                 "tracking_total_url": core_filters.link(
                     reverse("tracking:list"), office="all" if scope["all_offices"] else
                     (scope["office"].pk if scope["office"] else None)),
@@ -1717,7 +1707,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         if repository:
             for row in context["document_types"]:
                 row["workspace_url"] = (
-                    core_filters.link(base_url, **params, document_type=row["document_type_id"])
+                    core_filters.link(base_url, **params, document_type=row["document_type_id"], type_scope="main")
                     if row.get("document_type_id") else None
                 )
         else:
@@ -2508,7 +2498,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
 
     def get(self, request):
         filters = report_filters_from_request(request)
-        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().distinct().order_by("-created_at", "-pk")
+        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().prefetch_related("document_types").distinct().order_by("-created_at", "-pk")
         records, selected = filter_report_records(records, request)
         # The same point of view the page uses, so the Direction column means
         # what the screen it was exported from meant.
@@ -2567,7 +2557,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     # placeholder is not a number and must not be quoted as one.
                     record.display_tracking_number,
                     record.subject,
-                    record.document_type.name if record.document_type_id else "",
+                    record.document_type_names,
                     record.originating_office.code,
                     record.current_office.code if record.current_office_id else "",
                     record.get_status_display(),

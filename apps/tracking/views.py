@@ -61,7 +61,7 @@ DRAFT_DEADLINE_KEY = "draft_deadline_{pk}"
 
 
 def _get_record(request, pk) -> TrackingRecord:
-    records = TrackingRecord.objects.with_related()
+    records = TrackingRecord.objects.with_related().prefetch_related("document_types")
     if request.user.is_office_admin and not request.user.is_system_admin:
         records = records.visible_to(request.user)
     record = get_object_or_404(records, pk=pk)
@@ -210,7 +210,7 @@ class RecordListView(AppLoginRequiredMixin, View):
             SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
             SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
         }.get(sort, ("-last_movement_at",))
-        records = records.distinct().order_by(*ordering)
+        records = records.distinct().prefetch_related("document_types").order_by(*ordering)
         # Page size comes from the reader (`?per_page=`), defaulting to the
         # workspace's own. See apps/core/pagination.py.
         page_context = paginate(request, records, services.PAGE_SIZE)
@@ -338,6 +338,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
                     subject=form.cleaned_data["subject"],
                     instructions=form.cleaned_data["instructions"],
                     document_type=form.cleaned_data.get("document_type"),
+                    document_types=form.cleaned_data.get("document_types"),
                     classification=form.cleaned_data.get("classification"),
                     priority=form.cleaned_data.get("priority"),
                     requested_action=form.cleaned_data.get("requested_action", ""),
@@ -371,7 +372,8 @@ class RecordCreateView(OfficeAssignedMixin, View):
                 with transaction.atomic():
                     record = form.save(commit=False)
                     record.due_at = form.deadline_datetime()
-                    record.save(update_fields=[*form.Meta.fields, "due_at", "updated_at"])
+                    record.save(update_fields=[field for field in form.Meta.fields if field != "document_types"] + ["due_at", "updated_at"])
+                    form.save_m2m()
                     services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
                     log_action(AuditLog.Action.UPDATE, f"Updated draft “{record.subject}”", actor=request.user, target=record)
             except ValidationError as exc:

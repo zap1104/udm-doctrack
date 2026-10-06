@@ -14,8 +14,9 @@ from django.utils import timezone
 from django.views.generic import View
 
 from apps.core import filters as core_filters
+from apps.core.document_types import document_type_counts, document_type_match, document_type_options
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
-from apps.core.models import AuditLog, DocumentType, Tag
+from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.utils import log_action
 from apps.tracking.services import pending_upload_for
@@ -66,10 +67,11 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 Q(title__icontains=query) | Q(reference_number__icontains=query)
                 | Q(index_meta__icontains=query) | Q(ocr_text__icontains=query)
             )
-        for key, field in (("year", "year"), ("month", "document_date__month"),
-                           ("document_type", "document_type"), ("tag", "tags")):
+        for key, field in (("year", "year"), ("month", "document_date__month"), ("tag", "tags")):
             if data.get(key):
                 documents = documents.filter(**{field: data[key]})
+        if data.get("document_type"):
+            documents = documents.filter(document_type=data["document_type"]) if data.get("type_scope") == "main" else documents.filter(document_type_match(data["document_type"]))
         if data.get("source") == HISTORICAL_FILTER:
             documents = documents.exclude(source=COMPLETED_SOURCE)
         elif data.get("source"):
@@ -88,10 +90,11 @@ class RepositoryView(AppLoginRequiredMixin, View):
         data = {key: value for key, value in data.items() if key != omit}
         if data.get("q"):
             records = records.filter(Q(subject__icontains=data["q"]) | Q(tracking_number__icontains=data["q"]))
-        for key, field in (("year", "completed_at__year"), ("month", "completed_at__month"),
-                           ("document_type", "document_type")):
+        for key, field in (("year", "completed_at__year"), ("month", "completed_at__month")):
             if data.get(key):
                 records = records.filter(**{field: data[key]})
+        if data.get("document_type"):
+            records = records.filter(document_type=data["document_type"]) if data.get("type_scope") == "main" else records.filter(document_type_match(data["document_type"]))
         return records.distinct()
 
     @staticmethod
@@ -113,7 +116,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
             },
             # Retiring a type prevents new filing under it; existing records
             # must remain filterable and their type badges must still open them.
-            "document_types": DocumentType.objects.filter(documents__in=visible).distinct(),
+            "document_types": document_type_options(visible),
             # Most-used first: with a shared vocabulary the useful tags are the
             # common ones, and alphabetical order buries them under one-offs.
             "tags": Tag.active.filter(documents__in=visible).annotate(
@@ -170,7 +173,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
             options.update(
                 years=sorted({year for year in folder_pending.annotate(completion_year=ExtractYear("completed_at")).values_list("completion_year", flat=True) if year}, reverse=True),
                 months=set(folder_pending.values_list("completed_at__month", flat=True)),
-                document_types=DocumentType.objects.filter(tracking_records__in=folder_pending).distinct(),
+                document_types=document_type_options(folder_pending),
                 tags=Tag.active.none(), sources=set(),
             )
         form = RepositoryFilterForm(request.GET or None, **options)
@@ -246,12 +249,13 @@ class RepositoryView(AppLoginRequiredMixin, View):
             # Badges count whole folders, so opening one clears list filters.
             folder["url"] = core_filters.link(base_url, office=folder["office__id"])
         type_base = self._filter_pending(folder_pending, data, omit="document_type") if pending_view else self._filter_documents(folder_documents, data, omit="document_type")
-        type_folders = list(type_base.order_by().values("document_type_id", "document_type__name").annotate(total=Count("pk", distinct=True)).order_by("document_type__name"))
+        type_folders = [{"document_type_id": row["pk"], "document_type__name": row["name"], "total": row["total"]}
+                        for row in document_type_counts(type_base).order_by("name")]
         # Unclassified remains visible in the list; only selectable types become folders.
         type_folders = [folder for folder in type_folders if folder["document_type_id"]]
         for folder in type_folders:
-            folder["url"] = core_filters.link(base_url, request, document_type=folder["document_type_id"], page=None)
-            folder["selected"] = bool(data.get("document_type") and data["document_type"].pk == folder["document_type_id"])
+            folder["url"] = core_filters.link(base_url, request, document_type=folder["document_type_id"], type_scope=None, page=None)
+            folder["selected"] = bool(data.get("type_scope") != "main" and data.get("document_type") and data["document_type"].pk == folder["document_type_id"])
 
         # Retention reviews cover only filed documents in the selected folder.
         retention_base = self._filter_documents(folder_documents, data, omit="retention")
@@ -267,11 +271,16 @@ class RepositoryView(AppLoginRequiredMixin, View):
         folder_params = {"office": folder_office_id}
         selected_filters = []
         filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "retention": "Retention"}
+        if data.get("type_scope") == "main":
+            filter_labels["document_type"] = "Main type"
         for name, label in filter_labels.items():
             value = data.get(name)
             if value:
                 choices = dict(form.fields[name].choices) if hasattr(form.fields[name], "choices") and name not in {"document_type", "tag"} else {}
-                selected_filters.append({"label": label, "value": choices.get(value, choices.get(str(value), str(value))), "url": core_filters.link(base_url, request, **{name: None, "page": None})})
+                cleared = {name: None, "page": None}
+                if name == "document_type":
+                    cleared["type_scope"] = None
+                selected_filters.append({"label": label, "value": choices.get(value, choices.get(str(value), str(value))), "url": core_filters.link(base_url, request, **cleared)})
 
         return render(
             request,
@@ -291,7 +300,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "pending_url": core_filters.link(base_url, **folder_params, view="pending"),
                 "filed_url": core_filters.link(base_url, **folder_params),
                 "all_folders_url": base_url,
-                "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, tag=None, source=None, year=None, month=None, retention=None, page=None),
+                "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, type_scope=None, tag=None, source=None, year=None, month=None, retention=None, page=None),
                 "type_folders": type_folders,
                 "filed_count": folder_documents.count(),
                 # Hides the create/upload button from the accounts the
@@ -370,11 +379,14 @@ class MetadataReviewView(OfficeAssignedMixin, View):
         return latest.suggested if latest else Suggestion().as_dict()
 
     def _initial(self, document, suggestion) -> dict:
+        main_type = document.document_type_id if len(document.selected_document_types) > 1 else (
+            suggestion.get("document_type_id") or document.document_type_id
+        )
         return {
             "title": suggestion.get("title") or document.title,
             "description": suggestion.get("subject", ""),
             "office": suggestion.get("office_id") or document.office_id,
-            "document_type": suggestion.get("document_type_id") or document.document_type_id,
+            "document_type": main_type,
             "document_date": suggestion.get("document_date") or None,
             "year": document.year,
             "reference_number": suggestion.get("reference_number", ""),
@@ -435,6 +447,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
         accepted = {
             "title": data["title"],
             "document_type_id": data["document_type"].pk if data.get("document_type") else None,
+            "document_type_ids": [kind.pk for kind in data.get("document_types", [])],
             "office_id": data["office"].pk if data.get("office") else None,
             "document_date": data["document_date"].isoformat() if data.get("document_date") else "",
             "reference_number": data.get("reference_number", ""),

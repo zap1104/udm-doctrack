@@ -8,7 +8,7 @@
     <div class="eyebrow">Document Repository</div>
     <h1>{{ document.title }}</h1>
     <p class="sub">
-      {{ document.office.name }} · {{ document.document_type.name|default:"Unclassified" }}
+      {{ document.office.name }} · {{ document.document_type_names|default:"Unclassified" }}
       · {{ document.document_date|default:document.created_at|date:"d M Y" }}
       {% if document.reference_number %}· <span class="mono">{{ document.reference_number }}</span>{% endif %}
     </p>
@@ -40,7 +40,7 @@
         <div class="row">
           <div class="col-md-6"><table class="table table-sm table-stacked">
             <tr><th class="text-muted fw-normal">Owning office</th><td>{{ document.office.name }}</td></tr>
-            <tr><th class="text-muted fw-normal">Document type</th><td>{{ document.document_type.name|default:"—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">Document types</th><td>{% include "partials/_document_types_display.html" with item=document empty_label="—" %}</td></tr>
             <tr><th class="text-muted fw-normal">Document date</th><td>{{ document.document_date|date:"d M Y"|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Year</th><td>{{ document.year }}</td></tr>
             <tr><th class="text-muted fw-normal">Retention review</th><td>{% if document.retention_until %}{{ document.retention_until|date:"d M Y" }}{% if document.retention_is_due %}<br><strong class="text-danger">Due for records-officer review; not automatically deleted.</strong>{% elif document.retention_is_due_soon %}<br><span class="text-muted">Due within 90 days.</span>{% endif %}{% else %}No schedule set{% endif %}</td></tr>

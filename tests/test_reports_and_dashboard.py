@@ -89,7 +89,7 @@ TRACKING_PANELS = (
 #: page whose design is that it answers for one office.
 REPOSITORY_PANELS = (
     "Documents filed each month",
-    "Documents by type",
+    "Documents by main type",
 )
 
 
@@ -185,7 +185,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     assert sum(row["completed"] for row in rows) == 3
     assert sum(row["historical"] for row in rows) == 3
 
-    panel = body[body.index("Documents filed each month"):body.index("Documents by type")]
+    panel = body[body.index("Documents filed each month"):body.index("Documents by main type")]
     assert ">Completed</span>" in panel and ">Historical</span>" in panel, "legend"
     assert ">Completed</th>" in panel and ">Historical</th>" in panel, "table view"
 

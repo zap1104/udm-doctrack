@@ -7,7 +7,7 @@
     <a class="btn btn-dashboard-action btn-sm" href="{{ pending_filing.tracking_url }}"
        aria-label="View all {{ pending_filing.count }} completed records pending filing in Tracking">
       <span>View all {{ pending_filing.count }}</span>
-      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+      {% include "partials/_dashboard_action_arrow.html" %}
     </a>
   </div>
   {% if pending_filing.records %}

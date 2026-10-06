@@ -30,7 +30,7 @@
           <table class="table phase2-review-table table-stacked align-middle">
             <tbody>
               <tr><th>Originating office</th><td>{{ record.originating_office.name }}</td></tr>
-              <tr><th>Document type</th><td>{{ record.document_type.name|default:"Not specified" }}</td></tr>
+              <tr><th>Document types</th><td>{% include "partials/_document_types_display.html" with item=record %}</td></tr>
               <tr><th>Classification</th><td>{{ record.get_classification_display }}</td></tr>
               <tr><th>Priority</th><td>{{ record.get_priority_display }}</td></tr>
               <tr>

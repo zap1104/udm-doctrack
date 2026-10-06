@@ -1,0 +1,9 @@
+{% load doctrack %}
+<div data-document-type-picker>
+  <input type="hidden" name="document_types_submitted" value="1">
+  {% include "partials/_field.html" with field=form.document_types %}
+  {% if confidence.document_type %}<p class="form-text">Suggested type confidence: {{ confidence.document_type|confidence_label }}</p>{% endif %}
+  <div data-main-type-field>
+    {% include "partials/_field.html" with field=form.document_type %}
+  </div>
+</div>
