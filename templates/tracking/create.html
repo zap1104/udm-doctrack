@@ -1,10 +1,11 @@
 {% extends "base.html" %}
-{% block title %}New Tracking Slip · {{ SITE_NAME }}{% endblock %}
+{% block title %}{% if record %}Edit Tracking Draft{% else %}New Tracking Slip{% endif %} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-form-page tracking-form-page">
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking</div>
-    <h1>New Tracking Slip</h1>
+    <h1>{% if record %}Edit Tracking Draft{% else %}New Tracking Slip{% endif %}</h1>
     <div class="step-indicator mt-2">
       <span class="step active"><span class="num">1</span> Document and Routing Details</span>
       <span aria-hidden="true">›</span>
@@ -13,11 +14,11 @@
   </div>
 </div>
 
-<form method="post" enctype="multipart/form-data" novalidate>
+<form method="post" action="{% url 'tracking:create' %}{% if record %}?draft={{ record.pk }}{% endif %}" enctype="multipart/form-data" class="workspace-form" novalidate>
   {% csrf_token %}
   {% include "partials/_form_errors.html" %}
-  <div class="row g-4">
-    <div class="col-lg-8">
+  <div class="row g-4 workspace-form-layout">
+    <div class="col-lg-8 workspace-form-main">
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
@@ -30,15 +31,15 @@
           <section class="phase2-form-section" aria-labelledby="document-details-heading">
             <h3 id="document-details-heading" class="phase2-section-title">Document details</h3>
             {% include "partials/_field.html" with field=form.subject %}
-            <div class="row">
+            <div class="row workspace-field-pair">
               <div class="col-md-6">{% include "partials/_field.html" with field=form.document_type %}</div>
               <div class="col-md-6">{% include "partials/_field.html" with field=form.classification %}</div>
             </div>
 
             <div class="mb-3">
-              <label class="form-label">Originating office</label>
-              <input class="form-control" value="{{ user.office.name|default:'No office assigned' }}" readonly disabled>
-              <div class="form-text">Automatically taken from the signed-in account.</div>
+              <label class="form-label" for="originating-office">Originating office</label>
+              <input class="form-control" id="originating-office" value="{{ originating_office.name|default:'No office assigned' }}" aria-describedby="originating-office-help" readonly disabled>
+              <div class="form-text" id="originating-office-help">{% if record %}Fixed when this draft was created.{% else %}Automatically taken from the signed-in account.{% endif %}</div>
             </div>
           </section>
 
@@ -59,11 +60,14 @@
 
           <section class="phase2-form-section phase2-form-section--last" aria-labelledby="attachments-heading">
             <h3 id="attachments-heading" class="phase2-section-title">Attachments</h3>
+            {% if attachments %}
+              <p class="form-text">Already attached to this draft:</p>
+              <ul class="workspace-saved-files">{% for attachment in attachments %}<li>{{ attachment.original_name }}</li>{% endfor %}</ul>
+              <p class="form-text">Choose files below to add more attachments.</p>
+            {% endif %}
             <div class="phase2-upload-box">
-              {{ form.attachments }}
-              <div class="form-text mt-2">{{ form.attachments.help_text }}</div>
+              {% include "partials/_field.html" with field=form.attachments %}
             </div>
-            {% for error in form.attachments.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
           </section>
 
           <div class="form-actions">
@@ -74,14 +78,14 @@
       </div>
     </div>
 
-    <div class="col-lg-4">
+    <div class="col-lg-4 workspace-form-aside">
       <div class="card-udm phase2-sticky-card">
         <div class="card-udm-head"><h2>Before You Continue</h2></div>
         <div class="card-udm-body">
           <ol class="phase2-checklist">
-            <li><strong>Originating office is fixed.</strong> It comes from the signed-in account.</li>
+            <li><strong>Originating office is fixed.</strong> {% if record %}It is the office that created this draft.{% else %}It comes from the signed-in account.{% endif %}</li>
             <li><strong>Choose the destinations carefully.</strong> Every office selected receives the document and must confirm receipt.</li>
-            <li><strong>Use the calendar for the deadline.</strong> The interface converts the chosen date for the current backend.</li>
+            <li><strong>Choose a deadline date and optional time.</strong> Leave the time blank for end of day.</li>
             <li><strong>Review before sending.</strong> Sending does not mean the document has been received.</li>
           </ol>
         </div>
@@ -89,10 +93,11 @@
 
       <div class="help-note mt-3">
         Tracking numbers currently follow this format:<br>
-        <span class="mono">UDM-OVPA-{{ user.office.code|default:"OFFICE" }}-YYYY-MM-0001</span><br>
+        <span class="mono">UDM-OVPA-{{ originating_office.code|default:"OFFICE" }}-YYYY-MM-0001</span><br>
         The final numbering format remains subject to approval.
       </div>
     </div>
   </div>
 </form>
+</div>
 {% endblock %}

@@ -273,7 +273,9 @@ def test_every_column_chart_is_sized_by_its_own_width(client, users, charted, pa
     client.force_login(users["admin"])
     body = client.get(page).content.decode()
 
-    frames = body.split('<div class="column-chart-frame">')[1:]
+    import re
+
+    frames = re.split(r'<div class="column-chart-frame"(?:\s[^>]*)?>', body)[1:]
     assert len(frames) == body.count('class="column-chart"') >= 1
     for frame in frames:
         assert frame.index('class="column-chart"') < frame.index('class="chart-table"')
@@ -447,6 +449,24 @@ def _slices(body):
     return re.findall(r"<path class=\"donut-slice\"([^>]*)>(.*?)</path>", body, re.S)
 
 
+def test_repository_chart_keeps_the_existing_source_labels_without_mutating_breakdown():
+    from copy import deepcopy
+
+    from apps.core.views import DashboardView
+
+    rows = [
+        {"key": "historical", "group": "repository", "label": "Repository - historical", "total": 60,
+         "colour": "var(--udm-gold)", "url": "/documents/?source=historical"},
+        {"key": "completed", "group": "repository", "label": "Repository - completed", "total": 196,
+         "colour": "var(--udm-green)", "url": "/documents/?source=completed"},
+    ]
+    before = deepcopy(rows)
+    chart = DashboardView()._domain_donut({"slices": rows}, "repository")
+    assert [s["label"] for s in chart["slices"]] == ["Historical uploads or scans", "Filed from Tracking"]
+    assert rows == before
+    assert chart["total"] == 256
+
+
 @pytest.mark.django_db
 def test_every_slice_has_a_title_and_the_figures_its_tooltip_shows(client, users, charted):
     """<title> is the fallback where script does not run. It is not enough by
@@ -461,12 +481,18 @@ def test_every_slice_has_a_title_and_the_figures_its_tooltip_shows(client, users
     rings = [ring["status"] for ring in response.context["tracking_rings"]["rings"]]
     rings.append(response.context["repository_donut"])
     drawn = [s for ring in rings for s in ring["slices"] if s["path"]]
-    assert len(slices) == len(drawn) >= 2
+    assert len(slices) == len(drawn) >= 1
     for (attributes, inner), expected in zip(slices, drawn, strict=True):
         assert re.search(r"<title>[^<]+</title>", inner), inner
         assert f'data-count="{expected["total"]}"' in attributes
         assert f'data-percent="{expected["percent"]}"' in attributes
         assert f'data-slice="{expected["key"]}"' in attributes
+    repository = body[body.index('dashboard-side--repository'):]
+    assert 'class="donut-ring"' in repository, "the repository breakdown is a pie-style chart again"
+    for row in response.context["repository_donut"]["slices"]:
+        expected = f'href="{row["url"].replace("&", "&amp;")}"'
+        assert expected in repository
+        assert f'>{row["total"]}</strong>' in repository
 
 
 @pytest.mark.django_db

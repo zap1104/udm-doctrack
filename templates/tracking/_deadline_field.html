@@ -4,7 +4,7 @@
   the field still works with JavaScript off; doctrack.js hides it when
   "No deadline" is the answer.
 {% endcomment %}
-<fieldset class="deadline-field mb-3" data-deadline-field>
+<fieldset class="deadline-field mb-3" data-deadline-field{% if form.deadline_choice.errors %} aria-describedby="{{ form.deadline_choice.auto_id }}_error"{% endif %}>
   <legend class="form-label">{{ form.deadline_choice.label }} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></legend>
 
   <div class="deadline-options">
@@ -15,7 +15,7 @@
       </label>
     {% endfor %}
   </div>
-  {% for error in form.deadline_choice.errors %}<div class="field-errors" role="alert">{{ error }}</div>{% endfor %}
+  {% if form.deadline_choice.errors %}<div class="field-errors" role="alert" id="{{ form.deadline_choice.auto_id }}_error">{% for error in form.deadline_choice.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
 
   {% comment %}
     Date and time side by side, the time optional. Blank means end of day, which
@@ -30,25 +30,19 @@
       <div class="{% if form.due_date.errors %}form-field--error{% endif %}">
         <label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
         {{ form.due_date }}
+        <div class="form-text" id="{{ form.due_date.auto_id }}_helptext">{{ form.due_date.help_text }} Today or later, and no more than a year ahead.</div>
+        {% if form.due_date.errors %}<div class="field-errors" role="alert" id="{{ form.due_date.auto_id }}_error">{% for error in form.due_date.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
       </div>
       <div class="{% if form.due_time.errors %}form-field--error{% endif %}">
         <label class="form-label" for="{{ form.due_time.id_for_label }}">{{ form.due_time.label }}</label>
         {{ form.due_time }}
+        <div class="form-text" id="{{ form.due_time.auto_id }}_helptext">{{ form.due_time.help_text }}</div>
+        {% if form.due_time.errors %}<div class="field-errors" role="alert" id="{{ form.due_time.auto_id }}_error">{% for error in form.due_time.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
       </div>
     </div>
     <div class="deadline-clear-actions" data-deadline-clear-actions hidden>
       <button type="button" class="btn btn-sm btn-udm-outline" data-clear-deadline>Clear deadline</button>
       <button type="button" class="btn btn-sm btn-udm-outline" data-clear-deadline-time>Clear time</button>
     </div>
-    <div class="form-text">
-      {{ form.due_date.help_text }} Today or later, and no more than a year ahead.
-      {{ form.due_time.help_text }}
-    </div>
-    {% if form.due_date.errors or form.due_time.errors %}
-      <div class="field-errors" role="alert">
-        {% for error in form.due_date.errors %}<div>{{ error }}</div>{% endfor %}
-        {% for error in form.due_time.errors %}<div>{{ error }}</div>{% endfor %}
-      </div>
-    {% endif %}
   </div>
 </fieldset>

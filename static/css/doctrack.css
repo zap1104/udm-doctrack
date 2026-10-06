@@ -1643,8 +1643,8 @@ body.sidebar-open { overflow:hidden; }
 }
 @media (max-width:900px) {
   .app-shell { display:block; }
-  .app-sidebar { position:fixed; top:0; bottom:0; left:0; z-index:1050; display:block; width:min(82vw,286px); height:100vh; padding:18px 14px; overflow-y:auto; transform:translateX(-105%); transition:transform 180ms ease; box-shadow:12px 0 32px rgba(6,28,52,.24); }
-  body.sidebar-open .app-sidebar { transform:translateX(0); }
+  .app-sidebar { position:fixed; top:0; bottom:0; left:0; z-index:1050; display:block; width:min(82vw,286px); height:100vh; padding:18px 14px; overflow-y:auto; visibility:hidden; transform:translateX(-105%); transition:transform 180ms ease; box-shadow:12px 0 32px rgba(6,28,52,.24); }
+  body.sidebar-open .app-sidebar { visibility:visible; transform:translateX(0); }
   .sidebar-mobile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
   .sidebar-close { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:25px; line-height:1; }
   .sidebar-backdrop { position:fixed; inset:0; z-index:1040; display:block; border:0; background:rgba(6,20,36,.5); opacity:0; pointer-events:none; transition:opacity 180ms ease; }
@@ -3663,3 +3663,66 @@ input:focus {
   .report-metrics .stat-card { padding: 13px; }
 }
 @media (max-width: 359.98px) { .report-metrics { grid-template-columns: 1fr; } }
+
+/* Keep subjects readable when office and status columns need their own space.
+   Excess width belongs to the named, keyboard-focusable table scroller. */
+.tracking-records-table .tracking-subject { min-width: 280px; overflow-wrap: break-word; }
+.tracking-records-table .tracking-updated { min-width: 120px; }
+.desk-records-table .desk-cell { min-width: 240px; }
+.tracking-records-table th, .desk-records-table th { white-space: normal; }
+.tracking-records-table .deadline-when-cell { white-space: normal; }
+.table-udm .btn { white-space: nowrap; overflow-wrap: normal; }
+.table-responsive:focus-visible { outline: 3px solid var(--udm-focus); outline-offset: -3px; }
+.dashboard-scope { flex-wrap: wrap; }
+.dashboard-scope .form-select { width: auto; max-width: 100%; }
+.form-error-summary h2 { margin: 0 0 8px; font-size: 16px; }
+.form-error-summary ul { margin-bottom: 0; padding-left: 20px; }
+@media (max-width: 575.98px) {
+  .dashboard-head-actions { width: 100%; min-width: 0; }
+  .dashboard-scope { min-width: 0; }
+  .dashboard-scope .form-select { flex: 1 1 100%; width: 100%; min-width: 0; }
+}
+
+/* Operational work leads; totals and historical breakdowns stay secondary. */
+.dashboard-head-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 100%; }
+.dashboard-head-actions .dashboard-scope { grid-column: 1 / -1; }
+.dashboard-attention h2 { margin: 0 0 12px; font-size: 18px; font-weight: 750; }
+.dashboard-attention-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dashboard-attention .stat-card,
+.dashboard-attention .repository-pending-filing { display: block; min-width: 0; padding: 16px 20px; }
+.dashboard-attention .label { color: var(--udm-gold-ink); font-size: 14px; font-weight: 750; }
+.dashboard-attention .stat-card.red .label { color: var(--udm-red-ink); }
+.dashboard-attention .value { margin: 5px 0; color: var(--udm-gold-ink); font-size: 36px; font-weight: 800; line-height: 1.2; }
+.dashboard-attention .stat-card.red .value { color: var(--udm-red-ink); }
+.dashboard-attention .hint { max-width: none; color: var(--udm-muted); font-size: 13px; font-weight: 400; }
+.dashboard-secondary-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--udm-line); border-radius: 4px; overflow: hidden; }
+.dashboard-secondary-stats .stat-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; min-height: 0; padding: 12px 14px; border: 0; border-radius: 0; background: var(--udm-surface); }
+.dashboard-secondary-stats .stat-card:only-child { grid-column: 1 / -1; }
+.dashboard-secondary-stats .stat-card + .stat-card { border-left: 1px solid var(--udm-line); }
+.dashboard-secondary-stats .stat-card:hover { background: var(--udm-surface-sunk); }
+.dashboard-secondary-stats .label { color: var(--udm-navy-text); font-size: 12.5px; letter-spacing: 0; text-transform: none; text-decoration: underline; text-underline-offset: 3px; }
+.dashboard-secondary-stats .value { grid-column: 2; grid-row: 1 / 3; align-self: center; margin: 0; color: var(--udm-navy-text); font-size: 23px; }
+.dashboard-secondary-stats .hint { grid-column: 1; max-width: none; font-size: 12px; }
+.dashboard-recent-activity { margin: 0; padding: 12px 16px; border-top: 1px solid var(--udm-line); }
+.dashboard-recent-activity .desk-block--secondary { margin-top: 12px; }
+.repository-filed-total { margin: 0 0 12px; color: var(--udm-muted); font-size: 14px; }
+.repository-filed-total strong { margin-right: 6px; color: var(--udm-navy-text); font-size: 26px; }
+.repository-source-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--udm-line); color: var(--udm-navy-text); font-size: 13px; }
+.repository-source-row > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+.repository-source-row:hover { color: var(--udm-teal-ink); }
+/* Screen actions lead the history; the plain record print retains its history
+   before draft/help text. Official routing slips use their separate template. */
+@media print {
+  .tracking-record-work { display: flex; flex-direction: column; }
+  .tracking-record-history { order: 0; }
+  .tracking-record-actions { order: 1; }
+}
+@media (max-width: 575.98px) {
+  .dashboard-attention-grid { gap: 10px; }
+  .dashboard-attention .stat-card,
+  .dashboard-attention .repository-pending-filing { padding: 14px 12px; }
+  .dashboard-secondary-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-secondary-stats .stat-card:first-child { grid-column: 1 / -1; }
+  .dashboard-secondary-stats .stat-card:nth-child(2) { border-left: 0; }
+  .dashboard-secondary-stats .stat-card:not(:first-child) { border-top: 1px solid var(--udm-line); }
+}

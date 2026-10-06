@@ -223,7 +223,7 @@ class DashboardMemoMixin:
     def _plural(count, noun):
         return "{} {}{}".format(count, noun, "" if count == 1 else "s")
 
-    def _memo(self, scope, breakdown, overdue, overdue_rows, turnaround, uploads):
+    def _memo(self, scope, breakdown, overdue, overdue_rows, turnaround, uploads, *, draft_count=0):
         """The dashboard's own numbers, as labelled sections.
 
         Assembled here rather than in the template: a memo is a statement
@@ -242,7 +242,11 @@ class DashboardMemoMixin:
         absence of one.
         """
         line = self._memo_line
-        total = breakdown["total"]
+        # The circulation breakdown deliberately excludes unsent drafts. The
+        # memo describes all Tracking work, including those drafts, so its
+        # total and overdue denominator must include them too.
+        total = breakdown["total"] + draft_count
+        tracking_total = breakdown["tracking_total"] + draft_count
 
         if not total:
             # The one thing _breakdown_summary said that the memo did not. Four
@@ -263,11 +267,15 @@ class DashboardMemoMixin:
         overview = [
             line("Scope", scope["display"]),
             line("Total", self._plural(total, "document")),
-            line("Still moving", "{} ({}%)".format(
-                breakdown["tracking_total"], breakdown["tracking_percent"])),
+            line("In Tracking", f"{tracking_total} ({_percent(tracking_total, total)}%)"),
             line("Filed", "{} ({}%)".format(
-                breakdown["repository_total"], breakdown["repository_percent"])),
+                breakdown["repository_total"], _percent(breakdown["repository_total"], total))),
         ]
+        if draft_count:
+            overview.append(line(
+                "Drafts included", self._plural(draft_count, "draft")
+                + " in Tracking; circulation charts exclude drafts.",
+            ))
 
         late = overdue["total"]
         if late:
@@ -453,9 +461,10 @@ class DashboardMemoMixin:
         scope = self._scope()
         breakdown = self._combined_breakdown(user, scope["office"])
         records, documents = self._scoped(user, scope["office"])
+        draft_count = records.filter(status=Status.DRAFT).count()
 
         overdue_rows = analytics.overdue_offices(records)
-        overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"])
+        overdue = analytics.overdue_summary(records, overdue_rows, breakdown["total"] + draft_count)
         uploads = analytics.uploads_by_office(documents, records)
         trend = analytics.turnaround_by_month(records)
         # The month the turnaround figures are for: one of the months the trend
@@ -475,7 +484,7 @@ class DashboardMemoMixin:
             "turnaround_trend": trend,
             "turnaround": turnaround,
             "month_picker": core_filters.month_picker(self.request, months, month),
-            "memo": self._memo(scope, breakdown, overdue, overdue_rows, turnaround, uploads),
+            "memo": self._memo(scope, breakdown, overdue, overdue_rows, turnaround, uploads, draft_count=draft_count),
             "printed_at": timezone.localtime(),
         }
 
@@ -501,7 +510,6 @@ DESK_QUEUES = (
     (tracking_services.SCOPE_PENDING_RECEIPT, Status.PENDING_RECEIPT.label, False),
     (tracking_services.SCOPE_RECEIVED, Status.RECEIVED.label, False),
     (tracking_services.SCOPE_IN_PROCESS, Status.IN_PROCESS.label, False),
-    (tracking_services.SCOPE_PENDING_UPLOAD, Status.COMPLETED_PENDING_UPLOAD.label, False),
     (tracking_services.SCOPE_OVERDUE, "Overdue", False),
     (tracking_services.SCOPE_OUTGOING, "Outgoing", True),
 )
@@ -545,7 +553,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         usable = [slug for slug, _label, needs_office in DESK_QUEUES if not (needs_office and all_offices)]
         raw = (self.request.GET.get(DESK_PARAM) or "").strip()
         chosen = raw if raw in usable else DESK_DEFAULT
-        if raw and raw != chosen:
+        # Old dashboard bookmarks still open the new filing panel beside the
+        # default active queue. Completion is no longer an active-queue chip.
+        if raw and raw != chosen and raw != tracking_services.SCOPE_PENDING_UPLOAD:
             reason = (
                 "needs an office; pick one to use it"
                 if raw in known else "is not one of the tracking queues"
@@ -597,6 +607,42 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             # an attestation they cannot satisfy.
             "can_bulk_receive": any(record.can_confirm_now for record in selected_rows),
             "show_office_columns": user.is_records_staff,
+        }
+
+    def _pending_filing(self, user, scope):
+        """The completed preview is the existing Tracking pending-filing list.
+
+        Start from the same visible queryset and office predicate as Tracking,
+        rather than the repository's narrower originating-office preview.
+        """
+        office = tracking_services.ALL_OFFICES if scope["all_offices"] else scope["office"]
+        queue = tracking_services.office_queue(
+            tracking_services.active_for(user), tracking_services.SCOPE_PENDING_UPLOAD,
+            user, office=office,
+        ).distinct()
+        office_param = "all" if scope["all_offices"] else (scope["office"].pk if scope["office"] else None)
+        # The Repository shortcut opens an originating-office folder, while
+        # the Tracking preview includes every pending record the office touched.
+        # Count the Repository's own narrower cohort for its shortcut.
+        repository_queue = tracking_services.pending_upload_for(user).filter(is_archived=False)
+        if user.is_office_admin and not user.is_system_admin:
+            repository_queue = (
+                repository_queue.filter(originating_office_id=user.office_id)
+                if user.office_id else repository_queue.none()
+            )
+        if scope["office"]:
+            repository_queue = repository_queue.filter(originating_office=scope["office"])
+        return {
+            "count": queue.count(),
+            "records": list(queue[:DASHBOARD_ROWS]),
+            "repository_count": repository_queue.count(),
+            "repository_url": core_filters.link(
+                reverse("documents:repository"), view="pending",
+                office=scope["office"].pk if scope["office"] else None,
+            ),
+            "tracking_url": core_filters.link(
+                reverse("tracking:list"), scope=tracking_services.SCOPE_PENDING_UPLOAD, office=office_param,
+            ),
         }
 
     def get_context_data(self, **kwargs):
@@ -660,17 +706,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 tracking_services.SCOPE_OUTGOING: tracking_rings["counts"].get("outgoing"),
             },
         )
-        # `today` is read by `incoming_new_today` below.
-        #
-        # `received_today`, `forwarded_today` and `completed_today` were computed
-        # here — three queries on every dashboard load — for the Office Flow
-        # Today panel, which the dashboard redesign removed. No template has read
-        # them since. They were also wrong if ever put back: the first two
-        # hardcoded `user.office_id` and ignored the office picker the rest of
-        # the page obeys, and `completed_today` had no office filter at all, so it
-        # would have shown a university-wide number inside an office panel.
-        today = timezone.localdate()
-
+        context["pending_filing"] = self._pending_filing(user, scope)
         # Five, like the Action Centre's queue above it: a dashboard panel is a
         # glance with a link to the full list underneath — the reader who wants
         # row six wants the Tracking page. Scoped by the same office, through
@@ -704,21 +740,17 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 # equals the card above it" true by construction rather than by
                 # two queries happening to agree.
                 # None under every office, where there is no direction to count;
-                # the template shows the cards disabled rather than a number.
+                # the template omits those summaries rather than empty cards.
                 "incoming_count": tracking_rings["counts"].get("incoming"),
                 "tracking_total_count": tracking_total.count(),
                 "tracking_total_url": core_filters.link(
                     reverse("tracking:list"), office="all" if scope["all_offices"] else
                     (scope["office"].pk if scope["office"] else None)),
-                "incoming_new_today": (
-                    incoming.filter(last_movement_at__date=today).count() if split else None
-                ),
                 "outgoing_count": tracking_rings["counts"].get("outgoing"),
                 "tracking_rings": tracking_rings,
                 "overdue_count": overdue_count,
                 **action_centre,
                 "recent_records": recent,
-                "greeting": _greeting(),
                 "can_start_work": user.can_start_work,
                 "breakdown": breakdown,
             }
@@ -850,7 +882,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         them in the browser. Refetching on every press would be a round trip for
         numbers the page already had.
 
-        Completed - pending upload is shown separately below the chart and is
+        Completed - pending upload is shown in the attention summary and is
         included in the tracking total, never in a pie slice or overdue count.
         """
         tracking_url = reverse("tracking:list")
@@ -919,7 +951,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 "title": title,
                 "status": self._ring(self._stage_slices(grouped, "total", tracking_url, links, include_all=key == "all")),
                 "overdue": self._ring(
-                    self._stage_slices(grouped, "overdue", tracking_url, {**links, "overdue": "yes"})
+                    self._stage_slices(
+                        grouped, "overdue", tracking_url, {**links, "overdue": "yes"}, include_all=key == "all",
+                    )
                 ),
             }
             rings["overdue_total"] += ring["overdue"]["total"]
@@ -953,7 +987,15 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         repository ones in a single ring left the tracking slices too thin to
         read, which is the half somebody acts on.
         """
-        return self._ring([row for row in breakdown["slices"] if row["group"] == group])
+        rows = [row for row in breakdown["slices"] if row["group"] == group]
+        if group == "repository":
+            # Keep the card's clear source names on the restored chart and
+            # tooltip. Copy rows so memo/export labels are not changed.
+            rows = [
+                {**row, "label": "Filed from Tracking" if row["key"] == "completed" else "Historical uploads or scans"}
+                for row in rows
+            ]
+        return self._ring(rows)
 
     def _ring(self, rows):
         """Ring segments for a set of slices, each with a total, colour and url.
@@ -3025,8 +3067,9 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
             entries = entries.filter(created_at__date__gte=since)
         if until:
             entries = entries.filter(created_at__date__lte=until)
-        # By the office of whoever acted. A system administrator's filter: an
-        # office administrator's log is already their own office.
+        # The actor's office when the event happened. Account transfers and
+        # deletions must not change historical attribution. Legacy rows without
+        # a snapshot remain in the unfiltered system-administrator log.
         office = ""
         offices = []
         if self.request.user.is_system_admin:
@@ -3037,7 +3080,7 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
                 office = ""
             self.unrecognised = self.unrecognised or bool(raw_office and not office)
             if office:
-                entries = entries.filter(actor__office_id=office)
+                entries = entries.filter(extra__audit_actor_office_id=int(office))
         system_filters = {
             "q": query, "action": action, "office": office,
             "since": since.isoformat() if since else "",

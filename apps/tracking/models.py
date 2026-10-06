@@ -546,6 +546,8 @@ class TrackingRecord(TimeStampedModel):
     def can_user_confirm_receipt(self, user) -> bool:
         if not user.is_authenticated or not user.can_start_work or not user.office_id:
             return False
+        if self.status == Status.DRAFT or self.status in COMPLETED_STATUSES:
+            return False
         return self.pending_step_for_office(user.office) is not None
 
     def can_user_approve_upload(self, user) -> bool:

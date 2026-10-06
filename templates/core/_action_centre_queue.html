@@ -14,7 +14,7 @@
 <div id="{{ desk_target }}" class="desk-queue">
   <div class="card-udm-head action-centre-head">
     <div>
-      <h2>Tracking queues</h2>
+      <h2>Currently tracking</h2>
       <div class="card-udm-caption">{% if user.is_viewer %}Review permitted documents by queue.{% else %}Review documents by queue and confirm receipts.{% endif %}</div>
     </div>
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
@@ -66,12 +66,19 @@
         </h3>
         <div class="card-udm-body p-0">
           {% if attention_records %}
-            <div class="table-responsive"><table class="table-udm">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="{{ desk_queue.label }} documents"><table class="table-udm desk-records-table">
               {% if show_office_columns %}
                 <thead>
                   <tr>
                     {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
-                    <th>Tracking number</th><th>Subject</th><th>Originating office</th><th>Receiving offices</th><th></th>
+                    <th scope="col">Document</th><th scope="col">Originating office</th><th scope="col">Receiving offices</th><th scope="col"><span class="visually-hidden">Status or action</span></th>
+                  </tr>
+                </thead>
+              {% else %}
+                <thead class="visually-hidden">
+                  <tr>
+                    {% if can_bulk_receive %}<th scope="col">Select for receipt</th>{% endif %}
+                    <th scope="col">Document</th><th scope="col">Status or action</th>
                   </tr>
                 </thead>
               {% endif %}
@@ -87,8 +94,8 @@
                     </td>
                   {% endif %}
                   {% if show_office_columns %}
-                    <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
                     <td class="desk-cell">
+                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                       {% comment %}
                         The subject decides the width of this whole panel if it
                         is allowed to. .desk-cell-title caps it and wraps to a

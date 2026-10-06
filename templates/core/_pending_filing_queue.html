@@ -1,0 +1,32 @@
+<aside class="card-udm dashboard-filing-card" aria-labelledby="dashboard-filing-title">
+  <div class="card-udm-head dashboard-filing-head">
+    <div>
+      <h2 id="dashboard-filing-title">Completed - Pending Filing</h2>
+      <div class="card-udm-caption">Work is finished. These records still need filing.</div>
+    </div>
+    <a class="btn btn-dashboard-action btn-sm" href="{{ pending_filing.tracking_url }}"
+       aria-label="View all {{ pending_filing.count }} completed records pending filing in Tracking">
+      <span>View all {{ pending_filing.count }}</span>
+      <span class="btn-dashboard-action-arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+  {% if pending_filing.records %}
+    <p class="dashboard-filing-count">Showing {{ pending_filing.records|length }} of {{ pending_filing.count }} record{{ pending_filing.count|pluralize }}</p>
+    <ul class="dashboard-filing-list">
+      {% for record in pending_filing.records %}
+        <li>
+          <a class="dashboard-filing-record" href="{{ record.get_absolute_url }}">
+            <span class="mono dashboard-filing-number">{{ record.display_tracking_number }}</span>
+            <span class="dashboard-filing-subject">{{ record.subject }}</span>
+            <span class="dashboard-filing-open">Open record <span aria-hidden="true">&rarr;</span></span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="card-udm-body dashboard-filing-empty">
+      <p>No completed records are waiting for filing.</p>
+      <p class="text-muted mb-0">Records appear here after completion and stay until filed in the repository.</p>
+    </div>
+  {% endif %}
+</aside>

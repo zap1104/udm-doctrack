@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}Users · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-admin workspace-list">
 <div class="page-head">
   <div><div class="eyebrow">Administration</div><h1>User and office administration</h1>
   <p class="sub">Every account gets an office and a role before its first sign-in.</p></div>
@@ -9,12 +10,10 @@
 </div>
 {% include "administration/_tabs.html" with tab='users' %}
 
-<div class="card-udm mb-3"><div class="card-udm-body">
+<div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
   {% comment %}
-    Search, then three narrowing choices. The choices apply themselves on change
-    (data-auto-submit, listened for in doctrack.js; no inline handler, which the
-    Content-Security-Policy refuses); the search box needs Enter or the button,
-    because applying on every keystroke would reload the page mid-word.
+    Finish the search and narrowing choices, then apply them together with
+    Filter. Arrow keys can change selections without reloading the page.
   {% endcomment %}
   <form method="get" class="row g-2 align-items-end admin-filters">
     {# Carried so filtering does not snap a reader who asked for 100 rows back to 25. #}
@@ -26,7 +25,7 @@
     {% if not is_office_scoped %}
       <div class="col-md-3">
         <label class="form-label" for="user-office">Office</label>
-        <select class="form-select" id="user-office" name="office" data-auto-submit>
+        <select class="form-select" id="user-office" name="office">
           <option value="">All offices</option>
           {% for office in offices %}
             <option value="{{ office.pk }}" {% if selected_office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.name }}</option>
@@ -36,7 +35,7 @@
     {% endif %}
     <div class="col-6 col-md-2">
       <label class="form-label" for="user-role">Role</label>
-      <select class="form-select" id="user-role" name="role" data-auto-submit>
+      <select class="form-select" id="user-role" name="role">
         <option value="">Any role</option>
         {% for value, label in roles %}
           <option value="{{ value }}" {% if selected_role == value %}selected{% endif %}>{{ label }}</option>
@@ -45,7 +44,7 @@
     </div>
     <div class="col-6 col-md-2">
       <label class="form-label" for="user-status">Status</label>
-      <select class="form-select" id="user-status" name="status" data-auto-submit>
+      <select class="form-select" id="user-status" name="status">
         <option value="">Any status</option>
         {% for value, label in statuses %}
           <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
@@ -80,9 +79,9 @@
             {% else %}<span class="pill pill-overdue">Suspended</span>{% endif %}
           </td>
           <td class="text-end">
-            <a class="btn btn-udm-outline btn-sm" href="{% url 'accounts:user_edit' row.pk %}">Edit</a>
+            <a class="btn btn-udm-outline btn-sm" href="{% url 'accounts:user_edit' row.pk %}" aria-label="Edit user {{ row.display_name }} ({{ row.username }})">Edit</a>
             <form method="post" action="{% url 'accounts:user_toggle' row.pk %}" class="d-inline">{% csrf_token %}
-              <button class="btn btn-link btn-sm">{% if row.is_active %}Suspend{% else %}Reactivate{% endif %}</button>
+              <button class="btn btn-link btn-sm" aria-label="{% if row.is_active %}Suspend{% else %}Reactivate{% endif %} user {{ row.display_name }} ({{ row.username }})">{% if row.is_active %}Suspend{% else %}Reactivate{% endif %}</button>
             </form>
           </td>
         </tr>
@@ -91,4 +90,5 @@
   </table>
 </div></div>
 {% pager section="steps" %}
+</div>
 {% endblock %}

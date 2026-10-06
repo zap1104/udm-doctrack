@@ -323,9 +323,9 @@ def test_extraction_states_sum_to_the_repository(client, users, offices, agreeme
 #: existed.
 DASHBOARD_CONTEXT = {
     "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "desk_clear_href",
-    "desk_queue", "desk_queues", "desk_target", "greeting",
-    "incoming_count", "incoming_new_today", "memo", "month_picker", "monthly", "outgoing_count",
-    "overdue_count", "overdue_offices", "overdue_summary", "printed_at",
+    "desk_queue", "desk_queues", "desk_target",
+    "incoming_count", "memo", "month_picker", "monthly", "outgoing_count",
+    "overdue_count", "overdue_offices", "overdue_summary", "pending_filing", "printed_at",
     "recent_records", "repository_donut", "scope",
     "show_office_columns", "tracking_rings", "turnaround", "turnaround_trend",
     "turnaround_trend_geometry", "turnaround_trend_points", "uploads_by_office", "view",
@@ -425,7 +425,9 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 # adds one aggregate, reducing the all-office page by one query overall.
 # The editable office schedule adds one shared snapshot read per page, not
 # one per interval or chart. The assertions below verify that exact read.
-DASHBOARD_QUERIES = 51
+# Tracking and Repository pending cohorts each add one fixed count; drafts
+# add one fixed count so the memo and overdue denominator cover all Tracking.
+DASHBOARD_QUERIES = 54
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -472,7 +474,8 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 54
+DASHBOARD_OFFICE_QUERIES = 56
+# The incoming movement-today counter is no longer displayed or queried.
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 #: grouped query gives that office's own handover figures instead; the three

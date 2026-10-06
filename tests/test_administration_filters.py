@@ -156,6 +156,7 @@ def dated_log(users):
                                ("sup", 1, "New SUP change")):
         entry = AuditLog.objects.create(
             actor=users[who], actor_label=who, action=AuditLog.Action.UPDATE, summary=summary,
+            extra={"audit_actor_office_id": users[who].office_id},
         )
         AuditLog.objects.filter(pk=entry.pk).update(created_at=now - timedelta(days=days))
 

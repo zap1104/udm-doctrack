@@ -1,0 +1,215 @@
+{
+  "pages": [
+    {
+      "brokenImages": 0,
+      "forms": 4,
+      "heading": "Dashboard",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Dashboard · UDM DocTrack",
+      "url": "/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Search the repository",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Search · UDM DocTrack",
+      "url": "/search/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Tracking",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Document Tracking · UDM DocTrack",
+      "url": "/tracking/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 5,
+      "heading": "Document Tracking Reports",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Document Tracking Reports · UDM DocTrack",
+      "url": "/tracking/reports/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Repository",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Document Repository · UDM DocTrack",
+      "url": "/documents/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Repository Reports",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Document Repository Reports · UDM DocTrack",
+      "url": "/documents/reports/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 2,
+      "heading": "Administration",
+      "pageWidth": 1895,
+      "theme": "dark",
+      "title": "Administration · UDM DocTrack",
+      "url": "/administration/",
+      "width": 1910
+    },
+    {
+      "brokenImages": 0,
+      "forms": 4,
+      "heading": "Dashboard",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Search the repository",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/search/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Tracking",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/tracking/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 5,
+      "heading": "Document Tracking Reports",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/tracking/reports/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Repository",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/documents/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 3,
+      "heading": "Document Repository Reports",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/documents/reports/",
+      "width": 320
+    },
+    {
+      "brokenImages": 0,
+      "forms": 2,
+      "heading": "Administration",
+      "pageWidth": 305,
+      "theme": "dark",
+      "url": "/administration/",
+      "width": 320
+    },
+    {
+      "heading": "New Tracking Slip",
+      "pageWidth": 375,
+      "role": "office user",
+      "theme": "dark",
+      "url": "/tracking/new/",
+      "width": 390
+    },
+    {
+      "heading": "Dashboard",
+      "pageWidth": 375,
+      "role": "system administrator",
+      "theme": "light",
+      "url": "/",
+      "width": 390
+    }
+  ],
+  "roles": [
+    {
+      "globalOfficePicker": false,
+      "pendingLink": "/documents/?view=pending",
+      "pendingShortcut": "Pending filing\n3\nCreated by MED · awaiting filing.",
+      "url": "/",
+      "repositoryResult": "3 pending records",
+      "user": "med.head"
+    },
+    {
+      "hasAdministration": false,
+      "officeControls": [],
+      "pendingShortcut": "Pending filing 9 Completed in Tracking · not yet filed.",
+      "url": "/",
+      "user": "med.staff"
+    },
+    {
+      "bulkReceiptInputs": 0,
+      "hasAdministration": false,
+      "pendingShortcut": "Pending filing 9 Completed in Tracking · not yet filed.",
+      "url": "/",
+      "user": "med.viewer",
+      "detail": {
+        "actionForms": 0,
+        "pageWidth": 305,
+        "readOnlyNotice": true,
+        "url": "/tracking/4225/",
+        "width": 320
+      }
+    },
+    {
+      "officeControls": [
+        "All offices",
+        "HR · Human Resource Management Office",
+        "LND · Learning and Development Office",
+        "MED · Maintenance and Engineering Department",
+        "OVPA · Office of the Vice President for Administration",
+        "PAY · Payroll Section",
+        "PROC · Procurement Management Office",
+        "REC · Records Management Office",
+        "SEC · Security Services Office",
+        "SUP · Supply and Property Management"
+      ],
+      "pendingShortcut": "Pending filing 40 Completed in Tracking · not yet filed.",
+      "url": "/",
+      "user": "admin"
+    }
+  ],
+  "navigation": {
+    "phoneWidth": 390,
+    "closedHidden": true,
+    "mainInertWhileOpen": true,
+    "tabWrapped": true,
+    "shiftTabWrapped": true,
+    "escapeReturnedToToggle": true
+  },
+  "notes": [
+    "Principal pages inspected in dark mode at default desktop and 320px.",
+    "Light-mode dashboard inspected at desktop and 390px.",
+    "No live workflow, filing, upload, profile or administrative mutation submitted.",
+    "Account switches and theme toggles used existing demo accounts; administrator and original dark theme restored."
+  ]
+}

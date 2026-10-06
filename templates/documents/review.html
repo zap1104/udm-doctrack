@@ -2,10 +2,12 @@
 {% load doctrack %}
 {% block title %}Review Extracted Details · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-form workspace-review">
 <div class="page-head">
   <div>
     <div class="eyebrow">Document Repository · Step 2</div>
     <h1>Review Extracted Document Details</h1>
+    <p class="sub">The file is already saved. Check the suggested metadata before saving your corrections.</p>
     <div class="step-indicator mt-2">
       <span class="step"><span class="num">1</span> Choose File</span>
       <span aria-hidden="true">›</span>
@@ -19,33 +21,11 @@
 <form method="post" novalidate>
   {% csrf_token %}
   {% include "partials/_form_errors.html" %}
-  <div class="row g-4">
-    <div class="col-lg-5">
-      <div class="card-udm">
-        <div class="card-udm-head">
-          <h2>Extracted Text</h2>
-          <span class="pill {% if document.ocr_status == 'DONE' %}pill-ok{% else %}pill-draft{% endif %}">
-            {{ document.get_ocr_status_display }}
-          </span>
-        </div>
-        <div class="card-udm-body">
-          <div class="text-muted mb-2" style="font-size:12.5px;">
-            Engine: {{ document.ocr_engine|default:"none" }}
-            {% if document.page_count %}· {{ document.page_count }} page{{ document.page_count|pluralize }}{% endif %}
-            · {{ text_preview|length }} characters shown
-          </div>
-          <div class="text-preview">{{ text_preview|default:"No text could be read from this file. Fill in the details by hand — the record is still fully searchable by metadata and tags." }}</div>
-          {% if suggestion.notes %}
-            <ul class="form-text mt-2 mb-0 ps-3">
-              {% for note in suggestion.notes %}<li>{{ note }}</li>{% endfor %}
-            </ul>
-          {% endif %}
-        </div>
-      </div>
-    </div>
+  <div class="row g-4 workspace-columns">
 
-    <div class="col-lg-7">
-      <div class="card-udm">
+
+    <div class="col-lg-7 workspace-primary">
+      <div class="card-udm workspace-panel">
         <div class="card-udm-head"><h2>Review Suggested Metadata</h2></div>
         <div class="card-udm-body">
 
@@ -57,7 +37,8 @@
               {% endwith %}
             </label>
             {{ form.title }}
-            {% for error in form.title.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            {% if form.title.help_text %}<div class="form-text" id="{{ form.title.auto_id }}_helptext">{{ form.title.help_text }}</div>{% endif %}
+            {% if form.title.errors %}<div class="field-errors" role="alert" id="{{ form.title.auto_id }}_error">{% for error in form.title.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
           </div>
 
           {% include "partials/_field.html" with field=form.description %}
@@ -72,6 +53,8 @@
                   {% endwith %}
                 </label>
                 {{ form.document_type }}
+                {% if form.document_type.help_text %}<div class="form-text" id="{{ form.document_type.auto_id }}_helptext">{{ form.document_type.help_text }}</div>{% endif %}
+                {% if form.document_type.errors %}<div class="field-errors" role="alert" id="{{ form.document_type.auto_id }}_error">{% for error in form.document_type.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
               </div>
             </div>
             <div class="col-md-6">
@@ -83,6 +66,8 @@
                   {% endwith %}
                 </label>
                 {{ form.office }}
+                {% if form.office.help_text %}<div class="form-text" id="{{ form.office.auto_id }}_helptext">{{ form.office.help_text }}</div>{% endif %}
+                {% if form.office.errors %}<div class="field-errors" role="alert" id="{{ form.office.auto_id }}_error">{% for error in form.office.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
               </div>
             </div>
             <div class="col-md-4">{% include "partials/_field.html" with field=form.document_date %}</div>
@@ -99,7 +84,8 @@
           <div class="mb-3">
             <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
             {{ form.tags }}
-            <div class="form-text">{{ form.tags.help_text }}</div>
+            <div class="form-text" id="{{ form.tags.auto_id }}_helptext">{{ form.tags.help_text }}</div>
+            {% if form.tags.errors %}<div class="field-errors" role="alert" id="{{ form.tags.auto_id }}_error">{% for error in form.tags.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
             <datalist id="tag-options">
               {% for tag in all_tags %}<option value="{{ tag.name }}"></option>{% endfor %}
             </datalist>
@@ -132,6 +118,29 @@
         </div>
       </div>
     </div>
+    <div class="col-lg-5 workspace-support">
+      <div class="card-udm workspace-panel">
+        <div class="card-udm-head">
+          <h2>Extracted Text</h2>
+          <span class="pill {% if document.ocr_status == 'DONE' %}pill-ok{% else %}pill-draft{% endif %}">
+            {{ document.get_ocr_status_display }}
+          </span>
+        </div>
+        <div class="card-udm-body">
+          <div class="text-muted mb-2" style="font-size:12.5px;">
+            Engine: {{ document.ocr_engine|default:"none" }}
+            {% if document.page_count %}· {{ document.page_count }} page{{ document.page_count|pluralize }}{% endif %}
+            · {{ text_preview|length }} characters shown
+          </div>
+          <div class="text-preview">{{ text_preview|default:"No text could be read from this file. Fill in the details by hand — the record is still fully searchable by metadata and tags." }}</div>
+          {% if suggestion.notes %}
+            <ul class="form-text mt-2 mb-0 ps-3">
+              {% for note in suggestion.notes %}<li>{{ note }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   </div>
 </form>
 </div>
@@ -144,4 +153,5 @@
   ownership of the generated id.
 {% endcomment %}
 <span hidden data-tag-chips data-tag-chips-input="{{ form.tags.id_for_label }}"></span>
+</div>
 {% endblock %}

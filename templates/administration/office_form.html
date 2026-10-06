@@ -1,18 +1,20 @@
 {% extends "base.html" %}
 {% block title %}{% if office %}Edit office{% else %}Add office{% endif %} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-admin workspace-form">
 <div class="page-head"><div>
   <div class="eyebrow">Administration</div>
   <h1>{% if office %}{{ office.name }}{% else %}Add office{% endif %}</h1>
 </div></div>
-<div class="row g-4"><div class="col-lg-7"><div class="card-udm"><div class="card-udm-body">
+<div class="row g-4 workspace-columns"><div class="col-lg-7 workspace-primary"><div class="card-udm"><div class="card-udm-body">
   <form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
     {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
     <div class="form-actions"><button class="btn btn-udm" type="submit">Save office</button>
     <a class="btn btn-udm-outline" href="{% url 'accounts:office_list' %}">Cancel</a></div>
   </form>
 </div></div></div>
-<div class="col-lg-5"><div class="help-note">
+<div class="col-lg-5 workspace-support"><div class="help-note">
   The code appears inside every tracking number, so changing it later does not rewrite numbers already issued.
 </div></div></div>
+</div>
 {% endblock %}

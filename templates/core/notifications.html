@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}Notifications · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-notifications">
 <div class="page-head notification-page-head">
   <div>
     <div class="eyebrow">Account</div>
@@ -16,28 +17,28 @@
   {% endif %}
 </div>
 
-<div class="notification-toolbar card-udm mb-4">
+<div class="notification-toolbar card-udm mb-4 workspace-toolbar">
   <div class="card-udm-body d-flex flex-wrap align-items-center gap-2">
     <nav class="notification-filters" aria-label="Notification filters">
-      <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}">All</a>
-      <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}">Unread</a>
+      <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'all' %} aria-current="true"{% endif %}>All</a>
+      <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'unread' %} aria-current="true"{% endif %}>Unread</a>
     </nav>
     <form class="notification-kind-filter ms-auto" method="get">
       <input type="hidden" name="filter" value="{{ active_filter }}">
       {# Carried, or changing the type filter would reset the page length. #}
       <input type="hidden" name="per_page" value="{{ page_size }}">
       <label class="visually-hidden" for="notification-kind">Filter by type</label>
-      <select id="notification-kind" name="kind" class="form-select form-select-sm" data-auto-submit>
+      <select id="notification-kind" name="kind" class="form-select form-select-sm">
         <option value="">All types</option>
         {% for value, label in notification_kinds %}<option value="{{ value }}"{% if active_kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
-      <noscript><button class="btn btn-udm-outline btn-sm" type="submit">Apply</button></noscript>
+      <button class="btn btn-udm-outline btn-sm" type="submit">Apply</button>
     </form>
   </div>
 </div>
 
 <section aria-labelledby="notification-list-heading">
-  <div class="d-flex align-items-baseline justify-content-between gap-3 mb-2">
+  <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-3 mb-2 workspace-results-head">
     <h2 id="notification-list-heading" class="section-title mb-0">{{ notification_count }} update{{ notification_count|pluralize }}</h2>
     <span class="text-muted small">Unread updates appear first</span>
   </div>
@@ -58,4 +59,5 @@
 </section>
 
 {% pager section="steps" %}
+</div>
 {% endblock %}

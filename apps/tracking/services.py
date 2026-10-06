@@ -952,6 +952,7 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
             | Q(originating_office__name__icontains=query)
             | Q(originating_office__code__icontains=query)
             | Q(current_office__name__icontains=query)
+            | Q(current_office__code__icontains=query)
         )
     if status:
         # A list or a single value, so a caller holding one stage need not wrap
@@ -1648,7 +1649,7 @@ def annotate_can_confirm(records, user) -> None:
     """
     if not records:
         return
-    if not user.is_authenticated or not user.office_id:
+    if not user.is_authenticated or not user.can_start_work or not user.office_id:
         for record in records:
             record.can_confirm_now = False
         return
@@ -1661,7 +1662,7 @@ def annotate_can_confirm(records, user) -> None:
             to_office_id=user.office_id,
             received_at__isnull=True,
             batch=F("record__current_batch"),
-        ).values_list("record_id", flat=True)
+        ).exclude(record__status__in={Status.DRAFT, *COMPLETED_STATUSES}).values_list("record_id", flat=True)
     )
     for record in records:
         record.can_confirm_now = record.pk in pending

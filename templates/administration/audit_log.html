@@ -2,6 +2,7 @@
 {% load doctrack %}
 {% block title %}Audit log · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-admin workspace-audit">
 <div class="page-head"><div>
   <div class="eyebrow">Administration</div><h1>Audit log</h1>
   {% if request.user.is_system_admin %}
@@ -13,7 +14,9 @@
 </div></div>
 {% include "administration/_tabs.html" with tab='audit' %}
 
-<div class="card-udm mb-3"><div class="card-udm-body">
+<section class="workspace-section" aria-labelledby="system-activity-heading">
+<div class="workspace-section-head"><h2 id="system-activity-heading" class="section-title">System activity</h2></div>
+<div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
   <form method="get" class="row g-2 align-items-end admin-filters">
     {% comment %}
       Both sizes ride through the filter, so narrowing the log does not silently
@@ -31,7 +34,7 @@
     </div>
     <div class="col-6 col-lg-2">
       <label class="form-label" for="audit-action">Action</label>
-      <select class="form-select" id="audit-action" name="action" data-auto-submit>
+      <select class="form-select" id="audit-action" name="action">
         <option value="">All actions</option>
         {% for value, label in actions %}
           <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
@@ -41,7 +44,7 @@
     {% if filter_offices %}
       <div class="col-6 col-lg-2">
         <label class="form-label" for="audit-office">Office</label>
-        <select class="form-select" id="audit-office" name="office" data-auto-submit>
+        <select class="form-select" id="audit-office" name="office">
           <option value="">All offices</option>
           {% for office in filter_offices %}
             <option value="{{ office.pk }}" {% if system_filters.office == office.pk|stringformat:"s" %}selected{% endif %}>{{ office.code }} · {{ office.name }}</option>
@@ -90,6 +93,7 @@
 
 {# Its own page object, so Next here does not also move the panel below. #}
 {% pager system_page section="steps" %}
+</section>
 
 {% comment %}
   Who read and who printed. A separate panel because it comes from the record
@@ -97,7 +101,7 @@
   logging reads worth doing: a view-only account leaves no other trace, so
   without somewhere to inspect these rows the trail answers nobody.
 {% endcomment %}
-<div class="card-udm mt-4">
+<div class="card-udm mt-4 workspace-panel">
   <div class="card-udm-head">
     <div>
       <h2>Record access</h2>
@@ -127,7 +131,7 @@
       </div>
       <div class="col-6 col-lg-2">
         <label class="form-label" for="access-event">What</label>
-        <select class="form-select" id="access-event" name="event" data-auto-submit>
+        <select class="form-select" id="access-event" name="event">
           <option value="">Opened or printed</option>
           {% for value, label in access_events %}
             <option value="{{ value }}" {% if access_filters.event == value %}selected{% endif %}>{{ label }}</option>
@@ -181,5 +185,6 @@
     </table>
   </div>
   <div class="card-udm-body pt-0">{% pager access_page section="steps" %}</div>
+</div>
 </div>
 {% endblock %}

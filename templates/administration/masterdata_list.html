@@ -2,13 +2,14 @@
 {% load doctrack %}
 {% block title %}{{ config.label }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+<div class="workspace-page workspace-admin workspace-list">
 <div class="page-head">
   <div><div class="eyebrow">Administration</div><h1>{{ config.label }}</h1><p class="sub">{{ config.help }}</p></div>
   <a class="btn btn-udm" href="{% url 'core:masterdata_create' slug %}">+ Add {{ config.singular }}</a>
 </div>
 {% include "administration/_tabs.html" %}
 
-<div class="card-udm mb-3"><div class="card-udm-body">
+<div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
   <form method="get" class="row g-2 align-items-end admin-filters">
     {# Carried so searching does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
@@ -20,7 +21,7 @@
     {% if has_status %}
       <div class="col-md-3">
         <label class="form-label" for="masterdata-status">Status</label>
-        <select class="form-select" id="masterdata-status" name="status" data-auto-submit>
+        <select class="form-select" id="masterdata-status" name="status">
           <option value="">Active and retired</option>
           <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active only</option>
           <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Retired only</option>
@@ -50,7 +51,7 @@
           {% for name, label in config.columns %}
             <td>{% if forloop.first %}<strong>{{ object|attr:name }}</strong>{% else %}{{ object|attr:name }}{% endif %}</td>
           {% endfor %}
-          <td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{% url 'core:masterdata_edit' slug object.pk %}">Edit</a></td>
+          <td class="text-end"><a class="btn btn-udm-outline btn-sm" href="{% url 'core:masterdata_edit' slug object.pk %}" aria-label="Edit {{ config.singular }} {{ object }}">Edit</a></td>
         </tr>
       {% empty %}
         <tr><td colspan="{{ config.columns|length|add:1 }}" class="p-4 text-muted">Nothing here yet.</td></tr>
@@ -59,4 +60,5 @@
   </table>
 </div></div>
 {% pager section="steps" %}
+</div>
 {% endblock %}

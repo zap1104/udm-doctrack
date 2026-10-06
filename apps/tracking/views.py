@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import F
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -19,12 +20,14 @@ from apps.core.business_time import office_hours_caveat
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
+from apps.core.permissions import active_writer
 from apps.core.utils import log_action, qr_svg
 
 from . import services
 from .forms import (
     DEADLINE_DATE,
     DEADLINE_NONE,
+    END_OF_DAY,
     SORT_CHOICES,
     SORT_DEADLINE_ASC,
     SORT_DEADLINE_DESC,
@@ -41,6 +44,7 @@ from .forms import (
     status_pills,
 )
 from .models import (
+    COMPLETED_STATUSES,
     QUIET_EVENTS,
     Attachment,
     RoutingStep,
@@ -51,9 +55,8 @@ from .models import (
 #: Rows of the pending-upload queue shown before it collapses to a link.
 PENDING_UPLOAD_SHOWN = 5
 
-#: Session key holding the deadline chosen on step 1, as an ISO date or "" for
-#: none. Deliberately not the old `draft_due_<pk>` name — that key held a day
-#: count, and a session left over from before this change would be read as a date.
+#: Retired date-only session key, cleared after send. The persisted due_at is
+#: the source for a draft's complete deadline.
 DRAFT_DEADLINE_KEY = "draft_deadline_{pk}"
 
 
@@ -67,6 +70,43 @@ def _get_record(request, pk) -> TrackingRecord:
             "This document has not been routed to your office and nobody has granted you access to it."
         )
     return record
+
+
+def _draft_offices(request, record):
+    """Restore the selected offices in their original order."""
+    office_ids = request.session.get(f"draft_offices_{record.pk}", [])
+    found = {office.pk: office for office in Office.objects.filter(pk__in=office_ids)}
+    return [found[pk] for pk in office_ids if pk in found]
+
+
+def _draft_deadline_initial(record):
+    deadline = timezone.localtime(record.due_at) if record.due_at else None
+    return {
+        "deadline_choice": DEADLINE_DATE if deadline else DEADLINE_NONE,
+        "due_date": deadline.date() if deadline else None,
+        # Blank means 23:59:59. An explicitly chosen 23:59:00 stays explicit.
+        "due_time": deadline.time() if deadline and deadline.time() != END_OF_DAY else None,
+    }
+
+
+def _deadline_summary(form):
+    """Summarize the fields being reviewed, including an invalid submission."""
+    if form["deadline_choice"].value() == DEADLINE_NONE:
+        return {"deadline": None}
+    raw_date, raw_time = form["due_date"].value(), form["due_time"].value()
+    try:
+        # Field parsing preserves a validly formatted past date/time even when
+        # the form's deadline rules reject it. cleaned_data removes such fields.
+        due_date = form.fields["due_date"].clean(raw_date)
+        due_time = form.fields["due_time"].clean(raw_time)
+    except ValidationError:
+        due_date = None
+    if not due_date:
+        return {"deadline_input": f"{raw_date or 'Date not set'}, {raw_time or 'end of day'}"}
+    return {
+        "deadline": timezone.make_aware(datetime.combine(due_date, due_time or END_OF_DAY)),
+        "deadline_end_of_day": due_time is None,
+    }
 
 
 class RecordListView(AppLoginRequiredMixin, View):
@@ -252,39 +292,96 @@ class RecordCreateView(OfficeAssignedMixin, View):
 
     template_name = "tracking/create.html"
 
+    def _draft(self, request):
+        if "draft" not in request.GET:
+            return None
+        try:
+            pk = int(request.GET["draft"])
+        except (TypeError, ValueError) as exc:
+            raise Http404("Draft not found.") from exc
+        return _get_record(request, pk)
+
+    def _render_form(self, request, form, record=None):
+        return render(request, self.template_name, {
+            "form": form,
+            "record": record,
+            "attachments": record.attachments.all() if record else [],
+            "originating_office": record.originating_office if record else request.user.office,
+        })
+
     def get(self, request):
-        return render(request, self.template_name, {"form": CreateRecordForm(user=request.user)})
+        record = self._draft(request)
+        if record is not None and record.status != Status.DRAFT:
+            return redirect(record.get_absolute_url())
+        initial = {}
+        if record is not None:
+            initial = {
+                **_draft_deadline_initial(record),
+                "receiving_offices": [office.pk for office in _draft_offices(request, record)],
+            }
+        form = CreateRecordForm(user=request.user, instance=record, initial=initial)
+        return self._render_form(request, form, record)
 
     def post(self, request):
+        if "draft" in request.GET:
+            return self._edit_draft(request)
         form = CreateRecordForm(request.POST, request.FILES, user=request.user)
         if not form.is_valid():
             messages.error(request, "Check the highlighted fields.")
-            return render(request, self.template_name, {"form": form})
+            return self._render_form(request, form)
 
         deadline = form.deadline_datetime()
         try:
-            record = services.create_draft_record(
-                user=request.user,
-                subject=form.cleaned_data["subject"],
-                instructions=form.cleaned_data["instructions"],
-                document_type=form.cleaned_data.get("document_type"),
-                classification=form.cleaned_data.get("classification"),
-                priority=form.cleaned_data.get("priority"),
-                requested_action=form.cleaned_data.get("requested_action", ""),
-                due_at=deadline,
-            )
-            services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
+            with transaction.atomic():
+                record = services.create_draft_record(
+                    user=request.user,
+                    subject=form.cleaned_data["subject"],
+                    instructions=form.cleaned_data["instructions"],
+                    document_type=form.cleaned_data.get("document_type"),
+                    classification=form.cleaned_data.get("classification"),
+                    priority=form.cleaned_data.get("priority"),
+                    requested_action=form.cleaned_data.get("requested_action", ""),
+                    due_at=deadline,
+                )
+                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return render(request, self.template_name, {"form": form})
+            return self._render_form(request, form)
 
         request.session[f"draft_offices_{record.pk}"] = [
             office.pk for office in form.cleaned_data["receiving_offices"]
         ]
-        request.session[DRAFT_DEADLINE_KEY.format(pk=record.pk)] = (
-            form.cleaned_data["due_date"].isoformat() if deadline else ""
-        )
         return redirect("tracking:review", pk=record.pk)
+
+    def _edit_draft(self, request):
+        with transaction.atomic():
+            request.user = active_writer(request.user)
+            visible = self._draft(request)
+            record = TrackingRecord.objects.select_for_update().get(pk=visible.pk)
+            if record.status != Status.DRAFT:
+                return redirect(record.get_absolute_url())
+            if not record.can_user_act(request.user):
+                raise PermissionDenied("You cannot edit this draft.")
+
+            form = CreateRecordForm(request.POST, request.FILES, user=request.user, instance=record)
+            if not form.is_valid():
+                messages.error(request, "Check the highlighted fields.")
+                return self._render_form(request, form, record)
+            try:
+                with transaction.atomic():
+                    record = form.save(commit=False)
+                    record.due_at = form.deadline_datetime()
+                    record.save(update_fields=[*form.Meta.fields, "due_at", "updated_at"])
+                    services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
+                    log_action(AuditLog.Action.UPDATE, f"Updated draft “{record.subject}”", actor=request.user, target=record)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                return self._render_form(request, form, record)
+
+            request.session[f"draft_offices_{record.pk}"] = [
+                office.pk for office in form.cleaned_data["receiving_offices"]
+            ]
+            return redirect("tracking:review", pk=record.pk)
 
 
 class RecordReviewView(OfficeAssignedMixin, View):
@@ -299,29 +396,18 @@ class RecordReviewView(OfficeAssignedMixin, View):
         route_record() treats the first office as the one taking custody — so
         the list is re-sorted to match what the user actually chose.
         """
-        from apps.accounts.models import Office
-
-        office_ids = request.session.get(f"draft_offices_{record.pk}", [])
-        if not office_ids:
-            return []
-        found = {office.pk: office for office in Office.objects.filter(pk__in=office_ids)}
-        return [found[pk] for pk in office_ids if pk in found]
-
-    def _remembered_deadline(self, request, record):
-        """The date picked on step 1, or None. Falls back to whatever is already
-        on the draft so a lost session still shows the deadline that was saved."""
-        stored = request.session.get(DRAFT_DEADLINE_KEY.format(pk=record.pk))
-        if stored is not None:
-            return date.fromisoformat(stored) if stored else None
-        return timezone.localtime(record.due_at).date() if record.due_at else None
+        return _draft_offices(request, record)
 
     def _context(self, request, record, form, offices):
+        if form.is_bound:
+            offices = list(form.cleaned_data.get("receiving_offices") or [])
         return {
             "record": record,
             "form": form,
             "offices": offices,
-            "deadline": self._remembered_deadline(request, record),
-            "session_lost": not offices,
+            **_deadline_summary(form),
+            "receiving_offices_invalid": bool(form["receiving_offices"].errors),
+            "session_lost": not form.is_bound and not offices,
         }
 
     def get(self, request, pk):
@@ -329,13 +415,12 @@ class RecordReviewView(OfficeAssignedMixin, View):
         if record.status != Status.DRAFT:
             return redirect(record.get_absolute_url())
         offices = self._remembered(request, record)
-        deadline = self._remembered_deadline(request, record)
         form = ReviewRouteForm(
             user=request.user,
+            record=record,
             initial={
                 "receiving_offices": [office.pk for office in offices],
-                "deadline_choice": DEADLINE_DATE if deadline else DEADLINE_NONE,
-                "due_date": deadline,
+                **_draft_deadline_initial(record),
             },
         )
         return render(request, self.template_name, self._context(request, record, form, offices))
@@ -345,7 +430,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
         if record.status != Status.DRAFT:
             return redirect(record.get_absolute_url())
 
-        form = ReviewRouteForm(request.POST, user=request.user)
+        form = ReviewRouteForm(request.POST, user=request.user, record=record)
         if not form.is_valid():
             messages.error(request, "Check the highlighted fields before sending.")
             return render(
@@ -425,6 +510,8 @@ class RecordDetailView(AppLoginRequiredMixin, View):
         if archived_document is not None and not archived_document.can_user_view(request.user):
             archived_document = None
         can_reopen = record.can_user_reopen(request.user)
+        can_act = record.status != Status.DRAFT and record.can_user_act(request.user)
+        can_complete = can_act and record.current_step_queryset.filter(received_at__isnull=False).exists()
         return render(
             request,
             self.template_name,
@@ -444,11 +531,14 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "attachments": attachments,
                 "receipt_form": ConfirmReceiptForm(),
                 "remark_form": RemarkForm(),
-                "route_form": RouteForm(record=record, user=request.user),
+                # Distinct IDs from RemarkForm's attachments; POST field names
+                # remain unchanged for the existing route endpoint.
+                "route_form": RouteForm(record=record, user=request.user, auto_id="route_%s"),
                 "complete_form": CompleteForm(),
                 "grant_form": GrantAccessForm(actor=request.user),
-                "pending_offices": record.pending_receipt_offices(),
-                "can_act": record.status != Status.DRAFT and record.can_user_act(request.user),
+                "pending_offices": [] if record.status in COMPLETED_STATUSES else record.pending_receipt_offices(),
+                "can_act": can_act,
+                "can_complete": can_complete,
                 "can_complete_and_file": request.user.is_system_admin or (
                     request.user.is_office_admin and request.user.office_id in {
                         record.originating_office_id, record.current_office_id,
@@ -500,7 +590,7 @@ class BulkConfirmReceiptView(OfficeAssignedMixin, View):
             )
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, getattr(exc, "messages", [str(exc)])[0])
-            return redirect("tracking:list")
+            return redirect(_bulk_receipt_return(request))
         messages.success(
             request,
             f"Receipt recorded for {len(steps)} selected document{'s' if len(steps) != 1 else ''}.",
@@ -537,8 +627,9 @@ class AddRemarkView(OfficeAssignedMixin, View):
             messages.error(request, "Write the remark before saving.")
             return redirect(record.get_absolute_url())
         try:
-            services.add_remark(record, user=request.user, remark=form.cleaned_data["remark"])
-            services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
+            with transaction.atomic():
+                services.add_remark(record, user=request.user, remark=form.cleaned_data["remark"])
+                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return redirect(record.get_absolute_url())
@@ -560,15 +651,16 @@ class RouteRecordView(OfficeAssignedMixin, View):
             ))
             return redirect(record.get_absolute_url())
         try:
-            services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
-            services.route_record(
-                record,
-                list(form.cleaned_data["offices"]),
-                user=request.user,
-                instructions=form.cleaned_data.get("instructions", ""),
-                action=form.cleaned_data["action"],
-                due_at=form.deadline_datetime(),
-            )
+            with transaction.atomic():
+                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
+                services.route_record(
+                    record,
+                    list(form.cleaned_data["offices"]),
+                    user=request.user,
+                    instructions=form.cleaned_data.get("instructions", ""),
+                    action=form.cleaned_data["action"],
+                    due_at=form.deadline_datetime(),
+                )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return redirect(record.get_absolute_url())
@@ -586,7 +678,11 @@ class CompleteRecordView(OfficeAssignedMixin, View):
             messages.error(request, "Could not read the completion note.")
             return redirect(record.get_absolute_url())
 
-        services.complete_record(record, user=request.user, note=form.cleaned_data.get("note", ""))
+        try:
+            services.complete_record(record, user=request.user, note=form.cleaned_data.get("note", ""))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect(record.get_absolute_url())
         message = f"{record.tracking_number} is complete."
 
         # "File it now" is only on offer to somebody who may also approve it.

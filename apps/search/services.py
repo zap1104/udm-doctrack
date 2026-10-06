@@ -403,7 +403,7 @@ def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
     if remaining > 0:
         titles = (
             Document.objects.visible_to(user)
-            .filter(title__icontains=prefix)
+            .filter(is_active=True, title__icontains=prefix)
             .order_by("-created_at")
             .values_list("title", flat=True)[:remaining]
         )

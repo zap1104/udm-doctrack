@@ -16,7 +16,7 @@ from django.contrib.messages import get_messages
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 DASHBOARD = "/"
-QUEUES = ["incoming", "pending-receipt", "received", "in-process", "pending-upload", "overdue", "outgoing"]
+QUEUES = ["incoming", "pending-receipt", "received", "in-process", "overdue", "outgoing"]
 
 
 def _queues(response):
@@ -50,7 +50,7 @@ def test_across_every_office_direction_is_disabled_and_the_rest_still_agree(clie
     for slug in ("incoming", "outgoing"):
         assert queues[slug]["disabled"] and queues[slug]["count"] is None
     assert body.count('class="pill-toggle is-disabled" aria-disabled="true"') >= 2
-    for slug in ("pending-receipt", "received", "in-process", "pending-upload", "overdue"):
+    for slug in ("pending-receipt", "received", "in-process", "overdue"):
         assert queues[slug]["count"] == _listed(client, queues[slug]), slug
 
 

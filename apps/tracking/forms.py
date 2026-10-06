@@ -4,6 +4,7 @@ from datetime import datetime, time, timedelta
 
 from django import forms
 from django.core.validators import MaxLengthValidator
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import Office, User
@@ -215,7 +216,9 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
-        self.fields["document_type"].queryset = DocumentType.active.all()
+        self.fields["document_type"].queryset = DocumentType.objects.filter(
+            Q(is_active=True) | Q(pk=self.instance.document_type_id if self.instance.pk else None)
+        )
         self.fields["document_type"].empty_label = "Not specified"
         self.fields["instructions"].required = True
         # route_record() copies this onto every RoutingStep, where it is cut to
@@ -226,8 +229,9 @@ class CreateRecordForm(DeadlineMixin, BootstrapFormMixin, forms.ModelForm):
         self.fields["requested_action"].widget.choices = [
             ("", "Select the requested action")
         ] + list(TrackingRecord.RequestedAction.choices)
-        if user is not None and user.office_id:
-            self.fields["receiving_offices"].queryset = Office.active.exclude(pk=user.office_id)
+        sending_office_id = self.instance.originating_office_id or getattr(user, "office_id", None)
+        if sending_office_id:
+            self.fields["receiving_offices"].queryset = Office.active.exclude(pk=sending_office_id)
 
     def clean_subject(self):
         subject = " ".join(self.cleaned_data["subject"].split())
@@ -266,11 +270,12 @@ class ReviewRouteForm(DeadlineMixin, BootstrapFormMixin, forms.Form):
     due_date = due_date_field()
     due_time = due_time_field()
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, user=None, record=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
-        if user is not None and user.office_id:
-            self.fields["receiving_offices"].queryset = Office.active.exclude(pk=user.office_id)
+        sending_office_id = getattr(record, "originating_office_id", None) or getattr(user, "office_id", None)
+        if sending_office_id:
+            self.fields["receiving_offices"].queryset = Office.active.exclude(pk=sending_office_id)
 
     def clean_receiving_offices(self):
         offices = self.cleaned_data["receiving_offices"]

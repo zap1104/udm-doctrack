@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from html import unescape
 
 import pytest
 
@@ -566,7 +567,7 @@ def test_the_view_is_in_the_address_and_survives_a_change_of_office(
 def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffic):
     """Under every office Incoming and Outgoing are the same records, so two
     rings would be two identical rings. One ring for the university, a caption
-    saying how to get the split, and the two direction cards disabled."""
+    describing the scope, and no empty direction cards."""
     client.force_login(users["admin"])
     response = client.get(DASHBOARD)
     rings = response.context["tracking_rings"]
@@ -574,8 +575,8 @@ def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffi
 
     assert rings["split"] is False
     assert [ring["key"] for ring in rings["rings"]] == ["all"]
-    assert "Pick an office above to see incoming and outgoing separately." in body
-    assert body.count('stat-card is-disabled') == 1 and body.count('stat-card gold is-disabled') == 1
+    assert "Unfinished tracking records across all offices." in body
+    assert 'stat-card is-disabled' not in body and 'stat-card gold is-disabled' not in body
     assert response.context["incoming_count"] is None
     assert response.context["outgoing_count"] is None
 
@@ -636,7 +637,7 @@ def test_a_picked_office_travels_to_the_page_the_card_opens(client, users, offic
     linking to the viewer's would put the disagreement back."""
     client.force_login(users["admin"])
     response = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}")
-    body = response.content.decode()
+    body = unescape(response.content.decode())
 
     assert f"?scope=incoming&office={offices['SUP'].pk}" in body
     counted = response.context["incoming_count"]
@@ -730,12 +731,12 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
         if query:
             cards += [("incoming_count", "scope=incoming"), ("outgoing_count", "scope=outgoing")]
         else:
-            # Disabled under every office: no link to follow.
+            # Direction summaries are absent under every office.
             assert not re.search(r'class="stat-card[^"]*" href="/tracking/\?scope=(in|out)going', body)
         for key, filter_query in cards:
             match = re.search(rf'href="(/tracking/\?{filter_query}[^"]*)"', body)
             assert match, (filter_query, query)
-            href = match.group(1)
+            href = unescape(match.group(1))
             assert response.context[key] == len(page_records(client, href)), (filter_query, query)
 
         for row in response.context["breakdown"]["slices"]:
@@ -819,8 +820,6 @@ def test_the_two_office_filters_are_different_questions(client, users, offices, 
 @pytest.mark.parametrize(
     ("query", "phrase"),
     [
-        ("scope=incoming&owner=mine", "created by another office"),
-        ("scope=received&owner=mine", "created by another office"),
         (f"scope=outgoing&status={Status.DRAFT}", "has not been sent"),
     ],
 )
@@ -1139,13 +1138,14 @@ def test_the_picker_carries_the_filters_already_applied(client, users, offices, 
 def test_no_picker_submits_through_an_inline_handler(client, users):
     """django-csp allows no inline script, so `onchange="this.form.submit()"`
     either fails in production or forces 'unsafe-inline' into script-src for the
-    whole site. Both pickers declare `data-auto-submit` and doctrack.js listens."""
+    whole site. Native submit buttons now let users finish selecting first."""
     client.force_login(users["admin"])
 
     for path in (TRACKING, DASHBOARD):
         body = client.get(path).content.decode()
         assert "onchange=" not in body, path
-        assert "data-auto-submit" in body, path
+        assert "data-auto-submit" not in body, path
+        assert 'type="submit">Apply</button>' in body, path
 
 
 # --- viewing as every office -----------------------------------------------

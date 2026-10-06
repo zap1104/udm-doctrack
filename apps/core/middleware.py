@@ -87,8 +87,12 @@ def idle_seconds_for_request(request) -> int:
         return idle_seconds_for(user)
 
     raw = (request.GET.get("timeout") or "").strip()
-    if raw.isdigit() and int(raw) in configured_idle_windows():
-        return int(raw)
+    # Compare against known windows without parsing an untrusted integer.
+    # isdigit() accepts characters int() rejects, and very long values can
+    # exceed Python's conversion limit before reaching the allowlist.
+    for seconds in configured_idle_windows():
+        if raw == str(seconds):
+            return seconds
     return idle_seconds_for(None)
 
 
