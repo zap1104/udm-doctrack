@@ -1,4 +1,4 @@
-param([switch]$PreviewOnly, [int]$Port = 8000)
+﻿param([switch]$PreviewOnly, [int]$Port = 8000)
 
 if ($PreviewOnly) {
     Set-Location (Join-Path $PSScriptRoot "..")
