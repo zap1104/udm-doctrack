@@ -327,7 +327,7 @@
 <div class="card-udm">
   <div class="card-udm-head">
     <h2>{{ total }} tracking record{{ total|pluralize }}</h2>
-    <a class="small" href="{% url 'core:report_export' %}">Export CSV</a>
+    <a class="small" href="{% url 'core:report_export' %}?{{ request.GET.urlencode }}&amp;source=tracking">Export CSV</a>
   </div>
   <div class="card-udm-body p-0 table-responsive" tabindex="0" role="region" aria-label="Tracking records">
     <table class="table-udm tracking-records-table">

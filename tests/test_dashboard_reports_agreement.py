@@ -436,7 +436,9 @@ DASHBOARD_QUERIES = 53
 #: 39: the running-totals chart left Reports, which repeated the dashboard's.
 # Annual trend and paginated drilldown replace the repository panel rendering.
 #: Removing the report's type choices, pagination and record rows saves three reads.
-REPORTS_QUERIES = 44
+# The repository chart now partitions all dates in one grouped query instead
+# of making separate queries for its two sources.
+REPORTS_QUERIES = 43
 
 
 def _assert_one_office_schedule_query(captured):
@@ -479,9 +481,9 @@ DASHBOARD_OFFICE_QUERIES = 55
 # The incoming movement-today counter is no longer displayed or queried.
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
-#: grouped query gives that office's own handover figures instead; the three
-#: retention counts are added.
-REPORTS_OFFICE_QUERIES = 45
+# The office handover summary was removed. Direction bars reuse the existing
+# grouped stage counts, so there is no new query per direction or stage.
+REPORTS_OFFICE_QUERIES = 43
 
 
 @pytest.mark.django_db

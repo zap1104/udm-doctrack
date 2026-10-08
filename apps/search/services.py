@@ -92,6 +92,8 @@ class SearchResponse:
     total_matches: int = 0
     evaluated_count: int = 0
     truncated: bool = False
+    limited_count: int = 0
+    result_limit: int = 0
     duration_ms: int = 0
     query: str = ""
     used_fuzzy: bool = False
@@ -152,6 +154,8 @@ def search_documents(
             total_matches=total,
             evaluated_count=len(documents),
             truncated=total > len(documents),
+            limited_count=total - len(documents),
+            result_limit=limit,
             query="",
             explanation="Showing the newest records that match the filters.",
         )
@@ -193,6 +197,7 @@ def search_documents(
         fallback = base.filter(
                 Q(index_title__icontains=raw_query)
                 | Q(index_meta__icontains=raw_query)
+                | Q(index_extra__icontains=raw_query)
                 | Q(ocr_text__icontains=raw_query)
                 | Q(reference_number__icontains=raw_query)
             ).distinct().order_by("-document_date", "-pk")
@@ -240,7 +245,9 @@ def search_documents(
         hidden_count=hidden,
         total_matches=total,
         evaluated_count=len(candidates),
-        truncated=total > len(candidates),
+        truncated=total > len(candidates) or len(visible) > limit,
+        limited_count=max(0, len(visible) - limit),
+        result_limit=limit,
         query=raw_query,
         used_fuzzy=use_fuzzy,
         duration_ms=int((time.perf_counter() - started) * 1000),
@@ -397,6 +404,9 @@ def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
     prefix = (prefix or "").strip().lower()
     if len(prefix) < 2:
         return []
+    from django.db.models import Max, Min
+    from django.db.models.functions import Lower
+
     from apps.documents.services import suggested_tags_for
 
     tags = list(suggested_tags_for(user).filter(name__istartswith=prefix).values_list("name", flat=True)[:limit])
@@ -405,8 +415,12 @@ def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
         titles = (
             Document.objects.visible_to(user)
             .filter(is_active=True, title__icontains=prefix)
-            .order_by("-created_at")
-            .values_list("title", flat=True)[:remaining]
+            .annotate(suggestion=Lower("title"))
+            .exclude(suggestion__in=[term.casefold() for term in tags])
+            .values("suggestion")
+            .annotate(title_text=Min("title"), latest=Max("created_at"))
+            .order_by("-latest", "suggestion")
+            .values_list("title_text", flat=True)[:remaining]
         )
         tags.extend(titles)
     return tags[:limit]

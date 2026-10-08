@@ -105,7 +105,7 @@ def test_repository_type_links_open_the_same_scoped_documents(client, users, rep
 
 
 @pytest.mark.django_db
-def test_filed_history_stays_in_the_report_without_a_misleading_live_link(client, users, report_data):
+def test_filed_history_is_excluded_from_current_report_totals_and_stages(client, users, report_data):
     record = TrackingRecord.objects.get(subject="MED report document")
     confirm_receipt(record, user=users["sup"])
     record.refresh_from_db()
@@ -116,12 +116,10 @@ def test_filed_history_stays_in_the_report_without_a_misleading_live_link(client
     client.force_login(users["admin"])
     report = client.get("/tracking/reports/").context
     listed = client.get(report["report_workspace_url"]).context
-    assert report["total_records"] == listed["total"] + 1
-    completed = next(row for row in report["by_status"] if row["status"] == Status.COMPLETED)
-    assert completed["total"] == 1
-    assert completed["workspace_url"] is None
-    draft = next(row for row in report["by_status"] if row["status"] == Status.DRAFT)
-    assert client.get(draft["workspace_url"]).context["total"] == draft["total"] == 1
+    assert report["total_records"] == listed["total"] == 3
+    assert {row["status"] for row in report["by_status"]} == {Status.PENDING_RECEIPT}
+    assert record.pk not in {row.pk for row in listed["page_obj"]}
+    assert any(row.status == Status.DRAFT for row in listed["page_obj"])
 
 
 @pytest.mark.django_db

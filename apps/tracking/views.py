@@ -109,69 +109,77 @@ def _deadline_summary(form):
     }
 
 
+def tracking_workspace_queryset(request):
+    """The same permission-scoped, filtered population for the table and CSV."""
+    form = TrackingFilterForm(request.GET or None)
+    records = services.active_for(request.user)
+
+    # Apply every filter that validated, not only the all-or-nothing case.
+    # `if form.is_valid()` used to drop *all* filters when any one of them
+    # was unrecognised, so a stale link like "?scope=inbox&status=BOGUS"
+    # quietly returned every active record while looking like an inbox —
+    # the wrong answer presented as the right one.
+    form.is_valid()
+    data = getattr(form, "cleaned_data", {})
+    # Status, scope and overdue come from the resolver, not the form: it is
+    # what translates the two legacy spellings — `?status=OVERDUE` and
+    # `?scope=overdue` — into the overdue condition, so nothing downstream
+    # has to know they exist. Offices and owner the form still validates.
+    resolved = core_filters.resolve(request)
+    statuses = resolved.statuses
+    scope = resolved.scope
+    offices = data.get("offices")
+    owner = data.get("owner")
+
+    # Shared with the unified search page's tracking mode, so "how a
+    # tracking record gets filtered" has one implementation. This page
+    # passes no `query` — it has queue pills instead of a search box.
+    records = services.filter_records(
+        records, status=statuses, offices=offices, overdue=resolved.overdue
+    )
+    # "View this page as office X", the same thing the dashboard's picker
+    # means, and gated the same way — services.scope_office decides, so the
+    # two pages cannot answer "whose queue is this" differently.
+    #
+    # For a queue that answers *for* an office the chosen one replaces the
+    # viewer's. For one that does not — Overdue, Pending upload — there is
+    # no such office to replace, so the picker narrows by the same
+    # originating-or-current pairing the dashboard scopes its panels with.
+    # The sentinel, not an Office, when a system administrator asked for
+    # every office — apply_scope drops the office term rather than
+    # falling back to the viewer's own.
+    # Two variables because they are two jobs, and one name doing both is
+    # what broke: `queue_office` may be the ALL_OFFICES sentinel, which only
+    # apply_scope understands, while `narrow_office` is always a real Office
+    # or None. The sentinel is truthy and is not an office, so a single
+    # variable sent "__all__" into an `originating_office=` lookup and the
+    # page died with "Field 'id' expected a number".
+    narrow_office = resolved.as_office
+    queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
+
+    # The queue as `services.office_queue` builds it: the one place the
+    # office rule is written, shared with Search and the dashboard's Action
+    # Centre, so a count there is the number of rows here.
+    records = services.office_queue(records, scope, request.user, office=queue_office)
+    # A second, independent scope so the filter panel narrows *within* the
+    # queue the pill selected rather than replacing it: "Office files" while
+    # on Overdue means overdue records in your office, not one or the other.
+    # apply_scope no-ops on an empty value, so calling it twice is safe, and
+    # the .distinct() below absorbs any duplication from the stacked joins.
+    if owner:
+        records = services.apply_scope(records, owner, request.user)
+
+    return records, form, data, resolved, queue_office
+
+
 class RecordListView(AppLoginRequiredMixin, View):
     """Active Document Tracking — newest first, completed records live in Documents."""
 
     template_name = "tracking/list.html"
 
     def get(self, request):
-        form = TrackingFilterForm(request.GET or None)
-        records = services.active_for(request.user)
-
-        # Apply every filter that validated, not only the all-or-nothing case.
-        # `if form.is_valid()` used to drop *all* filters when any one of them
-        # was unrecognised, so a stale link like "?scope=inbox&status=BOGUS"
-        # quietly returned every active record while looking like an inbox —
-        # the wrong answer presented as the right one.
-        form.is_valid()
-        data = getattr(form, "cleaned_data", {})
-        # Status, scope and overdue come from the resolver, not the form: it is
-        # what translates the two legacy spellings — `?status=OVERDUE` and
-        # `?scope=overdue` — into the overdue condition, so nothing downstream
-        # has to know they exist. Offices and owner the form still validates.
-        resolved = core_filters.resolve(request)
-        statuses = resolved.statuses
-        scope = resolved.scope
-        offices = data.get("offices")
-        owner = data.get("owner")
-
-        # Shared with the unified search page's tracking mode, so "how a
-        # tracking record gets filtered" has one implementation. This page
-        # passes no `query` — it has queue pills instead of a search box.
-        records = services.filter_records(
-            records, status=statuses, offices=offices, overdue=resolved.overdue
-        )
-        # "View this page as office X", the same thing the dashboard's picker
-        # means, and gated the same way — services.scope_office decides, so the
-        # two pages cannot answer "whose queue is this" differently.
-        #
-        # For a queue that answers *for* an office the chosen one replaces the
-        # viewer's. For one that does not — Overdue, Pending upload — there is
-        # no such office to replace, so the picker narrows by the same
-        # originating-or-current pairing the dashboard scopes its panels with.
-        # The sentinel, not an Office, when a system administrator asked for
-        # every office — apply_scope drops the office term rather than
-        # falling back to the viewer's own.
-        # Two variables because they are two jobs, and one name doing both is
-        # what broke: `queue_office` may be the ALL_OFFICES sentinel, which only
-        # apply_scope understands, while `narrow_office` is always a real Office
-        # or None. The sentinel is truthy and is not an office, so a single
-        # variable sent "__all__" into an `originating_office=` lookup and the
-        # page died with "Field 'id' expected a number".
-        narrow_office = resolved.as_office
-        queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
-
-        # The queue as `services.office_queue` builds it: the one place the
-        # office rule is written, shared with Search and the dashboard's Action
-        # Centre, so a count there is the number of rows here.
-        records = services.office_queue(records, scope, request.user, office=queue_office)
-        # A second, independent scope so the filter panel narrows *within* the
-        # queue the pill selected rather than replacing it: "Office files" while
-        # on Overdue means overdue records in your office, not one or the other.
-        # apply_scope no-ops on an empty value, so calling it twice is safe, and
-        # the .distinct() below absorbs any duplication from the stacked joins.
-        if owner:
-            records = services.apply_scope(records, owner, request.user)
+        records, form, data, resolved, queue_office = tracking_workspace_queryset(request)
+        offices, owner = data.get("offices"), data.get("owner")
 
         # Minus anything the resolver understood. The forms validate against the
         # current vocabulary, so a bookmark reading `?status=OVERDUE` was
@@ -210,7 +218,7 @@ class RecordListView(AppLoginRequiredMixin, View):
             SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
             SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
         }.get(sort, ("-last_movement_at",))
-        records = records.distinct().prefetch_related("document_types").order_by(*ordering)
+        records = records.distinct().prefetch_related("document_types").order_by(*ordering, "-pk")
         # Page size comes from the reader (`?per_page=`), defaulting to the
         # workspace's own. See apps/core/pagination.py.
         page_context = paginate(request, records, services.PAGE_SIZE)

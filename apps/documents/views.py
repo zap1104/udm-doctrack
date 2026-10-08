@@ -128,7 +128,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
     def get(self, request):
         documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
-        pending_visible = pending_upload_for(request.user).filter(is_archived=False)
+        pending_visible = pending_upload_for(request.user)
         if request.user.is_office_admin and not request.user.is_system_admin:
             pending_visible = pending_visible.filter(originating_office_id=request.user.office_id) if request.user.office_id else pending_visible.none()
         pending_view = request.GET.get("view") == "pending"

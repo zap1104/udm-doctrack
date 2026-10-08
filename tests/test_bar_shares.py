@@ -21,6 +21,7 @@ from apps.core import analytics
 from apps.core.models import DocumentType
 from apps.core.views import ReportsView, top_searches
 from apps.documents.models import Document, SearchQueryLog
+from apps.tracking.models import Status, TrackingRecord
 from tests.test_dashboard_reports_agreement import agreement  # noqa: F401 — fixture, used by name
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
@@ -119,15 +120,15 @@ def test_the_other_row_is_drawn_at_its_share(client, users, agreement):  # noqa:
 
 
 @pytest.mark.django_db
-def test_stages_add_up_to_one_full_track(client, users, agreement):  # noqa: F811
-    """Every document is in exactly one stage, so the bars partition it."""
+def test_working_stages_and_drafts_reconcile_with_the_current_total(client, users, agreement):  # noqa: F811
     client.force_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
     rows = context["by_status"]
     for row in rows:
         assert row["bar_percent"] == analytics.bar(row["total"], context["total_records"])
-    assert abs(sum(row["bar_percent"] for row in rows) - 100) <= len(rows)
+    drafts = TrackingRecord.objects.visible_to(users["admin"]).filter(status=Status.DRAFT).count()
+    assert sum(row["total"] for row in rows) + drafts == context["total_records"]
 
 
 @pytest.mark.django_db

@@ -171,7 +171,7 @@ class SearchView(AppLoginRequiredMixin, View):
                 + ", ".join(sorted(form.errors)) + ". Showing the rest.",
             )
 
-        records = records.distinct().order_by("-last_movement_at")
+        records = records.distinct().order_by("-last_movement_at", "-pk")
         # Same page-size control, same parameter, same default as the Tracking
         # workspace — the two pages list the same records and a querystring has
         # to mean the same thing on both.

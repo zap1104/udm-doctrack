@@ -27,7 +27,7 @@
 </div>
 
 {% if response.truncated %}
-  <p class="form-text">{% if response.query %}Relevance was checked for {{ response.evaluated_count }} of {{ response.total_matches }} matching documents.{% else %}The newest {{ response.evaluated_count }} of {{ response.total_matches }} matching documents are available in this result set.{% endif %} Narrow the search or filters to find the remaining documents.</p>
+  <p class="form-text">This result set has a {{ response.result_limit }}-result search limit. {% if response.query %}Relevance was checked for {{ response.evaluated_count }} of {{ response.total_matches }} matching documents. {% if response.limited_count %}{{ response.limited_count }} more evaluated result{{ response.limited_count|pluralize }} exceeded the limit. {% endif %}{% else %}The newest {{ response.evaluated_count }} of {{ response.total_matches }} matching documents are available in this result set. {% endif %}Narrow the search or filters to find the remaining documents.</p>
 {% endif %}
 
 {% if response.hidden_count %}

@@ -31,11 +31,11 @@
     </nav>
     {% if not pending_view and pending_count %}
     <section class="repository-pending-preview workspace-section" aria-labelledby="pending-preview-title">
-      <div class="repository-section-head"><div><h2 id="pending-preview-title">Pending filing <span class="num">{{ pending_count }}</span></h2><p>Completed in Tracking. An authorized administrator must approve these into the repository.</p></div><a class="btn btn-sm btn-udm-outline" href="{{ pending_url }}">View pending filing</a></div>
+      <div class="repository-section-head"><div><h2 id="pending-preview-title">Pending filing <span class="num">{{ pending_count }}</span></h2><p>Completed in Tracking. An authorized administrator must approve these into the repository.{% if request.user.is_office_admin and not request.user.is_system_admin %} This repository queue shows documents created by your office.{% endif %}</p></div><a class="btn btn-sm btn-udm-outline" href="{{ pending_url }}">View pending filing</a></div>
       {% include "documents/_repository_pending.html" %}
     </section>
     {% endif %}
-    <div class="repository-list-head"><div><h2>{% if pending_view %}Pending filing{% elif selected_office %}{{ selected_office.code }} documents{% else %}Filed documents{% endif %}</h2><p>{% if pending_view %}Completed tracking records awaiting repository filing. They are counted separately from filed documents.{% else %}Approved tracking records, historical uploads, and scanned documents.{% endif %}</p></div>{% if not pending_view %}<a href="{% url 'search:index' %}?mode=repository">Advanced search</a>{% endif %}</div>
+    <div class="repository-list-head"><div><h2>{% if pending_view %}Pending filing{% elif selected_office %}{{ selected_office.code }} documents{% else %}Filed documents{% endif %}</h2><p>{% if pending_view %}Completed tracking records awaiting repository filing. They are counted separately from filed documents.{% if request.user.is_office_admin and not request.user.is_system_admin %} This repository queue shows documents created by your office.{% endif %}{% else %}Approved tracking records, historical uploads, and scanned documents.{% endif %}</p></div>{% if not pending_view %}<a href="{% url 'search:index' %}?mode=repository">Advanced search</a>{% endif %}</div>
     <form method="get" class="repository-filters card-udm workspace-toolbar" aria-label="Filter repository records">
       {% if folder_office_id %}<input type="hidden" name="office" value="{{ folder_office_id }}">{% endif %}{% if pending_view %}<input type="hidden" name="view" value="pending">{% endif %}
       <input type="hidden" name="per_page" value="{{ page_size }}">

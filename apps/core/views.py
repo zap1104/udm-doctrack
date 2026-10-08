@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import csv
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -41,7 +42,6 @@ from apps.tracking.models import (
 from . import analytics
 from . import filters as core_filters
 from .analytics import bar as _bar
-from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
 from .business_time import humanise_hours, load_holidays, office_hours_caveat, saved_schedule
@@ -1535,7 +1535,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         scope_office = report_scope_office(self.request, filters)
         university_wide = user.is_system_admin and scope_office is None
 
-        total_records = records.count()
+        current_records = records.exclude(status__in=COMPLETED_STATUSES)
+        total_records = (records if self.report_domain == "documents" else current_records).count()
         total_documents = documents.count()
         overdue_all = records.filter(tracking_services.overdue_q()).distinct().count()
         # The month the turnaround panel answers for: the dashboard's twelve
@@ -1616,7 +1617,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "overdue_elsewhere": overdue_split["elsewhere"],
                 "awaiting_split": awaiting_split,
                 "stale_receipts": stale_receipts,
-                "by_status": self._by_status(records, total_records, scope_office),
+                "by_status": self._by_status(current_records, total_records, scope_office),
                 "turnaround": self._turnaround(records, month),
                 "month_picker": core_filters.month_picker(self.request, months, month),
                 "overdue_accountability": self._overdue_accountability(records, overdue_all),
@@ -1634,6 +1635,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             0,
         )
         context["partial_receipts"] = awaiting_counts["partial"]
+        context["direction_stages"] = self._direction_stages(context["by_status"], scope_office, filters)
+        context["incoming_records"] = context["direction_stages"][0]["total"] if scope_office else None
+        context["outgoing_records"] = context["direction_stages"][1]["total"] if scope_office else None
+        context["all_office_stages"] = (
+            self._all_office_stages(context["by_status"], total_records, filters)
+            if university_wide and self.report_domain != "documents" else []
+        )
         # Rankings of offices only where the report covers every office. For one
         # office the other rows were built from the documents that office
         # touched, so each read as another office's figure while counting a
@@ -1642,8 +1650,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         if university_wide:
             context["office_flow"] = self._office_flow(records)
             context["office_volume"] = self._office_volume(records)
-        elif scope_office:
-            context["office_activity"] = self._office_activity(records, scope_office)
         # Repository upkeep is an administrator's work: an office clerk cannot
         # retry an extraction or change the tag vocabulary, so the figures are
         # not computed for anyone else.
@@ -1694,10 +1700,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     def _workspace_context(self, filters, context):
         """Open the existing workspaces without building another record list.
 
-        Tracking's completed, filed history is part of the report but no longer
-        belongs in its live workspace. Only live stage counts link to Tracking;
-        lifetime totals remain figures. Repository type links use its native
-        filter, so unclassified and grouped types remain informational.
+        Current-work links exclude both completion stages. Historical analytics
+        still use the full permission-scoped records. Repository type links use
+        its native filter, so unclassified and grouped types stay informational.
         """
         repository = self.report_domain == "documents"
         office = filters["office"]
@@ -1719,34 +1724,56 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         links = {"report_workspace_url": core_filters.link(base_url, **params)}
         if not repository:
             links.update({
+                "report_workspace_url": self._tracking_report_link(filters),
                 "report_pending_receipt_url": core_filters.link(base_url, **params, status=Status.PENDING_RECEIPT),
                 "report_overdue_url": core_filters.link(base_url, **params, overdue="yes"),
             })
         return links
 
-    def _office_activity(self, records, office):
-        """What one office itself received and sent, counted in handovers.
+    def _tracking_report_link(self, filters, *, scope=None, status=None):
+        office = filters["office"]
+        office_value = office.pk if office else ("all" if self.request.user.is_system_admin else None)
+        base = core_filters.link(reverse("tracking:list"), office=office_value, scope=scope)
+        # Repeated native status filters preserve the existing Tracking view and
+        # keep the current-work Total's destination out of Pending filing.
+        statuses = [status] if status else [Status.DRAFT, Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS]
+        query = urlencode([("status", value) for value in statuses])
+        return f"{base}{'&' if '?' in base else '?'}{query}"
 
-        The office's own row of the two office rankings, and complete: every
-        handover to or from an office is on a record that touches it, so the
-        records this report covers hold all of them. One grouped query.
-        """
-        months, _ = _month_window()
-        month_start = timezone.make_aware(
-            datetime.combine(months[-1], time.min), timezone.get_current_timezone()
-        )
-        steps = RoutingStep.objects.filter(record__in=records.order_by().values("pk"))
-        figures = steps.aggregate(
-            received=Count("id", filter=Q(to_office=office, received_at__isnull=False)),
-            received_this_month=Count(
-                "id", filter=Q(to_office=office, received_at__gte=month_start)
-            ),
-            sent=Count("id", filter=Q(from_office=office)),
-            sent_confirmed=Count("id", filter=Q(from_office=office, received_at__isnull=False)),
-        )
-        figures["sent_waiting"] = figures["sent"] - figures["sent_confirmed"]
-        figures["month"] = months[-1]
-        return figures
+    def _direction_stages(self, rows, office, filters):
+        if office is None:
+            return []
+        statuses = (Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS)
+        by_status = {row["status"]: row for row in rows}
+        directions = []
+        for key, label in (("incoming", "Incoming"), ("outgoing", "Outgoing")):
+            total = sum(by_status.get(status, {}).get(key, 0) for status in statuses)
+            stages = []
+            for status in statuses:
+                count = by_status.get(status, {}).get(key, 0)
+                stages.append({
+                    "status": status, "total": count, "percent": _percent(count, total),
+                    "share": analytics.share_text(count, total), "colour": STATUS_COLOURS[status],
+                    "workspace_url": self._tracking_report_link(filters, scope=key, status=status),
+                })
+            directions.append({
+                "key": key, "label": label, "total": total, "stages": stages,
+                "workspace_url": self._tracking_report_link(filters, scope=key),
+            })
+        return directions
+
+    def _all_office_stages(self, rows, total, filters):
+        """One disjoint stage breakdown of current records, not handovers."""
+        counts = {row["status"]: row["total"] for row in rows}
+        # Current records have four stages. Reuse the three routed-stage
+        # aggregates and the current total instead of querying drafts again.
+        counts[Status.DRAFT] = total - sum(counts.values())
+        return [{
+            "status": status, "total": counts.get(status, 0),
+            "share": analytics.share_text(counts.get(status, 0), total),
+            "colour": STATUS_COLOURS[status],
+            "workspace_url": self._tracking_report_link(filters, status=status),
+        } for status in (Status.DRAFT, Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS)]
 
     def _retention(self, documents, filters):
         """How many documents are due for their retention review, and when.
@@ -1781,14 +1808,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     # dashboard shows the same figures. Kept as thin methods rather than
     # inlined at the call site so a subclass can still override one panel.
     def _by_status(self, records, total, scope_office=None):
-        """One row per live status, with direction columns when there is a
-        point of view to measure them from.
-
-        Same shape either way — without an office the direction figures are zero
-        and `total` still carries the row — so the template renders one table
-        rather than branching, and a system administrator who has picked nothing
-        sees honest totals beside a prompt instead of a fabricated split.
-        """
+        """Three working stages, split by their current-batch direction."""
+        records = records.filter(status__in=(Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS))
         rows = analytics.by_status(records, total)
         split = {
             row["status"]: row
@@ -2096,9 +2117,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             row["label"] = row["document_type__name"] or "Unclassified"
             row["type_value"] = str(row["document_type_id"] or "none")
         documents_total = sum(row["total"] for row in rows)
+        unclassified = [row for row in rows if row["document_type_id"] is None]
+        classified = [row for row in rows if row["document_type_id"] is not None]
         rows, cut, remainder_label = analytics.cap_with_remainder(
-            rows, analytics.TOP_N, "type"
+            classified, analytics.TOP_N, "type"
         )
+        rows.extend(unclassified)
+        rows.sort(key=lambda row: row["total"], reverse=True)
         if cut:
             rows.append(
                 {
@@ -2130,29 +2155,46 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         repository tile and the dashboard ring cannot disagree about what a
         scanned document is.
         """
-        months, since = _month_window()
-        completed_series = _month_series(
-            documents.filter(source=COMPLETED_SOURCE), "created_at", since
-        )
-        historical_series = _month_series(
-            documents.exclude(source=COMPLETED_SOURCE), "created_at", since
-        )
+        months, _ = _month_window()
+        # Partition the entire visible repository, including dates outside the
+        # twelve labelled months. Otherwise the bars silently omit older files.
+        grouped = list(documents.annotate(filed_month=TruncMonth("created_at"))
+                       .values("filed_month").annotate(
+                           total=Count("pk", distinct=True),
+                           completed=Count("pk", filter=Q(source=COMPLETED_SOURCE), distinct=True),
+                       ).order_by("filed_month"))
+        completed_series, historical_series = {}, {}
+        outside = {"earlier": [0, 0], "later": [0, 0]}
+        for item in grouped:
+            month = timezone.localtime(item["filed_month"]).date()
+            completed, historical = item["completed"], item["total"] - item["completed"]
+            if month < months[0] or month > months[-1]:
+                bucket = outside["earlier" if month < months[0] else "later"]
+                bucket[0] += completed
+                bucket[1] += historical
+            else:
+                completed_series[month], historical_series[month] = completed, historical
+        buckets = [(month, month.strftime("%b"), month.strftime("%B %Y"),
+                    completed_series.get(month, 0), historical_series.get(month, 0)) for month in months]
+        if sum(outside["earlier"]):
+            buckets.insert(0, (None, "Earlier", f"Before {months[0]:%B %Y}", *outside["earlier"]))
+        if sum(outside["later"]):
+            buckets.append((None, "Later dates", f"After {months[-1]:%B %Y}", *outside["later"]))
         # Scaled against the tallest *month*, not the tallest bar, so the two
         # series stay comparable to each other within a month and across them.
         ceiling = max(
             [
-                completed_series.get(month, 0) + historical_series.get(month, 0)
-                for month in months
+                completed + historical for _, _, _, completed, historical in buckets
             ],
             default=0,
         )
         rows = []
-        for month in months:
-            completed = completed_series.get(month, 0)
-            historical = historical_series.get(month, 0)
+        for month, label, full_label, completed, historical in buckets:
             rows.append(
                 {
                     "month": month,
+                    "label": label,
+                    "full_label": full_label,
                     "completed": completed,
                     "historical": historical,
                     "total": completed + historical,
@@ -2173,7 +2215,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "has_values": bool(completed or historical),
                 }
             )
-        return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling)}
+        return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling),
+                "total": sum(row["total"] for row in rows),
+                "completed_total": sum(row["completed"] for row in rows),
+                "historical_total": sum(row["historical"] for row in rows),
+                "window_total": sum(completed_series.values()) + sum(historical_series.values()),
+                "earlier_total": sum(outside["earlier"]), "later_total": sum(outside["later"])}
 
 # ---------------------------------------------------------------------------
 # Search activity — university-wide, so system administrators only
@@ -2328,7 +2375,7 @@ class NotificationListView(AppLoginRequiredMixin, View):
         if active_kind:
             notification_query = notification_query.filter(kind=active_kind)
 
-        notification_query = notification_query.order_by("is_read", "-created_at")
+        notification_query = notification_query.order_by("is_read", "-created_at", "-pk")
         page_context = paginate(request, notification_query, self.PAGE_SIZE)
         page_obj = page_context["page_obj"]
         today = timezone.localdate()
@@ -2498,11 +2545,26 @@ class ReportExportView(AppLoginRequiredMixin, View):
 
     def get(self, request):
         filters = report_filters_from_request(request)
-        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().prefetch_related("document_types").distinct().order_by("-created_at", "-pk")
-        records, selected = filter_report_records(records, request)
+        if request.GET.get("source") == "tracking":
+            from apps.tracking.views import tracking_workspace_queryset
+
+            records, form, data, resolved, _ = tracking_workspace_queryset(request)
+            scope_office = resolved.as_office
+            selected = {
+                "status": ", ".join(resolved.statuses),
+                "scope": resolved.scope if "scope" not in form.errors else "",
+                "offices": ", ".join(office.code for office in (data.get("offices") or [])),
+                "owner": data.get("owner") or "",
+                "overdue": resolved.overdue,
+                "office": scope_office.code if scope_office else "All visible offices",
+            }
+        else:
+            records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters)
+            records, selected = filter_report_records(records, request)
+            scope_office = report_scope_office(request, filters)
+        records = records.with_related().prefetch_related("document_types").distinct().order_by("-created_at", "-pk")
         # The same point of view the page uses, so the Direction column means
         # what the screen it was exported from meant.
-        scope_office = report_scope_office(request, filters)
         direction = tracking_services.direction_annotation(scope_office)
         if direction is not None:
             records = records.annotate(_direction=direction)
@@ -3084,7 +3146,7 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         # Two paginators, two sets of parameters. The template renders a
         # `{% pager %}` per panel against its own page object, so filtering or
         # paging one leaves the other where the administrator left it.
-        system_page = paginate(self.request, entries, AUDIT_ROWS)
+        system_page = paginate(self.request, entries.order_by("-created_at", "-pk"), AUDIT_ROWS)
         access_page = paginate(
             self.request,
             access_entries,

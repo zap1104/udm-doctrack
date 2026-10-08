@@ -117,27 +117,38 @@ class Audit:
         office = context["filters"]["office"]
         docs = [row for row in documents if not office or row["office_id"] == office.pk]
         statuses = Counter(row["status"] for row in scoped)
-        self.equal("report tracked documents", context["total_records"], len(scoped))
+        current = [row for row in scoped if row["status"] not in COMPLETED_STATUSES]
+        self.equal("report tracked documents", context["total_records"], len(scoped) if context["is_repository_report"] else len(current))
         self.equal("report Pending Receipt stage", context["pending_receipt"], statuses[Status.PENDING_RECEIPT])
         self.equal("report completed", context["completed_records"], sum(statuses[key] for key in COMPLETED_STATUSES))
         late = sum(bool(row["due_at"] and row["due_at"] < timezone.now() and row["status"] not in COMPLETED_STATUSES) for row in scoped)
         self.equal("report overdue", context["overdue_all"], late)
-        self.equal("stage partition", sum(row["total"] for row in context["by_status"]), len(scoped))
+        self.equal("stage partition", sum(row["total"] for row in context["by_status"]), sum(row["status"] in (Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS) for row in current))
         self.equal("repository report total", context["total_documents"], len(docs))
         self.equal("type chart partition", sum(row["total"] for row in context["document_types"]), len(docs))
         for row in context["by_status"]:
             self.equal("stage " + row["status"], row["total"], statuses[row["status"]])
             if not context["is_repository_report"]:
-                self.equal("stage drilldown " + row["status"], self.listed(replaced(url, record_status=row["status"])), row["total"])
+                self.equal("stage drilldown " + row["status"], self.listed(row["workspace_url"]), row["total"])
+        for group in context.get("direction_stages", []):
+            self.equal("direction partition", sum(row["total"] for row in group["stages"]), group["total"])
+            self.equal("direction list", self.listed(group["workspace_url"]), group["total"])
+            for row in group["stages"]:
+                self.equal("direction status list", self.listed(row["workspace_url"]), row["total"])
         self.turnaround(context["turnaround"], scoped, local_steps)
         if not context["is_repository_report"]:
             self.trend(context["turnaround_trend"], scoped, local_steps)
         for state in ("due", "soon", "unscheduled"):
             self.equal("retention report " + state, context["retention"][state], self.listed(context["retention"][state + "_url"]))
         for row in context["document_months"]["rows"]:
-            added = [doc for doc in docs if timezone.localtime(doc["created_at"]).date().replace(day=1) == row["month"]]
+            labelled_months = [item["month"] for item in context["document_months"]["rows"] if item["month"]]
+            def belongs(doc, row=row, labelled_months=labelled_months):
+                month = timezone.localtime(doc["created_at"]).date().replace(day=1)
+                return month == row["month"] if row["month"] else month < min(labelled_months) if row["label"] == "Earlier" else month > max(labelled_months)
+            added = [doc for doc in docs if belongs(doc)]
             self.equal("filed month", row["total"], len(added))
             self.equal("filed month from tracking", row["completed"], sum(doc["source"] == COMPLETED_SOURCE for doc in added))
+        self.equal("repository chart partition", sum(row["total"] for row in context["document_months"]["rows"]), len(docs))
         if context["university_wide"]:
             flow = context["office_flow"]
             volume = context["office_volume"]
@@ -147,7 +158,7 @@ class Audit:
             self.equal("receipt office partition", sum(row["cumulative"] for row in volume["rows"]), volume["receipts"])
         if context["is_repository_report"]:
             for row in context["document_types"]:
-                self.equal("repository type drilldown", self.listed(replaced(url, record_type=row["type_value"])), row["total"])
+                self.equal("repository type drilldown", self.listed(row["workspace_url"]), row["total"])
         else:
             for link in Links(response.content.decode()).links:
                 classes = link.get("class", "").split()
@@ -292,14 +303,16 @@ class Audit:
             for extra in ("view=pending", "q=memorandum", f"source={HISTORICAL_FILTER}", "retention=unscheduled", "month=9", "view=folders&q=memorandum", "view=pending&q=memorandum&month=9"):
                 self.repository("/documents/?" + extra)
             for status in Status.values:
-                for extra in ("", "&record_q=memorandum", "&record_month=2026-09&record_overdue=yes"):
-                    url = f"/tracking/reports/?record_status={status}{extra}"
-                    report = self.get(url).context
-                    exported = self.get(report["report_export_url"])
+                for extra in ("", "&overdue=yes", "&scope=incoming"):
+                    url = f"/tracking/?status={status}{extra}"
+                    page = self.get(url)
+                    report = page.context
+                    export_link = next(link["href"] for link in Links(page.content.decode()).links if link["text"].strip() == "Export CSV")
+                    exported = self.get(export_link)
                     rows = list(csv.reader(io.StringIO(exported.content.decode())))
                     header = next(index for index, row in enumerate(rows) if row and row[0] == "Tracking number")
-                    self.equal("CSV matches filtered list", len(rows) - header - 1, report["report_records_count"])
-                    self.equal("CSV cap metadata", int(rows[2][1]), min(report["report_records_count"], 5000))
+                    self.equal("CSV matches filtered list", len(rows) - header - 1, min(report["total"], 5000))
+                    self.equal("CSV cap metadata", int(rows[2][1]), min(report["total"], 5000))
             badge = self.get("/notifications/count/").context
             self.equal("notification badge", badge["unread_notifications"], unread_for(user).count() if badge["notification_in_app_enabled"] else 0)
             browse = search_documents(user=user, limit=2, log=False)
@@ -312,11 +325,11 @@ class Audit:
             if user.is_office_admin:
                 admin = self.get("/administration/").context
                 self.equal("active user card", admin["user_count"], self.get("/accounts/users/?status=active").context["page_obj"].paginator.count)
-                for name, model in (("document-types", DocumentType), ("tags", Tag), ("metadata-rules", TagRule), ("metadata-fields", MetadataFieldDefinition)):
-                    self.equal("active master data " + name, model.objects.filter(is_active=True).count(), self.get(f"/administration/{name}/?status=active").context["page_obj"].paginator.count)
-                for tag in self.get("/administration/tags/?per_page=all").context["objects"]:
-                    self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).filter(is_active=True, tags=tag).distinct().count())
                 if user.is_system_admin:
+                    for name, model in (("document-types", DocumentType), ("tags", Tag), ("metadata-rules", TagRule), ("metadata-fields", MetadataFieldDefinition)):
+                        self.equal("active master data " + name, model.objects.filter(is_active=True).count(), self.get(f"/administration/{name}/?status=active").context["page_obj"].paginator.count)
+                    for tag in self.get("/administration/tags/?per_page=all").context["objects"]:
+                        self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).filter(is_active=True, tags=tag).distinct().count())
                     self.equal("active offices", admin["office_count"], self.get("/administration/offices/?status=active").context["page_obj"].paginator.count)
                     self.equal("search query partition", sum(row["total"] for row in admin["top_searches"]), admin["search_analytics"]["queries"])
                     self.equal("search click partition", sum(row["clicks"] for row in admin["top_searches"]), admin["search_analytics"]["clicks"])

@@ -23,7 +23,6 @@ import pytest
 from django.utils import timezone
 
 from apps.documents.models import Document, Source
-from apps.tracking.models import RoutingStep
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 REPORTS = "/tracking/reports/"
@@ -100,28 +99,17 @@ def test_an_office_report_does_not_rank_other_offices(client, users, routed, who
 
     assert not any(title in body for title in RANKINGS)
     assert "office_volume" not in response.context and "office_flow" not in response.context
-    assert response.context["office_activity"] is not None
+    assert "office_activity" not in response.context
+    assert response.context["direction_stages"]
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(("who", "code"), [("sup", "SUP"), ("med_admin", "MED"), ("viewer", "MED")])
-def test_an_offices_own_figures_are_its_whole_figures(client, users, offices, routed, who, code):
-    """Every handover to or from an office is on a document it touched, so the
-    office's own row is complete. Counted independently, straight off the
-    routing steps, with no scope at all."""
-    office = offices[code]
+@pytest.mark.parametrize("who", ["sup", "med_admin", "viewer", "admin"])
+def test_reports_remove_the_office_handover_panel_for_every_role(client, users, offices, routed, who):
     client.force_login(users[who])
-
-    activity = client.get(REPORTS).context["office_activity"]
-
-    steps = RoutingStep.objects
-    assert activity["received"] == steps.filter(to_office=office, received_at__isnull=False).count()
-    assert activity["sent"] == steps.filter(from_office=office).count()
-    assert activity["sent_confirmed"] == steps.filter(
-        from_office=office, received_at__isnull=False
-    ).count()
-    assert activity["sent_waiting"] == activity["sent"] - activity["sent_confirmed"]
-    assert activity["sent"] > 0, "the fixture routes documents from every office it names"
+    response = client.get(REPORTS, {"office": offices["MED"].pk})
+    assert "office_activity" not in response.context
+    assert "received and sent</h2>" not in response.content.decode()
 
 
 # --- the repository half: retention, for everyone -------------------------------

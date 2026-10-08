@@ -3,8 +3,7 @@
 import csv
 import io
 from datetime import timedelta
-from html import unescape
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 import pytest
 from django.utils import timezone
@@ -50,9 +49,7 @@ def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(clien
 
 
 @pytest.mark.django_db
-def test_office_overdue_headline_opens_all_overdue_records_in_its_scope(client, users, offices, partly_received):
-    import re
-
+def test_office_overdue_link_opens_all_overdue_records_in_its_scope(client, users, offices, partly_received):
     client.force_login(users["admin"])
     url = f"/tracking/reports/?office={offices['MED'].pk}"
     response = client.get(url)
@@ -61,8 +58,8 @@ def test_office_overdue_headline_opens_all_overdue_records_in_its_scope(client, 
     # still contains three overdue documents that require other offices.
     assert context["overdue"] == 0
     assert context["overdue_all"] == 3
-    match = re.search(r'class="stat-card red" href="([^"]+)"', response.content.decode())
-    target = urljoin(url, unescape(match[1]))
+    target = context["report_overdue_url"]
+    assert f'href="{target.replace("&", "&amp;")}"' in response.content.decode()
     listed = client.get(target).context
     assert listed["total"] == 3
     assert {row.pk for row in listed["page_obj"]} == {row.pk for row in partly_received}
