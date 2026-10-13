@@ -109,7 +109,7 @@ def slow_then_fast(users, offices, memo_type, monkeypatch):
         made.append(record)
     now = timezone.now()
     # sent_at's model default holds the original clock callable, so align the
-    # handovers explicitly with the fixture clock as well.
+    # endorsements explicitly with the fixture clock as well.
     RoutingStep.objects.filter(record__in=made).update(
         sent_at=now - timedelta(minutes=5), received_at=now,
     )
@@ -163,7 +163,7 @@ def test_a_stage_with_nothing_this_month_says_so(client, users, offices, memo_ty
 
 # --- what is really still waiting -----------------------------------------------
 @pytest.mark.django_db
-def test_only_handovers_that_can_still_be_confirmed_are_waiting(users, offices, memo_type):
+def test_only_endorsements_that_can_still_be_confirmed_are_waiting(users, offices, memo_type):
     def raised(subject):
         return create_draft_record(
             user=users["med"], subject=subject, instructions="x", document_type=memo_type,
@@ -206,9 +206,9 @@ def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_f
     assert figures["processing_samples"] == 1, "only the document finished this month"
     assert figures["lifetime_samples"] == 1
     receipt = next(stage for stage in figures["stages"] if stage["key"] == "receipt")
-    handovers = "handover" if receipt["samples"] == 1 else "handovers"
+    endorsements = "endorsement" if receipt["samples"] == 1 else "endorsements"
     documents = "document" if receipt["documents"] == 1 else "documents"
-    assert f'{receipt["samples"]} confirmed {handovers} across {receipt["documents"]} {documents}' in body
+    assert f'{receipt["samples"]} confirmed {endorsements} across {receipt["documents"]} {documents}' in body
     assert "Created → work completed" in body
     assert "1 completed document" in body
     assert "that had a deadline" in body or figures["on_time_total"] == 0

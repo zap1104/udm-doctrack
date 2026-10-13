@@ -16,6 +16,7 @@ from apps.core.pagination import (
 )
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
+from apps.tracking.filter_navigation import direction_filter_groups, tracking_view_link
 from apps.tracking.forms import queue_pills, status_pills
 
 from .forms import REPOSITORY, TRACKING, SearchForm, TrackingSearchForm, mode_from_request
@@ -58,7 +59,11 @@ class SearchView(AppLoginRequiredMixin, View):
         behaves exactly as every existing bookmark expects."""
         visible = Document.objects.visible_to(request.user).filter(is_active=True)
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
-        form = SearchForm(request.GET or None, years=years, visible=visible)
+        params = request.GET.copy()
+        office = core_filters._office_by_pk_or_code(params.get("office"), include_inactive=True)
+        if office:
+            params["office"] = str(office.pk)
+        form = SearchForm(params or None, years=years, visible=visible)
 
         # Relevance-ranked results are a top-N, not a paged list: page four of
         # a ranking is a worse answer than page one, and the reader who wants
@@ -116,15 +121,20 @@ class SearchView(AppLoginRequiredMixin, View):
         through the same `filter_records` / `apply_scope` the workspace uses —
         so a querystring means the same thing on both pages.
         """
-        form = TrackingSearchForm(request.GET or None)
+        resolved = core_filters.resolve(request)
+        form = TrackingSearchForm(core_filters.tracking_params(request, resolved) or None)
         # Every filter that validated, not all-or-nothing: a stale link with one
         # unrecognised value must not quietly return everything while looking
         # like it filtered. Same reasoning as RecordListView.
         form.is_valid()
         data = getattr(form, "cleaned_data", {})
 
-        records = tracking_services.active_for(request.user).prefetch_related("document_types")
-        resolved = core_filters.resolve(request)
+        queue_office = tracking_services.ALL_OFFICES if resolved.all_offices else resolved.as_office
+        stage_office = queue_office if resolved.all_offices else queue_office or request.user.office
+        records = (
+            tracking_services.active_for(request.user).with_stage_for(stage_office)
+            .prefetch_related("document_types")
+        )
         # Said out loud here as well as on the Tracking page. This branch shares
         # every filter with that one and reported none of them, so the same bad
         # office id warned there and passed silently here — the reader believing
@@ -152,10 +162,6 @@ class SearchView(AppLoginRequiredMixin, View):
         # in who resolved the office.
         # Same split as RecordListView: only apply_scope understands the
         # ALL_OFFICES sentinel, and it is truthy without being an office.
-        narrow_office = resolved.as_office
-        queue_office = (
-            tracking_services.ALL_OFFICES if resolved.all_offices else narrow_office
-        )
         # Through `office_queue`, like the Tracking page and the Action Centre, so
         # a querystring means the same thing on all three.
         records = tracking_services.office_queue(
@@ -182,6 +188,7 @@ class SearchView(AppLoginRequiredMixin, View):
         # rows carried no direction and no receiving offices while the Tracking
         # page's did. Same rows, same columns, so the same one query each.
         tracking_services.annotate_direction(page_records, request.user, office=queue_office)
+        tracking_services.annotate_stage(page_records, request.user, office=stage_office)
         tracking_services.annotate_receiving_offices(page_records)
 
         # Deadline pills and an explicitly selected office are searches too.
@@ -205,7 +212,10 @@ class SearchView(AppLoginRequiredMixin, View):
             "selected_office_ids": {str(office.pk) for office in (data.get("offices") or [])},
             "status_choices": status_pills(form),
             "selected_statuses": set(resolved.statuses),
-            "selected_scope": data.get("scope") or "",
+            "selected_scope": resolved.scope,
+            "direction_filter_groups": direction_filter_groups(request, resolved),
+            "all_tracking_href": tracking_view_link(request, resolved),
+            "can_pick_office": request.user.is_system_admin,
             # The owner filter was honoured above and had no control on the
             # page, so it could only be reached by hand-editing the URL — and
             # once set there was nothing to say it was on. Same field, same

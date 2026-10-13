@@ -15,6 +15,7 @@
   </div>
   <div class="page-actions">
     {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit Metadata</a>{% endif %}
+    {% if can_review_deletion %}<a class="btn btn-udm-outline" href="{% url 'documents:deletion_review' document.pk %}">Deletion review</a>{% endif %}
     {% if document.primary_file %}
       <a class="btn btn-udm" href="{% url 'documents:file_download' document.primary_file.pk %}">Download</a>
     {% endif %}
@@ -43,7 +44,7 @@
             <tr><th class="text-muted fw-normal">Document types</th><td>{% include "partials/_document_types_display.html" with item=document empty_label="—" %}</td></tr>
             <tr><th class="text-muted fw-normal">Document date</th><td>{{ document.document_date|date:"d M Y"|default:"—" }}</td></tr>
             <tr><th class="text-muted fw-normal">Year</th><td>{{ document.year }}</td></tr>
-            <tr><th class="text-muted fw-normal">Retention review</th><td>{% if document.retention_until %}{{ document.retention_until|date:"d M Y" }}{% if document.retention_is_due %}<br><strong class="text-danger">Due for records-officer review; not automatically deleted.</strong>{% elif document.retention_is_due_soon %}<br><span class="text-muted">Due within 90 days.</span>{% endif %}{% else %}No schedule set{% endif %}</td></tr>
+            <tr><th class="text-muted fw-normal">Deletion review date</th><td>{% if document.retention_until %}{{ document.retention_until|date:"d M Y" }}{% if document.retention_is_due %}<br><strong class="text-danger">Review due; administrator approval is required before removal.</strong>{% elif document.retention_is_due_soon %}<br><span class="text-muted">Review due within the next 90 days.</span>{% endif %}{% else %}No deletion review date set{% endif %}</td></tr>
           </table></div>
           <div class="col-md-6"><table class="table table-sm table-stacked">
             <tr><th class="text-muted fw-normal">From / author</th><td>{{ document.author_name|default:"—" }}</td></tr>
@@ -142,6 +143,7 @@
     {% endif %}
   </div>
 </div>
+    {% include "documents/_deletion_review_history.html" %}
     <div class="card-udm workspace-panel workspace-extracted-text mt-4">
       <div class="card-udm-head">
         <h2>Extracted Text</h2>

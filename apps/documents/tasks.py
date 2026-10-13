@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.core.models import AuditLog
+from apps.core.models import AuditLog, Notification, Tag
 from apps.core.utils import log_action, normalise_text
 
 from .extraction import extract_document_text
-from .models import Document, DocumentFile, MetadataSuggestion, OcrStatus, Source
+from .models import DELETION_RECOVERY_DAYS, Document, DocumentFile, MetadataSuggestion, OcrStatus, Source
 from .suggestions import suggest_metadata
 
 logger = logging.getLogger("doctrack")
@@ -18,6 +20,8 @@ logger = logging.getLogger("doctrack")
 
 def _extraction_actor(document, user_id):
     """Queued work must not retain permissions an account has since lost."""
+    if not document.is_active:
+        return None, False
     if user_id is None:
         # Actorless jobs are private maintenance calls, never user endpoints.
         return None, True
@@ -37,7 +41,7 @@ def _extraction_actor(document, user_id):
 
 
 def _cancel_extraction(document):
-    Document.objects.filter(pk=document.pk).update(
+    Document.objects.filter(pk=document.pk, is_active=True).update(
         ocr_status=OcrStatus.SKIPPED,
         ocr_notes="Queued text extraction was cancelled because the requesting account no longer has permission. An authorized editor can retry.",
         updated_at=timezone.now(),
@@ -46,6 +50,14 @@ def _cancel_extraction(document):
 
 
 def extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False) -> dict:
+    """A queued or in-flight job can outlive permanent repository deletion."""
+    try:
+        return _extract_document_task(document_id, user_id=user_id, file_ids=file_ids, replace=replace)
+    except Document.DoesNotExist:
+        return {"document_id": document_id, "status": OcrStatus.SKIPPED, "characters": 0, "failures": []}
+
+
+def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False) -> dict:
     """Extract one document's files outside the request transaction.
 
     The task marks the row RUNNING before opening storage, then writes the
@@ -59,7 +71,14 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
     if file_ids is not None:
         selected = selected.filter(pk__in=file_ids)
 
-    Document.objects.filter(pk=document.pk).update(ocr_status=OcrStatus.RUNNING, updated_at=timezone.now())
+    with transaction.atomic():
+        if user_id is not None:
+            User.objects.select_for_update().filter(pk=user_id).first()
+        document = Document.objects.select_for_update().get(pk=document.pk)
+        actor, allowed = _extraction_actor(document, user_id)
+        if not allowed:
+            return _cancel_extraction(document)
+        Document.objects.filter(pk=document.pk).update(ocr_status=OcrStatus.RUNNING, updated_at=timezone.now())
     parts = []
     engines = []
     failures = []
@@ -86,9 +105,18 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
             failures.append(f"{document_file.original_name}: file is missing from storage")
             logger.warning("Extraction could not open %s: %s", document_file.pk, exc)
             continue
-        document_file.page_count = result.pages
-        document_file.extracted_chars = result.char_count
-        document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
+        # A document may be removed while a provider is processing the file.
+        # Serialize this write with review decisions and recheck fresh access.
+        with transaction.atomic():
+            if user_id is not None:
+                User.objects.select_for_update().filter(pk=user_id).first()
+            document = Document.objects.select_for_update().get(pk=document.pk)
+            actor, allowed = _extraction_actor(document, user_id)
+            if not allowed:
+                return _cancel_extraction(document)
+            document_file.page_count = result.pages
+            document_file.extracted_chars = result.char_count
+            document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
         engines.append(result.engine)
         statuses.append(result.status)
         notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
@@ -157,3 +185,64 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
             extra={"status": status, "failures": failures[:5], "notes": notes[:5], "confidence": confidence},
         )
     return {"document_id": document.pk, "status": status, "characters": len(combined), "failures": failures}
+
+
+def purge_deleted_documents(*, now=None, limit=100):
+    """Delete expired repository rows and exact unshared storage objects.
+
+    Storage operations cannot roll back. Recovery is closed at the deadline;
+    failed cleanup retains the expired row for an idempotent retry. Holding the
+    document lock serializes cleanup with restore and duplicate workers.
+    """
+    from apps.tracking.models import Attachment
+
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=DELETION_RECOVERY_DAYS)
+    candidates = list(Document.objects.filter(is_active=False, deleted_at__lte=cutoff)
+                      .order_by(F("purge_attempted_at").asc(nulls_first=True), "deleted_at", "pk")
+                      .values_list("pk", flat=True)[:limit])
+    result = {"purged": 0, "failed": 0}
+    for document_id in candidates:
+        try:
+            with transaction.atomic():
+                document = Document.objects.select_for_update().filter(
+                    pk=document_id, is_active=False, deleted_at__lte=cutoff,
+                ).first()
+                if document is None:
+                    continue
+                # Mandatory minimal receipt, without copying document content.
+                AuditLog.objects.create(
+                    actor_label="system", action=AuditLog.Action.DELETE,
+                    target_type="Document", target_id=str(document.pk),
+                    summary=f"Permanently deleted repository document #{document.pk} after 30 days",
+                    extra={"permanent_repository_deletion": True, "audit_target_office_id": document.office_id,
+                           "deleted_at": document.deleted_at.isoformat()},
+                )
+                seen = set()
+                for document_file in document.files.all():
+                    name = document_file.file.name
+                    if not name or name in seen:
+                        continue
+                    seen.add(name)
+                    shared = DocumentFile.objects.filter(file=name).exclude(document_id=document.pk).exists()
+                    if shared or Attachment.objects.filter(file=name).exists():
+                        continue
+                    storage = document_file.file.storage
+                    storage.delete(name)
+                    if storage.exists(name):
+                        raise OSError("Repository storage did not remove the object")
+                tag_ids = list(document.tags.values_list("pk", flat=True))
+                Tag.objects.filter(pk__in=tag_ids, usage_count__gt=0).update(usage_count=F("usage_count") - 1)
+                # SET_NULL would expose previously hidden document notices again.
+                Notification.objects.filter(document=document).delete()
+                # Detailed review history exists only during the recovery period.
+                document.deletion_reviews.all().delete()
+                document.delete()
+            result["purged"] += 1
+        except Exception:
+            result["failed"] += 1
+            logger.exception("Permanent deletion failed for repository document %s; cleanup will retry", document_id)
+            # Commit this outside the rolled-back deletion transaction so a
+            # failed oldest batch cannot indefinitely block newer documents.
+            Document.objects.filter(pk=document_id, is_active=False, deleted_at__lte=cutoff).update(purge_attempted_at=now)
+    return result

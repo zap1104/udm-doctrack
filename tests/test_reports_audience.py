@@ -7,7 +7,7 @@ viewer (their office). Two faults came from giving all of them one layout:
 - An office administrator who had picked nothing read a page titled with their
   office that counted everything they could see, with no incoming/outgoing
   split, and a prompt to pick the office they were already reading.
-- An office's report ranked every office by documents received and handovers,
+- An office's report ranked every office by documents received and endorsements,
   built from the documents that office touched, so each row read as another
   office's figure while counting a fraction of it.
 
@@ -74,7 +74,7 @@ def test_an_office_administrator_cannot_pick_another_office(client, users, offic
 
 
 # --- rankings for the university, the office's own figures otherwise ------------
-RANKINGS = ("Documents received by office", "Handovers by office: sent and confirmed")
+RANKINGS = ("Confirmed receipts by office", "Endorsements by office: sent and confirmed")
 
 
 @pytest.mark.django_db
@@ -105,7 +105,7 @@ def test_an_office_report_does_not_rank_other_offices(client, users, routed, who
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["sup", "med_admin", "viewer", "admin"])
-def test_reports_remove_the_office_handover_panel_for_every_role(client, users, offices, routed, who):
+def test_reports_remove_the_office_endorsement_panel_for_every_role(client, users, offices, routed, who):
     client.force_login(users[who])
     response = client.get(REPORTS, {"office": offices["MED"].pk})
     assert "office_activity" not in response.context

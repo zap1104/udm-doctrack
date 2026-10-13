@@ -323,7 +323,7 @@ def test_extraction_states_sum_to_the_repository(client, users, offices, agreeme
 #: existed.
 DASHBOARD_CONTEXT = {
     "attention_records", "breakdown", "can_bulk_receive", "can_start_work", "desk_clear_href",
-    "desk_queue", "desk_queues", "desk_target",
+    "desk_queue", "desk_direction_groups", "desk_attention_queues", "desk_target",
     "incoming_count", "memo", "month_picker", "monthly", "outgoing_count",
     "overdue_count", "overdue_offices", "overdue_summary", "pending_filing", "printed_at",
     "recent_records", "repository_donut", "scope",
@@ -428,7 +428,10 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 # one per interval or chart. The assertions below verify that exact read.
 # Pending filing shares Tracking's count; the narrower Repository shortcut
 # count is gone. Drafts add one count for the memo and overdue denominator.
-DASHBOARD_QUERIES = 53
+# Office-stage annotations travel with the rows, so rendering does not fetch
+# them again. Hidden legacy queues are counted only when explicitly selected.
+# The all-office page now performs two fewer reads than the previous 53.
+DASHBOARD_QUERIES = 51
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -470,7 +473,7 @@ def test_the_reports_query_count_is_pinned(
 
 
 #: All four fell by one on the turnaround fixes: the average receipt time and the
-#: number of handovers it is taken over now come from one query, where the count
+#: number of endorsements it is taken over now come from one query, where the count
 #: was a query of its own.
 #: The same two pages with an office picked, which is where the dashboard draws
 #: two direction rings instead of one. Pinned separately because the pin under
@@ -481,7 +484,7 @@ DASHBOARD_OFFICE_QUERIES = 55
 # The incoming movement-today counter is no longer displayed or queried.
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
-# The office handover summary was removed. Direction bars reuse the existing
+# The office endorsement summary was removed. Direction bars reuse the existing
 # grouped stage counts, so there is no new query per direction or stage.
 REPORTS_OFFICE_QUERIES = 43
 

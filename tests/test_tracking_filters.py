@@ -135,8 +135,8 @@ def test_a_completed_record_never_shows_as_pending(sent_record, users, offices):
 
 
 @pytest.mark.django_db
-def test_a_partly_received_batch_still_counts_as_pending(users, offices, memo_type):
-    """Two recipients, one confirms: the record reads RECEIVED but one still owes."""
+def test_a_partly_received_batch_still_counts_as_pending(client, users, offices, memo_type):
+    """The sender waits for HR while SUP's incoming stage records its receipt."""
     from apps.tracking.models import TrackingRecord
 
     record = create_draft_record(
@@ -147,11 +147,24 @@ def test_a_partly_received_batch_still_counts_as_pending(users, offices, memo_ty
     confirm_receipt(record, user=users["sup"])
     record.refresh_from_db()
 
-    assert record.status == Status.RECEIVED
+    assert record.status == Status.PENDING_RECEIPT
     visible = TrackingRecord.objects.visible_to(users["med"])
     assert record in apply_scope(visible, "awaiting", users["med"]), (
         "HR has not confirmed, so the record is still pending a receipt"
     )
+
+    for recipient, own_stage, other_stage in (
+        ("sup", Status.RECEIVED, Status.PENDING_RECEIPT),
+        ("hr", Status.PENDING_RECEIPT, Status.RECEIVED),
+    ):
+        client.force_login(users[recipient])
+        response = client.get("/tracking/", {"scope": "incoming", "status": own_stage})
+        assert response.status_code == 200
+        assert {row.pk for row in response.context["page_obj"]} == {record.pk}
+        assert response.context["page_obj"][0].display_status == own_stage
+        response = client.get("/tracking/", {"scope": "incoming", "status": other_stage})
+        assert response.status_code == 200
+        assert not response.context["page_obj"]
 
 
 # ---------------------------------------------------------------------------
@@ -354,12 +367,13 @@ def test_the_page_has_no_search_box(client, users):
 
     assert 'name="q"' not in content
 
-    # The queue nav is direction; the rows below carry stage and deadline.
+    # Each direction contains its stages; completed work and deadlines stay separate.
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
     for label in ("All in Tracking", "Incoming", "Outgoing"):
         assert label in queue_nav, label
-    for label in ("Pending Receipt", "Received", "In Process",
-                  "Completed - Pending Filing", "Overdue"):
+    for label in ("Pending Receipt", "Received", "In Process"):
+        assert queue_nav.count(label) >= 2, f"{label} is available under each direction"
+    for label in ("Completed - Pending Filing", "Overdue"):
         assert label in body, label
         assert label not in queue_nav, f"{label} belongs in its own row"
 
@@ -493,7 +507,7 @@ def test_incoming_and_outgoing_are_disabled_across_every_office(client, users, u
     body = client.get(url).content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
-    assert queue_nav.count("pill-toggle is-disabled") == 2
+    assert queue_nav.count("pill-toggle is-disabled") == 8  # Both parents and all six children.
     assert "scope=incoming" not in queue_nav
     assert "scope=outgoing" not in queue_nav
 
@@ -672,8 +686,10 @@ def test_every_filter_pill_carries_the_active_queue(client, users, offices):
     client.force_login(users["admin"])
     body = client.get("/tracking/?scope=overdue").content.decode()
 
-    assert "scope=overdue&amp;offices=" in body, "office pills keep the queue"
-    assert "scope=overdue&amp;owner=" in body, "owner pills keep the queue"
+    assert "overdue=yes&amp;offices=" in body, "office pills keep the deadline condition"
+    assert "overdue=yes&amp;owner=" in body, "owner pills keep the deadline condition"
+    pills = re.findall(r'<a\b[^>]*class="pill-toggle[^\"]*"[^>]*href="([^\"]+)"', body)
+    assert all("scope=overdue" not in href for href in pills), "filter pills normalize legacy deadlines"
 
 
 @pytest.mark.django_db

@@ -31,5 +31,11 @@ def locked_mutation(function):
             locked = type(record).objects.select_for_update().get(pk=record.pk)
             result = function(locked, *args, user=actor, **kwargs)
             record.refresh_from_db()
+            if hasattr(record, "_stage_office_id"):
+                # Query annotations describe a read snapshot. Keep an office's
+                # displayed stage current when that same instance is mutated.
+                record.stage = type(record).objects.with_stage_for(record._stage_office_id).values_list(
+                    "stage", flat=True,
+                ).get(pk=record.pk)
             return record if result is locked else result
     return wrapped

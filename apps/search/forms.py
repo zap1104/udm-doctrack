@@ -106,7 +106,7 @@ class SearchForm(BootstrapFormMixin, forms.Form):
     def __init__(self, *args, years=None, visible=None, **kwargs):
         super().__init__(*args, **kwargs)
         if visible is not None:
-            self.fields["office"].queryset = Office.active.filter(documents__in=visible).distinct()
+            self.fields["office"].queryset = Office.objects.filter(documents__in=visible).distinct()
             self.fields["document_type"].queryset = document_type_options(visible)
             self.fields["tag"].queryset = Tag.active.filter(documents__in=visible).distinct()
         self.fields["year"].choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]

@@ -53,14 +53,14 @@
       {% endif %}
     </div>
     <div class="card-udm-body">
-      <form method="get" class="report-scope-picker">
+      <form method="get" class="report-scope-picker" {% include "partials/_auto_filter_attrs.html" %}>
         {% query_fields "office" %}
         {% comment %}
           The report's point of view, not merely a filter: every direction and
           accountability figure below is measured from whatever is chosen here.
 
-          Apply lets users finish selecting an office before the page changes.
-          The same native form works with or without JavaScript.
+          The selection updates every figure in place. The same native form
+          and fallback button work when JavaScript is unavailable.
         {% endcomment %}
         <div class="col-sm-6 col-lg-6">
           <label class="form-label" for="report-office">Office</label>
@@ -79,7 +79,7 @@
           </select>
         </div>
         <div class="col-sm-6 col-lg-3 d-grid">
-          <button class="btn btn-udm-outline" type="submit">Apply</button>
+          <button class="btn btn-udm-outline" type="submit" data-filter-fallback>Apply</button>
         </div>
       </form>
     </div>
@@ -133,7 +133,7 @@
 
   <div class="row g-4">
     {% comment %}
-      "Created, handed over and completed" was the first panel here, and the
+      "Created, endorsed and completed" was the first panel here, and the
       dashboard draws the same chart from the same function for the same scope.
       The consultation asked Reports to stop repeating the dashboard; it keeps
       the panels only it has.
@@ -162,7 +162,7 @@
                 Draft, Pending Receipt, Received, and In Process add up to this total.
                 A document sent to several offices is counted once, rather than once per recipient.
                 {% else %}
-                Each direction contains Pending Receipt, Received, and In Process.
+                Each direction contains Pending Receipt, Received, and In Process. Incoming follows this office's receipt and work. Outgoing stays Pending Receipt until every current recipient confirms.
                 Its three counts add up to the number beside that direction.
                 Total also includes drafts and visible documents passed on to other offices.
                 {% endif %}
@@ -229,7 +229,7 @@
           {% endfor %}
           {% endif %}
           {% if partial_receipts %}
-            <p class="report-caption mt-3 mb-0">{{ partial_receipts }} Received or In Process document{{ partial_receipts|pluralize }} still await another recipient’s confirmation. They remain counted in their current stage.</p>
+            <p class="report-caption mt-3 mb-0">For {{ partial_receipts }} document{{ partial_receipts|pluralize }}, some current recipients have confirmed receipt and others are still pending. Incoming shows each office's own receipt and work; the overall document stays Pending Receipt until all current recipients confirm.</p>
           {% endif %}
         </div>
       </section>
@@ -238,10 +238,10 @@
     <div class="col-12">
       <section class="card-udm" aria-labelledby="annual-turnaround-title">
         <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly averages within office hours for this report’s office scope. Months without dots have no observations.</p></div>
-          <form method="get" action="#annual-turnaround-title" class="report-year-picker no-print">
+          <form method="get" action="#annual-turnaround-title" class="report-year-picker no-print" {% include "partials/_auto_filter_attrs.html" %}>
             {% query_fields "trend_year" %}
             <div><label for="trend-year" class="form-label">Year</label><select id="trend-year" name="trend_year" class="form-select">{% for year in trend_years %}<option value="{{ year }}"{% if year == trend_year %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></div>
-            <button class="btn btn-udm" type="submit">Show year</button>
+            <button class="btn btn-udm" type="submit" data-filter-fallback>Show year</button>
           </form>
         </div><div class="card-udm-body">{% include "core/_turnaround_chart.html" %}</div>
       </section>
@@ -290,7 +290,7 @@
           {% endif %}
 
           {% comment %}
-            Why the receipt average cannot be complete yet: handovers still
+            Why the receipt average cannot be complete yet: endorsements still
             waiting to be confirmed, in the batch each document is on now. It
             counted every unconfirmed step ever written, finished documents and
             superseded hops included, which will never be confirmed.
@@ -389,7 +389,7 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Documents received by office</h2>
+            <h2>Confirmed receipts by office</h2>
             <div class="report-caption">
               Receipts an office has confirmed, since records began.
               {% if office_volume.receipts %}Each bar is an office's share of all {{ office_volume.receipts }}.{% endif %}
@@ -434,10 +434,10 @@
       <div class="card-udm">
         <div class="card-udm-head">
           <div>
-            <h2>Handovers by office: sent and confirmed</h2>
+            <h2>Endorsements by office: sent and confirmed</h2>
             <div class="report-caption">
               Every forward counted, not only the first send.
-              {% if office_flow.handovers %}Each bar is a share of all {{ office_flow.handovers }} handovers.{% endif %}
+              {% if office_flow.endorsements %}Each bar is a share of all {{ office_flow.endorsements }} endorsements.{% endif %}
             </div>
           </div>
           <div class="chart-legend">
@@ -454,13 +454,13 @@
                   <span>Sent</span>
                   <div class="report-bar"><i class="bar-pending" style="width:{{ row.sent_percent }}%"></i></div>
                   <strong class="num">{{ row.sent }}</strong>
-                  <span class="status-share num">{% share row.sent office_flow.handovers %}</span>
+                  <span class="status-share num">{% share row.sent office_flow.endorsements %}</span>
                 </div>
                 <div class="report-series-item report-series-item--share">
                   <span>Confirmed</span>
                   <div class="report-bar"><i class="bar-received" style="width:{{ row.received_percent }}%"></i></div>
                   <strong class="num">{{ row.received }}</strong>
-                  <span class="status-share num">{% share row.received office_flow.handovers %}</span>
+                  <span class="status-share num">{% share row.received office_flow.endorsements %}</span>
                 </div>
               </div>
             </div>
@@ -480,13 +480,13 @@
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>
-      <p>How much is kept, what kind, and where it stands against its retention schedule.</p>
+      <p>How much is kept, what kind, and when documents are due for deletion review.</p>
     </div>
   </div>
 
   {% comment %}
     What every reader of the repository report needs: how much is kept, and
-    where it stands against its retention schedule. Each card opens the
+    when documents are due for deletion review. Each card opens the
     repository filtered the same way, so the number is the list.
 
     "Document types in use" was here, and counted the rows of the type panel —
@@ -503,23 +503,23 @@
     </div>
     <div class="col-6 col-lg-3">
       <a class="stat-card red" href="{{ retention.due_url }}">
-        <div class="label">Due for retention review</div>
+        <div class="label">Due for deletion review</div>
         <div class="value">{{ retention.due }}</div>
-        <div class="hint">Past their retention date</div>
+        <div class="hint">Review date is today or earlier</div>
       </a>
     </div>
     <div class="col-6 col-lg-3">
       <a class="stat-card gold" href="{{ retention.soon_url }}">
         <div class="label">Due in the next 90 days</div>
         <div class="value">{{ retention.soon }}</div>
-        <div class="hint">Retention date coming up</div>
+        <div class="hint">Deletion review due in 1 to 90 days</div>
       </a>
     </div>
     <div class="col-6 col-lg-3">
       <a class="stat-card" href="{{ retention.unscheduled_url }}">
-        <div class="label">No retention date</div>
+        <div class="label">No deletion review date</div>
         <div class="value">{{ retention.unscheduled }}</div>
-        <div class="hint">Never scheduled for review</div>
+        <div class="hint">No review date is currently set</div>
       </a>
     </div>
   </div>

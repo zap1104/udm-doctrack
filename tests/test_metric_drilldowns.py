@@ -38,14 +38,17 @@ def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(clien
     client.force_login(users[role])
     response = client.get("/tracking/reports/")
     context = response.context
-    assert context["pending_receipt"] == 1
-    assert context["partial_receipts"] == 2
+    expected_pending = 1 if role == "sup" else 3
+    assert context["pending_receipt"] == expected_pending
+    assert context["partial_receipts"] == (2 if role == "sup" else 0)
     assert context["awaiting_receipt"] == 3
     listed = client.get(context["report_pending_receipt_url"]).context
     assert listed["total"] == context["pending_receipt"]
-    assert {row.pk for row in listed["page_obj"]} == {partly_received[0].pk}
-    assert client.get("/tracking/?status=PENDING_RECEIPT").context["total"] == 1
-    assert "still await another recipient" in response.content.decode()
+    expected_ids = {partly_received[0].pk} if role == "sup" else {row.pk for row in partly_received}
+    assert {row.pk for row in listed["page_obj"]} == expected_ids
+    assert client.get("/tracking/?status=PENDING_RECEIPT").context["total"] == expected_pending
+    if role == "sup":
+        assert "some current recipients have confirmed receipt" in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -67,15 +70,16 @@ def test_office_overdue_link_opens_all_overdue_records_in_its_scope(client, user
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("stage", [Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS])
-def test_export_uses_the_report_record_filters(client, users, partly_received, stage):
+def test_export_uses_the_report_record_filters(client, users, offices, partly_received, stage):
     client.force_login(users["admin"])
     response = client.get("/tracking/reports/export/", {
-        "record_status": stage, "record_q": "Count audit", "record_overdue": "yes",
+        "record_status": stage, "record_q": "Count audit", "record_overdue": "yes", "office": offices["SUP"].pk,
     })
     rows = list(csv.reader(io.StringIO(response.content.decode())))
     header = next(index for index, row in enumerate(rows) if row and row[0] == "Tracking number")
     actual = rows[header + 1:]
-    expected = {row.tracking_number for row in partly_received if row.status == stage}
+    expected = set(TrackingRecord.objects.filter(pk__in=[row.pk for row in partly_received])
+                   .with_stage_for(offices["SUP"]).filter(stage=stage).values_list("tracking_number", flat=True))
     assert len(actual) == len(expected) == 1
     assert {row[0] for row in actual} == expected
 

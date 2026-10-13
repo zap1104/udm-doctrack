@@ -12,7 +12,7 @@ def test_the_three_offices_are_defined_above_the_table(client, users):
 
     terms = body.index('<dl class="office-terms">')
     assert terms < body.index("<table")
-    for term in ("Originating office", "Current office", "Receiving office"):
+    for term in ("Originating office", "Received by", "Awaiting receipt"):
         assert f"<dt>{term}</dt>" in body, term
-    assert 'title="Holds it now: the last office to confirm receipt.">Current office</th>' in body
+    assert 'title="Offices that confirmed receipt of the latest endorsement.">Received by</th>' in body
     assert "Where is the document?" not in body, "the note under the table is gone"

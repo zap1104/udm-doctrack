@@ -11,6 +11,7 @@ from django.utils.html import format_html
 from apps.core.analytics import share_text
 from apps.core.business_time import humanise_hours
 from apps.core.colors import STATUS_PILLS
+from apps.core.filters import ResolvedFilters, tracking_params
 from apps.core.utils import human_size as _human_size
 from apps.tracking.models import Status
 
@@ -164,7 +165,7 @@ def pager(context, data=None, section: str = "both", anchor: str = "") -> dict:
 
 
 @register.simple_tag(takes_context=True)
-def filter_url(context, param, value, multi=False) -> str:
+def filter_url(context, param, value, multi=False, toggle=True) -> str:
     """A link that turns one filter value on or off, keeping the rest.
 
     This is what lets a *multi*-select filter be a row of links rather than a
@@ -178,11 +179,17 @@ def filter_url(context, param, value, multi=False) -> str:
     active clears it — so a single-select pill row needs no separate "all"
     entry unless the caller wants one for discoverability.
 
+    `toggle=False` keeps a count/facet link on the category it describes, even
+    when that category is selected already.
+
     `page` is always dropped: page four of the old filter is not page four of
     the new one, and keeping it lands the reader on an empty table.
     """
     request = context.get("request")
     params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    resolved = context.get("resolved")
+    if request is not None and isinstance(resolved, ResolvedFilters):
+        params = tracking_params(request, resolved)
     params.pop("page", None)
 
     value = "" if value is None else str(value)
@@ -190,7 +197,7 @@ def filter_url(context, param, value, multi=False) -> str:
 
     if multi:
         chosen = [item for item in current if item != value] if value in current else [*current, value]
-    elif value == "" or current == [value]:
+    elif value == "" or (toggle and current == [value]):
         chosen = []
     else:
         chosen = [value]

@@ -259,11 +259,12 @@ def by_status(records, total: int) -> list[dict]:
     Every document is in exactly one stage, so the bars add up to one full
     track across the rows. `bar_percent` is `percent` with the 1% floor that
     keeps a single document visible."""
-    rows = list(
-        records.values("status").annotate(total=Count("id", distinct=True)).order_by("-total")
-    )
+    field = "stage" if "stage" in records.query.annotations else "status"
+    rows = list(records.order_by().values(field).annotate(total=Count("id", distinct=True)).order_by("-total"))
     labels = dict(Status.choices)
     for row in rows:
+        if field != "status":
+            row["status"] = row.pop(field)
         row["label"] = labels.get(row["status"], row["status"])
         row["percent"] = percent(row["total"], total)
         row["bar_percent"] = bar(row["total"], total)
@@ -404,18 +405,18 @@ def overdue_summary(records, rows: list[dict], total_documents: int) -> dict:
 
 
 #: The series the chart draws, in order, with the colour class each is painted
-#: in. Handovers count routing steps where the other two count documents — one
-#: document endorsed four times is four handovers — so that column runs above
+#: in. Endorsements count routing steps where the other two count documents — one
+#: document endorsed four times is four endorsements — so that column runs above
 #: the others and usually sets the scale. Every column carries its own number,
 #: and the legend and the note say which unit each counts, because a reader who
 #: can see all three needs to know that one of them is not documents.
 VOLUME_SERIES = (
     # The colour class suffix, named for the meaning: Completed is the
-    # Completed-status green everywhere, handovers the Pending receipt amber of
+    # Completed-status green everywhere, endorsements the Pending receipt amber of
     # a document between offices. Completed was gold on this chart and
-    # handovers green, the reverse of every other page.
+    # endorsements green, the reverse of every other page.
     ("Created", "created", "created"),
-    ("Handovers", "transferred", "handover"),
+    ("Endorsements", "transferred", "endorsement"),
     ("Completed", "completed", "completed"),
 )
 
@@ -502,7 +503,7 @@ def monthly_volume(records) -> dict:
 #: The three stages every turnaround figure is reported in, in order: the key,
 #: what the stage is called, what it measures, and the thing it is counted in.
 TURNAROUND_STAGES = (
-    ("receipt", Status.PENDING_RECEIPT.label, "sent → confirmed", "handover"),
+    ("receipt", Status.PENDING_RECEIPT.label, "sent → confirmed", "endorsement"),
     ("processing", Status.IN_PROCESS.label, "first receipt → completed", "document"),
     ("lifetime", "Total lifetime", "created → completed", "document"),
 )
@@ -515,7 +516,7 @@ def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=N
     summary, Reports and the memo cannot count a different set. Two queries,
     whatever the period.
 
-    Bucketed by when the *work finished*: a handover by when it was confirmed,
+    Bucketed by when the *work finished*: an endorsement by when it was confirmed,
     a document by when it was completed, so a period's figure covers work
     actually closed in it. Completion rather than approval, because the wait
     for an administrator is somebody else's queue.
@@ -531,7 +532,7 @@ def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=N
     # Use the same cutoff for the month's summary and both trend charts.
     # Correlate the already-scoped cohort by record ID. Taking one match handles
     # duplicate rows from visibility/filter joins without rescanning the whole
-    # cohort for every handover when PostgreSQL has stale row estimates. Read
+    # cohort for every endorsement when PostgreSQL has stale row estimates. Read
     # the number in that same lookup so the outer query needs no record join.
     visible_number = records.filter(pk=OuterRef("record_id")).order_by().values("tracking_number")[:1]
     steps = RoutingStep.objects.annotate(
@@ -593,7 +594,7 @@ def _mean(values):
 def _sample_counts(samples) -> dict:
     """The denominator and its distinct documents, including genuine zeros.
 
-    Receipt is measured per handover, not per document. An instant confirmation
+    Receipt is measured per endorsement, not per document. An instant confirmation
     also has zero working time, but is not an interval outside office hours.
     """
     return {
@@ -640,8 +641,8 @@ def _named(sample) -> dict:
 def _stage(key, label, measures, noun, samples) -> dict:
     """Average, fastest and slowest for one stage.
 
-    Fastest leaves out the intervals that fell entirely outside office hours: a
-    handover sent and confirmed on a Saturday took no office time, and would be
+    Fastest leaves out the intervals that fell entirely outside office hours: an
+    endorsement sent and confirmed on a Saturday took no office time, and would be
     "fastest" every month without saying anything about anybody's speed. They
     still count in the average, which is what they did before this existed, and
     `zero_working_time` says how many there were, including instant confirmations.
@@ -706,12 +707,15 @@ def turnaround(records, month=None, *, now=None) -> dict:
         stage["excluded"] = collected["excluded"][stage["key"]]
     closed = len(collected["deadlines"])
     on_time = sum(1 for _month, kept in collected["deadlines"] if kept)
+    pending_records = records.filter(**{
+        "stage" if "stage" in records.query.annotations else "status": Status.PENDING_RECEIPT,
+    }).values("pk")
     waiting = RoutingStep.objects.filter(
         record__in=records, received_at__isnull=True,
         batch=F("record__current_batch"), sent_at__lte=now,
     ).exclude(record__status__in=COMPLETED_STATUSES).aggregate(
-        handovers=Count("pk"), documents=Count("record_id", distinct=True),
-        pending_documents=Count("record_id", filter=Q(record__status=Status.PENDING_RECEIPT), distinct=True),
+        endorsements=Count("pk"), documents=Count("record_id", distinct=True),
+        pending_documents=Count("record_id", filter=Q(record_id__in=pending_records), distinct=True),
     )
 
     result = {
@@ -730,14 +734,14 @@ def turnaround(records, month=None, *, now=None) -> dict:
         # A period with nothing due has no rate. 0% would read as "everything
         # was late" when the truth is "nothing was owed".
         "has_on_time": bool(closed),
-        # Handovers the receipt average cannot include yet: sent in the batch
+        # Endorsements the receipt average cannot include yet: sent in the batch
         # the document is on now, not yet confirmed, on a document still in
         # circulation. It counted every unconfirmed step ever written, which
         # included siblings on finished documents and hops the document had
         # already moved past — 83 on the seeded data, beside a Pending receipt
         # card reading 20. None of those will ever be confirmed. Live, not
         # of the period: it is what is waiting now.
-        "awaiting_confirmation": waiting["handovers"],
+        "awaiting_confirmation": waiting["endorsements"],
         "awaiting_confirmation_documents": waiting["documents"],
         "awaiting_confirmation_pending_documents": waiting["pending_documents"],
         "awaiting_confirmation_other_documents": waiting["documents"] - waiting["pending_documents"],
@@ -1049,17 +1053,16 @@ def combined_totals(records, documents) -> dict:
     different for every viewer of the same data. The ring is therefore
     documents *in circulation*, which is what the caption now says.
 
-    Not office-scoped, and deliberately so — the slices link to `?status=`,
-    which is not office-scoped either. The per-office queues are the stat cards,
-    which count through `apply_scope` and link to `?scope=`. Making the ring
-    office-scoped as well looked right until an administrator opened it: the
-    queues resolve against the viewer's own office, so a system administrator
-    saw their own office's three records where the page showed the university's.
+    The caller supplies the office stage annotation used by its Tracking links.
+    A recipient that has not confirmed stays Pending Receipt even when another
+    recipient has started work. With no office, each document has one aggregate
+    stage and remains Pending Receipt until all current recipients confirm.
     """
-    live = records.filter(status__in=ACTIVE_STATUSES).exclude(status=Status.DRAFT)
+    field = "stage" if "stage" in records.query.annotations else "status"
+    live = records.filter(**{f"{field}__in": ACTIVE_STATUSES}).exclude(**{field: Status.DRAFT})
 
     def by_status(status):
-        return live.filter(status=status).distinct().count()
+        return live.filter(**{field: status}).distinct().count()
 
     repository_total = documents.distinct().count()
     # Everything that did not come out of tracking. It tested `source == UPLOAD`,

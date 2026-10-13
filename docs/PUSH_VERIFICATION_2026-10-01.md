@@ -16,7 +16,7 @@ Checkpoint for `feature/core-reports-dashboard`: security hardening, the reposit
 
 - Folder-navigation sample documents now explicitly grant university-wide access. Private folders remain protected by separate permission regressions.
 - The legacy-role migration test verifies sharing while the office holds the record and rejection after the record has moved on.
-- Turnaround chart samples use a fixed mid-month clock and matching handover timestamps, so month-boundary dates do not invalidate multi-day expectations.
+- Turnaround chart samples use a fixed mid-month clock and matching endorsement timestamps, so month-boundary dates do not invalidate multi-day expectations.
 - Upload visibility assertions check the actual upload link instead of obsolete button wording, for both ordinary users and viewers.
 - The mobile menu applies its theme text color to the button and draws its bars with `currentColor`, preserving contrast and the theme token convention.
 

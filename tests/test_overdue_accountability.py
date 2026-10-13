@@ -6,7 +6,7 @@ Only SUP or HR can.
 
 `recalculate_status()` sets `current_office` to the *sending* office while a
 batch is unreceived, and that is correct — the last office with confirmed
-custody is the sender, and showing `to_office` there would claim a handover
+custody is the sender, and showing `to_office` there would claim an endorsement
 nobody has acknowledged. The bug was a panel captioned "who to chase" grouping
 by a field that answers "where is the paper". Two questions, two functions.
 
@@ -103,7 +103,7 @@ def test_a_confirmed_office_holds_while_the_other_still_owes_a_receipt(
 
 # --- 3. everyone has signed for it, and it is still late ---------------------
 @pytest.mark.django_db
-def test_once_everybody_has_received_it_the_holder_owes_the_work(
+def test_once_everybody_has_received_it_each_confirmed_office_owes_work(
     med_to_sup_and_hr, users, offices
 ):
     confirm_receipt(med_to_sup_and_hr, user=users["sup"])
@@ -113,7 +113,8 @@ def test_once_everybody_has_received_it_the_holder_owes_the_work(
     rows = _rows(users["admin"])
     holders = {code: row for code, row in rows.items() if row["holding"]}
 
-    assert list(holders) == [med_to_sup_and_hr.current_office.code]
+    assert set(holders) == {offices["SUP"].code, offices["HR"].code}
+    assert all(row["holding"] == 1 for row in holders.values())
     assert sum(row["awaiting"] for row in rows.values()) == 0
 
 

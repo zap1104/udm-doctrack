@@ -57,6 +57,20 @@ def notify_offices(offices, *, kind, title, message, url="", tracking_record=Non
     return Notification.objects.bulk_create([Notification(office=office, **kwargs) for office in offices])
 
 
+def overdue_notice_text(record, *, awaiting_receipt):
+    """Use the same deadline wording when a chase or receipt updates a notice."""
+    message = (
+        f"{record.tracking_number} was due "
+        f"{timezone.localtime(record.due_at):%d %b %Y}."
+    )
+    if awaiting_receipt:
+        title = "A document awaiting your office's receipt is past its deadline"
+        message += " Your office still needs to confirm receipt."
+    else:
+        title = "A document with your office is past its deadline"
+    return title[:160], message[:255]
+
+
 def unread_for(user):
     return Notification.objects.unread_for(user)
 

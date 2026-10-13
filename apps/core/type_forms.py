@@ -9,6 +9,9 @@ from .models import DocumentType
 class DocumentTypeSelectionMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # View-only admin forms omit model fields, including the type editors.
+        if not {"document_types", "document_type"}.issubset(self.fields):
+            return
         selected = self.instance.selected_document_types
         choices = DocumentType.objects.filter(Q(is_active=True) | Q(pk__in=[kind.pk for kind in selected]))
         multiple = self.fields["document_types"]
@@ -23,7 +26,7 @@ class DocumentTypeSelectionMixin:
         main.queryset = choices
         main.label = "Main document type"
         main.empty_label = "Choose the main type"
-        main.help_text = "Required for multiple types. This type controls deadlines and retention."
+        main.help_text = "Required for multiple types. This type controls deadlines and the deletion review period."
         main.widget.attrs["data-main-document-type"] = ""
         self.initial["document_types"] = [kind.pk for kind in selected]
         suggested = self.initial.get("document_type")
@@ -50,7 +53,7 @@ class DocumentTypeSelectionMixin:
         elif main and main.pk not in ids:
             self.add_error("document_type", "Choose a main type from the selected document types.")
         elif len(selected) > 1 and not main:
-            self.add_error("document_type", "Choose a main document type for deadlines and retention.")
+            self.add_error("document_type", "Choose a main document type for deadlines and the deletion review period.")
         cleaned["document_types"] = self.fields["document_types"].queryset.filter(pk__in=ids)
         return cleaned
 

@@ -19,14 +19,14 @@
     <table class="table-udm">
       <thead>
         <tr>
-          <th>Tracking number</th><th>Subject</th><th>Current office</th>
+          <th>Tracking number</th><th>Subject</th><th scope="col">Received by</th><th scope="col">Awaiting receipt</th>
           <th>Updated</th><th>Status</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for record in results %}
           <tr>
-            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+            <td class="mono"><a href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
             <td>
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
@@ -36,15 +36,16 @@
                 Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>
             </td>
-            <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
+            <td class="office-cell" data-receipt-offices="received">{% include "partials/_receipt_offices.html" with kind="received" %}</td>
+            <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" %}</td>
             <td style="white-space:nowrap;">{{ record.last_movement_at|date:"d M Y, g:i A" }}</td>
-            <td>{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
+            <td>{% include "partials/_status_pill.html" with status=record.display_status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
             <td class="text-end">
-              <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}">Open</a>
+              <a class="btn btn-udm-outline btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}">Open</a>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="6">
+          <tr><td colspan="7">
             <div class="empty-state">
               {% if query %}
                 <h3>No tracking records matched “{{ query }}”</h3>

@@ -432,6 +432,8 @@ class GrantAccessForm(BootstrapFormMixin, forms.Form):
         cleaned = super().clean()
         if not cleaned.get("office") and not cleaned.get("user"):
             raise forms.ValidationError("Choose an office or a user.")
+        if cleaned.get("office") and cleaned.get("user"):
+            raise forms.ValidationError("Choose either an office or a user, not both.")
         return cleaned
 
 

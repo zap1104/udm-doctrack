@@ -23,66 +23,16 @@
   {% endif %}
 </div>
 {% include "tracking/_subtabs.html" with active="tracking" %}
-{% with scope=request.GET.scope status=request.GET.status %}
-<nav class="tracking-queue-nav mb-3" aria-label="Tracking queues">
+<div class="tracking-queue-nav mb-3" aria-label="Tracking views">
   <div class="tracking-queue-list">
-    <a class="pill-toggle{% if not scope and not status %} is-active{% endif %}"
-       href="{% url 'tracking:list' %}">All in Tracking</a>
-    {% comment %}
-      Through `filter_url`, like the filter pills below, so a queue keeps the
-      filters already applied. They were bare `?scope=` links: a reader with
-      "Files created by me only" set watched 4 rows become 3 on clicking
-      Incoming and concluded the queue had narrowed their own files, when it had
-      replaced their filter with everybody's.
-
-      Each queue is one `scope`, computed in tracking.services.apply_scope.
-
-      Direction only, now: All active, Incoming, Outgoing. Pending Receipt,
-      Received, In Process and Pending Upload have moved to the Stage row below
-      as multi-select pills — they were stages of a document wearing the same
-      pill as a direction, so one row was answering two questions and you could
-      only ask one of them at a time.
-
-      The custody meaning those four used to carry is not lost, it is composed:
-      Incoming + Stage "Received" is the old Received queue, and now
-      Incoming + "Pending receipt" *and* "Received" is a question the page could
-      not previously be asked at all. Every `?scope=` value still resolves, so
-      the dashboard's links and saved bookmarks are unaffected — see
-      apps.tracking.forms.PILL_SCOPES.
-    {% endcomment %}
-    {% comment %}
-      Incoming and Outgoing are properties of a document *and* an office — the
-      batch that is outgoing for Supply is incoming for HR at the same instant —
-      so across every office at once neither is a question with an answer.
-
-      Shown disabled rather than hidden: a row that loses two pills when the
-      picker changes reads as the page breaking. `apply_scope` proves the point
-      — with no office its two predicates become the empty Q and both queues
-      return every active record, so honouring the click would head the full
-      list "Incoming". core_filters.resolve drops the scope for the same reason,
-      which is what makes a hand-typed URL behave like the disabled pill.
-    {% endcomment %}
-    {% if resolved.all_offices %}
-      <span class="pill-toggle is-disabled" aria-disabled="true"
-            title="Incoming and Outgoing describe a document relative to one office. Pick an office to use them.">Incoming</span>
-      <span class="pill-toggle is-disabled" aria-disabled="true"
-            title="Incoming and Outgoing describe a document relative to one office. Pick an office to use them.">Outgoing</span>
-    {% else %}
-      <a class="pill-toggle{% if scope == 'incoming' %} is-active{% endif %}"
-         href="{% filter_url 'scope' 'incoming' %}">Incoming</a>
-      <a class="pill-toggle{% if scope == 'outgoing' %} is-active{% endif %}"
-         href="{% filter_url 'scope' 'outgoing' %}">Outgoing</a>
-    {% endif %}
-    {% comment %}
-      Necessary once the pills preserve state: "click All Active" used to be the
-      way out and no longer is, because it now keeps everything else set.
-    {% endcomment %}
-    {% if request.GET.scope or request.GET.status or request.GET.offices or request.GET.owner or request.GET.office %}
+    <a class="pill-toggle{% if not resolved.scope and not resolved.statuses %} is-active{% endif %}"
+       href="{{ all_tracking_href }}">All in Tracking</a>
+    {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue %}
       <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
     {% endif %}
   </div>
-</nav>
-{% endwith %}
+</div>
+{% include "partials/_direction_filters.html" with groups=direction_filter_groups prefix="tracking-direction" %}
 {% comment %}
   The filters are pills too, because they are the same control as the queue nav
   above: click a thing, narrow the list. The bordered card with checkboxes, a
@@ -114,13 +64,13 @@
     {% endcomment %}
     <div class="tracking-filter-row tracking-filter-row--scope">
       <span class="tracking-filter-label" id="filter-as-office-label">Viewing as</span>
-      <form class="dashboard-scope" method="get" action="{% url 'tracking:list' %}">
-        {% if request.GET.scope %}<input type="hidden" name="scope" value="{{ request.GET.scope }}">{% endif %}
+      <form class="dashboard-scope" method="get" action="{% url 'tracking:list' %}" {% include "partials/_auto_filter_attrs.html" %}>
+        {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
         {% for stage in selected_statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
         {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}">{% endif %}
         {% if request.GET.q %}<input type="hidden" name="q" value="{{ request.GET.q }}">{% endif %}
         {% if request.GET.owner %}<input type="hidden" name="owner" value="{{ request.GET.owner }}">{% endif %}
-        {% if request.GET.overdue %}<input type="hidden" name="overdue" value="{{ request.GET.overdue }}">{% endif %}
+        {% if resolved.overdue %}<input type="hidden" name="overdue" value="{{ resolved.overdue }}">{% endif %}
         {% comment %}
           Carried like every other filter above: a GET form submits only its own
           fields, so without this a reader who asked for 100 rows is snapped back
@@ -131,7 +81,7 @@
           <input type="hidden" name="offices" value="{{ raised }}">
         {% endfor %}
         {% comment %}
-          Apply explicitly so arrow-key selection can finish before navigation.
+          Refresh the workspace in place and retain the native fallback.
         {% endcomment %}
         <select class="form-select form-select-sm" id="tracking-as-office" name="office"
                 aria-labelledby="filter-as-office-label">
@@ -157,7 +107,7 @@
             </option>
           {% endfor %}
         </select>
-        <button class="btn btn-udm-outline btn-sm" type="submit">Apply</button>
+        <button class="btn btn-udm-outline btn-sm" type="submit" data-filter-fallback>Apply</button>
       </form>
     </div>
     {% if resolved.all_offices %}
@@ -179,7 +129,7 @@
 
 <details id="tracking-filter-options" class="tracking-filter-disclosure no-print"{% if selected_office_ids or selected_statuses or resolved.overdue or selected_sort or selected_owner %} open{% endif %}>
   <summary>
-    <span><strong>Filter records</strong><span class="tracking-filter-description">Stage, originating office, deadline, sort, and ownership</span></span>
+    <span><strong>More filters</strong><span class="tracking-filter-description">Multiple stages, originating office, deadline, sort, and ownership</span></span>
     {% if selected_office_ids or selected_statuses or resolved.overdue or selected_sort or selected_owner %}<span class="tracking-filter-applied">Filters applied</span>{% endif %}
   </summary>
 <div class="tracking-filters">
@@ -214,13 +164,12 @@
     multi-select it would be selectable *beside* a stage, which reads as "all of
     them and this one".
 
-    A stage is not a queue and this row is not the queue nav. The queues ask
-    which office is holding the document; a status says nothing about who holds
-    it — filtering by one is how another office's records reached your Received
-    queue once already, which is why those pills stayed scopes.
+    This additional row can combine several stages in the chosen direction.
+    The main grouped links replace both direction and stage in one selection.
+    Status describes the whole document, not an individual recipient's receipt.
   {% endcomment %}
   <div class="tracking-filter-row tracking-filter-row--stage">
-    <span class="tracking-filter-label" id="filter-status-label">Stage (select one or more)</span>
+    <span class="tracking-filter-label" id="filter-status-label">Stages in this view (select one or more)</span>
     <div class="pill-row">
       <div class="pill-row-list" role="group" aria-labelledby="filter-status-label">
         {% for value, label in status_choices %}
@@ -320,8 +269,8 @@
 {% endcomment %}
 <dl class="office-terms">
   <div><dt>Originating office</dt><dd>raised the document. It never changes; it is under each subject.</dd></div>
-  <div><dt>Current office</dt><dd>holds it now: the last office to confirm receipt. While a handover waits to be confirmed, that is still the sender.</dd></div>
-  <div><dt>Receiving office</dt><dd>where it was last sent. The document is theirs once they confirm receipt; until then it is {{ "PENDING_RECEIPT"|status_label }}.</dd></div>
+  <div><dt>Received by</dt><dd>offices that confirmed receipt of the latest endorsement. More than one office can receive a document.</dd></div>
+  <div><dt>Awaiting receipt</dt><dd>offices that still need to confirm receipt. Once confirmed, they appear under Received by.</dd></div>
 </dl>
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
@@ -334,14 +283,14 @@
       <thead>
         <tr>
           {# Current and receiving both: where it is, and who owes the next act. #}
-          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col" title="Holds it now: the last office to confirm receipt.">Current office</th><th scope="col" title="Where it was last sent; it must confirm receipt.">Receiving office</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
+          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col" title="Offices that confirmed receipt of the latest endorsement.">Received by</th><th scope="col" title="Offices that still need to confirm receipt of the latest endorsement.">Awaiting receipt</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
         </tr>
       </thead>
       <tbody>
         {% for record in records %}
           <tr>
             {% if can_bulk_receive %}<td>{% if record.can_confirm_now %}<input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}" aria-label="Select {{ record.display_tracking_number }} for receipt">{% endif %}</td>{% endif %}
-            <td class="mono"><a href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+            <td class="mono"><a href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
             <td class="tracking-subject">
               {{ record.subject|truncatechars:60 }}
               <div class="text-muted" style="font-size:12.5px;">
@@ -363,10 +312,8 @@
                 Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
               </div>
             </td>
-            <td class="office-cell">{% include "partials/_office_badge.html" with office=record.current_office %}</td>
-            <td class="office-cell">
-              {% include "partials/_office_badges.html" with offices=record.receiving_offices_shown more=record.receiving_more %}
-            </td>
+            <td class="office-cell" data-receipt-offices="received">{% include "partials/_receipt_offices.html" with kind="received" %}</td>
+            <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" %}</td>
             <td class="tracking-updated">{{ record.last_movement_at|date:"d M Y" }}<br>{{ record.last_movement_at|date:"g:i A" }}</td>
           <td>
               {% comment %}
@@ -375,7 +322,7 @@
                 to be one, and the stage was the half that lost.
               {% endcomment %}
               <div class="pill-stack">
-                {% include "partials/_status_pill.html" with status=record.status %}
+                {% include "partials/_status_pill.html" with status=record.display_status %}
                 {% include "partials/_overdue_tag.html" with state=record.deadline_state %}
                 {% comment %}
                   The date itself, under the pills that depend on it. Inline
@@ -394,12 +341,12 @@
             </td>
             <td class="text-end">
               {% if record.can_confirm_now %}
-                <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                <a class="btn btn-receipt btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}">
                       <span class="btn-receipt-icon" aria-hidden="true">✓</span>
                       <span>Confirm Receipt</span>
                     </a>
               {% else %}
-                <a class="btn btn-udm-outline btn-sm" href="{{ record.get_absolute_url }}" aria-label="Open {{ record.display_tracking_number }}">Open</a>
+                <a class="btn btn-udm-outline btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}" aria-label="Open {{ record.display_tracking_number }}">Open</a>
               {% endif %}
             </td>
           </tr>

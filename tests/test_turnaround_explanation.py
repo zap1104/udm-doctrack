@@ -66,13 +66,13 @@ def at(day, hour):
 def test_overnight_calculation_has_a_popup_without_opening_help():
     # Monday 4 PM to Tuesday 9 AM is 17 elapsed hours and two office hours.
     sample = measured_sample(at(5, 16), at(6, 9))
-    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "handover", [sample])
+    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "endorsement", [sample])
     assert stage["average_calendar_seconds"] == 17 * 3600
     assert stage["average_outside_seconds"] == 15 * 3600
     assert stage["average_seconds"] == 2 * 3600
     html = render_to_string("core/_turnaround_stage.html", {"stage": stage, "id_prefix": "test"})
     assert "17 hrs total wait − 15 hrs excluded ≈ 2 hrs within office hours" in html
-    assert "2 hrs counted ÷ 1 confirmed handover ≈ 2 hrs" in html
+    assert "2 hrs counted ÷ 1 confirmed endorsement ≈ 2 hrs" in html
     assert "Average total wait" in html
     assert 'data-bs-target="#turnaround-calculation-dialog"' in html
     assert 'aria-label="View calculation for Pending Receipt"' in html
@@ -81,9 +81,9 @@ def test_overnight_calculation_has_a_popup_without_opening_help():
     assert "<details" not in html
 
 
-def test_average_formula_includes_zero_office_time_and_repeated_handovers():
+def test_average_formula_includes_zero_office_time_and_repeated_endorsements():
     samples = [measured_sample(at(5, 16), at(6, 9)), measured_sample(at(10, 8), at(10, 17))]
-    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "handover", samples)
+    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "endorsement", samples)
     assert stage["samples"] == 2 and stage["documents"] == 1
     assert stage["zero_working_time"] == 1
     assert stage["total_office_seconds"] == 2 * 3600
@@ -92,11 +92,11 @@ def test_average_formula_includes_zero_office_time_and_repeated_handovers():
     assert stage["average_outside_seconds"] == 12 * 3600
     html = render_to_string("core/_turnaround_stage.html", {"stage": stage, "id_prefix": "test"})
     assert "13 hrs total wait − 12 hrs excluded ≈ 1 hr within office hours" in html
-    assert "2 hrs counted ÷ 2 confirmed handovers ≈ 1 hr" in html
+    assert "2 hrs counted ÷ 2 confirmed endorsements ≈ 1 hr" in html
 
 
 def test_no_samples_has_no_fake_calculation():
-    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "handover", [])
+    stage = analytics._stage("receipt", "Pending Receipt", "sent until confirmed", "endorsement", [])
     assert stage["average_outside_seconds"] is None
     html = render_to_string("core/_turnaround_stage.html", {"stage": stage, "id_prefix": "test"})
     assert "Average breakdown" not in html

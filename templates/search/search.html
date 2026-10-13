@@ -44,12 +44,19 @@
   </div>
 </nav>
 
-<form method="get" class="workspace-search-form">
+<form method="get" class="workspace-search-form" {% include "partials/_auto_filter_attrs.html" %}>
   {% include "partials/_form_errors.html" %}
   {# Carried so the mode survives a submit of the search box. #}
   <input type="hidden" name="mode" value="{{ mode }}">
   {# And the page length, which is a property of the reader rather than the query. #}
   <input type="hidden" name="per_page" value="{{ page_size }}">
+  {% if is_tracking %}
+    {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
+    {% for stage in resolved.statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
+    {% for office in resolved.raised_by_ids %}<input type="hidden" name="offices" value="{{ office }}">{% endfor %}
+    {% if selected_owner %}<input type="hidden" name="owner" value="{{ selected_owner }}">{% endif %}
+    {% if resolved.overdue %}<input type="hidden" name="overdue" value="{{ resolved.overdue }}">{% endif %}
+  {% endif %}
   <div class="card-udm mb-4 search-query-card workspace-toolbar"><div class="card-udm-body">
     <div class="row g-2">
       {# Each form's own q carries the placeholder that describes its corpus. #}
@@ -63,6 +70,17 @@
   </div></div>
 
   {% if is_tracking %}
+    {% if can_pick_office %}
+      <div class="tracking-filter-row tracking-filter-row--scope mb-3">
+        <label class="tracking-filter-label" for="search-as-office">Viewing as</label>
+        <select class="form-select form-select-sm" id="search-as-office" name="office">
+          <option value="all"{% if resolved.all_offices %} selected{% endif %}>All offices</option>
+          {% for office in filter_offices %}
+            <option value="{{ office.pk }}"{% if resolved.as_office.pk == office.pk %} selected{% endif %}>{{ office.code }} · {{ office.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
     {% include "search/_filters_tracking.html" %}
 
     {% if has_searched %}

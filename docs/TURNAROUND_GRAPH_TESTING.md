@@ -33,7 +33,7 @@ code. Calculation definitions are in [TURNAROUND_TIME.md](TURNAROUND_TIME.md).
 | Independent arithmetic | 378 intervals checked against a separate quarter-hour office-time reference |
 | Calendar | All 48 months across four years, including leap years; current-month and future-period boundaries |
 | Counts and access | Dashboard, summaries, tables, and reports agree for multiple offices and user roles; forged office selection does not broaden visibility |
-| Large data / queries | 1,000 documents and 5,000 handovers, including duplicate joined rows; receipt counts, distinct document counts, means, and query budgets checked |
+| Large data / queries | 1,000 documents and 5,000 endorsements, including duplicate joined rows; receipt counts, distinct document counts, means, and query budgets checked |
 | Interaction | 124 Node tests, including 10,000 deterministic mixed pointer, touch, click, and keyboard events |
 
 The arithmetic tests check the configured schedule, lunch, weekends, and

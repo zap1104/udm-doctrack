@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import timedelta
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -26,6 +26,7 @@ import django  # noqa: E402
 django.setup()
 
 from django.db import transaction  # noqa: E402
+from django.http import QueryDict  # noqa: E402
 from django.test import Client, override_settings  # noqa: E402
 from django.test.utils import setup_test_environment  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -62,14 +63,14 @@ class Links(HTMLParser):
 
 def replaced(url, **changes):
     parts = urlsplit(url)
-    params = dict(parse_qsl(parts.query))
+    params = QueryDict(parts.query, mutable=True)
     params.pop("page", None)
     for key, value in changes.items():
         if value is None:
             params.pop(key, None)
         else:
             params[key] = value
-    return parts.path + "?" + urlencode(params)
+    return parts.path + "?" + params.urlencode()
 
 
 class Audit:
@@ -152,9 +153,9 @@ class Audit:
         if context["university_wide"]:
             flow = context["office_flow"]
             volume = context["office_volume"]
-            self.equal("handovers", flow["handovers"], len(local_steps))
-            self.equal("handover sender partition", sum(row["sent"] for row in flow["rows"]), sum(step["from_office_id"] is not None for step in local_steps))
-            self.equal("confirmed handovers", volume["receipts"], sum(step["received_at"] is not None for step in local_steps))
+            self.equal("endorsements", flow["endorsements"], len(local_steps))
+            self.equal("endorsement sender partition", sum(row["sent"] for row in flow["rows"]), sum(step["from_office_id"] is not None for step in local_steps))
+            self.equal("confirmed endorsements", volume["receipts"], sum(step["received_at"] is not None for step in local_steps))
             self.equal("receipt office partition", sum(row["cumulative"] for row in volume["rows"]), volume["receipts"])
         if context["is_repository_report"]:
             for row in context["document_types"]:
@@ -196,7 +197,7 @@ class Audit:
         for row in context["monthly"]["rows"]:
             month = row["month"]
             self.equal("cumulative created", row["created"], sum(timezone.localtime(item["created_at"]).date().replace(day=1) <= month for item in scoped))
-            self.equal("cumulative handovers", row["transferred"], sum(timezone.localtime(step["sent_at"]).date().replace(day=1) <= month for step in local_steps))
+            self.equal("cumulative endorsements", row["transferred"], sum(timezone.localtime(step["sent_at"]).date().replace(day=1) <= month for step in local_steps))
             self.equal("cumulative completed", row["completed"], sum(bool(item["status"] in COMPLETED_STATUSES and item["completed_at"] and timezone.localtime(item["completed_at"]).date().replace(day=1) <= month) for item in scoped))
 
     def samples(self, records, steps):
@@ -235,7 +236,7 @@ class Audit:
         self.equal("on-time numerator", panel["on_time"], sum(row["completed_at"] <= row["due_at"] for row in closed))
         batches = {row["pk"]: row for row in records}
         outstanding = [step for step in steps if step["received_at"] is None and step["sent_at"] <= panel["as_of"] and step["batch"] == batches[step["record_id"]]["current_batch"] and batches[step["record_id"]]["status"] not in COMPLETED_STATUSES]
-        self.equal("outstanding handovers", panel["awaiting_confirmation"], len(outstanding))
+        self.equal("outstanding endorsements", panel["awaiting_confirmation"], len(outstanding))
         self.equal("documents awaiting receipt", panel["awaiting_confirmation_documents"], len({step["record_id"] for step in outstanding}))
         pending_ids = {step["record_id"] for step in outstanding if batches[step["record_id"]]["status"] == Status.PENDING_RECEIPT}
         self.equal("waiting Pending Receipt documents", panel["awaiting_confirmation_pending_documents"], len(pending_ids))
@@ -313,6 +314,21 @@ class Audit:
                     header = next(index for index, row in enumerate(rows) if row and row[0] == "Tracking number")
                     self.equal("CSV matches filtered list", len(rows) - header - 1, min(report["total"], 5000))
                     self.equal("CSV cap metadata", int(rows[2][1]), min(report["total"], 5000))
+                    exported_rows = [dict(zip(rows[header], row, strict=True)) for row in rows[header + 1:]]
+                    if report["total"] <= 5000:
+                        self.equal(
+                            "CSV exact record set",
+                            sorted(row["Tracking number"] for row in exported_rows),
+                            sorted(report["page_obj"].paginator.object_list.values_list("tracking_number", flat=True)),
+                        )
+                    csv_directions = {row["Tracking number"]: row["Direction"] for row in exported_rows}
+                    for record in report["records"]:
+                        if record.tracking_number not in csv_directions:
+                            continue  # A large export may stop at its explicit 5,000-row cap.
+                        expected = "—" if report["resolved"].all_offices else {
+                            "incoming": "Incoming", "outgoing": "Outgoing", "": "Passed on",
+                        }[record.direction]
+                        self.equal("CSV direction matches table", csv_directions[record.tracking_number], expected)
             badge = self.get("/notifications/count/").context
             self.equal("notification badge", badge["unread_notifications"], unread_for(user).count() if badge["notification_in_app_enabled"] else 0)
             browse = search_documents(user=user, limit=2, log=False)

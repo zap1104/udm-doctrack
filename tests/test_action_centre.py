@@ -1,4 +1,4 @@
-"""The Action Centre's queues: a chip per queue, each the list it opens.
+"""Direction/stage controls and attention chips count the lists they open.
 
 Every chip is an `apply_scope` queue counted with the dashboard's office, and
 its "View all in Tracking" link opens the same queue with the same office. So
@@ -9,6 +9,7 @@ number of rows the Tracking page lists for it.
 from __future__ import annotations
 
 import re
+from html import escape
 
 import pytest
 from django.contrib.messages import get_messages
@@ -16,11 +17,22 @@ from django.contrib.messages import get_messages
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
 DASHBOARD = "/"
-QUEUES = ["incoming", "pending-receipt", "received", "in-process", "overdue", "outgoing"]
+QUEUES = ["awaiting", "incoming", "pending-receipt", "received", "in-process", "overdue", "outgoing"]
+RENDERED_QUEUES = [
+    "incoming", "incoming-pending-receipt", "incoming-received", "incoming-in-process",
+    "outgoing", "outgoing-pending-receipt", "outgoing-received", "outgoing-in-process",
+    "awaiting", "overdue",
+]
 
 
 def _queues(response):
-    return {queue["slug"]: queue for queue in response.context["desk_queues"]}
+    queues = {}
+    for group in response.context["desk_direction_groups"]:
+        queues[group["key"]] = {**group, "slug": group["key"]}
+        for stage in group["stages"]:
+            queues[stage["slug"]] = {**stage, "disabled": group["disabled"]}
+    queues.update({queue["slug"]: queue for queue in response.context["desk_attention_queues"]})
+    return queues
 
 
 def _listed(client, queue):
@@ -34,7 +46,7 @@ def test_every_chip_counts_the_list_it_opens(client, users, offices, traffic, ro
     office = "" if role != "admin" else f"?office={offices['SUP'].pk}"
     queues = _queues(client.get(f"{DASHBOARD}{office}"))
 
-    assert list(queues) == QUEUES
+    assert list(queues) == RENDERED_QUEUES
     for slug, queue in queues.items():
         assert not queue["disabled"], slug
         assert queue["count"] == _listed(client, queue), (role, slug)
@@ -47,10 +59,10 @@ def test_across_every_office_direction_is_disabled_and_the_rest_still_agree(clie
     queues = _queues(response)
     body = response.content.decode()
 
-    for slug in ("incoming", "outgoing"):
+    for slug in RENDERED_QUEUES[:8]:
         assert queues[slug]["disabled"] and queues[slug]["count"] is None
     assert body.count('class="pill-toggle is-disabled" aria-disabled="true"') >= 2
-    for slug in ("pending-receipt", "received", "in-process", "overdue"):
+    for slug in ("awaiting", "overdue"):
         assert queues[slug]["count"] == _listed(client, queues[slug]), slug
 
 
@@ -64,9 +76,18 @@ def test_picking_a_queue_shows_its_rows_and_marks_its_chip(client, users, traffi
 
     assert queue["slug"] == slug
     assert len(response.context["attention_records"]) == min(queue["count"], 5)
-    active = re.search(r'<a class="pill-toggle[^"]*is-active"[^>]*aria-current="true"', body)
+    active = [
+        anchor for anchor in re.findall(r'<a\b[^>]*>', body)
+        if f'href="{escape(queue["href"])}"' in anchor
+        and re.search(r'class="pill-toggle[^\"]*\bis-active\b', anchor)
+        and 'aria-current="true"' in anchor
+    ]
     assert active, "the picked chip says so to assistive technology"
-    if slug == "pending-receipt":
+    if slug in ("incoming", "outgoing"):
+        selected = next(group for group in response.context["desk_direction_groups"] if group["key"] == slug)
+        assert selected["active"]
+        assert f'aria-label="All {slug} documents, {queue["count"]} documents"' in active[0]
+    if slug == "awaiting":
         assert ">Reset queue</a>" not in body, "nothing to reset on the default queue"
     else:
         assert ">Reset queue</a>" in body
@@ -82,7 +103,7 @@ def test_a_queue_that_cannot_be_opened_falls_back_with_a_note(client, users, tra
     response = client.get(path)
 
     assert response.status_code == 200
-    assert response.context["desk_queue"]["slug"] == "pending-receipt"
+    assert response.context["desk_queue"]["slug"] == "awaiting"
     notes = [str(message) for message in get_messages(response.wsgi_request)]
     assert any(reason in note for note in notes), notes
 
@@ -108,7 +129,7 @@ def test_the_chips_work_without_script(client, users, traffic):  # noqa: F811
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    for slug in ("received", "in-process", "overdue"):
+    for slug in ("incoming-received", "incoming-in-process", "outgoing-received", "outgoing-in-process", "overdue"):
         assert f'href="/?desk={slug}"' in body, slug
     assert 'hx-push-url="true"' in body
 

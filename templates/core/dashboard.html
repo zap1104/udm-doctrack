@@ -22,11 +22,11 @@
       somebody is already entitled to see.
     {% endcomment %}
     {% comment %}
-      A native Apply button lets keyboard users finish choosing before the
-      page changes. Existing query fields carry the other selections along.
+      Office changes refresh the figures in place. Existing query fields carry
+      the other selections along; the button remains a no-script fallback.
     {% endcomment %}
     {% if scope.can_pick %}
-      <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}">
+      <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}" {% include "partials/_auto_filter_attrs.html" %}>
         {% query_fields "office" "ring" "turnaround_window" %}
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office">
@@ -45,7 +45,7 @@
         </select>
         {# The ring view survives a change of office; the script keeps it in step. #}
         <input type="hidden" name="ring" value="overdue" data-ring-view-input{% if tracking_rings.view != 'overdue' %} disabled{% endif %}>
-        <button class="btn btn-udm-outline btn-sm" type="submit">Apply</button>
+        <button class="btn btn-udm-outline btn-sm" type="submit" data-filter-fallback>Apply</button>
       </form>
     {% endif %}
     {% comment %}
@@ -127,7 +127,7 @@
             {% if show_office_columns %}
               <thead>
                 <tr>
-                  <th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col">Originating office</th><th scope="col">Receiving offices</th><th scope="col" class="text-end">Status</th>
+                  <th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col">Originating office</th><th scope="col">Endorsed to</th><th scope="col" class="text-end">Status</th>
                 </tr>
               </thead>
             {% else %}
@@ -136,7 +136,7 @@
             <tbody>
             {% for record in recent_records %}
               <tr>
-                <td><a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
+                <td><a class="mono" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
                 <td class="desk-cell">
                   <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                   <div class="desk-update-time" title="{{ record.last_movement_at|date:'d M Y, g:i A T' }}">Updated {{ record.last_movement_at|timesince }} ago</div>
@@ -145,7 +145,7 @@
                   <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
                   <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.destination_offices more=record.destination_more %}</td>
                 {% endif %}
-                <td class="text-end">{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
+                <td class="text-end">{% include "partials/_status_pill.html" with status=record.display_status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</td>
               </tr>
             {% empty %}
               <tr><td class="text-muted p-4" colspan="{% if show_office_columns %}5{% else %}3{% endif %}">
@@ -372,14 +372,14 @@
     <div class="card-udm">
       <div class="card-udm-head">
         <div>
-          <h2>Created, handed over and completed &mdash; running totals</h2>
+          <h2>Created, endorsed and completed &mdash; running totals</h2>
           <div class="card-udm-caption">
             Activity since records began.
           </div>
         </div>
         <div class="chart-legend">
           <span class="chart-key"><i class="chart-swatch chart-swatch--created" aria-hidden="true"></i>Created</span>
-          <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Handovers</span>
+          <span class="chart-key"><i class="chart-swatch chart-swatch--pending" aria-hidden="true"></i>Endorsements</span>
           <span class="chart-key"><i class="chart-swatch chart-swatch--completed" aria-hidden="true"></i>Completed</span>
         </div>
       </div>
@@ -388,11 +388,11 @@
           <div class="column-chart-frame" data-column-hover-frame>
           <div class="column-chart" role="img" tabindex="0" data-hover-columns
                aria-describedby="tracking-totals-keyboard-help"
-               aria-label="Grouped column chart of documents created, handed over and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
+               aria-label="Grouped column chart of documents created, endorsed and completed per month, as running totals. Every column is labelled with its value, and the table below lists them all.">
             {% include "core/_column_axis.html" with ticks=monthly.ticks %}
             <div class="column-chart-plot">
               {% for row in monthly.rows %}
-                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} handovers, {{ row.completed }} completed">
+                <div class="column-group" title="{{ row.month|date:'F Y' }} &mdash; {{ row.created }} created, {{ row.transferred }} endorsements, {{ row.completed }} completed">
                   <div class="column-pair">
                     {% with column_hover=True %}{% include "core/_columns.html" %}{% endwith %}
                   </div>
@@ -409,11 +409,11 @@
           <p id="tracking-totals-keyboard-help" class="visually-hidden">Use Left and Right arrow keys to inspect bars, Home and End to jump to the first or last bar, and Escape to close the tooltip.</p>
           <span class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-column-announce></span>
           <div class="chart-scale">
-            Top of the chart = {{ monthly.ceiling }} &middot; documents and handovers use different units &middot;
+            Top of the chart = {{ monthly.ceiling }} &middot; documents and endorsements use different units &middot;
             every bar carries its own running total
           </div>
           <details class="chart-note">
-            <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="How to read this chart" description="Understand running totals and handovers." %}</summary>
+            <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="How to read this chart" description="Understand running totals and endorsements." %}</summary>
             <p>
               Each month is the position at the end of that month, counted from the
               first document in the system &mdash; not that month on its own. A month
@@ -421,7 +421,7 @@
             </p>
             <p>
               Created and Completed count documents. Their difference is not the live
-              work queue; use the tracking cards and Tracking queues for that. Handovers count moves between offices, so one
+              work queue; use the tracking cards and Tracking queues for that. Endorsements count moves between offices, so one
               document endorsed four times adds four &mdash; which is why that bar is
               usually the tallest and why it is not a count of documents. Each bar
               carries its own number so the three are never mistaken for one another.
@@ -432,7 +432,7 @@
             <div class="table-responsive"><table class="table-udm">
               <thead><tr>
                 <th>Month</th><th class="text-end">Created</th>
-                <th class="text-end">Handovers</th><th class="text-end">Completed</th>
+                <th class="text-end">Endorsements</th><th class="text-end">Completed</th>
               </tr></thead>
               <tbody>
                 {% for row in monthly.rows %}
@@ -477,7 +477,7 @@
           </div>
         </div>
         <div class="card-udm-body">
-          <form class="dashboard-turnaround-filters no-print" method="get" action="#turnaround-panel" aria-label="Turnaround filters">
+          <form class="dashboard-turnaround-filters no-print" method="get" action="#turnaround-panel" aria-label="Turnaround filters" {% include "partials/_auto_filter_attrs.html" %}>
             {% for key, value in turnaround_filters.keep %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
             <div>
               <label for="turnaround-month">Month</label>
@@ -492,8 +492,8 @@
               </select>
             </div>
             <div class="dashboard-turnaround-filter-actions">
-              <button type="submit" class="btn btn-sm btn-udm">Apply</button>
-              <a class="btn btn-sm btn-udm-outline" href="{{ turnaround_filters.reset_url }}">Reset</a>
+              <button type="submit" class="btn btn-sm btn-udm" data-filter-fallback>Apply</button>
+              <a class="btn btn-sm btn-udm-outline" href="{{ turnaround_filters.reset_url }}" data-filter-reset>Reset</a>
             </div>
           </form>
           <p class="dashboard-turnaround-period">Daily view · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} &middot; current month so far{% endif %}</p>

@@ -90,22 +90,22 @@ def test_column_tooltip_metadata_is_scoped_and_preserves_values(enhanced, value)
     html = render_to_string("core/_columns.html", {
         "column_hover": enhanced,
         "row": {"has_values": True, "month": date(2026, 8, 1), "columns": [
-            {"label": "Handovers", "series": "handover", "value": value, "percent": 91 if value else 0},
+            {"label": "Endorsements", "series": "endorsement", "value": value, "percent": 91 if value else 0},
         ]},
     })
     parsed = RenderedHTML(html)
     item = next(node for node in parsed.nodes if node["attrs"].get("class") == "column-item")
-    assert item["attrs"]["title"] == f"Handovers · August 2026: {value}"
+    assert item["attrs"]["title"] == f"Endorsements · August 2026: {value}"
     assert item["text"] == str(value)
     assert ("data-column-hover" in item["attrs"]) is enhanced
     if enhanced:
-        assert item["attrs"]["data-column-label"] == "Handovers"
+        assert item["attrs"]["data-column-label"] == "Endorsements"
         assert item["attrs"]["data-column-month"] == "August 2026"
         assert item["attrs"]["data-column-value"] == str(value)
-        assert item["attrs"]["data-column-series"] == "handover"
+        assert item["attrs"]["data-column-series"] == "endorsement"
     else:
         assert not any(name.startswith("data-column-") for name in item["attrs"])
-    bars = [node for node in parsed.nodes if node["attrs"].get("class") == "column column--handover"]
+    bars = [node for node in parsed.nodes if node["attrs"].get("class") == "column column--endorsement"]
     assert len(bars) == (1 if value else 0)
     if bars:
         assert bars[0]["attrs"]["style"] == "height:91%"
@@ -128,8 +128,8 @@ def test_tracking_filter_disclosure_exposes_applied_selections_and_keeps_office_
     assert disclosure["tag"] == "details"
     assert ("open" in disclosure["attrs"]) == bool(selection)
     summary = next(node for node in html.nodes if node["tag"] == "summary" and node["parent"] is disclosure)
-    assert "Filter records" in summary["text"]
-    assert "Stage" in summary["text"]
+    assert "More filters" in summary["text"]
+    assert "Multiple stages" in summary["text"]
     assert ("Filters applied" in summary["text"]) == bool(selection)
     office = html.by_id("tracking-as-office")
     ancestor = office["parent"]

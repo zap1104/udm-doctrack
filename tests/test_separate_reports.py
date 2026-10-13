@@ -1,10 +1,15 @@
 """Reports show statistics; record links open the existing scoped workspaces."""
 from datetime import timedelta
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from django.contrib import messages
+from django.test import RequestFactory
 from django.utils import timezone
 
+from apps.accounts.models import Office, User
 from apps.core import analytics
+from apps.core.views import ReportsView
 from apps.documents.models import Document
 from apps.documents.services import archive_tracking_record
 from apps.tracking.models import ACTIVE_STATUSES, Status, TrackingRecord
@@ -24,6 +29,38 @@ def report_data(users, offices, memo_type):
         route_record(record, [offices["SUP" if office == "MED" else "MED"]], user=users[office.lower()])
         Document.objects.create(title=f"{office} filed document", office=offices[office], document_type=memo_type,
                                 uploaded_by=users[office.lower()], year=timezone.localdate().year)
+
+
+@pytest.mark.parametrize("domain", ["tracking", "documents"])
+@pytest.mark.parametrize("office_id", [None, 17])
+def test_report_workspace_links_use_the_destination_office_vocabulary(domain, office_id):
+    view = ReportsView(report_domain=domain)
+    view.request = RequestFactory().get(f"/{domain}/reports/")
+    view.request.user = User(role="SYSTEM_ADMIN")
+    office = Office(pk=office_id) if office_id else None
+    context = {"document_types": [{"document_type_id": 7}], "by_status": []}
+    links = view._workspace_context({"office": office}, context)
+    targets = [links["report_workspace_url"]]
+    if domain == "documents":
+        targets.append(context["document_types"][0]["workspace_url"])
+    expected = [str(office_id)] if office_id else (["all"] if domain == "tracking" else [])
+    for target in targets:
+        assert parse_qs(urlsplit(target).query).get("office", []) == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("office", ["", "all", "MED"])
+def test_repository_report_links_open_without_invalid_office_warnings(client, users, offices, report_data, office):
+    client.force_login(users["admin"])
+    query = {"office": offices[office].pk if office == "MED" else office}
+    report = client.get("/documents/reports/", query).context
+    targets = [(report["report_workspace_url"], report["total_documents"])]
+    targets.extend((row["workspace_url"], row["total"]) for row in report["document_types"] if row["workspace_url"])
+    for target, expected_count in targets:
+        response = client.get(target)
+        assert response.status_code == 200
+        assert response.context["total"] == expected_count
+        assert not [message for message in messages.get_messages(response.wsgi_request) if message.level >= messages.WARNING]
 
 
 @pytest.mark.django_db

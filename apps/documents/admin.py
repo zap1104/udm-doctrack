@@ -3,6 +3,7 @@
 from django.contrib import admin
 
 from .models import (
+    DeletionReview,
     Document,
     DocumentAccessGrant,
     DocumentFile,
@@ -33,9 +34,18 @@ class DocumentAdmin(admin.ModelAdmin):
     search_fields = ("title", "description", "reference_number", "author_name", "recipient_name")
     date_hierarchy = "created_at"
     filter_horizontal = ("tags", "document_types")
-    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at")
+    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at", "is_active")
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
+
+    def has_delete_permission(self, request, obj=None):
+        # Approval, recovery and file cleanup belong to the review workflow.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and not obj.is_active:
+            return False
+        return super().has_change_permission(request, obj)
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
@@ -43,6 +53,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
     @admin.action(description="Rebuild the search index for the selected documents")
     def rebuild_search_index(self, request, queryset):
+        queryset = queryset.filter(is_active=True)
         for document in queryset:
             document.rebuild_index()
         self.message_user(request, f"Reindexed {queryset.count()} document(s).")
@@ -91,3 +102,18 @@ class SearchResultClickAdmin(admin.ModelAdmin):
 class DocumentAccessGrantAdmin(admin.ModelAdmin):
     list_display = ("document", "office", "user", "granted_by", "created_at")
     search_fields = ("document__title", "reason")
+
+
+@admin.register(DeletionReview)
+class DeletionReviewAdmin(admin.ModelAdmin):
+    list_display = ("document", "decision", "reviewer_label", "reviewed_at")
+    readonly_fields = tuple(field.name for field in DeletionReview._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

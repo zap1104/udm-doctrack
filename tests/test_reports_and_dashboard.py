@@ -80,8 +80,8 @@ TRACKING_PANELS = (
     "Documents by stage",
     "Turnaround Time for the Month of {month}",
     "Overdue: who must act next",
-    "Documents received by office",
-    "Handovers by office: sent and confirmed",
+    "Confirmed receipts by office",
+    "Endorsements by office: sent and confirmed",
 )
 
 #: Document Repository Report, in order.
@@ -309,7 +309,7 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
     assert "this_month_percent" not in row, "no second scale"
 
     body = client.get(REPORTS).content.decode()
-    assert "Documents received by office" in body
+    assert "Confirmed receipts by office" in body
 
 
 # --- 3.10 naming -----------------------------------------------------------
@@ -335,7 +335,7 @@ def test_an_administrator_gets_the_office_filter(client, users, who):
     # is gone, and Apply re-scopes the page after the selection is finished.
     assert 'id="report-office-name"' not in body
     assert "data-auto-submit" not in body
-    assert 'type="submit">Apply</button>' in body
+    assert 'data-filter-fallback>Apply</button>' in body
 
 
 @pytest.mark.django_db

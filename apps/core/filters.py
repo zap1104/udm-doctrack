@@ -154,20 +154,22 @@ def office_touches_record_q(office) -> Q:
     )
 
 
-def _office_by_pk_or_code(raw: str) -> Office | None:
+def _office_by_pk_or_code(raw: str, *, include_inactive=False) -> Office | None:
     """A primary key, or a code for the links that have always emitted one.
 
     The Repository's smart folders have been emitting codes since they were
-    written and people have bookmarked them, so a code still resolves. It reads
-    `Office.active` rather than `Office.objects`, which the Repository did not:
-    an archived office went on filtering as though nothing had changed.
+    written and people have bookmarked them, so a code still resolves. Retired
+    offices may still own visible files; include them for content filters only.
     """
     raw = (raw or "").strip()
     if not raw or len(raw) > 64:
         return None
+    offices = Office.objects if include_inactive else Office.active
     if raw.isascii() and raw.isdigit():
-        return Office.active.filter(pk=raw).first()
-    return Office.active.filter(code__iexact=raw).first()
+        if len(raw) > 19 or int(raw) > 9223372036854775807:
+            return None
+        return offices.filter(pk=raw).first()
+    return offices.filter(code__iexact=raw).first()
 
 
 def resolve(
@@ -218,11 +220,11 @@ def resolve(
     if allow_office and user.is_office_admin and not user.is_system_admin:
         # Content/folder filters cannot change an administrator's office.
         as_office = user.office
-        if raw_office and (as_office is None or raw_office not in {str(as_office.pk), as_office.code}):
+        if raw_office and (as_office is None or raw_office.casefold() not in {str(as_office.pk), as_office.code.casefold()}):
             invalid.append("office")
     elif raw_office and allow_office and not gate_office:
         # Open to everybody: `visible_to` is the bound, not the picker.
-        as_office = _office_by_pk_or_code(raw_office)
+        as_office = _office_by_pk_or_code(raw_office, include_inactive=True)
         if as_office is None:
             invalid.append("office")
     elif raw_office and allow_office:
@@ -234,9 +236,9 @@ def resolve(
         if as_office is None and not all_offices:
             # Either the value names nothing, or this account may not pick. Both
             # are worth saying; the page decides how loudly.
-            as_office = _office_by_pk_or_code(raw_office) if _may_pick(user) else None
-            if as_office is None:
-                invalid.append("office")
+            invalid.append("office")
+            # Match Dashboard/Reports' All offices fallback. It has no direction.
+            all_offices = bool(picker)
     elif raw_office and not allow_office:
         invalid.append("office")
 
@@ -245,7 +247,7 @@ def resolve(
         office = _office_by_pk_or_code(raw)
         if office is None:
             invalid.append("offices")
-        else:
+        elif office not in raised_by:
             raised_by.append(office)
 
     raw_statuses = [value.strip() for value in params.getlist("status") if value.strip()]
@@ -306,6 +308,32 @@ def resolve(
 
 def _may_pick(user) -> bool:
     return bool(getattr(user, "is_system_admin", False))
+
+
+def tracking_params(request, resolved: ResolvedFilters) -> QueryDict:
+    """Canonical state for Tracking forms and links, preserving repeated values.
+
+    Translating legacy overdue URLs once lets deadline links clear the filter.
+    The forms consume the same validated office list as the resolver, so one
+    invalid office cannot discard the other valid selections.
+    """
+    params = request.GET.copy()
+    for name, values in (
+        ("status", resolved.statuses), ("offices", resolved.raised_by_ids),
+        ("scope", [resolved.scope] if resolved.scope else []),
+        ("overdue", [resolved.overdue] if resolved.overdue else []),
+    ):
+        params.pop(name, None)
+        if values:
+            params.setlist(name, values)
+    if "office" in params:
+        if resolved.all_offices:
+            params["office"] = "all"
+        elif resolved.as_office:
+            params["office"] = str(resolved.as_office.pk)
+        else:
+            params.pop("office", None)
+    return params
 
 
 def link(base: str, request=None, **overrides) -> str:

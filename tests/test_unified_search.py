@@ -12,6 +12,9 @@ exactly as it did.
 
 from __future__ import annotations
 
+import re
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
 from django.utils import timezone
 
@@ -286,19 +289,33 @@ def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup
     three-line block and putting "In my office" and "Created by me" up as queues
     beside the Show row that asks that same question.
 
-    The nav is direction now — the stages moved to their own multi-select row —
-    and this page draws it from the same PILL_SCOPES the workspace does, so the
-    two cannot drift."""
+    Each direction now has a parent and three stage links. Their shared
+    navigation keeps the workspace and search aligned, while additional
+    ownership and deadline filters stay below it."""
     client.force_login(users["med"])
-    body = client.get(f"{TRACK}&q=electrical").content.decode()
+    response = client.get(f"{TRACK}&q=electrical")
+    body = response.content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
-    for label in ("All in Tracking", "Incoming", "Outgoing"):
-        assert f">{label}</a>" in queue_nav, label
-    for elsewhere in ("Pending Receipt", "Received", "In Process",
-                      "Completed - Pending Filing"):
-        assert elsewhere not in queue_nav, f"{elsewhere} belongs in the Stage row"
-        assert elsewhere in body, elsewhere
+    assert ">All in Tracking</a>" in queue_nav
+    groups = response.context["direction_filter_groups"]
+    assert [group["key"] for group in groups] == ["incoming", "outgoing"]
+    assert 'aria-label="Direction and document stage"' in queue_nav
+    for group in groups:
+        label_id = f'search-direction-{group["key"]}-label'
+        assert f'<strong id="{label_id}">{group["label"]}</strong>' in queue_nav
+        assert f'role="group" aria-labelledby="{label_id}"' in queue_nav
+        assert f'aria-label="All {group["key"]} documents"' in queue_nav
+        assert [stage["label"] for stage in group["stages"]] == ["Pending Receipt", "Received", "In Process"]
+        for stage in group["stages"]:
+            assert f'aria-label="{group["label"]} · {stage["label"]}"' in queue_nav
+            params = parse_qs(urlsplit(stage["href"]).query)
+            assert params["scope"] == [group["key"]]
+            assert params["status"] == [stage["status"]]
+            assert params["q"] == ["electrical"]
+    direction_nav = re.search(r'<nav class="direction-filters[^\"]*"[^>]*>.*?</nav>', queue_nav, re.S).group()
+    assert "Completed - Pending Filing" not in direction_nav
+    assert "Completed - Pending Filing" in body
     for dropped in ("Waiting for my receipt", "Awaiting anyone", "In my office",
                     "Sent by my office", "Created by me"):
         assert dropped not in queue_nav, dropped

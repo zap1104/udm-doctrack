@@ -6,14 +6,14 @@ scope; it does not grant access to other documents.
 
 | Figure | What is measured | Count used for the average | Month assigned by |
 | --- | --- | --- | --- |
-| Pending Receipt | Sent to confirmed | Valid confirmed handovers, including multiple handovers of one document | Confirmation time |
+| Pending Receipt | Sent to confirmed | Valid confirmed endorsements, including multiple endorsements of one document | Confirmation time |
 | In Process | First receipt to completion, including transfers and waits across offices | Valid completed documents with a first receipt | Completion time |
 | Total lifetime | Creation to completion | Valid completed documents | Completion time |
 
 The Pending Receipt turnaround figure describes completed receipt waits. It is
 different from the live count of documents currently in Pending Receipt.
 Each card states its denominator. Receipt also states how many unique documents
-those handovers belong to.
+those endorsements belong to.
 
 Working time excludes weekends, the configured lunch break, and active holidays
 entered under Administration. By default, a working day is eight office hours
@@ -52,7 +52,7 @@ hover. Their centres and underlying values are not moved or rounded to zero.
 When values overlap, the popup and table show each stage's exact displayed time.
 
 The average is the sum of valid working durations divided by their count.
-Monthly summaries use individual handovers or documents, not an unweighted
+Monthly summaries use individual endorsements or documents, not an unweighted
 average of daily dots. For example, one document taking one hour on Monday and
 three taking three hours on Tuesday have a monthly average of 2.5 hours, not
 two hours. Daily and yearly chart points retain their precision; short positive
@@ -77,14 +77,14 @@ and a deadline. Finishing exactly at the deadline is on time. The percentage
 is rounded to a whole number, with its numerator and denominator displayed.
 
 “Waiting now” is a separate live count across all months. It includes only
-unconfirmed handovers in each unfinished document's current batch, with a send
+unconfirmed endorsements in each unfinished document's current batch, with a send
 time no later than now. A document may already be Received or In Process while
 another recipient has not confirmed, so the unique document count can exceed
 the Pending Receipt stage count. The UI splits those two populations. These
-open handovers enter the receipt average only after confirmation.
+open endorsements enter the receipt average only after confirmation.
 
 The Tracking CSV shows receipt time summed across a document's valid confirmed
-handovers. This is a per-document total, not the per-handover average plotted
+endorsements. This is a per-document total, not the per-endorsement average plotted
 on the dashboard. Its processing and lifetime durations use the same timestamp
 validity rules as the summaries.
 

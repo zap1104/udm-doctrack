@@ -23,7 +23,7 @@
       <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'all' %} aria-current="true"{% endif %}>All</a>
       <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'unread' %} aria-current="true"{% endif %}>Unread</a>
     </nav>
-    <form class="notification-kind-filter ms-auto" method="get">
+    <form class="notification-kind-filter ms-auto" method="get" {% include "partials/_auto_filter_attrs.html" %}>
       <input type="hidden" name="filter" value="{{ active_filter }}">
       {# Carried, or changing the type filter would reset the page length. #}
       <input type="hidden" name="per_page" value="{{ page_size }}">
@@ -32,7 +32,7 @@
         <option value="">All types</option>
         {% for value, label in notification_kinds %}<option value="{{ value }}"{% if active_kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
-      <button class="btn btn-udm-outline btn-sm" type="submit">Apply</button>
+      <button class="btn btn-udm-outline btn-sm" type="submit" data-filter-fallback>Apply</button>
     </form>
   </div>
 </div>

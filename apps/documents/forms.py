@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from django import forms
+from django.core import signing
 from django.db.models import Q
 from django.utils import timezone
 
@@ -9,7 +12,7 @@ from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
 from apps.core.type_forms import DocumentTypeSelectionMixin
 
-from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, Document, OcrLanguage, Source
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, DeletionReview, Document, OcrLanguage, Source
 
 
 class UploadForm(BootstrapFormMixin, forms.Form):
@@ -95,7 +98,9 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
             "access_level": "Who can open this",
             "ocr_language": "Text language",
             "allow_external_ocr": "Allow external OCR for scanned pages",
+            "retention_until": "Deletion review date",
         }
+        help_texts = {"retention_until": "A review date, not an automatic deletion date. Clear it to leave the review unscheduled."}
 
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
@@ -107,6 +112,11 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
             self.fields["office"].queryset = offices.filter(pk=self.instance.office_id or user.office_id)
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})
         self.fields["access_level"].choices = AccessLevel.choices
+        if not self.instance.document_type_id:
+            self.fields["retention_until"].help_text = (
+                "Leave blank to use the main document type's review period when first classified. "
+                "Documents are never deleted automatically."
+            )
 
         for definition in self.metadata_definitions:
             self.fields[f"meta_{definition.key}"] = self._build_metadata_field(definition)
@@ -141,6 +151,11 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
         cleaned = super().clean()
         if not cleaned.get("year") and cleaned.get("document_date"):
             cleaned["year"] = cleaned["document_date"].year
+        kind = cleaned.get("document_type")
+        base_year = cleaned["document_date"].year if cleaned.get("document_date") else cleaned.get("year")
+        if (not self.instance.document_type_id and kind and kind.retention_years and base_year
+                and not cleaned.get("retention_until") and base_year + kind.retention_years > date.max.year):
+            self.add_error("retention_until", "The type's review period exceeds supported dates. Enter a deletion review date or correct the document date.")
         return cleaned
 
     @property
@@ -210,10 +225,10 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
         required=False,
         label="",
         choices=[
-            ("", "Any retention status"),
-            ("due", "Due for disposition review"),
+            ("", "Any deletion review status"),
+            ("due", "Deletion review due"),
             ("soon", "Due within 90 days"),
-            ("unscheduled", "No retention date"),
+            ("unscheduled", "No deletion review date"),
         ],
     )
 
@@ -261,3 +276,71 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
                 "aria-label", self.fields[name].widget.attrs.get("aria-label")
                 or f"Filter by {name.replace('_', ' ')}"
             )
+        self.fields["retention"].widget.attrs["aria-label"] = "Filter by deletion review status"
+
+
+class DeletionReviewForm(BootstrapFormMixin, forms.Form):
+    decision = forms.ChoiceField(label="Review decision", choices=[])
+    next_review_date = forms.DateField(required=False, label="Next deletion review date", widget=DateInput(),
+                                       help_text="Required when keeping or restoring a document. Choose a date after today; leave blank for removal.")
+    reason = forms.CharField(label="Reason / approval reference", max_length=2000,
+                             widget=forms.Textarea(attrs={"rows": 4}),
+                             help_text="Explain the decision. For removal, include the applicable approval or authority reference.")
+    confirmed = forms.BooleanField(required=False,
+                                    label="I confirm this document is approved for removal from the repository.")
+    state_token = forms.CharField(label="Review session", widget=forms.HiddenInput)
+    SALT = "doctrack.document.deletion-review"
+
+    def __init__(self, *args, document, **kwargs):
+        from .services import deletion_review_state
+
+        self.document = document
+        super().__init__(*args, **kwargs)
+        choices = [("", "Choose a decision")]
+        if document.is_active:
+            choices.append(("KEEP", "Keep document and set next review date"))
+            if document.retention_is_due:
+                choices.append(("DELETE", "Remove from repository"))
+        elif document.deletion_recovery_open:
+            choices.append(("RESTORE", "Restore to repository"))
+        self.fields["decision"].choices = choices
+        self.fields["next_review_date"].widget.attrs["min"] = (timezone.localdate() + timedelta(days=1)).isoformat()
+        self.initial["state_token"] = signing.dumps(
+            {"pk": document.pk, "state": deletion_review_state(document)}, salt=self.SALT,
+        )
+
+    def clean_state_token(self):
+        try:
+            payload = signing.loads(self.cleaned_data["state_token"], salt=self.SALT, max_age=7200)
+            if payload["pk"] != self.document.pk:
+                raise signing.BadSignature()
+            return payload["state"]
+        except (signing.BadSignature, KeyError, TypeError):
+            raise forms.ValidationError("This review expired or is invalid. Reload the page and try again.") from None
+
+    def clean(self):
+        data = super().clean()
+        decision, next_date = data.get("decision"), data.get("next_review_date")
+        if decision == DeletionReview.Decision.DELETE:
+            if not data.get("confirmed"):
+                self.add_error("confirmed", "Confirm approval before removing this document.")
+            if next_date:
+                self.add_error("next_review_date", "Leave this blank when removing a document.")
+        elif decision in {DeletionReview.Decision.KEEP, DeletionReview.Decision.RESTORE}:
+            if not next_date or next_date <= timezone.localdate():
+                self.add_error("next_review_date", "Choose a next review date after today.")
+        return data
+
+
+class DeletionQueueForm(BootstrapFormMixin, forms.Form):
+    q = forms.CharField(required=False, label="Title or reference", max_length=255)
+    office = forms.ModelChoiceField(required=False, label="Owning office", queryset=Office.objects.none(),
+                                    empty_label="All available offices")
+    status = forms.ChoiceField(label="Review status", initial="due", choices=[
+        ("due", "Deletion review due"), ("soon", "Due within 90 days"),
+        ("unscheduled", "No review date"), ("deleted", "Deleted documents"),
+    ])
+
+    def __init__(self, *args, offices, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["office"].queryset = offices

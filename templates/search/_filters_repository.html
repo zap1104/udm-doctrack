@@ -26,8 +26,7 @@
       <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
     </div>
 
-    <button class="btn btn-udm-outline w-100 mt-3" type="submit">Apply filters</button>
-    <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}">Clear</a>
+    <a class="btn btn-link w-100 mt-1" href="{% url 'search:index' %}" data-filter-reset>Clear</a>
   </div>
 </div>
 

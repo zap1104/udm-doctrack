@@ -47,7 +47,8 @@ class DocumentType(TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
     description = models.CharField(max_length=255, blank=True)
     retention_years = models.PositiveSmallIntegerField(
-        default=5, help_text="How long records of this type are normally kept."
+        default=5, verbose_name="years before deletion review",
+        help_text="Years from the document date to its first deletion review. Zero leaves it unscheduled. No automatic deletion."
     )
     sort_order = models.PositiveSmallIntegerField(default=100)
     is_active = models.BooleanField(default=True)
@@ -309,7 +310,9 @@ class NotificationQuerySet(models.QuerySet):
     def visible_to(self, user):
         if not getattr(user, "is_authenticated", False) or not user.is_active or not user.office_id:
             return self.none()
-        notifications = self.filter(office_id=user.office_id)
+        notifications = self.filter(office_id=user.office_id).filter(
+            Q(document__isnull=True) | Q(document__is_active=True)
+        )
         if user.is_office_admin and not user.is_system_admin:
             from apps.documents.models import Document
             from apps.tracking.models import TrackingRecord

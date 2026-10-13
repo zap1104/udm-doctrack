@@ -44,7 +44,7 @@ Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people a
 
 ## Status
 
-The deployment-readiness branch adds background extraction through django-q2 with a safe synchronous fallback; bounded OCR retries, language hints, image normalization, confidence display, and a per-document external-provider opt-out; explicit bulk receipt; office-scoped notifications; optional SMTP password recovery; retention review queues that never auto-delete; search click-through analytics; `/healthz/`; deployment-blocking security checks; filtered report exports; pure-Python upload content sniffing; and deeper CI verification. Review [docs/OPERATIONS.md](docs/OPERATIONS.md) and [docs/ACCESSIBILITY_AUDIT.md](docs/ACCESSIBILITY_AUDIT.md) before deploying with real records.
+The deployment-readiness branch adds background extraction through django-q2 with a safe synchronous fallback; bounded OCR retries, language hints, image normalization, confidence display, and a per-document external-provider opt-out; explicit bulk receipt; office-scoped notifications; optional SMTP password recovery; administrator-approved deletion review with 30-day recovery followed by permanent repository cleanup; search click-through analytics; `/healthz/`; deployment-blocking security checks; filtered report exports; pure-Python upload content sniffing; and deeper CI verification. Review [docs/OPERATIONS.md](docs/OPERATIONS.md) and [docs/ACCESSIBILITY_AUDIT.md](docs/ACCESSIBILITY_AUDIT.md) before deploying with real records.
 
 ## What it does
 
@@ -63,7 +63,7 @@ The deployment-readiness branch adds background extraction through django-q2 wit
 - Completed records archive themselves into the repository, files and all.
 - Text is read locally from digital PDFs, Word and Excel files. Scanned pages use OCR only when there is no text layer and the record permits an external provider; with background tasks enabled, the upload returns immediately and the repository shows a plain-language pending state.
 - The system proposes a title, type, office, date and tags. **A person reviews and corrects before anything is saved.**
-- Smart folders are saved views over metadata — one file, many folders, no duplicates on disk. Retention dates are computed from document type and surfaced for human disposition review without automatic deletion.
+- Smart folders are saved views over metadata — one file, many folders, no duplicates on disk. Initial deletion review dates are computed from the main document type. An authorized administrator decides whether to keep a document or remove it from the repository. Approved removals can be restored for 30 days, after which their repository files and metadata are permanently deleted. Completed Tracking history, original Tracking attachments, and a minimal audit entry remain. See [docs/DELETION_REVIEW.md](docs/DELETION_REVIEW.md).
 
 **Search**
 - PostgreSQL full-text search with weighted fields, plus fuzzy matching for misspellings.
@@ -167,7 +167,7 @@ These audits compare permission-scoped counts and record lists, filter choices,
 invalid selections, and preserved form selections. Sessions and request logs
 are rolled back. They complement the full test suite used before pushing.
 The turnaround audit also checks known intervals, short waits, repeated
-handovers, zero working time, month boundaries, and invalid timestamps using
+endorsements, zero working time, month boundaries, and invalid timestamps using
 temporary records that are rolled back. See [the turnaround calculation guide](docs/TURNAROUND_TIME.md).
 The [graph testing report](docs/TURNAROUND_GRAPH_TESTING.md) describes the
 calculation, interaction, permission, and responsive checks and their limits.

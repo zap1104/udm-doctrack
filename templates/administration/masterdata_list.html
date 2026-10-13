@@ -10,7 +10,7 @@
 {% include "administration/_tabs.html" %}
 
 <div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
-  <form method="get" class="row g-2 align-items-end admin-filters">
+  <form method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
     {# Carried so searching does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
     <div class="col-md-{% if has_status %}7{% else %}10{% endif %}">

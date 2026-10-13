@@ -19,6 +19,7 @@ from apps.tracking.services import add_activity
 from .extraction import extract_document_text
 from .models import (
     AccessLevel,
+    DeletionReview,
     Document,
     DocumentFile,
     DocumentMetadata,
@@ -189,10 +190,14 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
 
     if data.get("office"):
         document.office = data["office"]
+    first_classification = not document.document_type_id and main is not None
     document.document_type = main
     document.document_date = data.get("document_date")
     document.year = data.get("year") or (document.document_date or timezone.localdate()).year
-    document.retention_until = data.get("retention_until")
+    if "retention_until" in data:
+        document.retention_until = data["retention_until"]
+    if first_classification and document.retention_until is None:
+        document.retention_until = document.default_retention_until()
     document.ocr_language = data.get("ocr_language") or document.ocr_language
     if "allow_external_ocr" in data:
         document.allow_external_ocr = bool(data["allow_external_ocr"])
@@ -211,6 +216,68 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
 
     document.rebuild_index()
     log_action(AuditLog.Action.UPDATE, f"Saved metadata for “{document.title}”", actor=user, target=document)
+    return document
+
+
+def deletion_review_state(document):
+    return {
+        "updated_at": document.updated_at.isoformat(),
+        "retention_until": document.retention_until.isoformat() if document.retention_until else None,
+        "is_active": document.is_active,
+    }
+
+
+@locked_mutation
+def review_document_deletion(document, *, user, decision, reason, expected_state,
+                             next_review_date=None, confirmed=False):
+    """Make one audited decision against a fresh, locked repository document."""
+    if not document.can_user_review_deletion(user, include_deleted=True):
+        raise PermissionDenied("Only an authorized administrator for the owning office can review deletion.")
+    if expected_state != deletion_review_state(document):
+        raise ValidationError("This document changed after you opened it. Reload the review before deciding.")
+    reason = str(reason or "").strip()
+    if not reason or len(reason) > 2000:
+        raise ValidationError("Enter a reason of up to 2,000 characters.")
+    if decision not in DeletionReview.Decision.values:
+        raise ValidationError("Choose a valid review decision.")
+    restoring = decision == DeletionReview.Decision.RESTORE
+    if restoring == document.is_active:
+        raise ValidationError("This decision does not match the document's current state. Reload the review.")
+    if restoring and not document.deletion_recovery_open:
+        raise ValidationError("The 30-day recovery period has ended. This document cannot be restored.")
+    if decision == DeletionReview.Decision.DELETE:
+        if not document.retention_is_due:
+            raise ValidationError("Deletion review must be due before a document can be removed.")
+        if confirmed is not True:
+            raise ValidationError("Confirm that this document is approved for removal from the repository.")
+        if next_review_date is not None:
+            raise ValidationError("A removed document cannot have a next review date.")
+    elif next_review_date is None or next_review_date <= timezone.localdate():
+        raise ValidationError("Choose a next review date after today.")
+
+    # History is required, in the same transaction, unlike best-effort general logging.
+    DeletionReview.objects.create(
+        document=document, decision=decision, reason=reason,
+        previous_review_date=document.retention_until,
+        next_review_date=next_review_date, reviewed_by=user,
+        reviewer_label=user.display_name[:150],
+    )
+    document.is_active = decision != DeletionReview.Decision.DELETE
+    document.deleted_at = None if document.is_active else timezone.now()
+    document.purge_attempted_at = None
+    if document.is_active:
+        document.retention_until = next_review_date
+    update_fields = ["is_active", "deleted_at", "purge_attempted_at", "retention_until", "updated_at"]
+    if not document.is_active and document.ocr_status in {OcrStatus.PENDING, OcrStatus.RUNNING}:
+        document.ocr_status = OcrStatus.SKIPPED
+        document.ocr_notes = "Text extraction was cancelled when this document was removed from the repository. Restore the document before retrying."
+        update_fields.extend(["ocr_status", "ocr_notes"])
+    document.save(update_fields=update_fields)
+    log_action(
+        AuditLog.Action.DELETE if not document.is_active else AuditLog.Action.UPDATE,
+        f"Deletion review: {DeletionReview.Decision(decision).label} — {document.title}"[:255],
+        actor=user, target=document, extra={"decision": decision, "next_review_date": str(next_review_date or "")},
+    )
     return document
 
 

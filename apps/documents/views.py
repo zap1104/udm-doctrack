@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -13,16 +11,24 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
+from apps.accounts.models import Office
 from apps.core import filters as core_filters
 from apps.core.document_types import document_type_counts, document_type_match, document_type_options
-from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
+from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.utils import log_action
 from apps.tracking.services import pending_upload_for
 
 from . import services
-from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
+from .forms import (
+    AddFilesForm,
+    DeletionQueueForm,
+    DeletionReviewForm,
+    DocumentMetadataForm,
+    RepositoryFilterForm,
+    UploadForm,
+)
 from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document, DocumentFile
 from .suggestions import Suggestion
 
@@ -41,7 +47,7 @@ RETENTION_DUE_SHOWN = 8
 
 
 def _get_document(request, pk) -> Document:
-    documents = Document.objects.with_related()
+    documents = Document.objects.filter(is_active=True).with_related()
     if request.user.is_office_admin and not request.user.is_system_admin:
         documents = documents.visible_to(request.user)
     document = get_object_or_404(documents, pk=pk)
@@ -80,7 +86,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         if data.get("retention") == "due":
             documents = documents.due_for_retention_review(today)
         elif data.get("retention") == "soon":
-            documents = documents.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
+            documents = documents.upcoming_deletion_review(today)
         elif data.get("retention") == "unscheduled":
             documents = documents.filter(retention_until__isnull=True)
         return documents.distinct()
@@ -159,8 +165,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         elif "office" in resolved.invalid:
             messages.warning(
                 request,
-                "That office was not recognised, so every office is shown. "
-                "It may have been archived.",
+                "That office was not recognised. The office filter was not applied.",
             )
 
         folder_pending = pending_visible
@@ -182,7 +187,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
             for field in ("tag", "source", "retention"):
                 form.fields.pop(field)
             if any(request.GET.get(field) for field in ("tag", "source", "retention")):
-                messages.warning(request, "Tags, origin, and retention apply only to filed documents. They were ignored for records awaiting filing.")
+                messages.warning(request, "Tags, origin, and deletion review apply only to filed documents. They were ignored for records awaiting filing.")
 
         # Apply every filter that validated, not the all-or-nothing case. The
         # whole block used to hang off `if form.is_valid()`, so one unrecognised
@@ -270,7 +275,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # zero-count tab into a link to every accessible record instead.
         folder_params = {"office": folder_office_id}
         selected_filters = []
-        filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "retention": "Retention"}
+        filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "retention": "Deletion review"}
         if data.get("type_scope") == "main":
             filter_labels["document_type"] = "Main type"
         for name, label in filter_labels.items():
@@ -395,6 +400,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             "access_level": document.access_level,
             "ocr_language": document.ocr_language,
             "allow_external_ocr": document.allow_external_ocr,
+            "retention_until": document.retention_until,
             "tags": ", ".join(suggestion.get("tags", [])),
             **{f"meta_{key}": value for key, value in (suggestion.get("metadata") or {}).items()},
         }
@@ -444,6 +450,8 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             )
 
         data = form.cleaned_data
+        if "retention_until" not in request.POST:
+            data.pop("retention_until", None)
         accepted = {
             "title": data["title"],
             "document_type_id": data["document_type"].pk if data.get("document_type") else None,
@@ -484,8 +492,10 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
                 "suggestion": document.suggestions.first(),
                 "add_files_form": AddFilesForm(),
                 "can_edit": document.can_user_edit(request.user),
+                "can_review_deletion": document.can_user_review_deletion(request.user),
+                "deletion_reviews": document.deletion_reviews.select_related("reviewed_by")[:20],
                 "related": Document.objects.visible_to(request.user)
-                .filter(office=document.office)
+                .filter(office=document.office, is_active=True)
                 .exclude(pk=document.pk)
                 .order_by("-created_at")[:5],
             },
@@ -520,7 +530,8 @@ class DocumentEditView(OfficeAssignedMixin, View):
         services.save_document_metadata(
             document,
             user=request.user,
-            data=form.cleaned_data,
+            data={key: value for key, value in form.cleaned_data.items()
+                  if key != "retention_until" or "retention_until" in request.POST},
             tag_names=form.cleaned_data.get("tags", []),
             metadata_values=form.metadata_cleaned(),
         )
@@ -613,3 +624,92 @@ class TagSuggestJsonView(AppLoginRequiredMixin, View):
         prefix = request.GET.get("q", "").strip().lower()
         tags = services.suggested_tags_for(request.user).filter(name__icontains=prefix)[:10]
         return JsonResponse({"results": [tag.name for tag in tags]})
+
+
+def _reviewable_documents(user):
+    documents = Document.objects.visible_to(user)
+    if not user.is_system_admin:
+        documents = documents.filter(office_id=user.office_id)
+    return documents
+
+
+class DeletionQueueView(AdminRequiredMixin, View):
+    """A human decision queue scoped to offices the administrator may manage."""
+
+    permission_message = "Only administrators can manage deletion reviews."
+
+    def get(self, request):
+        base = _reviewable_documents(request.user)
+        office_options = Office.objects.filter(pk__in=base.values("office_id")).order_by("name")
+        values = request.GET.copy()
+        if not values.get("status"):
+            values["status"] = "due"
+        form = DeletionQueueForm(values, offices=office_options)
+        valid = form.is_valid()
+        data = form.cleaned_data
+        if not valid:
+            base = base.none()
+        if data.get("office"):
+            base = base.filter(office=data["office"])
+        if data.get("q"):
+            base = base.filter(Q(title__icontains=data["q"]) | Q(reference_number__icontains=data["q"]))
+        active = base.filter(is_active=True)
+        queues = {
+            "due": active.due_for_retention_review(), "soon": active.upcoming_deletion_review(),
+            "unscheduled": active.filter(retention_until__isnull=True), "deleted": base.filter(is_active=False),
+        }
+        status = data.get("status", "due")
+        documents = queues.get(status, base.none()).with_related().order_by("retention_until", "pk")
+        context = paginate(request, documents)
+        context.update({
+            "form": form, "status": status, "total": context["page_obj"].paginator.count,
+            "queue_counts": {key: query.count() for key, query in queues.items()},
+            "queue_links": {key: core_filters.link(request.path, request, status=key) for key in queues},
+        })
+        return render(request, "documents/deletion_queue.html", context)
+
+
+class DeletionReviewView(AdminRequiredMixin, View):
+    template_name = "documents/deletion_review.html"
+    permission_message = "Only administrators can record deletion review decisions."
+
+    def _document(self, request, pk):
+        document = get_object_or_404(_reviewable_documents(request.user).with_related(), pk=pk)
+        if not document.can_user_review_deletion(request.user, include_deleted=True):
+            raise PermissionDenied("Only an authorized administrator for the owning office can review deletion.")
+        return document
+
+    def _render(self, request, document, form):
+        return render(request, self.template_name, {
+            "document": document, "form": form, "files": document.files.all(),
+            "deletion_reviews": document.deletion_reviews.select_related("reviewed_by"),
+        })
+
+    def get(self, request, pk):
+        document = self._document(request, pk)
+        return self._render(request, document, DeletionReviewForm(document=document))
+
+    def post(self, request, pk):
+        document = self._document(request, pk)
+        form = DeletionReviewForm(request.POST, document=document)
+        if form.is_valid():
+            data = form.cleaned_data
+            try:
+                services.review_document_deletion(
+                    document, user=request.user, decision=data["decision"], reason=data["reason"],
+                    next_review_date=data.get("next_review_date"), confirmed=data.get("confirmed"),
+                    expected_state=data["state_token"],
+                )
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            except Document.DoesNotExist as exc:
+                raise Http404("This repository document has been permanently deleted.") from exc
+            else:
+                messages.success(request, "Deletion review recorded. " + (
+                    "The document moved to Deleted documents. It can be restored for 30 days before permanent deletion."
+                    if not document.is_active else "The document is available in the repository with its next review date."
+                ))
+                if document.is_active:
+                    return redirect(document.get_absolute_url())
+                return redirect(core_filters.link(reverse("documents:deletion_queue"), status="deleted"))
+        return self._render(request, document, form)

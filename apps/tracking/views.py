@@ -24,6 +24,7 @@ from apps.core.permissions import active_writer
 from apps.core.utils import log_action, qr_svg
 
 from . import services
+from .filter_navigation import direction_filter_groups, tracking_view_link
 from .forms import (
     DEADLINE_DATE,
     DEADLINE_NONE,
@@ -44,7 +45,6 @@ from .forms import (
     status_pills,
 )
 from .models import (
-    COMPLETED_STATUSES,
     QUIET_EVENTS,
     Attachment,
     RoutingStep,
@@ -70,6 +70,15 @@ def _get_record(request, pk) -> TrackingRecord:
             "This document has not been routed to your office and nobody has granted you access to it."
         )
     return record
+
+
+def _record_return_url(request, record):
+    """Retain a system administrator's validated display perspective only."""
+    if not request.user.is_system_admin or "office" not in request.GET:
+        return record.get_absolute_url()
+    resolved = core_filters.resolve(request)
+    office = "all" if resolved.all_offices else getattr(resolved.as_office, "pk", None)
+    return core_filters.link(record.get_absolute_url(), office=office)
 
 
 def _draft_offices(request, record):
@@ -111,8 +120,11 @@ def _deadline_summary(form):
 
 def tracking_workspace_queryset(request):
     """The same permission-scoped, filtered population for the table and CSV."""
-    form = TrackingFilterForm(request.GET or None)
-    records = services.active_for(request.user)
+    resolved = core_filters.resolve(request)
+    form = TrackingFilterForm(core_filters.tracking_params(request, resolved) or None)
+    queue_office = services.ALL_OFFICES if resolved.all_offices else resolved.as_office
+    stage_office = queue_office if resolved.all_offices else queue_office or request.user.office
+    records = services.active_for(request.user).with_stage_for(stage_office)
 
     # Apply every filter that validated, not only the all-or-nothing case.
     # `if form.is_valid()` used to drop *all* filters when any one of them
@@ -125,7 +137,6 @@ def tracking_workspace_queryset(request):
     # what translates the two legacy spellings — `?status=OVERDUE` and
     # `?scope=overdue` — into the overdue condition, so nothing downstream
     # has to know they exist. Offices and owner the form still validates.
-    resolved = core_filters.resolve(request)
     statuses = resolved.statuses
     scope = resolved.scope
     offices = data.get("offices")
@@ -148,15 +159,9 @@ def tracking_workspace_queryset(request):
     # The sentinel, not an Office, when a system administrator asked for
     # every office — apply_scope drops the office term rather than
     # falling back to the viewer's own.
-    # Two variables because they are two jobs, and one name doing both is
-    # what broke: `queue_office` may be the ALL_OFFICES sentinel, which only
-    # apply_scope understands, while `narrow_office` is always a real Office
-    # or None. The sentinel is truthy and is not an office, so a single
-    # variable sent "__all__" into an `originating_office=` lookup and the
-    # page died with "Field 'id' expected a number".
-    narrow_office = resolved.as_office
-    queue_office = services.ALL_OFFICES if resolved.all_offices else narrow_office
-
+    # A default stage perspective does not narrow the visible population.
+    # Keeping queue_office separate preserves records shared by access grant;
+    # stage_office describes their row without imposing another content filter.
     # The queue as `services.office_queue` builds it: the one place the
     # office rule is written, shared with Search and the dashboard's Action
     # Centre, so a count there is the number of rows here.
@@ -231,6 +236,10 @@ class RecordListView(AppLoginRequiredMixin, View):
         # The same office the queue was built for. Tagged from the viewer's
         # instead, every row of another office's Incoming read "Outgoing".
         services.annotate_direction(page_records, request.user, office=queue_office)
+        services.annotate_stage(
+            page_records, request.user,
+            office=queue_office if resolved.all_offices else queue_office or request.user.office,
+        )
 
         # The completed-but-unapproved queue. It sits on this page rather than
         # on the repository page because these records have not reached the
@@ -267,6 +276,8 @@ class RecordListView(AppLoginRequiredMixin, View):
                 # else. Without it the reader concludes the filter is broken.
                 "impossible_reason": core_filters.impossible_reason(resolved),
                 "resolved": resolved,
+                "direction_filter_groups": direction_filter_groups(request, resolved),
+                "all_tracking_href": tracking_view_link(request, resolved),
                 # The picker is offered to whoever `scope_office` would honour
                 # the parameter for, so the control and the gate cannot drift.
                 "can_pick_office": request.user.is_system_admin,
@@ -492,7 +503,14 @@ class RecordDetailView(AppLoginRequiredMixin, View):
         services.log_view(record, user=request.user)
         # Takes a list, so one record is the same call the listing pages make.
         # It answers "is this ours to act on" without reading the routing table.
-        services.annotate_direction([record], request.user)
+        resolved = core_filters.resolve(request)
+        stage_office = (
+            services.ALL_OFFICES if resolved.all_offices
+            else resolved.as_office or request.user.office
+        )
+        services.annotate_direction([record], request.user, office=stage_office)
+        services.annotate_stage([record], request.user, office=stage_office)
+        office_param = "all" if resolved.all_offices else getattr(stage_office, "pk", None)
         # Split here rather than with |slice in the template. Django's slice
         # filter fails *silently* on a queryset — negative indexing is
         # unsupported, and the filter swallows the error and returns the whole
@@ -502,6 +520,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "from_office", "to_office", "sent_by", "received_by"
             ).order_by("sequence")
         )
+        services.annotate_receiving_offices([record], steps=steps)
         # Office time at each hop, from the engine every turnaround figure uses.
         # Attached to the step for the template; nothing is saved.
         waits = analytics.record_waits(record, steps)
@@ -527,6 +546,23 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             self.template_name,
             {
                 "record": record,
+                "routing_slip_url": core_filters.link(
+                    reverse("tracking:routing_slip", args=[record.pk]), office=office_param,
+                ),
+                "record_action_urls": {
+                    action: core_filters.link(
+                        reverse(f"tracking:{action}", args=[record.pk]),
+                        office=office_param if request.user.is_system_admin and "office" in request.GET else None,
+                    )
+                    for action in [
+                        "confirm_receipt", "add_remark", "route", "complete",
+                        "grant_access", "archive", "reopen",
+                    ]
+                },
+                "stage_scope_label": (
+                    f"Status for {stage_office.name}" if not resolved.all_offices and stage_office
+                    else "Overall status"
+                ),
                 "steps": steps,
                 # Oldest first in both lists, so the fold takes the head and the
                 # tail stays open. A short list makes the head empty on its own,
@@ -546,7 +582,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "route_form": RouteForm(record=record, user=request.user, auto_id="route_%s"),
                 "complete_form": CompleteForm(),
                 "grant_form": GrantAccessForm(actor=request.user),
-                "pending_offices": [] if record.status in COMPLETED_STATUSES else record.pending_receipt_offices(),
+                "pending_offices": record.awaiting_receipt_offices,
                 "can_act": can_act,
                 "can_complete": can_complete,
                 "can_complete_and_file": request.user.is_system_admin or (
@@ -614,17 +650,17 @@ class ConfirmReceiptView(OfficeAssignedMixin, View):
         form = ConfirmReceiptForm(request.POST)
         if not form.is_valid():
             messages.error(request, "Could not read the receipt note.")
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         try:
             services.confirm_receipt(record, user=request.user, note=form.cleaned_data.get("note", ""))
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, getattr(exc, "messages", [str(exc)])[0])
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         messages.success(
             request,
             f"Receipt recorded for {record.tracking_number} at {timezone.localtime():%d %b %Y, %I:%M %p}.",
         )
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class AddRemarkView(OfficeAssignedMixin, View):
@@ -635,16 +671,16 @@ class AddRemarkView(OfficeAssignedMixin, View):
         form = RemarkForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "Write the remark before saving.")
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         try:
             with transaction.atomic():
                 services.add_remark(record, user=request.user, remark=form.cleaned_data["remark"])
                 services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         messages.success(request, "Remark added to the routing history.")
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class RouteRecordView(OfficeAssignedMixin, View):
@@ -659,7 +695,7 @@ class RouteRecordView(OfficeAssignedMixin, View):
             messages.error(request, "; ".join(
                 f"{field}: {error}" for field, errors in form.errors.items() for error in errors
             ))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         try:
             with transaction.atomic():
                 services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
@@ -673,9 +709,9 @@ class RouteRecordView(OfficeAssignedMixin, View):
                 )
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         messages.success(request, "Document routed. The receiving office must confirm receipt.")
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class CompleteRecordView(OfficeAssignedMixin, View):
@@ -686,13 +722,13 @@ class CompleteRecordView(OfficeAssignedMixin, View):
         form = CompleteForm(request.POST)
         if not form.is_valid():
             messages.error(request, "Could not read the completion note.")
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
 
         try:
             services.complete_record(record, user=request.user, note=form.cleaned_data.get("note", ""))
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         message = f"{record.tracking_number} is complete."
 
         # "File it now" is only on offer to somebody who may also approve it.
@@ -711,12 +747,12 @@ class CompleteRecordView(OfficeAssignedMixin, View):
                     f"Completed, but approving it into the repository failed: "
                     f"{'; '.join(getattr(exc, 'messages', [str(exc)]))}",
                 )
-                return redirect(record.get_absolute_url())
+                return redirect(_record_return_url(request, record))
 
         messages.success(
             request, f"{message} It is waiting for an administrator to approve it into the repository."
         )
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class ApproveUploadView(OfficeAssignedMixin, View):
@@ -739,14 +775,14 @@ class ApproveUploadView(OfficeAssignedMixin, View):
             document = services.approve_upload(record, user=request.user)
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         messages.success(
             request, f"{record.tracking_number} was approved into the Document Repository."
         )
         if request.POST.get("next") == "queue":
             return redirect(f"{reverse('tracking:list')}?scope={services.SCOPE_PENDING_UPLOAD}")
         if not document.can_user_view(request.user):
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         return redirect(document.get_absolute_url())
 
 
@@ -763,18 +799,18 @@ class ReopenRecordView(OfficeAssignedMixin, View):
         form = ReopenForm(request.POST)
         if not form.is_valid():
             messages.error(request, "Say briefly why the record is going back.")
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         try:
             services.reopen_record(record, user=request.user, reason=form.cleaned_data["reason"])
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect(record.get_absolute_url())
+            return redirect(_record_return_url(request, record))
         messages.success(
             request,
             f"{record.tracking_number} is back in active tracking. The completion "
             "stays in its history.",
         )
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class GrantAccessView(OfficeAssignedMixin, View):
@@ -784,8 +820,8 @@ class GrantAccessView(OfficeAssignedMixin, View):
             raise PermissionDenied("Only the originating or holding office can share this record.")
         form = GrantAccessForm(request.POST, actor=request.user)
         if not form.is_valid():
-            messages.error(request, "Choose an office or a user.")
-            return redirect(record.get_absolute_url())
+            messages.error(request, next(iter(form.errors.values()))[0])
+            return redirect(_record_return_url(request, record))
         services.grant_access(
             record,
             user=request.user,
@@ -794,7 +830,7 @@ class GrantAccessView(OfficeAssignedMixin, View):
             reason=form.cleaned_data.get("reason", ""),
         )
         messages.success(request, "Access granted.")
-        return redirect(record.get_absolute_url())
+        return redirect(_record_return_url(request, record))
 
 
 class RoutingSlipView(AppLoginRequiredMixin, View):
@@ -822,11 +858,24 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
             request=request,
         )
         services.log_print(record, user=request.user)
+        resolved = core_filters.resolve(request)
+        stage_office = (
+            services.ALL_OFFICES if resolved.all_offices
+            else resolved.as_office or request.user.office
+        )
+        services.annotate_direction([record], request.user, office=stage_office)
+        services.annotate_stage([record], request.user, office=stage_office)
+        office_param = "all" if resolved.all_offices else getattr(stage_office, "pk", None)
         return render(
             request,
             self.template_name,
             {
                 "record": record,
+                "record_url": core_filters.link(record.get_absolute_url(), office=office_param),
+                "stage_scope_label": (
+                    f"Status for {stage_office.name}" if not resolved.all_offices and stage_office
+                    else "Overall status"
+                ),
                 "steps": record.routing_steps.select_related(
                     "from_office", "to_office", "sent_by", "received_by"
                 ).order_by("sequence"),

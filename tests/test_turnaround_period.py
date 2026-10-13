@@ -118,7 +118,7 @@ def test_the_picker_offers_the_charted_months_and_keeps_the_office(client, users
     assert ("office", str(office)) in picker["keep"]
     assert f'<input type="hidden" name="office" value="{office}">' in body
     assert 'id="turnaround-month" name="month"' in body
-    assert 'type="submit" class="btn btn-sm btn-udm">Apply</button>' in body
+    assert 'type="submit" class="btn btn-sm btn-udm" data-filter-fallback>Apply</button>' in body
 
 
 @pytest.mark.django_db
@@ -211,7 +211,7 @@ def test_the_cumulative_chart_says_it_is_a_running_total(client, users):
     client.force_login(users["admin"])
     body = client.get("/").content.decode()
 
-    assert "<h2>Created, handed over and completed &mdash; running totals</h2>" in body
+    assert "<h2>Created, endorsed and completed &mdash; running totals</h2>" in body
 
 
 # --- the memo states its period -------------------------------------------------------

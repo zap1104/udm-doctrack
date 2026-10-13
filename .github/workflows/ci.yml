@@ -91,7 +91,7 @@ jobs:
         run: pytest -q --cov=apps --cov-report=term-missing --cov-fail-under=60 -o faulthandler_timeout=120
 
       - name: Background processing and maintenance regressions
-        run: ENABLE_BACKGROUND_TASKS=True pytest -q tests/test_processing_regressions.py tests/test_security_maintenance.py tests/test_queued_extraction_security.py
+        run: ENABLE_BACKGROUND_TASKS=True pytest -q tests/test_processing_regressions.py tests/test_security_maintenance.py tests/test_queued_extraction_security.py tests/test_deletion_purge.py
 
       - name: Prepare verification database
         env:

@@ -3,7 +3,7 @@
 The dashboard's "Added to the repository" panel printed "HR 3 — 20%" beside a
 bar that filled the card, because every horizontal bar in the app was measured
 against the busiest row: the leader always drew a full track whatever its share.
-The same was true of Reports' stages, overdue offices, receipts, handovers and
+The same was true of Reports' stages, overdue offices, receipts, endorsements and
 document types, and of Administration's most used searches.
 
 Now a bar's track is 100% of the whole the panel names in its caption, the bar
@@ -145,7 +145,7 @@ def test_overdue_bars_are_shares_of_every_overdue_document(client, users, agreem
 
 
 @pytest.mark.django_db
-def test_receipts_and_handovers_are_shares_of_every_one(client, users, agreement):  # noqa: F811
+def test_receipts_and_endorsements_are_shares_of_every_one(client, users, agreement):  # noqa: F811
     client.force_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
@@ -155,11 +155,11 @@ def test_receipts_and_handovers_are_shares_of_every_one(client, users, agreement
         assert row["cumulative_percent"] == analytics.bar(row["cumulative"], volume["receipts"])
 
     flow = context["office_flow"]
-    assert flow["handovers"] >= sum(row["sent"] for row in flow["rows"])
-    assert flow["handovers"] >= sum(row["received"] for row in flow["rows"])
+    assert flow["endorsements"] >= sum(row["sent"] for row in flow["rows"])
+    assert flow["endorsements"] >= sum(row["received"] for row in flow["rows"])
     for row in flow["rows"]:
-        assert row["sent_percent"] == analytics.bar(row["sent"], flow["handovers"])
-        assert row["received_percent"] == analytics.bar(row["received"], flow["handovers"])
+        assert row["sent_percent"] == analytics.bar(row["sent"], flow["endorsements"])
+        assert row["received_percent"] == analytics.bar(row["received"], flow["endorsements"])
 
 
 @pytest.mark.django_db

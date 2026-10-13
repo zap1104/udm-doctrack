@@ -25,7 +25,8 @@ def filter_report_records(records, request, *, repository=False, type_values=Non
         overdue = ""
     if status:
         if status in Status.values:
-            records = records.filter(status=status)
+            stage_field = "stage" if "stage" in records.query.annotations else "status"
+            records = records.filter(**{stage_field: status})
         else:
             messages.warning(request, "Unknown record status. Showing all statuses.")
             status = ""

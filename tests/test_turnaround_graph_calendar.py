@@ -184,11 +184,11 @@ def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(of
         for record in records for sequence in range(1, 6)
     ])
     # This deliberately produces five joined rows per document. The service
-    # must still count each completion once and every actual handover once.
+    # must still count each completion once and every actual endorsement once.
     joined = TrackingRecord.objects.filter(routing_steps__received_at__isnull=False)
     assert joined.count() == 5000
     # A bad membership plan used to rescan the complete joined population for
-    # every handover. Bound each query so that regression fails promptly instead
+    # every endorsement. Bound each query so that regression fails promptly instead
     # of leaving a report or CI waiting for many minutes. PostgreSQL restores
     # this transaction-local setting when pytest rolls back the test.
     with connection.cursor() as cursor:

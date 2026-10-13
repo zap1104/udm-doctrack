@@ -1,0 +1,11 @@
+{% load doctrack %}
+{% if deletion_reviews %}
+<details class="card-udm deletion-review-history mt-4">
+  <summary>Deletion review history</summary>
+  <ol class="list-unstyled card-udm-body mb-0">
+  {% for review in deletion_reviews %}
+    <li><strong>{{ review.get_decision_display }}</strong><p class="text-muted supporting-copy mb-1">{{ review.reviewed_at|date:"d M Y, g:i A" }} · {{ review.reviewer_label }}</p><p class="body-copy mb-1">{{ review.reason|linebreaksbr }}</p><p class="text-muted supporting-copy mb-0">Previous review date: {{ review.previous_review_date|date:"d M Y"|default:"Unscheduled" }}{% if review.next_review_date %} · Next review: {{ review.next_review_date|date:"d M Y" }}{% endif %}</p></li>
+  {% endfor %}
+  </ol>
+</details>
+{% endif %}

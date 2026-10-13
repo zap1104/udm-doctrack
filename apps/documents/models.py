@@ -15,7 +15,7 @@ Rebuild with `Document.rebuild_index()` or `manage.py reindex_documents`.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
@@ -61,6 +61,7 @@ COMPLETED_SOURCE = Source.DTS
 #: historical side of the same rule, by exclusion, so the Historical figure on
 #: the dashboard and the page its segment opens cannot count different sets.
 HISTORICAL_FILTER = "historical"
+DELETION_RECOVERY_DAYS = 30
 
 
 class OcrStatus(models.TextChoices):
@@ -121,6 +122,10 @@ class DocumentQuerySet(models.QuerySet):
     def due_for_retention_review(self, on_date=None):
         return self.filter(retention_until__isnull=False, retention_until__lte=on_date or timezone.localdate())
 
+    def upcoming_deletion_review(self, on_date=None):
+        today = on_date or timezone.localdate()
+        return self.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
+
 
 class DocumentManager(models.Manager.from_queryset(DocumentQuerySet)):
     """Named at module level so Django's makemigrations can import it by dotted
@@ -167,7 +172,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
 
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     access_level = models.CharField(max_length=12, choices=AccessLevel.choices, default=AccessLevel.OFFICE)
-    retention_until = models.DateField(null=True, blank=True)
+    retention_until = models.DateField(null=True, blank=True, verbose_name="deletion review date")
 
     ocr_text = models.TextField(blank=True)
     ocr_status = models.CharField(max_length=8, choices=OcrStatus.choices, default=OcrStatus.PENDING)
@@ -189,6 +194,8 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="uploaded_documents"
     )
     is_active = models.BooleanField(default=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True, editable=False)
+    purge_attempted_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     objects = DocumentManager()
 
@@ -210,7 +217,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.year:
             self.year = (self.document_date or timezone.localdate()).year
-        if self.retention_until is None:
+        if self._state.adding and self.retention_until is None:
             self.retention_until = self.default_retention_until()
             if self.retention_until and kwargs.get("update_fields") is not None:
                 kwargs["update_fields"] = set(kwargs["update_fields"]) | {"retention_until"}
@@ -219,8 +226,12 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     def default_retention_until(self):
         if not self.document_type_id or not self.document_type.retention_years:
             return None
+        if not self.document_date and self.year and not 1 <= self.year <= date.max.year:
+            return None
         base = self.document_date or (date(self.year, 12, 31) if self.year else timezone.localdate())
         target_year = base.year + self.document_type.retention_years
+        if target_year > date.max.year:
+            return None
         try:
             return base.replace(year=target_year)
         except ValueError:
@@ -305,10 +316,10 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         return (text[:220] + "…") if len(text) > 220 else text
 
     def can_user_view(self, user) -> bool:
-        return Document.objects.filter(pk=self.pk).visible_to(user).exists()
+        return Document.objects.filter(pk=self.pk, is_active=True).visible_to(user).exists()
 
     def can_user_edit(self, user) -> bool:
-        if not user.is_authenticated or not user.can_start_work:
+        if not self.is_active or not user.is_authenticated or not user.can_start_work:
             return False
         if user.is_system_admin:
             return True
@@ -317,6 +328,47 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         # Authorship and grants can preserve read access after a transfer.
         # They do not give a former owning office permission to change records.
         return bool(user.office_id) and user.office_id == self.office_id and user.is_records_staff
+
+    def can_user_review_deletion(self, user, *, include_deleted=False) -> bool:
+        if not user.is_authenticated or not user.can_start_work or not user.is_office_admin:
+            return False
+        if not include_deleted and not self.is_active:
+            return False
+        if not user.is_system_admin and self.office_id != user.office_id:
+            return False
+        return Document.objects.filter(pk=self.pk).visible_to(user).exists()
+
+    @property
+    def deletion_purge_at(self):
+        return self.deleted_at + timedelta(days=DELETION_RECOVERY_DAYS) if self.deleted_at else None
+
+    @property
+    def deletion_recovery_open(self):
+        return bool(not self.is_active and self.deletion_purge_at and timezone.now() < self.deletion_purge_at)
+
+
+class DeletionReview(models.Model):
+    """Human decisions remain append-only until permanent repository cleanup."""
+
+    class Decision(models.TextChoices):
+        KEEP = "KEEP", "Kept and rescheduled"
+        DELETE = "DELETE", "Removed from repository"
+        RESTORE = "RESTORE", "Restored to repository"
+
+    document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="deletion_reviews")
+    decision = models.CharField(max_length=8, choices=Decision.choices)
+    reason = models.TextField(max_length=2000)
+    previous_review_date = models.DateField(null=True, blank=True)
+    next_review_date = models.DateField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    reviewer_label = models.CharField(max_length=150)
+    reviewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-reviewed_at", "-pk"]
+
+    def __str__(self):
+        return f"{self.get_decision_display()}: {self.document}"
 
 
 class DocumentFile(TimeStampedModel):

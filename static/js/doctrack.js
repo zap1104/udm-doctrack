@@ -143,6 +143,7 @@
     if (opener && opener.isConnected) opener.focus();
   });
   document.addEventListener("htmx:afterSwap", enhance);
+  document.addEventListener("htmx:historyRestore", enhance);
   enhance();
 })();
 
@@ -360,45 +361,42 @@
      3. Guard rails on actions that cannot be undone.
      Receipt and completion are permanent, so ask once.
   ---------------------------------------------------------------------- */
-  document.querySelectorAll("form[action*='/receipt/']").forEach(function (form) {
-    form.addEventListener("submit", function (event) {
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (form.matches("form[action*='/receipt/']")) {
       var ok = window.confirm(
         "Confirm that your office is taking custody of this document now?\n\n" +
         "The date and time are recorded permanently and cannot be edited later."
       );
       if (!ok) event.preventDefault();
-    });
-  });
-
-  document.querySelectorAll("form[action*='/complete/']").forEach(function (form) {
-    /* The status name comes from the page, rendered through the same filter as
-       every pill, so this dialog cannot call the status something else. */
-    var status = form.getAttribute("data-completed-status") || "Completed - Pending Filing";
-    form.addEventListener("submit", function (event) {
-      var ok = window.confirm(
+    }
+    if (form.matches("form[action*='/complete/']")) {
+      /* The status name comes from the page, through the same badge filter. */
+      var status = form.getAttribute("data-completed-status") || "Completed - Pending Filing";
+      var completed = window.confirm(
         "Mark this document as completed?\n\n" +
         "It stays in Document Tracking, marked " + status + ", until an administrator approves it into the Document Repository."
       );
-      if (!ok) event.preventDefault();
-    });
+      if (!completed) event.preventDefault();
+    }
   });
 
   /* ----------------------------------------------------------------------
      4. Stop double submissions — a second click must not create a second record.
   ---------------------------------------------------------------------- */
-  document.querySelectorAll("form").forEach(function (form) {
-    form.addEventListener("submit", function (event) {
-      window.setTimeout(function () {
-        if (event.defaultPrevented) return;
-        form.querySelectorAll('button[type="submit"]').forEach(function (button) {
-          button.disabled = true;
-          if (!button.dataset.originalText) {
-            button.dataset.originalText = button.textContent;
-            button.textContent = "Working…";
-          }
-        });
-      }, 0);
-    });
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (form.method.toLowerCase() === "get") return;
+    window.setTimeout(function () {
+      if (event.defaultPrevented) return;
+      form.querySelectorAll('button[type="submit"]').forEach(function (button) {
+        button.disabled = true;
+        if (!button.dataset.originalText) {
+          button.dataset.originalText = button.textContent;
+          button.textContent = "Working…";
+        }
+      });
+    }, 0);
   });
 
   /* ----------------------------------------------------------------------
@@ -506,21 +504,13 @@
      button but no [data-print-log] marker (or one added later without it)
      must not end up with a button that silently does nothing.
   ---------------------------------------------------------------------- */
-  document.querySelectorAll("[data-print-trigger]").forEach(function (button) {
-    button.addEventListener("click", function () { window.print(); });
+  document.addEventListener("click", function (event) {
+    if (event.target.closest && event.target.closest("[data-print-trigger]")) window.print();
   });
 
   /* ----------------------------------------------------------------------
-     Auto-submitting selects.
-
-     A filter that applies itself on change, without an inline onchange
-     handler: django-csp allows no inline script, so `onchange="this.form.submit()"`
-     either fails in production or forces 'unsafe-inline' into script-src for
-     the whole site. Declared as data, listened for here, like every other
-     behaviour on the page.
-
-     The markup keeps a <noscript> submit button, so the control still works
-     with scripting off.
+     In-place GET filters are enhanced in auto-filters.js. They use HTMX and
+     external listeners so Content-Security-Policy needs no inline handlers.
   ---------------------------------------------------------------------- */
   /* [data-reload]: the error page's "Try Again". It carried
      onclick="window.location.reload()", which the Content-Security-Policy
@@ -555,19 +545,17 @@
      opening a print dialog — via the button OR Ctrl+P — posts one entry.
   ---------------------------------------------------------------------- */
   (function () {
-    var marker = document.querySelector("[data-print-log]");
-    if (!marker) return;
-
-    var url = marker.dataset.printLogUrl;
-    var token = marker.dataset.printLogCsrf;
-    if (!url || !token) return;
-
     /* One entry per print dialog, not per page view: a user who prints twice
        has produced two copies, but a dialog they cancel is still an attempt
        worth recording once. */
     var logging = false;
 
     function recordPrint() {
+      var marker = document.querySelector("[data-print-log]");
+      if (!marker) return;
+      var url = marker.dataset.printLogUrl;
+      var token = marker.dataset.printLogCsrf;
+      if (!url || !token) return;
       if (logging) return;
       logging = true;
       window.setTimeout(function () { logging = false; }, 2000);
@@ -903,9 +891,10 @@
      The template hands over the field ids and the endpoint on a marker,
      so Django keeps ownership of both.
   ---------------------------------------------------------------------- */
-  (function () {
+  function enhanceSearch() {
     var marker = document.querySelector("[data-search-enhance]");
-    if (!marker) return;
+    if (!marker || marker.dataset.searchReady === "1") return;
+    marker.dataset.searchReady = "1";
 
     var slider = document.getElementById(marker.dataset.searchRelevanceId || "");
     var readout = document.getElementById("relevance-value");
@@ -944,7 +933,10 @@
           .catch(function () { /* suggestions are optional */ });
       }, 220);
     });
-  })();
+  }
+  enhanceSearch();
+  document.addEventListener("htmx:afterSwap", enhanceSearch);
+  document.addEventListener("htmx:historyRestore", enhanceSearch);
 
   /* ----------------------------------------------------------------------
      Phase 6 mobile navigation and shared accessibility helpers.
@@ -1389,8 +1381,7 @@
 (function () {
   "use strict";
 
-  var charts = document.querySelectorAll(".column-chart");
-  if (!charts.length) return;
+  var charts = [];
 
   function touching(chart) {
     var labels = chart.querySelectorAll(".column-value");
@@ -1414,12 +1405,18 @@
     for (var i = 0; i < charts.length; i++) fit(charts[i]);
   }
 
-  fitAll();
+  function enhanceCharts() {
+    if (observer) observer.disconnect();
+    charts = document.querySelectorAll(".column-chart");
+    fitAll();
+    if (observer) charts.forEach(function (chart) { observer.observe(chart); });
+  }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
 
+  var observer = null;
   if (window.ResizeObserver) {
     var widths = new WeakMap();
-    var observer = new ResizeObserver(function (entries) {
+    observer = new ResizeObserver(function (entries) {
       for (var i = 0; i < entries.length; i++) {
         var chart = entries[i].target;
         var width = Math.round(entries[i].contentRect.width);
@@ -1428,8 +1425,10 @@
         fit(chart);
       }
     });
-    for (var n = 0; n < charts.length; n++) observer.observe(charts[n]);
   }
+  enhanceCharts();
+  document.addEventListener("htmx:afterSwap", enhanceCharts);
+  document.addEventListener("htmx:historyRestore", enhanceCharts);
 
   window.addEventListener("beforeprint", function () {
     for (var i = 0; i < charts.length; i++) charts[i].classList.add("column-chart--turned");

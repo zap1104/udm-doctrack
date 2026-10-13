@@ -44,7 +44,7 @@
       <button type="button" class="btn btn-udm-outline btn-sm" data-bs-toggle="modal" data-bs-target="#turnaround-calculation-dialog"
               data-turnaround-calculation data-stage-label="{{ stage.label }}"
               data-equation="{{ stage.average_calendar_seconds|duration_hours }} total wait − {{ stage.average_outside_seconds|duration_hours }} excluded ≈ {{ stage.average_seconds|duration_hours }} within office hours."
-              data-average-equation="{{ stage.total_office_seconds|duration_hours }} counted ÷ {{ stage.samples }} {% if stage.key == 'receipt' %}confirmed handover{{ stage.samples|pluralize }}{% else %}completed document{{ stage.samples|pluralize }}{% endif %} ≈ {{ stage.average_seconds|duration_hours }}."
+              data-average-equation="{{ stage.total_office_seconds|duration_hours }} counted ÷ {{ stage.samples }} {% if stage.key == 'receipt' %}confirmed endorsement{{ stage.samples|pluralize }}{% else %}completed document{{ stage.samples|pluralize }}{% endif %} ≈ {{ stage.average_seconds|duration_hours }}."
               aria-label="View calculation for {{ stage.label }}">View calculation</button>
     </div>
   {% else %}

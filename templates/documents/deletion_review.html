@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load static doctrack %}
+{% block title %}Deletion Review · {{ document.title }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form deletion-review-page">
+  <div class="page-head"><div><div class="eyebrow">Document Repository · Administrators</div><h1>{% if document.is_active %}Deletion review{% elif document.deletion_recovery_open %}Restore a document{% else %}Awaiting permanent deletion{% endif %}</h1><p class="sub">{{ document.title }}</p></div><a class="btn btn-udm-outline" href="{% url 'documents:deletion_queue' %}">Back to reviews</a></div>
+  <div class="row g-4 workspace-columns">
+    <div class="col-lg-7 workspace-primary">
+      <section class="card-udm" aria-labelledby="review-decision-title">
+        <div class="card-udm-head"><h2 id="review-decision-title">{% if document.is_active %}Record your decision{% elif document.deletion_recovery_open %}Review before restoring{% else %}Recovery period ended{% endif %}</h2></div>
+        <div class="card-udm-body">
+          {% if not document.is_active %}{% if document.deletion_recovery_open %}<p class="help-note">This document can be restored for 30 days after removal. Restore it before <strong>{{ document.deletion_purge_at|date:"d M Y, g:i A T" }}</strong> to keep its repository files and metadata.</p><p class="supporting-copy">Restoration returns the same document, files, metadata, and access permissions to the repository. After the deadline, these repository files and metadata will be permanently deleted.</p>{% else %}<p class="help-note">The 30-day recovery period has ended. This document can no longer be restored. Its repository files and metadata are awaiting permanent deletion; cleanup retries automatically if it fails.</p><p class="supporting-copy">Completed Tracking history, original Tracking attachments, and a minimal audit entry remain.</p>{% endif %}{% elif document.retention_is_due %}<p class="help-note">The review date is today or earlier. Check the document and applicable approval before deciding.</p>{% else %}<p class="help-note">{% if document.retention_until %}This document is not due for deletion review yet.{% else %}This document has no review date.{% endif %} You can keep it and set its next review date. Removal is available only when review is due.</p>{% endif %}
+          {% if document.is_active or document.deletion_recovery_open %}
+          <form method="post" novalidate data-deletion-review-form>
+            {% csrf_token %}
+            {% include "partials/_form_errors.html" %}
+            {% if form.errors %}<p><a href="{% url 'documents:deletion_review' document.pk %}">Reload this review</a> to check the latest document state.</p>{% endif %}
+            {{ form.state_token }}
+            {% if form.state_token.errors %}<div class="field-errors" role="alert">{{ form.state_token.errors }}</div>{% endif %}
+            {% include "partials/_field.html" with field=form.decision %}
+            <div data-review-next-date>{% include "partials/_field.html" with field=form.next_review_date %}</div>
+            {% include "partials/_field.html" with field=form.reason %}
+            <div data-review-removal>
+              <p class="help-note">Removal immediately hides this document from the repository, search, reports, and repository downloads. An authorized administrator can restore it within 30 days. After that, its repository files and metadata are permanently deleted.</p>
+              <p class="supporting-copy">Completed Tracking history, original Tracking attachments, and a minimal audit entry remain. Check the applicable disposal approval before confirming.</p>
+              {% include "partials/_field.html" with field=form.confirmed %}
+            </div>
+            <div class="form-actions"><button class="btn btn-udm" type="submit" data-review-submit>Record decision</button><a class="btn btn-udm-outline" href="{% url 'documents:deletion_queue' %}">Cancel</a></div>
+          </form>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+    <div class="col-lg-5 workspace-support">
+      <section class="card-udm" aria-labelledby="review-document-title"><div class="card-udm-head"><h2 id="review-document-title">Document to review</h2></div><div class="card-udm-body">
+        <dl class="deletion-review-metadata"><dt>Owning office</dt><dd>{{ document.office.name }}</dd><dt>Document types</dt><dd>{{ document.document_type_names|default:"Unclassified" }}</dd><dt>Review date</dt><dd>{{ document.retention_until|date:"d M Y"|default:"No review date" }}</dd>{% if not document.is_active %}<dt>Removed on</dt><dd>{{ document.deleted_at|date:"d M Y, g:i A T"|default:"Not recorded" }}</dd><dt>Recovery deadline</dt><dd>{{ document.deletion_purge_at|date:"d M Y, g:i A T"|default:"Unavailable" }}</dd>{% endif %}<dt>Access</dt><dd>{{ document.get_access_level_display }}</dd></dl>
+        {% if document.is_active %}<p><a href="{{ document.get_absolute_url }}">Open document details</a></p>{% endif %}
+        <h3 class="section-heading">Repository files</h3><ul class="ps-3 mb-0">{% for file in files %}<li class="body-copy">{% if document.is_active %}<a href="{% url 'documents:file_download' file.pk %}">{{ file.original_name }}</a>{% else %}{{ file.original_name }}{% endif %} <span class="text-muted supporting-copy">({{ file.size|human_size }})</span></li>{% empty %}<li>No files attached.</li>{% endfor %}</ul>
+        {% if document.tracking_record %}<p class="supporting-copy mt-3 mb-0">Completed Tracking history is retained independently of this review.</p>{% endif %}
+      </div></section>
+    </div>
+  </div>
+  {% include "documents/_deletion_review_history.html" %}
+</div>
+{% endblock %}
+{% block extra_scripts %}<script src="{% static 'js/deletion-review.js' %}"></script>{% endblock %}
