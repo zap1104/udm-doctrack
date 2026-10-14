@@ -44,6 +44,7 @@ from .business_time import (
     working_day_seconds,
 )
 from .colors import STATUS_COLOURS
+from .processing_time import processing_seconds
 
 #: Months of history the charts cover. A year is the reporting unit offices
 #: actually use, and it keeps every column chart to twelve readable bars.
@@ -504,7 +505,7 @@ def monthly_volume(records) -> dict:
 #: what the stage is called, what it measures, and the thing it is counted in.
 TURNAROUND_STAGES = (
     ("receipt", Status.PENDING_RECEIPT.label, "sent → confirmed", "endorsement"),
-    ("processing", Status.IN_PROCESS.label, "first receipt → completed", "document"),
+    ("processing", Status.IN_PROCESS.label, "first receipt → completed, excluding receipt waits", "document"),
     ("lifetime", "Total lifetime", "created → completed", "document"),
 )
 
@@ -537,48 +538,67 @@ def _turnaround_samples(records, since=None, until=None, holidays=None, *, now=N
     visible_number = records.filter(pk=OuterRef("record_id")).order_by().values("tracking_number")[:1]
     steps = RoutingStep.objects.annotate(
         turnaround_tracking_number=Subquery(visible_number)
-    ).filter(turnaround_tracking_number__isnull=False, received_at__lte=now)
+    ).filter(turnaround_tracking_number__isnull=False)
     done = records.filter(status__in=COMPLETED_STATUSES, completed_at__lte=now)
+    receipt_period = Q(received_at__lte=now)
     if since is not None:
-        steps = steps.filter(received_at__gte=since)
+        receipt_period &= Q(received_at__gte=since)
         done = done.filter(completed_at__gte=since)
     if until is not None:
-        steps = steps.filter(received_at__lt=until)
+        receipt_period &= Q(received_at__lt=until)
         done = done.filter(completed_at__lt=until)
+    completed_rows = list(done.order_by().values_list(
+        "pk", "tracking_number", "created_at", "first_received_at", "completed_at", "due_at",
+    ).distinct())
+    completed_ids = {row[0] for row in completed_rows}
+    history = {record_id: [] for record_id in completed_ids}
 
     samples = {key: [] for key, *_ in TURNAROUND_STAGES}
     excluded = {key: 0 for key, *_ in TURNAROUND_STAGES}
     deadlines = []
 
-    def sample(start, end, record_id, tracking_number):
+    def sample(start, end, record_id, tracking_number, *, measured=None):
+        office, calendar = measured if measured is not None else (
+            business_seconds_between(start, end, holidays), max(0.0, (end - start).total_seconds()),
+        )
         return {
-            "office": business_seconds_between(start, end, holidays),
-            "calendar": max(0.0, (end - start).total_seconds()),
+            "office": office,
+            "calendar": calendar,
             "ended": end,
             "month": _month_of(end),
             "record_id": record_id,
             "tracking_number": tracking_number,
         }
 
-    for sent_at, received_at, record_id, number in steps.order_by().values_list(
-        "sent_at", "received_at", "record_id", "turnaround_tracking_number"
+    # One grouped read supplies both receipt samples in this period and the
+    # complete routing history for documents completed in it. Earlier waits
+    # must still pause processing even if their confirmations were last month.
+    for sent_at, received_at, batch, record_id, number in steps.filter(
+        receipt_period | Q(record_id__in=completed_ids),
+    ).order_by().values_list(
+        "sent_at", "received_at", "batch", "record_id", "turnaround_tracking_number"
     ):
+        if record_id in history:
+            history[record_id].append((batch, sent_at, received_at))
+        if received_at is None or received_at > now or (since is not None and received_at < since) or (
+            until is not None and received_at >= until
+        ):
+            continue
         if sent_at and received_at >= sent_at:
             samples["receipt"].append(sample(sent_at, received_at, record_id, number))
         else:
             excluded["receipt"] += 1
 
-    for record_id, number, created_at, first_received_at, completed_at, due_at in (
-        done.order_by().values_list(
-            "pk", "tracking_number", "created_at", "first_received_at", "completed_at", "due_at"
-        ).distinct()
-    ):
+    for record_id, number, created_at, first_received_at, completed_at, due_at in completed_rows:
         if completed_at >= created_at:
             samples["lifetime"].append(sample(created_at, completed_at, record_id, number))
         else:
             excluded["lifetime"] += 1
         if first_received_at and created_at <= first_received_at <= completed_at:
-            samples["processing"].append(sample(first_received_at, completed_at, record_id, number))
+            samples["processing"].append(sample(
+                first_received_at, completed_at, record_id, number,
+                measured=processing_seconds(first_received_at, completed_at, history[record_id], holidays),
+            ))
         else:
             excluded["processing"] += 1
         if due_at and completed_at >= created_at:
@@ -827,6 +847,7 @@ def record_durations(record, steps, holidays=None, *, now=None) -> dict:
     if holidays is None:
         holidays = load_holidays()
     now = now or timezone.now()
+    steps = list(steps)
     finished = (
         record.status in COMPLETED_STATUSES and record.completed_at
         and record.created_at <= record.completed_at <= now
@@ -839,7 +860,10 @@ def record_durations(record, steps, holidays=None, *, now=None) -> dict:
             if received else None
         ),
         "processing": (
-            business_seconds_between(record.first_received_at, record.completed_at, holidays)
+            processing_seconds(
+                record.first_received_at, record.completed_at,
+                ((step.batch, step.sent_at, step.received_at) for step in steps), holidays,
+            )[0]
             if finished and record.first_received_at
             and record.created_at <= record.first_received_at <= record.completed_at else None
         ),

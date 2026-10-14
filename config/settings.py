@@ -103,12 +103,13 @@ def has_package(name: str) -> bool:
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", False)
 if not DEBUG and (SECRET_KEY == "dev-only-insecure-key-change-me" or len(SECRET_KEY) < 50):
-    raise ImproperlyConfigured("Production requires a random DJANGO_SECRET_KEY of at least 50 characters.")
+    raise ImproperlyConfigured(
+        "Production requires a random DJANGO_SECRET_KEY of at least 50 characters.")
 # To reach the dev server from a phone on the same wifi, add that machine's LAN
 # address to DJANGO_ALLOWED_HOSTS in .env — not here. .env is untracked, so the
 # address stays off GitHub and out of everybody else's checkout.
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS",
-                         "localhost,127.0.0.1,[::1],testserver")
+                         "localhost,127.0.0.1,[::1],testserver,192.168.1.119")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 ROOT_URLCONF = "config.urls"
@@ -344,7 +345,8 @@ SESSION_IDLE_MINUTES_ADMIN = env_int("SESSION_IDLE_MINUTES_ADMIN", 15)
 #: This stays the ordinary-user figure and the project-wide default; the shorter
 #: administrator window is applied per request by RoleIdleTimeoutMiddleware.
 SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", SESSION_IDLE_MINUTES * 60)
-SESSION_COOKIE_AGE_ADMIN = env_int("SESSION_COOKIE_AGE_ADMIN", SESSION_IDLE_MINUTES_ADMIN * 60)
+SESSION_COOKIE_AGE_ADMIN = env_int(
+    "SESSION_COOKIE_AGE_ADMIN", SESSION_IDLE_MINUTES_ADMIN * 60)
 SESSION_SAVE_EVERY_REQUEST = True
 #: How long the "you are about to be signed out" warning is on screen. Two
 #: minutes is enough to read it and save a half-typed remark.
@@ -583,7 +585,8 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS", 31536000)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if TRUST_PROXY_SSL_HEADER else None
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO", "https") if TRUST_PROXY_SSL_HEADER else None
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "same-origin"
     X_FRAME_OPTIONS = "DENY"

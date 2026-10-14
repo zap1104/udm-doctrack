@@ -85,106 +85,128 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
     notes = []
     statuses = []
     confidences = []
-    for document_file in selected.order_by("created_at"):
-        document.refresh_from_db()
-        actor, allowed = _extraction_actor(document, user_id)
-        if not allowed:
-            return _cancel_extraction(document)
-        try:
-            document_file.file.open("rb")
+    pending_files = list(selected.order_by("created_at", "pk"))
+    processed_file_ids = set()
+    # A full retry includes files added while a provider was processing. Bound
+    # discovery so continuous uploads cannot keep one worker running forever.
+    for pass_number in range(3):
+        for document_file in pending_files:
+            document.refresh_from_db()
+            actor, allowed = _extraction_actor(document, user_id)
+            if not allowed:
+                return _cancel_extraction(document)
+            processed_file_ids.add(document_file.pk)
             try:
-                result = extract_document_text(
-                    document_file.file,
-                    document_file.original_name,
-                    language_hint=document.ocr_language,
-                    allow_external_ocr=document.allow_external_ocr,
-                )
-            finally:
-                document_file.file.close()
-        except (FileNotFoundError, OSError) as exc:
-            failures.append(f"{document_file.original_name}: file is missing from storage")
-            logger.warning("Extraction could not open %s: %s", document_file.pk, exc)
-            continue
-        # A document may be removed while a provider is processing the file.
-        # Serialize this write with review decisions and recheck fresh access.
+                document_file.file.open("rb")
+                try:
+                    result = extract_document_text(
+                        document_file.file,
+                        document_file.original_name,
+                        language_hint=document.ocr_language,
+                        allow_external_ocr=document.allow_external_ocr,
+                    )
+                finally:
+                    document_file.file.close()
+            except (FileNotFoundError, OSError) as exc:
+                failures.append(f"{document_file.original_name}: file is missing from storage")
+                logger.warning("Extraction could not open %s: %s", document_file.pk, exc)
+                continue
+            # A document may be removed while a provider is processing the file.
+            # Serialize this write with review decisions and recheck fresh access.
+            with transaction.atomic():
+                if user_id is not None:
+                    User.objects.select_for_update().filter(pk=user_id).first()
+                document = Document.objects.select_for_update().get(pk=document.pk)
+                actor, allowed = _extraction_actor(document, user_id)
+                if not allowed:
+                    return _cancel_extraction(document)
+                if result.status not in {OcrStatus.FAILED, OcrStatus.SKIPPED}:
+                    document_file.page_count = result.pages
+                    document_file.extracted_chars = result.char_count
+                    document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
+            engines.append(result.engine)
+            statuses.append(result.status)
+            notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
+            if result.confidence is not None:
+                confidences.append(result.confidence)
+            if result.text:
+                parts.append(result.text)
+            if result.status == OcrStatus.FAILED:
+                failures.extend(result.notes)
+
+        extracted = normalise_text("\n\n".join(parts))[:200000]
+        engine = ", ".join(dict.fromkeys(item for item in engines if item))[:32]
+        confidence = round(sum(confidences) / len(confidences), 4) if confidences else None
         with transaction.atomic():
+            # Match the actor-before-document lock order used by mutation services.
+            # Demotion cannot race the final permission check and result write.
             if user_id is not None:
                 User.objects.select_for_update().filter(pk=user_id).first()
             document = Document.objects.select_for_update().get(pk=document.pk)
             actor, allowed = _extraction_actor(document, user_id)
             if not allowed:
                 return _cancel_extraction(document)
-            document_file.page_count = result.pages
-            document_file.extracted_chars = result.char_count
-            document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
-        engines.append(result.engine)
-        statuses.append(result.status)
-        notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
-        if result.confidence is not None:
-            confidences.append(result.confidence)
-        if result.text:
-            parts.append(result.text)
-        if result.status == OcrStatus.FAILED:
-            failures.extend(result.notes)
-
-    extracted = normalise_text("\n\n".join(parts))[:200000]
-    engine = ", ".join(dict.fromkeys(item for item in engines if item))[:32]
-    confidence = round(sum(confidences) / len(confidences), 4) if confidences else None
-    with transaction.atomic():
-        # Match the actor-before-document lock order used by mutation services.
-        # Demotion cannot race the final permission check and result write.
-        if user_id is not None:
-            User.objects.select_for_update().filter(pk=user_id).first()
-        document = Document.objects.select_for_update().get(pk=document.pk)
-        actor, allowed = _extraction_actor(document, user_id)
-        if not allowed:
-            return _cancel_extraction(document)
-        incomplete = failures or any(item in {OcrStatus.FAILED, OcrStatus.SKIPPED} for item in statuses)
-        if replace and incomplete and document.ocr_text:
-            # A failed retry must not erase the last usable search text.
-            combined = document.ocr_text
-        elif replace or not document.ocr_text:
-            combined = extracted
-        else:
-            combined = normalise_text(f"{document.ocr_text}\n\n{extracted}")[:200000]
-        if failures or OcrStatus.FAILED in statuses:
-            status = OcrStatus.FAILED
-        elif OcrStatus.SKIPPED in statuses:
-            status = OcrStatus.SKIPPED
-        elif combined:
-            status = OcrStatus.DONE
-        else:
-            status = OcrStatus.EMPTY
-        document.ocr_text = combined
-        document.ocr_status = status
-        document.ocr_engine = engine or ("failed" if failures else "none")
-        document.ocr_confidence = confidence
-        document.ocr_notes = "\n".join((notes + failures)[:20])[:4000]
-        document.page_count = document.file_page_count
-        document.save(
-            update_fields=[
-                "ocr_text", "ocr_status", "ocr_engine", "ocr_confidence", "ocr_notes", "page_count", "updated_at"
-            ]
-        )
-        suggestion = suggest_metadata(
-            text=document.ocr_text, filename=document.title, office=document.office, user=actor
-        )
-        MetadataSuggestion.objects.create(
-            document=document,
-            engine=suggestion.engine,
-            engine_version=suggestion.engine_version,
-            suggested=suggestion.as_dict(),
-            text_sample=document.ocr_text[:4000],
-        )
-        document.rebuild_index()
-        log_action(
-            AuditLog.Action.UPDATE,
-            f"Finished text extraction for “{document.title}”",
-            actor=actor,
-            target=document,
-            extra={"status": status, "failures": failures[:5], "notes": notes[:5], "confidence": confidence},
-        )
-    return {"document_id": document.pk, "status": status, "characters": len(combined), "failures": failures}
+            if replace and file_ids is None:
+                pending_files = list(DocumentFile.objects.filter(document=document).exclude(
+                    pk__in=processed_file_ids,
+                ).order_by("created_at", "pk"))
+                if pending_files:
+                    if pass_number < 2:
+                        # Continue only after this transaction releases its locks.
+                        continue
+                    failures.append("Attachments kept changing during extraction. Existing text was preserved; retry when uploads finish.")
+            incomplete = failures or any(item in {OcrStatus.FAILED, OcrStatus.SKIPPED} for item in statuses)
+            if replace and incomplete and document.ocr_text:
+                # A failed retry must not erase the last usable search text.
+                combined = document.ocr_text
+            elif replace or not document.ocr_text:
+                combined = extracted
+            else:
+                combined = document.ocr_text
+                normalized_combined = normalise_text(combined)
+                for part in parts:
+                    text = normalise_text(part)
+                    if text and text not in normalized_combined:
+                        combined = normalise_text(f"{combined}\n\n{text}")[:200000]
+                        normalized_combined = combined
+            if failures or OcrStatus.FAILED in statuses:
+                status = OcrStatus.FAILED
+            elif OcrStatus.SKIPPED in statuses:
+                status = OcrStatus.SKIPPED
+            elif combined:
+                status = OcrStatus.DONE
+            else:
+                status = OcrStatus.EMPTY
+            document.ocr_text = combined
+            document.ocr_status = status
+            document.ocr_engine = engine or ("failed" if failures else "none")
+            document.ocr_confidence = confidence
+            document.ocr_notes = "\n".join((notes + failures)[:20])[:4000]
+            document.page_count = document.file_page_count
+            document.save(
+                update_fields=[
+                    "ocr_text", "ocr_status", "ocr_engine", "ocr_confidence", "ocr_notes", "page_count", "updated_at"
+                ]
+            )
+            suggestion = suggest_metadata(
+                text=document.ocr_text, filename=document.title, office=document.office, user=actor
+            )
+            MetadataSuggestion.objects.create(
+                document=document,
+                engine=suggestion.engine,
+                engine_version=suggestion.engine_version,
+                suggested=suggestion.as_dict(),
+                text_sample=document.ocr_text[:4000],
+            )
+            document.rebuild_index()
+            log_action(
+                AuditLog.Action.UPDATE,
+                f"Finished text extraction for “{document.title}”",
+                actor=actor,
+                target=document,
+                extra={"status": status, "failures": failures[:5], "notes": notes[:5], "confidence": confidence},
+            )
+        return {"document_id": document.pk, "status": status, "characters": len(combined), "failures": failures}
 
 
 def purge_deleted_documents(*, now=None, limit=100):

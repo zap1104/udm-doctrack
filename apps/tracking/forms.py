@@ -524,6 +524,13 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     would sail past the form and be handed to `apply_scope` unchecked.
     """
 
+    q = forms.CharField(
+        required=False,
+        label="Search tracking",
+        widget=forms.TextInput(attrs={
+            "placeholder": "Search tracking no., subject or office…", "autocomplete": "off",
+        }),
+    )
     status = forms.MultipleChoiceField(
         required=False,
         label="",

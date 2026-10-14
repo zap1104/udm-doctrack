@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import (
     LoginView,
     LogoutView,
@@ -12,7 +11,9 @@ from django.contrib.auth.views import (
     PasswordResetDoneView,
     PasswordResetView,
 )
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -110,9 +111,30 @@ class PasswordResetDonePage(PasswordResetAvailableMixin, PasswordResetDoneView):
 class PasswordResetConfirmPage(PasswordResetAvailableMixin, PasswordResetConfirmView):
     form_class = AccountSetPasswordForm
     template_name = "accounts/password_reset_confirm.html"
+    success_url = reverse_lazy("accounts:password_reset_complete")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST":
+            # Keep Django's existing token check and the password write in one
+            # transaction, so a concurrent reset cannot reuse an old token.
+            with transaction.atomic():
+                return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_user(self, uidb64):
+        user = super().get_user(uidb64)
+        if user is None:
+            return None
+        if self.request.method == "POST":
+            return User.objects.select_for_update().filter(pk=user.pk, is_active=True).first()
+        return user if user.is_active else None
 
     def form_valid(self, form):
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
         log_action(AuditLog.Action.UPDATE, "Password recovery completed", actor=getattr(self, "user", None), extra={"kind": "password_reset"})
         return response
 
@@ -143,10 +165,27 @@ class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
     template_name = "accounts/password_change.html"
     success_url = reverse_lazy("core:dashboard")
 
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST" and request.user.is_authenticated:
+            # AuthenticationMiddleware may have loaded the account before an
+            # administrator suspended it or reset its password.
+            with transaction.atomic():
+                current = User.objects.select_for_update().filter(pk=request.user.pk).first()
+                if current is None:
+                    raise PermissionDenied("This account is no longer available.")
+                request.user = current
+                return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
         User.objects.filter(pk=self.request.user.pk).update(must_change_password=False)
-        update_session_auth_hash(self.request, form.user)
+        form.user.must_change_password = False
+        self.request.user = form.user
         # Only now is the sign-in fully complete, so this is where a forced
         # password change forgives the lockout escalation (when configured to).
         if getattr(settings, "AXES_ESCALATION_RESET_ON_LOGIN", False):
@@ -453,7 +492,9 @@ class OfficeEditView(SystemAdminRequiredMixin, View):
         office = get_object_or_404(Office, pk=pk) if pk else None
         form = OfficeForm(request.POST, instance=office)
         if form.is_valid():
-            saved = form.save()
+            from apps.search.indexing import save_masterdata_form
+
+            saved = save_masterdata_form(form)
             log_action(
                 AuditLog.Action.UPDATE if pk else AuditLog.Action.CREATE,
                 f"{'Updated' if pk else 'Created'} office “{saved.name}”",

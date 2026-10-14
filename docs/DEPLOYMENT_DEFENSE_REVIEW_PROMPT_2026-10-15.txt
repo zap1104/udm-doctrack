@@ -1,0 +1,112 @@
+ONLY TRY TO FIX WHAT IS NEEDED AND DO NOT BREAK ANYTHING ELSE.
+
+I need a thorough, evidence-based completion review of my UDM DocTrack capstone. Help me finish it for our defense and for useful university-office deployment. This round is assessment and planning. Start from the actual source and my approved requirements, then propose the smallest necessary changes. Include the mandatory rule above in every response and revised prompt.
+
+1. CURRENT STATE
+
+UDM DocTrack manages records for offices under the Office of the Vice President for Administration at Universidad de Manila. Its two connected modules are Document Tracking for routing/custody and Document Repository for approved filing, historical uploads, metadata and retrieval.
+
+Keep the existing stack: Django 5, PostgreSQL with psycopg[binary]>=3.2.10,<3.4, Bootstrap 5, HTMX, django-q2, django-axes, django-csp, Argon2 and permission-checked signed downloads. Production files use private Cloudflare R2/S3-compatible storage or Azure Blob. Windows development uses PowerShell and scripts/start.ps1. Do not propose replacing this stack. PostgreSQL handles search, the default shared cache and django-q2's ORM queue; Redis is optional, not a prerequisite.
+
+Apps: core, accounts, tracking, documents and search. Roles: SYSTEM_ADMIN, ADMIN, USER and VIEWER. SYSTEM_ADMIN provides cross-office administration. ADMIN remains confined to its own office. Other users may see records only through the existing visibility/routing/sharing rules; a displayed office selector never grants access. Preserve visible_to()/administrable_by() boundaries and current-batch routing queries using F("current_batch"). MED is Maintenance and Engineering Division. Public registration is not part of the system.
+
+The intended tracking lifecycle is Draft -> Pending Receipt after endorsement -> Received after explicit receipt -> In Process after a real work update -> another endorsement/receipt cycle when needed -> completed pending filing -> administrator-approved Repository filing. Sending is not receiving. Receipt timestamps and history come from the server. Keep append-only history, parallel recipients, custody rules, reopen behavior and existing identifiers. User-facing terminology is endorse/endorsement; internal names need not be renamed just for wording consistency.
+
+Incoming and Outgoing each have Pending Receipt, Received and In Process filters based on the current routing batch and office viewpoint. Overdue is a separate deadline flag, not an extra workflow stage. Reports' current-work stages exclude completed states. Dashboard workload explicitly combines currently tracking plus pending filing; these are different populations. System-admin all-office Reports use one overall stage view; direction becomes meaningful when an office is selected. Preserve the consistent office-view design.
+
+Processing turnaround includes Received time and pauses during receipt waits. Parallel waits are combined without double deduction; superseded waits stop at the next valid batch. Working and elapsed clocks exclude these waits. Total lifetime does not pause, and office custody remains a separate measurement. Receipt averages count endorsements; processing/lifetime averages count completed documents. Their averages must not be added as though they have identical units and samples.
+
+Tracking and Search share tracking queries, filters and ordering. Repository has owning-office, type, tag, source, date and genuine relevance controls. Repository text searches default to 0% minimum to preserve matches; Search retains its configured default of 75%. Blank browsing and Pending filing do not use relevance scoring. Repository pagination counts all qualifying matches; Search's bounded results must disclose limits. Dropdown/date/relevance controls use HTMX updates; text searches use Search/Enter. Filters, URLs, counts and exports must retain the same scope.
+
+Repository supports multiple document types, metadata suggestions reviewed by a person, searchable extracted text, authorized downloads, and deletion review. A due review date never deletes a document automatically. Approved Repository removal has 30-day recovery, followed by permanent Repository cleanup. Completed Tracking history, original Tracking attachments and a minimal audit entry currently remain; backups have a separate disposal policy. Check that this matches our approved policy and UI wording before proposing any broader deletion.
+
+Digital PDF/DOCX/XLSX text can be read locally. External OCR needs a configured provider and per-document permission. OCR.space is supported; Azure Document Intelligence is an optional fallback. django-q2 supports queued extraction and maintenance with a synchronous development fallback. The metadata engine is currently rule-based. AIEngine in apps/documents/suggestions.py is a placeholder that falls back to rules; setting SUGGESTION_ENGINE=ai does not create a trained model. Confirm whether real AI/ML is mandatory in our approved title, objectives or rubric. If it is, identify the concrete missing work as a defense blocker. Do not describe rules, OCR, search relevance or hand-set confidence as measured ML accuracy.
+
+The recorded 14 October 2026 audit reports 7,215 tests passed with 3 skipped, 58 background-enabled checks passed, 21,807 count comparisons across 26 scopes without mismatches, 256 page checks across four roles, and responsive/theme/browser checks. These are dated local results. Live cloud storage, external OCR, email delivery, backup restoration and manual screen-reader operation were not demonstrated by that audit. Verify the actual revision and evidence before relying on them. The latest fixes were local and uncommitted on codex/turnaround-and-filter-parity when this prompt was prepared; do not assume they are on main or deployed.
+
+Deployment files exist but require review. render.yaml currently defines a free web service and free PostgreSQL database, uses preDeployCommand, and defines no worker service or ENABLE_BACKGROUND_TASKS=True. Procfile has separate web/worker entries; that does not by itself add a worker to the Render blueprint. Confirm migrations, init_db and ensure_schedules execute on the intended host. The existing production checks require HTTPS, secure settings, CSP, durable storage and configured email.
+
+Documentation can lag behind code. In particular, verify descriptions of automatic archiving, Apply buttons, AI capability, backup features and demo seeding against the latest behavior rather than treating old documentation as proof.
+
+2. COMPLETION, DEPLOYMENT AND DEFENSE REVIEW
+
+A. Start with one practical intake checklist
+
+Ask me to fill unknown values, using Already set up / Not set up / Unsure. Reuse facts the source already confirms. Ask for credential presence and configuration status, NEVER actual secret keys, passwords, tokens, live database URLs or confidential documents.
+
+Collect:
+- Defense date, approved proposal/title/objectives, rubric, required deliverables and remaining team capacity.
+- Whether this is a defense demo, a university pilot or a production launch; specify separate environments and datasets.
+- Hosting provider/plan, monthly budget, region, expected users/concurrency, document volume, file types/sizes/pages and internet reliability.
+- Canonical HTTPS URL/domain and who controls DNS; a custom purchased domain is optional if the platform hostname is acceptable.
+- PostgreSQL provider, database availability/expiry, SSL, extension permissions, connection budget, backups and restore status.
+- Storage choice, private bucket/container, credentials present, endpoint/region, backup method and access to original files for migration.
+- OCR provider/plan/key present, endpoint, supported languages, file/page/quota limits, approved external-processing policy and representative non-sensitive samples.
+- SMTP provider, sender address, credentials present, reachable encrypted port, verified sender/DNS requirements and recovery-email testing status.
+- Worker process, ENABLE_BACKGROUND_TASKS state, schedule registration, health/monitoring and restart arrangements.
+- Official office/user/role list, account owner, routing SLAs, document types, tags, metadata fields, office hours/holidays and deletion-review policy.
+- Privacy approval, UAT participants/protocol, performance/evaluation targets, manuals, diagrams, slides and demo preparation.
+- Current branch/commit, CI evidence, deployed revision if any, known failures and recent feedback from another AI reviewer.
+
+B. Give me an exact setup inventory
+
+For each prerequisite, list purpose, required/conditional/optional status, what I must obtain, exact existing environment variables, configuration location, dependencies, responsible person and a non-destructive verification step. Separate credentials from code changes. Give Windows PowerShell commands locally and clearly labeled provider-specific commands for production. Resolve conflicting variable names against config/settings.py.
+
+Cover at least:
+- Application origin/security: DJANGO_SECRET_KEY, DJANGO_DEBUG=False, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS, SITE_BASE_URL, ENABLE_CSP=True, ALLOW_DEMO_SEED=False, HTTPS/cookie/proxy settings and TIME_ZONE. Trust forwarded headers only behind the intended trusted proxy.
+- Database: DATABASE_URL or the supported POSTGRES_* variables, DB_SSLMODE and necessary pg_trgm/unaccent initialization. Keep staging/production/demo distinct.
+- R2/S3: STORAGE_BACKEND=s3, AWS_STORAGE_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_ENDPOINT_URL and AWS_S3_REGION_NAME. Validate least-privilege private storage and real upload/download/delete behavior.
+- Azure alternative: STORAGE_BACKEND=azure, AZURE_ACCOUNT_NAME, AZURE_ACCOUNT_KEY, AZURE_CONTAINER and the matching storage dependency. Select one storage backend; do not require both.
+- OCR: OCR_BACKEND, OCR_SPACE_API_KEY, OCR_SPACE_ENDPOINT and provider timeout/retry settings; optional AZURE_DOCINT_ENDPOINT/AZURE_DOCINT_KEY. Compare MAX_UPLOAD_MB and page limits with the chosen provider. Unsupported scanned files need a clear result, not missing data or a claim that extraction succeeded.
+- Email: EMAIL_BACKEND, EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS, DEFAULT_FROM_EMAIL and SITE_BASE_URL. SMTP delivery needs a compatible host/plan; it is not proof merely because variables are present.
+- Jobs: ENABLE_BACKGROUND_TASKS=True, python manage.py qcluster, and python manage.py ensure_schedules. Check extraction, notification pruning/chasing, security-throttle pruning and deleted-document cleanup schedules.
+- Operations: database AND matching object-store backups, proven restore, monitoring/alerts, logs without secrets, dependency updates, release/rollback ownership and real operating costs.
+
+Verify current provider documentation and cite primary sources for plan limits/pricing. Recheck Render's pre-deploy availability, free database expiry, SMTP restrictions, filesystem persistence and worker configuration. Verify provider-specific backup capabilities rather than assuming every S3-compatible service supports every AWS feature. Do not require Gemini/Claude API keys just because I use those assistants for review; the current rules engine needs neither. Do not add Redis, SMS, SSO or paid AI services without a demonstrated approved requirement.
+
+C. Audit every feature through its real flow
+
+Create a feature inventory from URLs, views, models, services, templates, scripts and tests. For each feature report: requirement, source location/function, current behavior, evidence, defect or uncertainty, smallest correction and acceptance checks. Mark Implemented and verified / Implemented but unverified / Partially implemented / Missing required feature / Optional / Needs user decision. Include both normal operation and failure/unauthorized paths.
+
+1. Accounts: create/edit/deactivate, office assignment, role boundaries, profile/email verification, forced password change, verified-email recovery, lockouts, idle warnings/keep-alive, logout, stale requests and concurrent resets. Test every role, missing office and revoked access, including direct URLs and HTMX requests.
+2. Tracking: drafts and tracking-number issuance, one/multiple recipients, explicit/bulk receipt, remarks/attachments, re-endorsement/returns, custody, deadlines/SLAs, completion/reopening, pending filing and approved filing. Double submissions and parallel actions must not duplicate records or rewrite history. Test mixed parallel-recipient stages and repeated batches.
+3. Repository: tracking-origin versus historical uploads/scans, primary/secondary types, owning office/sharing, metadata correction, duplicate warnings, folders, tags, file counts, re-extraction, missing files and rollback cleanup.
+4. Counts/reporting: all dashboards, stage/direction bars, repository/source/type charts, period totals, overdue, pending filing, workload, memo/CSV/print and every drill-down. Compare counts to exact document IDs across roles, office code/ID/all, dates, query, type/tag/source, sorting and pagination. Check clear/reset/back/bookmark behavior.
+5. Explain each population and denominator. Overdue overlaps stages; multi-type/tag categories can overlap; drafts/other direction/older or missing-date records need explicit accounting. A last-12-month graph is not an all-time total. Distinguish documents, endorsements, copies and file attachments. Do not force a false sum or hide valid rows to make numbers match.
+6. Turnaround: Received inclusion, pause/resume, parallel/superseded waits, office hours/lunch/weekends/holidays, deadlines, month/timezone boundaries, invalid/future timestamps and changed schedules. Match cards, charts, tables, timeline definitions and CSV units. Test with independently calculated examples.
+7. Search: exact references, full-text/fuzzy results, genuine relevance, thresholds/show-below, unindexed files, renames/searchable-field changes, query limits and truthful counts. No permission leakage through results, snippets, suggestions/autocomplete, facets or exports.
+8. Extraction/jobs: local digital files and approved scans, language/quality, provider limits/failures, retries/duplicate delivery, worker downtime/restart, simultaneous uploads, text/page-count preservation, completed suggestions reaching the original upload session and files kept safe when processing fails.
+9. Deletion: due-review dates, keep/remove decisions, reasons/confirmation, stale decisions, 30-day restore boundaries, expired recovery, stopped workers and failed storage cleanup. Verify what is removed and retained across Repository, Tracking, audit records and backups; align policy and UI wording.
+10. Security: direct-object access, private storage, signed-link expiry/revocation expectations, upload sniffing/limits, unsafe filenames/content, CSRF/XSS, CSV injection, CSP, Argon2, secret handling, deactivated accounts and audit completeness. Preserve existing protection and tested library constraints.
+11. UI/accessibility: every relevant page for all four roles, light/dark, desktop/mobile, keyboard and screen reader. Check labels, focus after HTMX updates, status/error announcements, automatic-select usability, zoom/reflow/contrast, chart table alternatives, touch targets, modals and empty/loading/error states. Use current screenshots covering all relevant screens; screenshot inspection alone does not prove backend correctness or accessibility compliance.
+12. Deployment/operations: clean clone, dependency installation, migrations/static assets/extensions/cache, secure admin bootstrap, separate worker/shared configuration, queue schedules, HTTPS/proxy behavior, QR links on another device, health probes, provider outage handling, paired backup/restore and rollback with backward-compatible data. Check budgets, resource limits and realistic load.
+13. Notifications: routing/receipt/completion and other configured event notifications, unread badges, individual/all-read actions, valid authorized links, duplicate prevention, chase/pruning schedules and email failures. A notification must not expose a record or action the recipient cannot access; email failure must not undo a completed core transaction.
+14. Administration: offices, users, types/tags, SLAs, office hours/holidays, reference counters and other master data actually found in the source. Check duplicate names/codes, protected references, inactive choices, permission limits, audit trails, update effects on existing records and search indexes, and unsafe raw Django-admin edits. Include routing-slip/QR printing, print logs, memo/report exports and legacy redirects in the inventory; verify scope, content and access outside normal navigation.
+
+D. Separate defense readiness from production readiness
+
+Map approved objectives to implemented features and evidence. Identify any required feature still missing, especially actual AI/ML if promised. Prepare architecture/ERD/workflow/role diagrams, requirements traceability, test results, user/admin manuals, deployment/operations guide, limitations, UAT and performance/evaluation evidence. Check the manuscript, citations, appendices and slides against the university's required format and the actual implementation. Obtain adviser/office acceptance and data-processing approval where required. Propose a reproducible evaluation protocol with approved/anonymized data and held-out cases; do not invent participant counts, accuracy percentages or research results.
+
+Give a short demo using representative accounts and documents: create -> endorse -> confirm -> work -> endorse again -> complete -> approve/file -> find/download. Demonstrate scoped counts/permissions, OCR review and an error/recovery case if time allows. Prepare likely panel questions on why this stack, actual AI versus rules, relevance versus accuracy, custody evidence, turnaround, privacy/deletion, outages and restore. Include a realistic rehearsal plan, isolated demo reset, printed routing slip, backup recording and tested fallback for internet/projector failure. Check CDN assets, OCR/cloud dependencies and QR access before calling a demo offline-capable. Never reset or seed the real production database for defense.
+
+E. Return a practical plan, not generic advice
+
+Provide:
+1. Your understanding of the approved scope and a clear summary of readiness and remaining blockers.
+2. The setup checklist I must fill and the required/conditional/optional service inventory.
+3. The complete feature verification matrix, with source citations and explicit evidence gaps.
+4. P0/P1/P2 tasks split into Before defense / Before production launch / Optional later. For each include owner, dependencies, exact files, smallest change, acceptance test, required evidence and an honest effort estimate or Unknown. Distinguish configuration, coding, data, testing and documentation work.
+5. An ordered execution plan with checkpoints, migrations/backups where needed, rollback and deployment smoke checks. Prioritize data safety, permissions and broken core flows over visual redesign or speculative additions.
+6. Separate Defense-ready and Production-ready checklists, each with pass/fail criteria and unresolved decisions. A feature is not finished just because its page renders or a mock test passes.
+7. A defense evidence/demo package checklist and accurate wording for capability/limitation claims.
+8. A concise first-next-actions list and the exact missing files/information you need from me.
+
+When another AI's review is supplied, deduplicate it and classify each suggestion as Accept / Modify / Reject / Needs evidence, with reasons tied to the source and approved scope. Keep proposed changes separate from current-state facts. Report checks as Passed / Failed / Not run / Blocked, including skipped tests and mocked versus live integrations. Aim for no known critical defects and proven acceptance checks; do not promise zero bugs from test counts alone.
+
+ACCESS TO THE PROJECT
+
+I may send small source packets because the repository is too large to upload. You cannot access my local files unless I attach them or give an accessible repository. Request exact repository filenames and needed functions/dependencies rather than guessing or requesting the entire project. Screenshots and older summaries are context, not source-code proof.
+
+Start with AGENTS.md, .env.example, requirements.txt, render.yaml, Procfile, docs/OPERATIONS.md, docs/AI_ROADMAP.md, docs/DEMO_SCRIPT.md and docs/verification/system-audit-2026-10-14.md. Request relevant source next: config/settings.py and apps/core/checks.py; accounts models/forms/views; tracking models/services/filter_navigation/views; core analytics/processing_time/views; documents models/services/views/tasks/extraction/suggestions; search services/indexing/forms/views; corresponding templates/tests and .github/workflows/ci.yml. Each pasted section will identify its original filename. Secrets must be redacted and demo data anonymized.
+
+ONLY TRY TO FIX WHAT IS NEEDED AND DO NOT BREAK ANYTHING ELSE. Preserve working behavior, permissions, routing, identifiers, user data and existing accessibility. This round ends with a concrete reviewable plan; implementation and live deployment follow my approval.

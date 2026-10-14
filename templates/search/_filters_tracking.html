@@ -3,16 +3,16 @@
   <div class="tracking-queue-list">
     <a class="pill-toggle{% if not resolved.scope and not selected_statuses %} is-active{% endif %}"
        href="{{ all_tracking_href }}">All in Tracking</a>
-    {% if selected_scope or selected_statuses or selected_owner or selected_office_ids or resolved.overdue %}
+    {% if selected_scope or selected_statuses or selected_owner or selected_office_ids or resolved.overdue or selected_sort %}
       <a class="pill-toggle" href="{% url 'search:index' %}?mode={{ tracking_mode }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Clear filters</a>
     {% endif %}
   </div>
 </div>
 {% include "partials/_direction_filters.html" with groups=direction_filter_groups prefix="search-direction" %}
-<details id="search-tracking-filter-options" class="tracking-filter-disclosure"{% if selected_statuses and not selected_scope or selected_statuses|length > 1 or selected_owner or selected_office_ids or resolved.overdue %} open{% endif %}>
+<details id="search-tracking-filter-options" class="tracking-filter-disclosure"{% if selected_statuses and not selected_scope or selected_statuses|length > 1 or selected_owner or selected_office_ids or resolved.overdue or selected_sort %} open{% endif %}>
   <summary>
-    <span><strong>More filters</strong><span class="tracking-filter-description">Multiple stages, originating office, deadline, and ownership</span></span>
-    {% if selected_statuses or selected_owner or selected_office_ids or resolved.overdue %}<span class="tracking-filter-applied">Filters applied</span>{% endif %}
+    <span><strong>More filters</strong><span class="tracking-filter-description">Multiple stages, originating office, deadline, sort, and ownership</span></span>
+    {% if selected_statuses or selected_owner or selected_office_ids or resolved.overdue or selected_sort %}<span class="tracking-filter-applied">Filters applied</span>{% endif %}
   </summary>
 <div class="tracking-filters">
   <div class="tracking-filter-row">
@@ -76,6 +76,15 @@
            {% if resolved.overdue == 'yes' %}aria-current="true"{% endif %}>Overdue</a>
       </div>
     </div>
+  </div>
+
+  <div class="tracking-filter-row">
+    <span class="tracking-filter-label" id="search-sort-label">Sort</span>
+    <div class="pill-row"><div class="pill-row-list" role="group" aria-labelledby="search-sort-label">
+      {% for value, label in sort_choices %}
+        <a class="pill-toggle{% if selected_sort == value %} is-active{% endif %}" href="{% filter_url 'sort' value %}"{% if selected_sort == value %} aria-current="true"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </div></div>
   </div>
 
   <div class="tracking-filter-row">

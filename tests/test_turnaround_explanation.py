@@ -129,4 +129,4 @@ def test_guide_shows_how_the_configured_schedule_works():
         }})
     assert "9:00 AM to 3:00 PM = 6 hrs total wait − 0 mins excluded = 6 hrs" in html
     assert "6 hours is the length of a full working day, not a fixed deduction" in html
-    assert "It does not measure hands-on work" in html
+    assert "Neither clock measures hands-on work" in html

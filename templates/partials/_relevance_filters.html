@@ -1,0 +1,11 @@
+{% if form.min_relevance %}
+<label class="form-label" for="{{ form.min_relevance.id_for_label }}">
+  Minimum relevance: <span id="relevance-value" data-relevance-value>{{ form.min_relevance.value|default_if_none:form.min_relevance.field.initial }}</span>%
+</label>
+{{ form.min_relevance }}{{ form.min_relevance.errors }}
+<div class="form-check mt-2">
+  {{ form.show_all }}
+  <label class="form-check-label" for="{{ form.show_all.id_for_label }}">{{ form.show_all.label }}</label>
+</div>
+<p id="relevance-filter-help" class="form-text mb-0">Relevance measures how closely a document matches your search words. It applies only when search text is entered.</p>
+{% endif %}

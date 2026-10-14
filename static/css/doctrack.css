@@ -991,7 +991,7 @@ a:hover { text-decoration: underline; }
 .repository-list-head>a { font-size:13px; white-space:nowrap; }
 .repository-filters { padding:16px 18px; margin-bottom:14px; }
 .repository-filters label { display:block; margin-bottom:5px; color:var(--udm-muted); font-size:12px; font-weight:600; }
-.repository-filters input:not([type=hidden]),.repository-filters select { min-height:42px; }
+.repository-filters input:not([type=hidden]):not([type=checkbox]),.repository-filters select { min-height:42px; }
 .deletion-review-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
 .deletion-review-tabs a { display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
 .deletion-review-tabs a[aria-current=page] { background:var(--udm-green-soft); border-color:var(--udm-green); font-weight:700; }
@@ -3642,6 +3642,9 @@ input:focus {
 .repository-search > div { min-width: 0; }
 .repository-filter-grid { gap: 12px; margin: 14px 0 0; }
 .repository-filter-grid > div { min-width: 0; }
+@media (min-width: 992px) {
+  .repository-filter-grid--primary { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
 .repository-filters label { color: var(--udm-label-ink); font-size: 13px; font-weight: 600; }
 .repository-more-filters { border-top: 1px solid var(--udm-line); margin-top: 16px; padding-top: 4px; }
 .repository-more-filters > summary {

@@ -4,7 +4,7 @@
     <h3 id="{{ id_prefix }}-{{ stage.key }}">{{ stage.label }}</h3>
   </div>
   <p class="dashboard-turnaround-measure">
-    {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → work completed{% else %}Created → work completed{% endif %}
+    {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → work completed, excluding receipt waits{% else %}Created → work completed{% endif %}
   </p>
   <p class="turnaround-sample-basis">{% include "core/_turnaround_sample_count.html" with item=stage %}</p>
   {% if stage.excluded %}
@@ -17,7 +17,7 @@
         <dd class="dashboard-turnaround-primary num">{{ stage.average_seconds|duration_hours }}</dd>
       </div>
       <div>
-        <dt>Average total wait</dt>
+        <dt>{% if stage.key == "processing" %}Average elapsed processing time{% else %}Average total wait{% endif %}</dt>
         <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar_seconds|duration_hours }}</dd>
       </div>
     </dl>
@@ -26,14 +26,14 @@
         <div>
           <dt>Fastest within office hours</dt>
           {% if stage.fastest %}
-            <dd><strong class="num">{{ stage.fastest.office_seconds|duration_hours }}</strong><a href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><span>{{ stage.fastest.calendar_seconds|duration_hours }} total wait</span></dd>
+            <dd><strong class="num">{{ stage.fastest.office_seconds|duration_hours }}</strong><a href="{{ stage.fastest.url }}">{{ stage.fastest.tracking_number }}</a><span>{{ stage.fastest.calendar_seconds|duration_hours }} {% if stage.key == "processing" %}elapsed processing time{% else %}total wait{% endif %}</span></dd>
           {% else %}
             <dd class="dashboard-turnaround-empty">No positive working time</dd>
           {% endif %}
         </div>
         <div>
           <dt>Slowest within office hours</dt>
-          <dd><strong class="num">{{ stage.slowest.office_seconds|duration_hours }}</strong><a href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><span>{{ stage.slowest.calendar_seconds|duration_hours }} total wait</span></dd>
+          <dd><strong class="num">{{ stage.slowest.office_seconds|duration_hours }}</strong><a href="{{ stage.slowest.url }}">{{ stage.slowest.tracking_number }}</a><span>{{ stage.slowest.calendar_seconds|duration_hours }} {% if stage.key == "processing" %}elapsed processing time{% else %}total wait{% endif %}</span></dd>
         </div>
       </dl>
     {% endif %}
@@ -43,7 +43,7 @@
     <div class="turnaround-calculation-control">
       <button type="button" class="btn btn-udm-outline btn-sm" data-bs-toggle="modal" data-bs-target="#turnaround-calculation-dialog"
               data-turnaround-calculation data-stage-label="{{ stage.label }}"
-              data-equation="{{ stage.average_calendar_seconds|duration_hours }} total wait − {{ stage.average_outside_seconds|duration_hours }} excluded ≈ {{ stage.average_seconds|duration_hours }} within office hours."
+              data-equation="{{ stage.average_calendar_seconds|duration_hours }} {% if stage.key == 'processing' %}elapsed processing time{% else %}total wait{% endif %} − {{ stage.average_outside_seconds|duration_hours }} excluded ≈ {{ stage.average_seconds|duration_hours }} within office hours."
               data-average-equation="{{ stage.total_office_seconds|duration_hours }} counted ÷ {{ stage.samples }} {% if stage.key == 'receipt' %}confirmed endorsement{{ stage.samples|pluralize }}{% else %}completed document{{ stage.samples|pluralize }}{% endif %} ≈ {{ stage.average_seconds|duration_hours }}."
               aria-label="View calculation for {{ stage.label }}">View calculation</button>
     </div>

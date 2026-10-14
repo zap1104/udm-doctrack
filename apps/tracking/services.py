@@ -971,14 +971,23 @@ def on_time_q():
     )
 
 
+def order_records(records, sort=""):
+    """The workspace, Search and its export use the same stable ordering."""
+    from .forms import SORT_DEADLINE_ASC, SORT_DEADLINE_DESC
+
+    ordering = {
+        SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
+        SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
+    }.get(sort, ("-last_movement_at",))
+    return records.distinct().order_by(*ordering, "-pk")
+
+
 def filter_records(records, *, query=None, status=None, offices=None, overdue=None):
     """Free-text, stage and originating-office filtering for tracking records.
 
     Kept here rather than inline in a view because two pages need it: the
-    Tracking workspace, and the tracking half of the unified search page. The
-    second one is why the text branch exists at all — the workspace has no
-    search box, having traded it for the queue pills, so `query` is only ever
-    passed by search.
+    Tracking workspace and the tracking half of the unified search page. Both
+    query boxes narrow the chosen queue through this same implementation.
 
     Scope narrowing is deliberately *not* here. It depends on the user, this
     does not, and the queues compose with these filters rather than replacing

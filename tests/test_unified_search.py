@@ -418,13 +418,12 @@ def test_the_tracking_search_form_reuses_the_workspace_definition():
 
     workspace = TrackingFilterForm()
     search = TrackingSearchForm()
-    for name in ("status", "scope", "offices", "owner"):
+    for name in ("q", "status", "scope", "offices", "owner", "sort"):
         assert search.fields[name].__class__ is workspace.fields[name].__class__
     assert list(search.fields["scope"].choices) == list(workspace.fields["scope"].choices)
 
 
-def test_only_the_search_form_has_a_text_box():
-    """The workspace traded its box for the queue pills; this page is the
-    search surface, so the box belongs to it."""
+def test_both_tracking_surfaces_share_the_text_box():
+    """Searching a tracking number must mean the same thing on both pages."""
     assert "q" in TrackingSearchForm().fields
-    assert "q" not in TrackingFilterForm().fields
+    assert "q" in TrackingFilterForm().fields

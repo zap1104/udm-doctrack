@@ -17,7 +17,7 @@ from apps.core.pagination import (
 from apps.documents.models import Document, SearchQueryLog, SearchResultClick
 from apps.tracking import services as tracking_services
 from apps.tracking.filter_navigation import direction_filter_groups, tracking_view_link
-from apps.tracking.forms import queue_pills, status_pills
+from apps.tracking.forms import SORT_CHOICES, queue_pills, status_pills
 
 from .forms import REPOSITORY, TRACKING, SearchForm, TrackingSearchForm, mode_from_request
 from .services import autocomplete_terms, search_documents
@@ -177,7 +177,8 @@ class SearchView(AppLoginRequiredMixin, View):
                 + ", ".join(sorted(form.errors)) + ". Showing the rest.",
             )
 
-        records = records.distinct().order_by("-last_movement_at", "-pk")
+        sort = data.get("sort") or ""
+        records = tracking_services.order_records(records, sort)
         # Same page-size control, same parameter, same default as the Tracking
         # workspace — the two pages list the same records and a querystring has
         # to mean the same thing on both.
@@ -198,7 +199,7 @@ class SearchView(AppLoginRequiredMixin, View):
         asked = bool(
             data.get("q") or resolved.statuses or data.get("scope")
             or data.get("offices") or data.get("owner")
-            or resolved.overdue or office_selected
+            or resolved.overdue or office_selected or sort
         )
         return {
             "form": form,
@@ -208,6 +209,9 @@ class SearchView(AppLoginRequiredMixin, View):
             **page_context,
             "total": page.paginator.count,
             "query": data.get("q") or "",
+            "sort_choices": SORT_CHOICES,
+            "selected_sort": sort,
+            "sort_label": dict(SORT_CHOICES)[sort],
             "filter_offices": Office.active.all(),
             "selected_office_ids": {str(office.pk) for office in (data.get("offices") or [])},
             "status_choices": status_pills(form),

@@ -396,6 +396,23 @@ def re_extract_document(document: Document, *, user) -> dict:
 # ---------------------------------------------------------------------------
 @locked_mutation
 def archive_tracking_record(record, *, user, tag_names=None, description="") -> Document:
+    """File a completed record and clean up new copies if filing rolls back."""
+    created_files = []
+    try:
+        return _archive_tracking_record(
+            record, user=user, tag_names=tag_names, description=description,
+            created_files=created_files,
+        )
+    except Exception:
+        for storage, name in created_files:
+            try:
+                storage.delete(name)
+            except Exception:
+                logger.exception("Could not clean up a new repository copy after failed filing")
+        raise
+
+
+def _archive_tracking_record(record, *, user, tag_names, description, created_files) -> Document:
     """Approve a finished DTS record into the repository, keeping its identity.
 
     This is the act that files the document, and it is what moves the record
@@ -462,6 +479,7 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
             uploaded_by=user,
         )
         document_file.file.save(attachment.original_name, ContentFile(payload), save=False)
+        created_files.append((document_file.file.storage, document_file.file.name))
         document_file.save()
         created_file_ids.append(document_file.pk)
         if not settings.ENABLE_BACKGROUND_TASKS:

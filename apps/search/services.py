@@ -29,11 +29,12 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
+from itertools import chain
 
 from django.conf import settings
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramSimilarity
 from django.db import DatabaseError, connection
-from django.db.models import F, FloatField, Q, Value
+from django.db.models import Case, F, FloatField, IntegerField, Q, Value, When
 from django.db.models.functions import Greatest
 from django.utils.html import escape
 
@@ -120,13 +121,23 @@ def search_documents(
     show_below_threshold: bool = False,
     limit: int | None = None,
     log: bool = True,
+    base_documents=None,
+    exhaustive: bool = False,
 ) -> SearchResponse:
+    """Score one permission-scoped corpus.
+
+    Search keeps its existing top-result ceiling. The Repository can request
+    every match for normal pagination, reading candidates in batches. A caller's
+    supplied queryset only narrows visibility; it can never grant access.
+    """
     started = time.perf_counter()
     raw_query = " ".join((query or "").split())
     limit = limit or settings.SEARCH_RESULT_LIMIT
     min_relevance = settings.SEARCH_MIN_RELEVANCE_DEFAULT if min_relevance is None else int(min_relevance)
 
-    base = Document.objects.visible_to(user).filter(is_active=True).with_related()
+    visible = Document.objects.visible_to(user).filter(is_active=True)
+    base = visible if base_documents is None else base_documents.filter(pk__in=visible.order_by().values("pk"))
+    base = base.with_related()
     if year:
         base = base.filter(year=year)
     if office:
@@ -145,7 +156,8 @@ def search_documents(
     # ---- browse mode: filters only, no query text -------------------------
     if not raw_query:
         total = base.distinct().count()
-        documents = list(base.distinct().order_by("-document_date", "-created_at", "-pk")[:limit])
+        ordered = base.distinct().order_by("-document_date", "-created_at", "-pk")
+        documents = list(ordered.iterator(chunk_size=200)) if exhaustive else list(ordered[:limit])
         response = SearchResponse(
             results=[
                 SearchResult(document=document, relevance=0, text_score=0, fuzzy_score=0, field_score=0)
@@ -155,7 +167,7 @@ def search_documents(
             evaluated_count=len(documents),
             truncated=total > len(documents),
             limited_count=total - len(documents),
-            result_limit=limit,
+            result_limit=total if exhaustive else limit,
             query="",
             explanation="Showing the newest records that match the filters.",
         )
@@ -178,34 +190,57 @@ def search_documents(
     else:
         annotations["similarity"] = Value(0.0, output_field=FloatField())
 
-    conditions = Q(search_vector=search_query) | Q(index_title__icontains=raw_query)
-    conditions |= Q(reference_number__icontains=raw_query)
+    plain_conditions = (
+        Q(title__icontains=raw_query) | Q(index_title__icontains=raw_query)
+        | Q(index_meta__icontains=raw_query) | Q(index_extra__icontains=raw_query)
+        | Q(ocr_text__icontains=raw_query) | Q(reference_number__icontains=raw_query)
+    )
+    # Exact identifiers score 100% after candidates are read. Keep them ahead
+    # of incidental mentions before the bounded candidate window is cut, and
+    # admit a linked tracking number even while its index is being rebuilt.
+    # This is still applied only to the permission- and filter-scoped base.
+    identifier_conditions = (
+        Q(reference_number__iexact=raw_query)
+        | Q(tracking_record__tracking_number__iexact=raw_query)
+    ) if len(raw_query) >= 6 else Q(pk__in=[])
+    identifier_priority = Case(
+        When(identifier_conditions, then=Value(1)),
+        default=Value(0), output_field=IntegerField(),
+    )
+    # Metadata/text remain findable while a legacy or newly filed record is
+    # waiting for its stored full-text index to be rebuilt.
+    conditions = Q(search_vector=search_query) | plain_conditions | identifier_conditions
     if use_fuzzy:
         conditions |= Q(similarity__gte=0.28)
 
     try:
         queryset = (
-            base.annotate(**annotations)
+            base.annotate(_identifier_priority=identifier_priority, **annotations)
             .filter(conditions)
-            .distinct().order_by("-rank", "-similarity", "-document_date", "-pk")
+            .distinct().order_by(
+                "-_identifier_priority", F("rank").desc(nulls_last=True),
+                "-similarity", "-document_date", "-pk",
+            )
         )
         total = queryset.count()
-        candidates = list(queryset[:limit * 2])
+        if exhaustive:
+            iterator = queryset.iterator(chunk_size=200)
+            # Execute the ranking query inside the fallback guard, not after
+            # leaving it when the first batch is read.
+            first = next(iterator, None)
+            candidates = chain([first] if first is not None else [], iterator)
+        else:
+            candidates = list(queryset[:limit * 2])
     except DatabaseError as exc:  # e.g. pg_trgm dropped after the process started
         logger.warning("Search fell back to plain matching: %s", exc)
         _TRIGRAM_STATE["value"] = False
-        fallback = base.filter(
-                Q(index_title__icontains=raw_query)
-                | Q(index_meta__icontains=raw_query)
-                | Q(index_extra__icontains=raw_query)
-                | Q(ocr_text__icontains=raw_query)
-                | Q(reference_number__icontains=raw_query)
-            ).distinct().order_by("-document_date", "-pk")
+        fallback = (
+            base.filter(plain_conditions | identifier_conditions)
+            .annotate(_identifier_priority=identifier_priority)
+            .distinct().order_by("-_identifier_priority", "-document_date", "-pk")
+        )
         total = fallback.count()
-        candidates = list(fallback[:limit])
-        for candidate in candidates:
-            candidate.rank = 0.0
-            candidate.similarity = 0.0
+        candidates = fallback.iterator(chunk_size=200) if exhaustive else list(fallback[:limit])
         use_fuzzy = False
 
     results: list[SearchResult] = []
@@ -235,19 +270,27 @@ def search_documents(
                 snippet_html=_snippet(document, tokens),
             )
         )
+        if exhaustive:
+            # Keep compact scored records while evaluating an unlimited corpus.
+            # Django loads these fields lazily if a later caller needs them;
+            # the score, match explanation and short snippet are already saved.
+            for field_name in ("ocr_text", "search_vector", "index_title", "index_meta", "index_extra", "description"):
+                document.__dict__.pop(field_name, None)
 
     results.sort(key=lambda item: (-item.relevance, -(item.document.document_date.toordinal() if item.document.document_date else 0)))
     visible = results if show_below_threshold else [item for item in results if item.relevance >= min_relevance]
     hidden = 0 if show_below_threshold else len(results) - len(visible)
 
+    evaluated_count = len(results)
+    returned = visible if exhaustive else visible[:limit]
     response = SearchResponse(
-        results=visible[:limit],
+        results=returned,
         hidden_count=hidden,
         total_matches=total,
-        evaluated_count=len(candidates),
-        truncated=total > len(candidates) or len(visible) > limit,
-        limited_count=max(0, len(visible) - limit),
-        result_limit=limit,
+        evaluated_count=evaluated_count,
+        truncated=not exhaustive and (total > evaluated_count or len(visible) > limit),
+        limited_count=0 if exhaustive else max(0, len(visible) - limit),
+        result_limit=total if exhaustive else limit,
         query=raw_query,
         used_fuzzy=use_fuzzy,
         duration_ms=int((time.perf_counter() - started) * 1000),

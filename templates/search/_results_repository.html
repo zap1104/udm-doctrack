@@ -33,7 +33,7 @@
 {% if response.hidden_count %}
   <div class="alert alert-light border" style="border-radius:10px;font-size:13.5px;">
     {{ response.hidden_count }} more record{{ response.hidden_count|pluralize }} matched below the
-    <span data-relevance-threshold>{{ form.min_relevance.value|default:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
+    <span data-relevance-threshold>{{ form.min_relevance.value|default_if_none:SEARCH_MIN_RELEVANCE_DEFAULT }}</span>% threshold.
     Tick “Include results below the threshold” to see them.
   </div>
 {% endif %}

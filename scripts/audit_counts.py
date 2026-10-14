@@ -38,6 +38,7 @@ from apps.core.notifications import unread_for  # noqa: E402
 from apps.documents.models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document  # noqa: E402
 from apps.search.services import search_documents  # noqa: E402
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord  # noqa: E402
+from scripts.audit_tracking_stages import loaded_records, manual_stage  # noqa: E402
 
 
 class Links(HTMLParser):
@@ -73,6 +74,29 @@ def replaced(url, **changes):
     return parts.path + "?" + params.urlencode()
 
 
+def processing_reference(start, end, steps, holidays):
+    """Independent endpoint partition: count only spans outside receipt waits."""
+    valid_sends = [step for step in steps if step["sent_at"] and step["sent_at"] <= end]
+    waits = []
+    for step in valid_sends:
+        sent, received = step["sent_at"], step["received_at"]
+        if received and received < sent:
+            continue
+        later = [item for item in valid_sends if item["batch"] > step["batch"]]
+        next_batch = min((item["batch"] for item in later), default=None)
+        superseded = min((item["sent_at"] for item in later if item["batch"] == next_batch), default=end)
+        left, right = max(start, sent), min(end, received or end, superseded)
+        if left < right:
+            waits.append((left, right))
+    boundaries = sorted({start, end, *(point for interval in waits for point in interval)})
+    office = elapsed = 0.0
+    for left, right in zip(boundaries, boundaries[1:], strict=False):
+        if not any(begin <= left < stop for begin, stop in waits):
+            office += business_seconds_between(left, right, holidays)
+            elapsed += (right - left).total_seconds()
+    return office, elapsed
+
+
 class Audit:
     def __init__(self):
         self.checked = 0
@@ -83,6 +107,11 @@ class Audit:
         self.client = None
         self.sample_cache = {}
         self.integrity = {}
+        self.stage_records = {}
+        self.user = None
+
+    def stage_office(self, office):
+        return office or (None if self.user.is_system_admin else self.user.office)
 
     def equal(self, name, actual, expected):
         self.checked += 1
@@ -117,7 +146,7 @@ class Audit:
         local_steps = [step for step in steps if step["record_id"] in ids]
         office = context["filters"]["office"]
         docs = [row for row in documents if not office or row["office_id"] == office.pk]
-        statuses = Counter(row["status"] for row in scoped)
+        statuses = Counter(manual_stage(self.stage_records[row["pk"]], self.stage_office(office)) for row in scoped)
         current = [row for row in scoped if row["status"] not in COMPLETED_STATUSES]
         self.equal("report tracked documents", context["total_records"], len(scoped) if context["is_repository_report"] else len(current))
         self.equal("report Pending Receipt stage", context["pending_receipt"], statuses[Status.PENDING_RECEIPT])
@@ -136,7 +165,7 @@ class Audit:
             self.equal("direction list", self.listed(group["workspace_url"]), group["total"])
             for row in group["stages"]:
                 self.equal("direction status list", self.listed(row["workspace_url"]), row["total"])
-        self.turnaround(context["turnaround"], scoped, local_steps)
+        self.turnaround(context["turnaround"], scoped, local_steps, office)
         if not context["is_repository_report"]:
             self.trend(context["turnaround_trend"], scoped, local_steps)
         for state in ("due", "soon", "unscheduled"):
@@ -177,9 +206,14 @@ class Audit:
         active = [row for row in scoped if row["status"] != Status.COMPLETED]
         self.equal("dashboard tracking total", context["tracking_total_count"], len(active))
         self.equal("tracking-total link", self.listed(context["tracking_total_url"]), len(active))
-        for queue in context["desk_queues"]:
+        queues = list(context["desk_attention_queues"])
+        for group in context["desk_direction_groups"]:
+            queues.extend([group, *group["stages"]])
+            if group["count"] is not None:
+                self.equal("direction stage partition " + group["key"], sum(stage["count"] for stage in group["stages"]), group["count"])
+        for queue in queues:
             if queue["count"] is not None:
-                self.equal("Action Centre " + queue["slug"], queue["count"], self.listed(queue["tracking_url"]))
+                self.equal("Action Centre " + queue["label"], queue["count"], self.listed(queue["tracking_url"]))
         breakdown = context["breakdown"]
         self.equal("dashboard partition", sum(row["total"] for row in breakdown["slices"]), breakdown["total"])
         for row in breakdown["slices"]:
@@ -192,7 +226,7 @@ class Audit:
                     self.equal("ring slice", row["total"], self.listed(row["url"]))
         ids = {row["pk"] for row in scoped}
         local_steps = [step for step in steps if step["record_id"] in ids]
-        self.turnaround(context["turnaround"], scoped, local_steps)
+        self.turnaround(context["turnaround"], scoped, local_steps, context["scope"]["office"])
         self.trend(context["turnaround_trend"], scoped, local_steps, daily=True)
         for row in context["monthly"]["rows"]:
             month = row["month"]
@@ -215,11 +249,13 @@ class Audit:
             if row["status"] in COMPLETED_STATUSES and end and row["created_at"] <= end <= now:
                 samples["lifetime"].append((timezone.localdate(end), business_seconds_between(row["created_at"], end, holidays), row["pk"], (end - row["created_at"]).total_seconds()))
                 if row["first_received_at"] and row["created_at"] <= row["first_received_at"] <= end:
-                    samples["processing"].append((timezone.localdate(end), business_seconds_between(row["first_received_at"], end, holidays), row["pk"], (end - row["first_received_at"]).total_seconds()))
+                    local_steps = [step for step in steps if step["record_id"] == row["pk"]]
+                    office, elapsed = processing_reference(row["first_received_at"], end, local_steps, holidays)
+                    samples["processing"].append((timezone.localdate(end), office, row["pk"], elapsed))
         self.sample_cache[cache_key] = samples
         return samples
 
-    def turnaround(self, panel, records, steps):
+    def turnaround(self, panel, records, steps, office=None):
         samples = self.samples(records, steps)
         for stage in panel["stages"]:
             selected = [sample for sample in samples[stage["key"]] if sample[0].replace(day=1) == panel["month"]]
@@ -238,7 +274,8 @@ class Audit:
         outstanding = [step for step in steps if step["received_at"] is None and step["sent_at"] <= panel["as_of"] and step["batch"] == batches[step["record_id"]]["current_batch"] and batches[step["record_id"]]["status"] not in COMPLETED_STATUSES]
         self.equal("outstanding endorsements", panel["awaiting_confirmation"], len(outstanding))
         self.equal("documents awaiting receipt", panel["awaiting_confirmation_documents"], len({step["record_id"] for step in outstanding}))
-        pending_ids = {step["record_id"] for step in outstanding if batches[step["record_id"]]["status"] == Status.PENDING_RECEIPT}
+        pending_ids = {step["record_id"] for step in outstanding
+                       if manual_stage(self.stage_records[step["record_id"]], self.stage_office(office)) == Status.PENDING_RECEIPT}
         self.equal("waiting Pending Receipt documents", panel["awaiting_confirmation_pending_documents"], len(pending_ids))
         self.equal("waiting additional recipients", panel["awaiting_confirmation_other_documents"], len({step["record_id"] for step in outstanding} - pending_ids))
 
@@ -272,9 +309,11 @@ class Audit:
         offices = list(Office.active.order_by("pk"))
         users = [User.objects.filter(role=role, is_active=True, office__isnull=False).order_by("pk").first() for role in User.Role.values]
         for user in filter(None, users):
+            self.user = user
             self.client = Client()
             self.client.force_login(user)
             self.responses = {}
+            self.stage_records = {record.pk: record for record in loaded_records(user)}
             records = list(TrackingRecord.objects.visible_to(user).values("pk", "status", "originating_office_id", "current_office_id", "created_at", "completed_at", "first_received_at", "current_batch", "due_at"))
             documents = list(Document.objects.visible_to(user).filter(is_active=True).values("pk", "office_id", "source", "created_at"))
             steps = list(RoutingStep.objects.filter(record_id__in=[row["pk"] for row in records]).values("record_id", "from_office_id", "to_office_id", "batch", "sent_at", "received_at"))

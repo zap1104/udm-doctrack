@@ -7,13 +7,27 @@ scope; it does not grant access to other documents.
 | Figure | What is measured | Count used for the average | Month assigned by |
 | --- | --- | --- | --- |
 | Pending Receipt | Sent to confirmed | Valid confirmed endorsements, including multiple endorsements of one document | Confirmation time |
-| In Process | First receipt to completion, including transfers and waits across offices | Valid completed documents with a first receipt | Completion time |
+| In Process | First receipt to completion, excluding pending receipt waits | Valid completed documents with a first receipt | Completion time |
 | Total lifetime | Creation to completion | Valid completed documents | Completion time |
 
 The Pending Receipt turnaround figure describes completed receipt waits. It is
 different from the live count of documents currently in Pending Receipt.
 Each card states its denominator. Receipt also states how many unique documents
 those endorsements belong to.
+
+Processing pauses when a new endorsement is sent and resumes after receipt.
+Time spent Received before an office starts work remains included. Parallel
+recipient waits are merged, so processing stays paused until the last receipt
+in that batch and overlapping waits are deducted only once. An unconfirmed
+wait stops at the next endorsement batch or completion. Earlier months' waits
+still pause a document completed in a later month. Both working and elapsed
+processing clocks remove these intervals; total lifetime never pauses.
+
+Receipt is measured per endorsement, while processing and lifetime are measured
+per document. Parallel copies and different denominators mean these averages
+must not be added. Timeline custody time still measures how long an office held
+its copy, ending when that office endorses it onward; it is a different measure
+from the document's processing duration.
 
 Working time excludes weekends, the configured lunch break, and active holidays
 entered under Administration. By default, a working day is eight office hours
@@ -29,7 +43,7 @@ one lunch hour, leaving eight office hours. Eight hours is not a fixed deduction
 Monday 4 PM to Tuesday 9 AM is 17 elapsed hours minus 15 closed hours, leaving
 two office hours (assuming neither day is a configured holiday).
 
-Each stage's **View calculation** popup shows its actual average total wait minus average excluded time,
+Each stage's **View calculation** popup shows its actual average elapsed time minus average excluded time,
 and total counted office time divided by the observation count. These values
 use the same valid samples as the graph and cards. They measure elapsed time
 inside the schedule, not how long staff actively worked on a document.
@@ -44,7 +58,8 @@ Changes affect both historical and current turnaround figures; timestamps and
 total wait remain unchanged. A lazy snapshot keeps a request's cards, graphs,
 exports and time labels on one schedule, with one schedule query per calculation.
 
-Graph popups show total wait minus excluded time for that date. Small markers
+Graph popups show elapsed time minus excluded time for that date. Processing's
+elapsed time already excludes receipt waits. Small markers
 use a yellow circle for Pending Receipt, a pink diamond for In Process and a
 green cross for Total lifetime, matching the legend. Their transparent shapes
 share a fixed ten-pixel footprint at every screen width and do not enlarge on
@@ -85,7 +100,8 @@ open endorsements enter the receipt average only after confirmation.
 
 The Tracking CSV shows receipt time summed across a document's valid confirmed
 endorsements. This is a per-document total, not the per-endorsement average plotted
-on the dashboard. Its processing and lifetime durations use the same timestamp
+on the dashboard. Its processing duration uses the same merged receipt pauses
+as the summaries, and its lifetime remains unchanged. Both use the same timestamp
 validity rules as the summaries.
 
 To verify live numbers and known intervals without leaving database changes:

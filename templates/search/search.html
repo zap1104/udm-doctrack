@@ -56,6 +56,7 @@
     {% for office in resolved.raised_by_ids %}<input type="hidden" name="offices" value="{{ office }}">{% endfor %}
     {% if selected_owner %}<input type="hidden" name="owner" value="{{ selected_owner }}">{% endif %}
     {% if resolved.overdue %}<input type="hidden" name="overdue" value="{{ resolved.overdue }}">{% endif %}
+    {% if selected_sort %}<input type="hidden" name="sort" value="{{ selected_sort }}">{% endif %}
   {% endif %}
   <div class="card-udm mb-4 search-query-card workspace-toolbar"><div class="card-udm-body">
     <div class="row g-2">
@@ -95,7 +96,7 @@
       <div class="search-results-head">
         <div class="search-results-summary">
           <strong>{{ total }}</strong> tracking record{{ total|pluralize }} matched
-          <span class="text-muted">· Latest tracking activity first</span>
+          <span class="text-muted">· {% if selected_sort %}{{ sort_label }}{% else %}Latest tracking activity first{% endif %}</span>
         </div>
         {% pager section="size" %}
       </div>

@@ -30,8 +30,6 @@ from .forms import (
     DEADLINE_NONE,
     END_OF_DAY,
     SORT_CHOICES,
-    SORT_DEADLINE_ASC,
-    SORT_DEADLINE_DESC,
     BulkConfirmReceiptForm,
     CompleteForm,
     ConfirmReceiptForm,
@@ -142,11 +140,8 @@ def tracking_workspace_queryset(request):
     offices = data.get("offices")
     owner = data.get("owner")
 
-    # Shared with the unified search page's tracking mode, so "how a
-    # tracking record gets filtered" has one implementation. This page
-    # passes no `query` — it has queue pills instead of a search box.
     records = services.filter_records(
-        records, status=statuses, offices=offices, overdue=resolved.overdue
+        records, query=data.get("q"), status=statuses, offices=offices, overdue=resolved.overdue
     )
     # "View this page as office X", the same thing the dashboard's picker
     # means, and gated the same way — services.scope_office decides, so the
@@ -219,11 +214,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         # on "latest first" as much as on "soonest first", where NULL sorting
         # high would put unscheduled work above the genuinely distant.
         sort = data.get("sort") or ""
-        ordering = {
-            SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
-            SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
-        }.get(sort, ("-last_movement_at",))
-        records = records.distinct().prefetch_related("document_types").order_by(*ordering, "-pk")
+        records = services.order_records(records.prefetch_related("document_types"), sort)
         # Page size comes from the reader (`?per_page=`), defaulting to the
         # workspace's own. See apps/core/pagination.py.
         page_context = paginate(request, records, services.PAGE_SIZE)
@@ -267,6 +258,7 @@ class RecordListView(AppLoginRequiredMixin, View):
                 "records": page_records,
                 "sort_choices": SORT_CHOICES,
                 "selected_sort": sort,
+                "query": data.get("q") or "",
                 # The four stages offered as pills, and which are lit. A set of
                 # strings because that is what a template `in` test compares
                 # against — the resolver validated them already.

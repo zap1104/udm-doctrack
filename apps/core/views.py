@@ -1122,7 +1122,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: it measures are one colour across the page.
     TREND_SERIES = (
         ("receipt", Status.PENDING_RECEIPT.label, Status.PENDING_RECEIPT, "sent until confirmed", "endorsement"),
-        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "first receipt until completed", "document"),
+        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "first receipt until completed, excluding receipt waits", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
 
@@ -1230,7 +1230,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     count = f"{point['samples']} confirmed {point['unit']} across {point['documents']} {document_unit}"
                 office_text = humanise_hours(point["office_seconds"]) if point["office_seconds"] is not None else point["text"]
                 calendar_text = humanise_hours(point["calendar_seconds"]) if point["calendar_seconds"] is not None else point["calendar"]
-                summary = f"{point['label']} {office_text} within office hours, {calendar_text} total wait, over {count}"
+                calendar_measure = "elapsed processing time" if point["key"] == "processing" else "total wait"
+                summary = f"{point['label']} {office_text} within office hours, {calendar_text} {calendar_measure}, over {count}"
                 if point["zero_working_time"]:
                     summary += f"; {point['zero_working_time']} with zero working time"
                 summaries.append(summary)
@@ -1292,9 +1293,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             return round(x, 1), round(y, 1)
 
         # "Receipt" is time-to-confirm-receipt, and "In process" is the span
-        # from that confirmation to completion. The second is a stage, not the
-        # IN_PROCESS status: a document is in somebody's hands for the whole of
-        # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
+        # from that confirmation to completion, excluding subsequent receipt
+        # waits. Processing includes Received time while an office holds the
+        # document, even before its first work update.
         built = []
         for key, label, status, measures, _unit in self.TREND_SERIES:
             colour = STATUS_COLOURS[status]
@@ -2590,6 +2591,8 @@ class ReportExportView(AppLoginRequiredMixin, View):
                 "scope": resolved.scope if "scope" not in form.errors else "",
                 "offices": ", ".join(office.code for office in (data.get("offices") or [])),
                 "owner": data.get("owner") or "",
+                "q": data.get("q") or "",
+                "sort": data.get("sort") or "",
                 "overdue": resolved.overdue,
                 "office": scope_office.code if scope_office else "All visible offices",
             }
@@ -2602,7 +2605,11 @@ class ReportExportView(AppLoginRequiredMixin, View):
             scope_office = report_scope_office(request, filters)
             records = records.with_stage_for(scope_office)
             records, selected = filter_report_records(records, request)
-        records = records.with_stage_for(scope_office).with_related().prefetch_related("document_types").distinct().order_by("-created_at", "-pk")
+        records = records.with_stage_for(scope_office).with_related().prefetch_related("document_types").distinct()
+        if request.GET.get("source") == "tracking":
+            records = tracking_services.order_records(records, data.get("sort") or "")
+        else:
+            records = records.order_by("-created_at", "-pk")
         # The same point of view the page uses, so the Direction column means
         # what the screen it was exported from meant.
         direction = tracking_services.direction_annotation(scope_office)
@@ -2634,7 +2641,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
         writer.writerow(["Record filters", *(f"{key}={value}" for key, value in selected.items() if value)])
         # The basis of the three duration columns, which are plain numbers of
         # office hours so a spreadsheet can sort and add them.
-        writer.writerow(["Durations", office_hours_caveat()])
+        writer.writerow(["Durations", office_hours_caveat(), "In Process excludes time awaiting receipt between endorsements."])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
             # "Overdue" in place of the stage, so an exported sheet had no
@@ -3015,7 +3022,9 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(request.POST, instance=instance)
         if form.is_valid():
-            obj = form.save()
+            from apps.search.indexing import save_masterdata_form
+
+            obj = save_masterdata_form(form)
             from .utils import log_action
 
             log_action(

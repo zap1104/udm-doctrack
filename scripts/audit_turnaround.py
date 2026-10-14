@@ -86,14 +86,14 @@ class Audit:
 
         record = self.record(at(14, 8), at(14, 8, 15), at(14, 10), due=at(14, 10))
         self.step(record, at(14, 8), at(14, 8, 15))
-        self.step(record, at(14, 9), at(14, 9, 5))
+        self.step(record, at(14, 9), at(14, 9, 5), batch=2)
         records, stages, result = self.panel(record)
         receipt = stages["receipt"]
         self.equal("two endorsements", receipt["samples"], 2)
         self.equal("one unique document", receipt["documents"], 1)
         self.equal("endorsement mean in seconds", receipt["average_seconds"], 600)
         self.equal("short mean label", receipt["average_label"], "10 mins")
-        self.equal("processing starts at first receipt", stages["processing"]["average_seconds"], 6300)
+        self.equal("processing pauses during the next receipt wait", stages["processing"]["average_seconds"], 6000)
         self.equal("lifetime starts at creation", stages["lifetime"]["average_seconds"], 7200)
         self.equal("deadline equality is on time", result["on_time"], 1)
         self.equal("only deadline records form denominator", result["on_time_total"], 1)
@@ -106,6 +106,7 @@ class Audit:
             self.equal(name + " endorsements", row["receipt_samples"], 2)
             self.equal(name + " unique documents", row["receipt_documents"], 1)
         self.equal("export sums endorsements per document", analytics.record_durations(record, record.routing_steps.all(), now=self.now)["receipt"], 1200)
+        self.equal("export pauses processing during endorsements", analytics.record_durations(record, record.routing_steps.all(), now=self.now)["processing"], 6000)
 
         instant = self.record(at(14, 8), at(14, 8), at(14, 8))
         self.step(instant, at(14, 8), at(14, 8))

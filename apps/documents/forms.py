@@ -11,6 +11,7 @@ from apps.accounts.models import Office
 from apps.core.forms import BootstrapFormMixin, DateInput, MultipleFileField
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
 from apps.core.type_forms import DocumentTypeSelectionMixin
+from apps.search.filter_fields import RepositorySearchControls
 
 from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, DeletionReview, Document, OcrLanguage, Source
 
@@ -185,7 +186,7 @@ MONTH_NAMES = [
 ]
 
 
-class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
+class RepositoryFilterForm(BootstrapFormMixin, RepositorySearchControls):
     """Filters for the repository list.
 
     Two rules, both learned the hard way on the tracking page:
@@ -207,9 +208,14 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
     buries them.
     """
 
+    # Existing repository searches returned every plain match. A relevance
+    # cutoff is an explicit choice here; Search keeps its configured default.
+    minimum_default = 0
+
     q = forms.CharField(
-        required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search title, reference, metadata or document text…"})
+        required=False, label="", widget=forms.TextInput(attrs={"placeholder": "Search title, reference, metadata or document text…", "autocomplete": "off"})
     )
+    office = forms.ModelChoiceField(required=False, label="Office", queryset=Office.objects.none(), empty_label="All available offices")
     document_type = forms.ModelChoiceField(
         required=False, label="", queryset=DocumentType.active.none(), empty_label="All types"
     )
@@ -234,10 +240,10 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
 
     #: Declaration order is also the order the row is read in: what you are
     #: looking for, then what kind of thing it is, then when it is from.
-    FIELD_ORDER = ("q", "document_type", "tag", "source", "year", "month", "retention")
+    FIELD_ORDER = ("q", "office", "document_type", "tag", "source", "year", "month", "date_from", "date_to", "retention", "min_relevance", "show_all")
 
     def __init__(self, *args, years=None, months=None, document_types=None, tags=None,
-                 sources=None, **kwargs):
+                 sources=None, offices=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.order_fields(self.FIELD_ORDER)
 
@@ -270,6 +276,8 @@ class RepositoryFilterForm(BootstrapFormMixin, forms.Form):
             self.fields["document_type"].queryset = document_types
         if tags is not None:
             self.fields["tag"].queryset = tags
+        if offices is not None:
+            self.fields["office"].queryset = offices
 
         for name in ("year", "month", "document_type", "tag", "source", "retention"):
             self.fields[name].widget.attrs.setdefault(

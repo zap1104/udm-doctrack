@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from django import forms
-from django.conf import settings
 
 from apps.accounts.models import Office
 from apps.core.document_types import document_type_options
-from apps.core.forms import BootstrapFormMixin, DateInput
+from apps.core.forms import BootstrapFormMixin
 from apps.core.models import DocumentType, Tag
 from apps.documents.models import Source
 from apps.tracking.forms import TrackingFilterForm
+
+from .filter_fields import RepositorySearchControls
 
 #: What this page is searching. Two different corpora with two different
 #: shapes: the repository holds filed documents with extracted text and a
@@ -43,32 +44,13 @@ def mode_from_request(params) -> str:
 
 
 class TrackingSearchForm(TrackingFilterForm):
-    """The Tracking page's filters, plus the free-text box search needs.
+    """The same query, queue and ordering fields as the Tracking workspace."""
 
-    A subclass rather than a second form: status, scope, offices and owner keep
-    exactly one definition, so the two pages' choice lists cannot drift apart —
-    which is the thing that would actually go wrong here.
-
-    `q` lives on this side because the Tracking workspace deliberately has no
-    search box; it traded one for the queue pills. This page is the search
-    surface, so the box belongs to it.
-    """
-
-    q = forms.CharField(
-        required=False,
-        label="",
-        widget=forms.TextInput(
-            attrs={
-                "placeholder": "Search tracking no., subject or office…",
-                "autocomplete": "off",
-            }
-        ),
-    )
-
-    field_order = ("q", "status", "scope", "offices", "owner")
+    field_order = ("q", "status", "scope", "offices", "owner", "sort")
 
 
-class SearchForm(BootstrapFormMixin, forms.Form):
+class SearchForm(BootstrapFormMixin, RepositorySearchControls):
+    field_order = ("q", "year", "office", "document_type", "tag", "source", "date_from", "date_to", "min_relevance", "show_all")
     q = forms.CharField(
         required=False,
         label="",
@@ -92,16 +74,6 @@ class SearchForm(BootstrapFormMixin, forms.Form):
     source = forms.ChoiceField(
         required=False, label="Origin", choices=[("", "Any origin")] + list(Source.choices)
     )
-    date_from = forms.DateField(required=False, label="From", widget=DateInput())
-    date_to = forms.DateField(required=False, label="To", widget=DateInput())
-    min_relevance = forms.IntegerField(
-        required=False,
-        label="Minimum relevance",
-        min_value=0,
-        max_value=100,
-        widget=forms.NumberInput(attrs={"type": "range", "min": 0, "max": 100, "step": 5, "class": "form-range"}),
-    )
-    show_all = forms.BooleanField(required=False, label="Include results below the threshold")
 
     def __init__(self, *args, years=None, visible=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -110,16 +82,4 @@ class SearchForm(BootstrapFormMixin, forms.Form):
             self.fields["document_type"].queryset = document_type_options(visible)
             self.fields["tag"].queryset = Tag.active.filter(documents__in=visible).distinct()
         self.fields["year"].choices = [("", "All years")] + [(str(year), str(year)) for year in (years or [])]
-        self.fields["min_relevance"].initial = settings.SEARCH_MIN_RELEVANCE_DEFAULT
-
-    def clean_min_relevance(self):
-        value = self.cleaned_data.get("min_relevance")
-        return settings.SEARCH_MIN_RELEVANCE_DEFAULT if value is None else value
-
-    def clean(self):
-        cleaned = super().clean()
-        date_from, date_to = cleaned.get("date_from"), cleaned.get("date_to")
-        if date_from and date_to and date_from > date_to:
-            raise forms.ValidationError("The “From” date is after the “To” date.")
-        return cleaned
 

@@ -170,15 +170,11 @@ def test_a_partly_received_batch_still_counts_as_pending(client, users, offices,
 # ---------------------------------------------------------------------------
 # The simplified filter panel
 #
-# The free-text box is gone, the queues are pills rather than a dropdown, and
-# what is left is the two questions the pills cannot answer: which office raised
-# it, and whose files am I looking at.
+# Queries narrow the chosen queue; the pills retain stage, office and ownership.
 # ---------------------------------------------------------------------------
-def test_the_free_text_box_is_gone_from_the_form():
-    """Tracking searches records; the repository's search is the one that
-    indexes file text. Two boxes doing different things under the same name is
-    what this removes."""
-    assert "q" not in TrackingFilterForm().fields
+def test_the_tracking_form_can_search_its_own_records():
+    assert "q" in TrackingFilterForm().fields
+    assert "tracking" in TrackingFilterForm().fields["q"].widget.attrs["placeholder"]
 
 
 def test_the_pill_driven_fields_are_still_validated():
@@ -356,16 +352,15 @@ def test_the_owner_filter_narrows_within_the_pill_rather_than_replacing_it(
 
 # --- what the page renders --------------------------------------------------
 @pytest.mark.django_db
-def test_the_page_has_no_search_box(client, users):
+def test_the_page_has_a_tracking_search_box(client, users):
     client.force_login(users["admin"])
     body = client.get("/tracking/").content.decode()
     # The page's own markup, not the chrome around it. The topbar carries the
-    # repository's archive search — also name="q" — on every page, and that one
-    # is deliberately untouched: it searches documents, which is the job the
-    # tracking box was confusingly duplicating.
+    # repository's archive search — also name="q" — on every page.
     content = body.split('<main id="main-content"', 1)[1]
 
-    assert 'name="q"' not in content
+    assert 'name="q"' in content
+    assert "Search tracking" in content
 
     # Each direction contains its stages; completed work and deadlines stay separate.
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]

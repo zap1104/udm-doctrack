@@ -23,11 +23,25 @@
   {% endif %}
 </div>
 {% include "tracking/_subtabs.html" with active="tracking" %}
+<form method="get" class="card-udm mb-3 workspace-toolbar no-print" aria-label="Search tracking records" {% include "partials/_auto_filter_attrs.html" %}>
+  {% if resolved.as_office %}<input type="hidden" name="office" value="{{ resolved.as_office.pk }}">{% elif resolved.all_offices %}<input type="hidden" name="office" value="all">{% endif %}
+  {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
+  {% for stage in selected_statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
+  {% for office in selected_office_ids %}<input type="hidden" name="offices" value="{{ office }}">{% endfor %}
+  {% if selected_owner %}<input type="hidden" name="owner" value="{{ selected_owner }}">{% endif %}
+  {% if selected_sort %}<input type="hidden" name="sort" value="{{ selected_sort }}">{% endif %}
+  {% if resolved.overdue %}<input type="hidden" name="overdue" value="{{ resolved.overdue }}">{% endif %}
+  <input type="hidden" name="per_page" value="{{ page_size }}">
+  <div class="card-udm-body"><div class="row g-2 align-items-end">
+    <div class="col-sm-9"><label class="form-label" for="{{ form.q.id_for_label }}">Search tracking</label>{{ form.q }}{{ form.q.errors }}</div>
+    <div class="col-sm-3 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
+  </div></div>
+</form>
 <div class="tracking-queue-nav mb-3" aria-label="Tracking views">
   <div class="tracking-queue-list">
     <a class="pill-toggle{% if not resolved.scope and not resolved.statuses %} is-active{% endif %}"
        href="{{ all_tracking_href }}">All in Tracking</a>
-    {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue %}
+    {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue or query or selected_sort %}
       <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
     {% endif %}
   </div>
