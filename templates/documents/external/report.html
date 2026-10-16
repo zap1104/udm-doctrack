@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}External Repository Reports · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-reports">
+  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Repository Reports</h1><p class="sub">{{ total }} matching filed document{{ total|pluralize }} of {{ all_count }} available.</p></div><a class="btn btn-udm-outline" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=csv">Export CSV</a></div>
+  {% include "documents/external/_nav.html" %}
+  {% include "documents/external/_filters.html" %}
+  <div class="row g-4">
+    <div class="col-md-6"><div class="card-udm"><div class="card-udm-body"><h2 class="h5">Managing offices</h2><ul>{% for row in offices %}<li>{{ row.office__name }}: {{ row.total }}</li>{% empty %}<li>No matching documents</li>{% endfor %}</ul></div></div></div>
+    <div class="col-md-6"><div class="card-udm"><div class="card-udm-body"><h2 class="h5">Acquisition sources</h2><ul>{% for row in sources %}<li>{{ row.source }}: {{ row.total }}</li>{% empty %}<li>No matching documents</li>{% endfor %}</ul><p>{{ due_count }} document{{ due_count|pluralize }} due for deletion review.</p></div></div></div>
+  </div>
+</div>
+{% endblock %}

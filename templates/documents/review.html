@@ -5,7 +5,7 @@
 <div class="workspace-page workspace-form workspace-review">
 <div class="page-head">
   <div>
-    <div class="eyebrow">Document Repository · Step 2</div>
+    <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository · Step 2</div>
     <h1>Review Extracted Document Details</h1>
     <p class="sub">The file is already saved. Check the suggested metadata before saving your corrections.</p>
     <div class="step-indicator mt-2">
@@ -103,8 +103,8 @@
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-udm" type="submit">Save to the Document Repository</button>
-            <a class="btn btn-udm-outline" href="{% url 'documents:repository' %}">Back</a>
+            <button class="btn btn-udm" type="submit">Save to the {% if document.is_external %}External {% endif %}Document Repository</button>
+            <a class="btn btn-udm-outline" href="{{ document.repository_url }}">Back</a>
           </div>
         </div>
       </div>

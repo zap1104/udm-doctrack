@@ -113,6 +113,8 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
             self.fields["office"].queryset = offices.filter(pk=self.instance.office_id or user.office_id)
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})
         self.fields["access_level"].choices = AccessLevel.choices
+        if self.instance.is_external:
+            self.fields["office"].disabled = True
         if not self.instance.document_type_id:
             self.fields["retention_until"].help_text = (
                 "Leave blank to use the main document type's review period when first classified. "

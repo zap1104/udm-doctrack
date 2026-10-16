@@ -1,10 +1,14 @@
 from django.urls import path
 
-from . import views
+from . import external_views, views
 
 app_name = "documents"
 
 urlpatterns = [
+    path("external/", external_views.ExternalRepositoryView.as_view(), name="external_repository"),
+    path("external/upload/", external_views.ExternalUploadView.as_view(), name="external_upload"),
+    path("external/reports/", external_views.ExternalRepositoryReportView.as_view(), name="external_reports"),
+    path("external/deletion-review/", external_views.ExternalDeletionQueueView.as_view(), name="external_deletion_queue"),
     path("", views.RepositoryView.as_view(), name="repository"),
     path("upload/", views.UploadView.as_view(), name="upload"),
     path("deletion-review/", views.DeletionQueueView.as_view(), name="deletion_queue"),

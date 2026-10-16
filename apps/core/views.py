@@ -204,7 +204,7 @@ class DashboardMemoMixin:
         """The two base querysets the analytics panels and the memo read from."""
         records = TrackingRecord.objects.visible_to(user)
         # Active only, as the repository lists them — see ReportsView.
-        documents = Document.objects.visible_to(user).filter(is_active=True)
+        documents = Document.objects.visible_to(user).in_collection().filter(is_active=True)
         if office:
             # The same definition Reports uses, called rather than restated —
             # see core_filters.office_touches_record_q. The two-condition copy
@@ -1555,7 +1555,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         # Active documents only, as the repository and search list them. A
         # document deactivated from Django's admin site vanished from every list
         # while still counting here, so a figure could exceed the page it opens.
-        documents = Document.objects.visible_to(user).filter(is_active=True)
+        documents = Document.objects.visible_to(user).in_collection().filter(is_active=True)
         if filters["office"]:
             documents = documents.filter(office=filters["office"])
         documents = documents.distinct()
@@ -2529,8 +2529,11 @@ class PrintLogView(AppLoginRequiredMixin, View):
         target_id = request.POST.get("target_id", "").strip()
         target = None
         if target_type or target_id:
+            from apps.tracking.models import ExternalTrackingRecord
+
             targets = {
                 "TrackingRecord": TrackingRecord.objects.visible_to(request.user),
+                "ExternalTrackingRecord": ExternalTrackingRecord.objects.visible_to(request.user),
                 "Document": Document.objects.visible_to(request.user).filter(is_active=True),
             }
             if (target_type not in targets or not target_id.isascii() or not target_id.isdigit()
@@ -2849,6 +2852,7 @@ def audit_entries_for(user):
     if not user.office_id:
         return entries.none()
     from apps.accounts.models import User
+    from apps.tracking.models import ExternalOffice, ExternalTrackingRecord
 
     def ids(queryset):
         return queryset.order_by().annotate(audit_pk=Cast("pk", output_field=CharField())).values("audit_pk")
@@ -2861,6 +2865,8 @@ def audit_entries_for(user):
         | Q(target_type="TrackingRecord", target_id__in=ids(TrackingRecord.objects.visible_to(user)))
         | Q(target_type="Document", target_id__in=ids(Document.objects.visible_to(user)))
         | Q(target_type="Office", target_id=str(user.office_id))
+        | Q(target_type="ExternalTrackingRecord", target_id__in=ids(ExternalTrackingRecord.objects.visible_to(user)))
+        | Q(target_type="ExternalOffice", target_id__in=ids(ExternalOffice.objects.visible_to(user)))
         | (Q(target_type="Document", action=AuditLog.Action.DELETE, extra__permanent_repository_deletion=True) & own_target)
     )
     # Legacy rows have no verifiable office snapshot. Keep them available to
@@ -2941,7 +2947,7 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
         model = config["model"]
         objects = model.objects.all()
         if model is Tag:
-            visible_documents = Document.objects.visible_to(request.user).filter(is_active=True)
+            visible_documents = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
             # The stored usage counter includes retired documents and can
             # become stale after direct m2m edits. Display a live count scoped
             # to records this administrator can actually open.

@@ -19,10 +19,12 @@ from apps.tracking.services import add_activity
 from .extraction import extract_document_text
 from .models import (
     AccessLevel,
+    Collection,
     DeletionReview,
     Document,
     DocumentFile,
     DocumentMetadata,
+    ExternalDocumentOffice,
     MetadataSuggestion,
     OcrStatus,
     Source,
@@ -32,14 +34,16 @@ from .suggestions import Suggestion, suggest_metadata
 logger = logging.getLogger("doctrack")
 
 
-def suggested_tags_for(user):
+def suggested_tags_for(user, *, collection=Collection.OVPA):
     """Tag suggestions must not disclose another office's document keywords."""
     tags = Tag.active.all()
     if not user.is_authenticated or not user.is_active:
         return tags.none()
     if user.is_system_admin:
-        return tags.order_by("-usage_count", "name")
-    documents = Document.objects.visible_to(user).filter(is_active=True)
+        from django.db.models import Q
+
+        return tags.filter(Q(documents__isnull=True) | Q(documents__collection=collection)).distinct().order_by("-usage_count", "name")
+    documents = Document.objects.visible_to(user).in_collection(collection).filter(is_active=True)
     return tags.filter(documents__in=documents).distinct().order_by("name")
 
 
@@ -49,7 +53,7 @@ def suggested_tags_for(user):
 @transaction.atomic
 def ingest_upload(
     *, user, uploaded_file, office=None, source=Source.UPLOAD,
-    ocr_language="auto", allow_external_ocr=False,
+    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
 ) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
 
@@ -58,6 +62,10 @@ def ingest_upload(
     while a third-party OCR request runs.
     """
     user = active_writer(user)
+    if collection not in Collection.values:
+        raise ValidationError("Choose a valid repository collection.")
+    if collection == Collection.EXTERNAL and not user.is_office_admin:
+        raise PermissionDenied("Only administrators can upload external documents.")
     validate_upload(uploaded_file)
     office = office or user.office
     if not user.is_authenticated or not user.is_active or user.is_viewer:
@@ -66,6 +74,14 @@ def ingest_upload(
         raise PermissionDenied("You can only upload to your own office.")
     if office is None:
         raise ValidationError("Your account has no office, so it cannot own a document.")
+    counterparts = []
+    if collection == Collection.EXTERNAL:
+        from apps.tracking.models import ExternalOffice
+
+        supplied = {getattr(entry, "pk", entry) for entry in (external_offices or [])}
+        counterparts = list(ExternalOffice.objects.select_for_update().filter(pk__in=supplied, managing_office=office, is_active=True))
+        if not supplied or len(counterparts) != len(supplied):
+            raise ValidationError("Choose at least one active external office managed by the owning office.")
 
     extraction = (
         extract_document_text(
@@ -80,6 +96,7 @@ def ingest_upload(
     document = Document.objects.create(
         title=(uploaded_file.name.rsplit(".", 1)[0][:255] or "Untitled document"),
         source=source,
+        collection=collection,
         office=office,
         year=timezone.localdate().year,
         uploaded_by=user,
@@ -107,6 +124,8 @@ def ingest_upload(
         extracted_chars=extraction.char_count if extraction else 0,
         uploaded_by=user,
     )
+    for counterpart in counterparts:
+        ExternalDocumentOffice.objects.create(document=document, external_office=counterpart, name_snapshot=counterpart.name, code_snapshot=counterpart.code)
 
     if extraction is None:
         _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk])
@@ -134,7 +153,7 @@ def ingest_upload(
     return document, suggestion
 
 
-def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False) -> None:
+def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False, robust=False) -> None:
     """Queue extraction only after the surrounding transaction commits."""
     if not settings.ENABLE_BACKGROUND_TASKS:
         return
@@ -147,11 +166,12 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False)
             user_id=user_id,
             file_ids=file_ids,
             replace=replace,
-        )
+        ),
+        robust=robust,
     )
 
 
-def duplicate_of(uploaded_file, *, user=None) -> Document | None:
+def duplicate_of(uploaded_file, *, user=None, collection=Collection.OVPA) -> Document | None:
     """Warn (never block) when the same file was already archived."""
     try:
         digest = checksum_of(uploaded_file)
@@ -159,7 +179,7 @@ def duplicate_of(uploaded_file, *, user=None) -> Document | None:
         return None
     if user is None:
         return None
-    visible = Document.objects.visible_to(user).filter(is_active=True)
+    visible = Document.objects.visible_to(user).in_collection(collection).filter(is_active=True)
     existing = DocumentFile.objects.filter(checksum=digest, document__in=visible).select_related("document").first()
     return existing.document if existing else None
 
@@ -174,6 +194,8 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
         raise PermissionDenied("Only the owning office can edit this record.")
     if data.get("office") and not user.is_system_admin and data["office"].pk != document.office_id:
         raise PermissionDenied("Only a system administrator can transfer ownership.")
+    if document.is_external and data.get("office") and data["office"].pk != document.office_id:
+        raise ValidationError("An external document must retain its managing office.")
     from apps.core.document_types import resolve_document_types
     previous_types = document.selected_document_types
     main = data.get("document_type")

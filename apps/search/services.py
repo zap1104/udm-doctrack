@@ -39,7 +39,7 @@ from django.db.models.functions import Greatest
 from django.utils.html import escape
 
 from apps.core.document_types import document_type_match
-from apps.documents.models import Document, SearchQueryLog
+from apps.documents.models import Collection, Document, SearchQueryLog
 
 logger = logging.getLogger("doctrack")
 
@@ -123,6 +123,7 @@ def search_documents(
     log: bool = True,
     base_documents=None,
     exhaustive: bool = False,
+    collection=Collection.OVPA,
 ) -> SearchResponse:
     """Score one permission-scoped corpus.
 
@@ -135,7 +136,7 @@ def search_documents(
     limit = limit or settings.SEARCH_RESULT_LIMIT
     min_relevance = settings.SEARCH_MIN_RELEVANCE_DEFAULT if min_relevance is None else int(min_relevance)
 
-    visible = Document.objects.visible_to(user).filter(is_active=True)
+    visible = Document.objects.visible_to(user).in_collection(collection).filter(is_active=True)
     base = visible if base_documents is None else base_documents.filter(pk__in=visible.order_by().values("pk"))
     base = base.with_related()
     if year:
@@ -202,6 +203,8 @@ def search_documents(
     identifier_conditions = (
         Q(reference_number__iexact=raw_query)
         | Q(tracking_record__tracking_number__iexact=raw_query)
+        | Q(external_tracking_record__tracking_number__iexact=raw_query)
+        | Q(external_tracking_record__original_reference__iexact=raw_query)
     ) if len(raw_query) >= 6 else Q(pk__in=[])
     identifier_priority = Case(
         When(identifier_conditions, then=Value(1)),
@@ -336,8 +339,9 @@ def _is_identifier_hit(document: Document, raw_query: str) -> bool:
     if not needle or len(needle) < 6:
         return False
     candidates = [document.reference_number or ""]
-    if document.tracking_record_id and getattr(document, "tracking_record", None):
-        candidates.append(document.tracking_record.tracking_number)
+    if document.tracking_origin:
+        candidates.append(document.tracking_origin.tracking_number)
+        candidates.append(getattr(document.tracking_origin, "original_reference", ""))
     return any(needle == value.lower() for value in candidates if value)
 
 
@@ -456,7 +460,7 @@ def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
     remaining = limit - len(tags)
     if remaining > 0:
         titles = (
-            Document.objects.visible_to(user)
+            Document.objects.visible_to(user).in_collection()
             .filter(is_active=True, title__icontains=prefix)
             .annotate(suggestion=Lower("title"))
             .exclude(suggestion__in=[term.casefold() for term in tags])

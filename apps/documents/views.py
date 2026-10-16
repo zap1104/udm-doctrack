@@ -32,7 +32,7 @@ from .forms import (
     RepositoryFilterForm,
     UploadForm,
 )
-from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document, DocumentFile
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Collection, Document, DocumentFile
 from .suggestions import Suggestion
 
 #: Documents per page when the reader has not asked for another size. The
@@ -141,8 +141,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
         }
 
     def get(self, request):
-        documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
-        visible = Document.objects.visible_to(request.user).filter(is_active=True)
+        documents = Document.objects.visible_to(request.user).in_collection().filter(is_active=True).with_related()
+        visible = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
         pending_visible = pending_upload_for(request.user)
         if request.user.is_office_admin and not request.user.is_system_admin:
             pending_visible = pending_visible.filter(originating_office_id=request.user.office_id) if request.user.office_id else pending_visible.none()
@@ -440,7 +440,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
         return {
             "title": suggestion.get("title") or document.title,
             "description": suggestion.get("subject", ""),
-            "office": suggestion.get("office_id") or document.office_id,
+            "office": document.office_id if document.is_external else (suggestion.get("office_id") or document.office_id),
             "document_type": main_type,
             "document_date": suggestion.get("document_date") or None,
             "year": document.year,
@@ -473,7 +473,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                 "suggestion": suggestion,
                 "confidence": suggestion.get("confidence", {}),
                 "text_preview": (document.ocr_text or "")[:4000],
-                "all_tags": services.suggested_tags_for(request.user)[:50],
+                "all_tags": services.suggested_tags_for(request.user, collection=document.collection)[:50],
             },
         )
 
@@ -495,7 +495,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                     "suggestion": suggestion,
                     "confidence": suggestion.get("confidence", {}),
                     "text_preview": (document.ocr_text or "")[:4000],
-                    "all_tags": services.suggested_tags_for(request.user)[:50],
+                    "all_tags": services.suggested_tags_for(request.user, collection=document.collection)[:50],
                 },
             )
 
@@ -545,7 +545,7 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
                 "can_review_deletion": document.can_user_review_deletion(request.user),
                 "deletion_reviews": document.deletion_reviews.select_related("reviewed_by")[:20],
                 "related": Document.objects.visible_to(request.user)
-                .filter(office=document.office, is_active=True)
+                .in_collection(document.collection).filter(office=document.office, is_active=True)
                 .exclude(pk=document.pk)
                 .order_by("-created_at")[:5],
             },
@@ -676,8 +676,8 @@ class TagSuggestJsonView(AppLoginRequiredMixin, View):
         return JsonResponse({"results": [tag.name for tag in tags]})
 
 
-def _reviewable_documents(user):
-    documents = Document.objects.visible_to(user)
+def _reviewable_documents(user, *, collection=Collection.OVPA):
+    documents = Document.objects.visible_to(user).in_collection(collection)
     if not user.is_system_admin:
         documents = documents.filter(office_id=user.office_id)
     return documents
@@ -687,9 +687,10 @@ class DeletionQueueView(AdminRequiredMixin, View):
     """A human decision queue scoped to offices the administrator may manage."""
 
     permission_message = "Only administrators can manage deletion reviews."
+    collection = Collection.OVPA
 
     def get(self, request):
-        base = _reviewable_documents(request.user)
+        base = _reviewable_documents(request.user, collection=self.collection)
         office_options = Office.objects.filter(pk__in=base.values("office_id")).order_by("name")
         values = request.GET.copy()
         if not values.get("status"):
@@ -713,6 +714,7 @@ class DeletionQueueView(AdminRequiredMixin, View):
         context = paginate(request, documents)
         context.update({
             "form": form, "status": status, "total": context["page_obj"].paginator.count,
+            "is_external_collection": self.collection == Collection.EXTERNAL,
             "queue_counts": {key: query.count() for key, query in queues.items()},
             "queue_links": {key: core_filters.link(request.path, request, status=key) for key in queues},
         })
@@ -724,7 +726,7 @@ class DeletionReviewView(AdminRequiredMixin, View):
     permission_message = "Only administrators can record deletion review decisions."
 
     def _document(self, request, pk):
-        document = get_object_or_404(_reviewable_documents(request.user).with_related(), pk=pk)
+        document = get_object_or_404(Document.objects.visible_to(request.user).with_related(), pk=pk)
         if not document.can_user_review_deletion(request.user, include_deleted=True):
             raise PermissionDenied("Only an authorized administrator for the owning office can review deletion.")
         return document
@@ -761,5 +763,6 @@ class DeletionReviewView(AdminRequiredMixin, View):
                 ))
                 if document.is_active:
                     return redirect(document.get_absolute_url())
-                return redirect(core_filters.link(reverse("documents:deletion_queue"), status="deleted"))
+                queue = "documents:external_deletion_queue" if document.is_external else "documents:deletion_queue"
+                return redirect(core_filters.link(reverse(queue), status="deleted"))
         return self._render(request, document, form)

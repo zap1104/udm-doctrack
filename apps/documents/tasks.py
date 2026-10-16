@@ -216,7 +216,7 @@ def purge_deleted_documents(*, now=None, limit=100):
     failed cleanup retains the expired row for an idempotent retry. Holding the
     document lock serializes cleanup with restore and duplicate workers.
     """
-    from apps.tracking.models import Attachment
+    from apps.tracking.models import Attachment, ExternalAttachment
 
     now = now or timezone.now()
     cutoff = now - timedelta(days=DELETION_RECOVERY_DAYS)
@@ -238,6 +238,7 @@ def purge_deleted_documents(*, now=None, limit=100):
                     target_type="Document", target_id=str(document.pk),
                     summary=f"Permanently deleted repository document #{document.pk} after 30 days",
                     extra={"permanent_repository_deletion": True, "audit_target_office_id": document.office_id,
+                           "collection": document.collection, "external_record_id": document.external_tracking_record_id,
                            "deleted_at": document.deleted_at.isoformat()},
                 )
                 seen = set()
@@ -247,7 +248,7 @@ def purge_deleted_documents(*, now=None, limit=100):
                         continue
                     seen.add(name)
                     shared = DocumentFile.objects.filter(file=name).exclude(document_id=document.pk).exists()
-                    if shared or Attachment.objects.filter(file=name).exists():
+                    if shared or Attachment.objects.filter(file=name).exists() or ExternalAttachment.objects.filter(file=name).exists():
                         continue
                     storage = document_file.file.storage
                     storage.delete(name)

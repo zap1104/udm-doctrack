@@ -313,6 +313,12 @@ class NotificationQuerySet(models.QuerySet):
         notifications = self.filter(office_id=user.office_id).filter(
             Q(document__isnull=True) | Q(document__is_active=True)
         )
+        from apps.tracking.models import ExternalTrackingRecord
+
+        notifications = notifications.filter(
+            Q(external_record__isnull=True)
+            | Q(external_record__in=ExternalTrackingRecord.objects.visible_to(user))
+        )
         if user.is_office_admin and not user.is_system_admin:
             from apps.documents.models import Document
             from apps.tracking.models import TrackingRecord
@@ -350,6 +356,10 @@ class Notification(models.Model):
     tracking_record = models.ForeignKey(
         "tracking.TrackingRecord", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
     )
+    external_record = models.ForeignKey(
+        "tracking.ExternalTrackingRecord", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="notifications",
+    )
     document = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
     )
@@ -364,6 +374,12 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(external_record__isnull=True) | Q(tracking_record__isnull=True),
+                name="notification_distinct_tracking_origin",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=["office", "resolved_at", "-created_at"],

@@ -7,6 +7,59 @@ from django.utils import timezone
 from .models import Notification
 
 
+def chase_external_followups():
+    """Chase external cases without changing OVPA routing or its notice totals."""
+    from apps.tracking.models import COMPLETED_STATUSES, ExternalTrackingRecord, Status
+
+    from .notifications import notify_office
+
+    now = timezone.now()
+    cutoff = now - timedelta(days=settings.UNRECEIVED_NUDGE_DAYS)
+    kinds = [Notification.Kind.UNRECEIVED, Notification.Kind.OVERDUE]
+    Notification.objects.filter(
+        external_record__status__in=[Status.DRAFT, *COMPLETED_STATUSES],
+        kind__in=kinds, resolved_at__isnull=True,
+    ).update(resolved_at=now)
+    candidates = ExternalTrackingRecord.objects.exclude(
+        status__in=[Status.DRAFT, *COMPLETED_STATUSES],
+    ).order_by("pk").values_list("pk", flat=True)
+    raised = {"unreceived": 0, "overdue": 0}
+    for record_id in candidates.iterator():
+        with transaction.atomic():
+            record = ExternalTrackingRecord.objects.select_for_update().filter(pk=record_id).first()
+            if record is None:
+                continue
+            step = record.current_step
+            if not step or record.status in {Status.DRAFT, *COMPLETED_STATUSES}:
+                Notification.objects.filter(external_record=record, kind__in=kinds,
+                                            resolved_at__isnull=True).update(resolved_at=now)
+                continue
+            pending = step.received_at is None
+            unreceived = pending and step.sent_at < cutoff
+            overdue = bool(record.due_at and record.due_at < now)
+            checks = [
+                (Notification.Kind.UNRECEIVED, unreceived, record.managing_office,
+                 "Follow up on an external slip awaiting receipt",
+                 f"{record.tracking_number} is awaiting receipt from {step.to_name_snapshot}.", "unreceived"),
+                (Notification.Kind.OVERDUE, overdue,
+                 (step.to_office if pending else record.current_office) or record.managing_office,
+                 "An external slip is past its deadline",
+                 f"{record.tracking_number} is past its deadline. Check its current receipt or work step.", "overdue"),
+            ]
+            for kind, needed, office, title, message, counter in checks:
+                notices = Notification.objects.filter(external_record=record, kind=kind,
+                                                       resolved_at__isnull=True)
+                if not needed:
+                    notices.update(resolved_at=now)
+                    continue
+                notices.exclude(office=office).update(resolved_at=now)
+                if not notices.filter(office=office).update(title=title, message=message[:255]):
+                    notify_office(office, kind=kind, title=title, message=message,
+                                  url=record.get_absolute_url(), external_record=record)
+                    raised[counter] += 1
+    return raised
+
+
 def prune_notifications():
     """Resolve stale informational alerts and prune only old resolved UI rows."""
     now = timezone.now()
@@ -49,6 +102,7 @@ def chase_unreceived_and_overdue():
     Notification.objects.filter(
         kind__in=[Notification.Kind.UNRECEIVED, Notification.Kind.OVERDUE],
         tracking_record__isnull=True,
+        external_record__isnull=True,
         resolved_at__isnull=True,
     ).update(resolved_at=now)
 

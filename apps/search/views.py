@@ -57,7 +57,7 @@ class SearchView(AppLoginRequiredMixin, View):
     def _repository(self, request) -> dict:
         """Unchanged from before the toggle existed, so `/search/` with no mode
         behaves exactly as every existing bookmark expects."""
-        visible = Document.objects.visible_to(request.user).filter(is_active=True)
+        visible = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
         years = sorted({value for value in visible.values_list("year", flat=True) if value}, reverse=True)
         params = request.GET.copy()
         office = core_filters._office_by_pk_or_code(params.get("office"), include_inactive=True)
@@ -243,7 +243,7 @@ class SearchView(AppLoginRequiredMixin, View):
 class SearchClickView(AppLoginRequiredMixin, View):
     def get(self, request, log_id, document_id, rank):
         query_log = get_object_or_404(SearchQueryLog, pk=log_id, user=request.user)
-        document = get_object_or_404(Document.objects.visible_to(request.user), pk=document_id, is_active=True)
+        document = get_object_or_404(Document.objects.visible_to(request.user).in_collection(), pk=document_id, is_active=True)
         rank = max(1, min(int(rank), max(query_log.result_count, 1)))
         SearchResultClick.objects.create(
             query_log=query_log,

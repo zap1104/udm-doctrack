@@ -51,6 +51,7 @@ INCLUDE_RE = re.compile(r"""{%\s*(?:include|extends)\s+['"]([^'"]+)['"]""")
 LOAD_RE = re.compile(r"{%\s*load\s+([\w\s]+?)\s*%}")
 NAME_RE = re.compile(r"""name\s*=\s*['"]([\w_-]+)['"]""")
 APPNAME_RE = re.compile(r"""app_name\s*=\s*['"](\w+)['"]""")
+URL_INCLUDE_RE = re.compile(r"""include\(\s*['"]([\w.]+)['"]""")
 
 BUILTIN_LIBRARIES = {
     "static", "i18n", "l10n", "tz", "cache", "humanize", "admin_urls", "log", "mathfilters",
@@ -59,12 +60,24 @@ BUILTIN_LIBRARIES = {
 
 def known_url_names() -> set[str]:
     names: set[str] = set()
-    for path in ROOT.glob("apps/*/urls.py"):
+    visited: set[tuple[Path, str]] = set()
+
+    def read_routes(path: Path, namespace: str = "") -> None:
+        if (path, namespace) in visited or not path.is_file():
+            return
+        visited.add((path, namespace))
         text = path.read_text(encoding="utf-8")
         namespace_match = APPNAME_RE.search(text)
-        namespace = namespace_match.group(1) if namespace_match else ""
+        if namespace_match:
+            namespace = f"{namespace}:{namespace_match.group(1)}" if namespace else namespace_match.group(1)
         for name in NAME_RE.findall(text):
             names.add(f"{namespace}:{name}" if namespace else name)
+        for module in URL_INCLUDE_RE.findall(text):
+            if module.startswith("apps."):
+                read_routes(ROOT.joinpath(*module.split(".")).with_suffix(".py"), namespace)
+
+    for path in ROOT.glob("apps/*/urls.py"):
+        read_routes(path)
     # Django's own admin namespace and auth views
     names.update({"admin:index", "django-admin:index"})
     return names

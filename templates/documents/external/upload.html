@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Upload External Document · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form">
+  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>Upload external document</h1><p class="sub">Choose a file and its managing office, then review the extracted details.</p></div></div>
+  {% include "documents/external/_nav.html" %}
+  <form method="post" enctype="multipart/form-data" class="card-udm"><div class="card-udm-body">
+    {% csrf_token %}
+    {% include "partials/_form_errors.html" %}
+    {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
+    <div class="form-actions"><button class="btn btn-udm" type="submit">Upload and review</button><a class="btn btn-udm-outline" href="{% url 'documents:external_repository' %}">Cancel</a></div>
+  </div></form>
+</div>
+{% endblock %}

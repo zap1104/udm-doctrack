@@ -5,7 +5,8 @@
 <div class="workspace-page workspace-detail workspace-document-detail">
 <div class="page-head">
   <div>
-    <div class="eyebrow">Document Repository</div>
+    <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
+    <a href="{{ document.repository_url }}">Back to {% if document.is_external %}external {% endif %}repository</a>
     <h1>{{ document.title }}</h1>
     <p class="sub">
       {{ document.office.name }} · {{ document.document_type_names|default:"Unclassified" }}
@@ -24,10 +25,11 @@
 
 <div class="card-udm mb-4">
   <div class="card-udm-body d-flex flex-wrap gap-4 align-items-center">
-    <div><span class="text-muted small d-block">Repository source</span><strong>{% if document.source == "DTS" %}Completed DTS record{% else %}Historical office upload{% endif %}</strong></div>
+    <div><span class="text-muted small d-block">Repository source</span><strong>{% if document.source == "DTS" %}Completed tracking record{% else %}Historical office upload{% endif %}</strong></div>
     <div><span class="text-muted small d-block">Owning office</span>{% include "partials/_office_badge.html" with office=document.office %}</div>
     <div><span class="text-muted small d-block">Access</span><strong>{{ document.get_access_level_display }}</strong></div>
-    {% if document.tracking_record %}<div class="ms-lg-auto"><a href="{{ document.tracking_record.get_absolute_url }}">Open DTS history</a></div>{% endif %}
+    {% if document.tracking_origin %}<div class="ms-lg-auto"><a href="{{ document.tracking_origin.get_absolute_url }}">Open tracking history</a></div>{% endif %}
+    {% if document.is_external %}<div><span class="text-muted small d-block">External counterparts at filing</span>{% for link in document.external_office_links.all %}<span class="badge text-bg-secondary">{{ link.name_snapshot }}</span> {% empty %}None recorded{% endfor %}</div>{% endif %}
   </div>
 </div>
 
@@ -66,7 +68,7 @@
         <h3 class="section-heading">Tags</h3>
         <div>
           {% for tag in document.tags.all %}
-            <a class="tag-chip" href="{% url 'search:index' %}?q={{ tag.name|urlencode }}">{{ tag.name }}</a>
+            <a class="tag-chip" href="{% if document.is_external %}{{ document.repository_url }}{% else %}{% url 'search:index' %}{% endif %}?q={{ tag.name|urlencode }}">{{ tag.name }}</a>
           {% empty %}
             <span class="text-muted">No tags are assigned. Add tags to improve search and organization.</span>
           {% endfor %}
@@ -106,14 +108,15 @@
       </div>
     </div>
 
-    {% if document.tracking_record %}
+    {% if document.tracking_origin %}
       <div class="card-udm mt-4">
         <div class="card-udm-head"><h2>Origin</h2></div>
         <div class="card-udm-body">
           <p class="body-copy">Archived from tracking record</p>
-          <a class="mono" href="{{ document.tracking_record.get_absolute_url }}">{{ document.tracking_record.display_tracking_number }}</a>
+          <a class="mono" href="{{ document.tracking_origin.get_absolute_url }}">{{ document.tracking_origin.display_tracking_number }}</a>
+          {% if document.is_external and document.tracking_origin.original_reference %}<p>Original paper reference: <span class="mono">{{ document.tracking_origin.original_reference }}</span></p>{% endif %}
           <div class="text-muted supporting-copy">
-            Completed {{ document.tracking_record.completed_at|date:"d M Y, g:i A" }}
+            Completed {{ document.tracking_origin.completed_at|date:"d M Y, g:i A" }}
           </div>
         </div>
       </div>

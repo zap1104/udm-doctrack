@@ -3,7 +3,7 @@
 {% block content %}
 <div class="workspace-page workspace-form workspace-edit">
 <div class="page-head"><div>
-  <div class="eyebrow">Document Repository</div>
+  <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
   <h1>Edit Document Metadata</h1>
   <p class="sub">{{ document.title }}</p>
 </div></div>

@@ -67,6 +67,7 @@ def log_action(
     audit_extra["audit_actor_office_id"] = getattr(actor, "office_id", None)
     audit_extra["audit_target_office_id"] = (
         getattr(target, "office_id", None)
+        or getattr(target, "managing_office_id", None)
         or getattr(target, "current_office_id", None)
         or getattr(target, "originating_office_id", None)
         or (getattr(target, "pk", None) if target_type == "Office" else None)

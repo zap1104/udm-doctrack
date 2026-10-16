@@ -3,8 +3,8 @@
 {% block title %}Deletion Review · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="repository-page workspace-page workspace-repository">
-  <div class="page-head"><div><div class="eyebrow">Document Repository · Administrators</div><h1>Deletion review</h1><p class="sub">Review whether filed documents should be kept or removed from the repository.</p></div></div>
-  {% include "documents/_subtabs.html" with active="deletion" %}
+  <div class="page-head"><div><div class="eyebrow">{% if is_external_collection %}External {% endif %}Document Repository · Administrators</div><h1>Deletion review</h1><p class="sub">Review whether filed documents should be kept or removed from the repository.</p></div></div>
+  {% if is_external_collection %}{% include "documents/external/_nav.html" %}{% else %}{% include "documents/_subtabs.html" with active="deletion" %}{% endif %}
   <p class="help-note">Removal requires an administrator's approval. Removed documents can be restored for 30 days. After that, their repository files and metadata are permanently deleted; completed Tracking history and a minimal audit entry remain.</p>
   <form method="get" class="repository-filters card-udm workspace-toolbar" aria-label="Filter deletion reviews" {% include "partials/_auto_filter_attrs.html" %}>
     <input type="hidden" name="per_page" value="{{ page_size }}">
@@ -14,7 +14,7 @@
       <div>{% include "partials/_field.html" with field=form.status %}</div>
     </div>
     <button class="btn btn-udm" type="submit">Search</button>
-    <a class="btn btn-udm-outline" href="{% url 'documents:deletion_queue' %}" data-filter-reset>Clear filters</a>
+    <a class="btn btn-udm-outline" href="{{ request.path }}" data-filter-reset>Clear filters</a>
   </form>
   <nav class="deletion-review-tabs" aria-label="Deletion review queues">
     <a href="{{ queue_links.due }}" data-filter-reset{% if status == 'due' %} aria-current="page"{% endif %}>Due for review <strong>{{ queue_counts.due }}</strong></a>

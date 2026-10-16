@@ -909,3 +909,14 @@ class RecordAccessGrant(models.Model):
 
         if self.office_id is None and self.user_id is None:
             raise ValidationError("Choose an office or a user to grant access to.")
+
+# Separate ledger: external offices never enter the account-office population.
+from .external_models import (  # noqa: E402,F401
+    ExternalActionRevision,
+    ExternalActivity,
+    ExternalAttachment,
+    ExternalNumberSequence,
+    ExternalOffice,
+    ExternalRoutingStep,
+    ExternalTrackingRecord,
+)

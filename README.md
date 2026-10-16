@@ -48,6 +48,10 @@ The deployment-readiness branch adds background extraction through django-q2 wit
 
 ## What it does
 
+**External UDM offices**
+
+Office administrators can manage a separate External Tracking and External Repository collection for other UDM offices without DocTrack accounts. External steps are entered manually with correction history; participating internal offices confirm their own receipts. Existing OVPA records and totals remain separate. See [the External offices guide](docs/EXTERNAL_OFFICES.md) for the workflow, permissions and setup.
+
 **Tracking**
 - Automatic tracking numbers: `UDM-OVPA-MED-2026-08-0001` — unique, readable, never reused.
 - Routing to one or many offices, with instructions and a deadline.

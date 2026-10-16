@@ -1,0 +1,7 @@
+<nav class="subtabs mb-4" aria-label="External repository navigation">
+  <a class="subtab" href="{% url 'documents:repository' %}">OVPA repository</a>
+  <a class="subtab" href="{% url 'documents:external_repository' %}">External documents</a>
+  <a class="subtab" href="{% url 'documents:external_reports' %}">External reports</a>
+  {% if request.user.is_office_admin %}<a class="subtab" href="{% url 'documents:external_deletion_queue' %}">External deletion review</a>{% endif %}
+  <a class="subtab" href="{% url 'tracking:external_list' %}">External tracking</a>
+</nav>

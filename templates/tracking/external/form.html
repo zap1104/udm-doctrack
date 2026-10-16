@@ -1,0 +1,25 @@
+{% extends "tracking/external/base.html" %}
+{% block title %}{{ title }} · {{ SITE_NAME }}{% endblock %}
+{% block external_content %}
+<div class="page-head"><div><div class="eyebrow">External Tracking</div><h1>{{ title }}</h1>{% if record %}<p class="sub">{{ record.title }} · {{ record.display_tracking_number }}</p>{% endif %}</div></div>
+<div class="card-udm external-form-card"><div class="card-udm-body">
+  {% if action == 'receipt' %}<p>Your office and the current server time will be recorded for this receipt.</p>{% endif %}
+  {% if correction %}<p>Only external paper facts can be corrected. The reason, original values, replacement values, your identity and recording time remain in the history.</p>{% endif %}
+  {% if action == 'file' %}<p>This approves the completed paper record into the External repository and freezes its custody history. Later explanations can be added as annotations.</p>{% endif %}
+  {% if record.status == 'DRAFT' %}<p>Review the source and recipient before sending. An external tracking number is assigned when the draft is first routed.</p>{% endif %}
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}{% include "partials/_form_errors.html" %}
+    {% for field in form %}
+      {% if field.is_hidden %}{{ field }}{% else %}
+      <div class="mb-3">
+        {% if field.field.widget.input_type == 'checkbox' %}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+        {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="text-muted"> (required)</span>{% endif %}</label>{{ field }}{% endif %}
+        {% if field.help_text %}<p class="form-text">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="text-danger small">{{ error }}</p>{% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="external-actions"><button type="submit" class="btn btn-udm">{{ submit_label }}</button><a class="btn btn-udm-outline" href="{% if record %}{{ record.get_absolute_url }}{% else %}{% url 'tracking:external_list' %}{% endif %}">Cancel</a></div>
+  </form>
+</div></div>
+{% endblock %}

@@ -3,4 +3,5 @@
   <a class="subtab{% if active == 'folders' %} is-active{% endif %}" href="{% if folders_url %}{{ folders_url }}{% else %}{% url 'documents:repository' %}?view=folders{% endif %}"{% if active == 'folders' %} aria-current="page"{% endif %}>Browse folders</a>
   <a class="subtab{% if active == 'reports' %} is-active{% endif %}" href="{% url 'core:repository_reports' %}"{% if active == 'reports' %} aria-current="page"{% endif %}>Reports</a>
   {% if request.user.is_office_admin %}<a class="subtab{% if active == 'deletion' %} is-active{% endif %}" href="{% url 'documents:deletion_queue' %}"{% if active == 'deletion' %} aria-current="page"{% endif %}>Deletion review</a>{% endif %}
+  <a class="subtab" href="{% url 'documents:external_repository' %}">External documents</a>
 </nav>

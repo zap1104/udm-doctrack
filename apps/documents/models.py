@@ -41,6 +41,11 @@ class Source(models.TextChoices):
     SCAN = "SCAN", "Scanned document"
 
 
+class Collection(models.TextChoices):
+    OVPA = "OVPA", "OVPA"
+    EXTERNAL = "EXTERNAL", "External UDM offices"
+
+
 #: The one rule for "completed" versus "historical" in the repository.
 #:
 #: Completed means the document came out of tracking — a record the offices
@@ -86,6 +91,9 @@ class AccessLevel(models.TextChoices):
 
 
 class DocumentQuerySet(models.QuerySet):
+    def in_collection(self, collection=Collection.OVPA):
+        return self.filter(collection=collection)
+
     def visible_to(self, user):
         if (not user.is_authenticated or not user.is_active
                 or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
@@ -110,12 +118,14 @@ class DocumentQuerySet(models.QuerySet):
                 Q(office_id=user.office_id)
                 | Q(tracking_record__routing_steps__to_office_id=user.office_id)
                 | Q(tracking_record__originating_office_id=user.office_id)
+                | Q(external_tracking_record__routing_steps__to_office_id=user.office_id)
+                | Q(external_tracking_record__routing_steps__from_office_id=user.office_id)
             )
             conditions |= Q(grants__office_id=user.office_id) | (office_history & ~Q(access_level=AccessLevel.RESTRICTED))
         return self.filter(conditions).distinct()
 
     def with_related(self):
-        return self.select_related("office", "document_type", "uploaded_by", "tracking_record").prefetch_related(
+        return self.select_related("office", "document_type", "uploaded_by", "tracking_record", "external_tracking_record").prefetch_related(
             "tags", "document_types"
         )
 
@@ -140,6 +150,14 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, help_text="Short abstract shown in search results.")
     source = models.CharField(max_length=8, choices=Source.choices, default=Source.UPLOAD)
+    collection = models.CharField(max_length=8, choices=Collection.choices, default=Collection.OVPA, db_index=True)
+    external_tracking_record = models.OneToOneField(
+        "tracking.ExternalTrackingRecord", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="archived_document",
+    )
+    external_offices = models.ManyToManyField(
+        "tracking.ExternalOffice", through="ExternalDocumentOffice", blank=True, related_name="documents",
+    )
 
     tracking_record = models.OneToOneField(
         "tracking.TrackingRecord",
@@ -201,6 +219,11 @@ class Document(DocumentTypesMixin, TimeStampedModel):
 
     class Meta:
         ordering = ["-document_date", "-created_at"]
+        constraints = [
+            models.CheckConstraint(condition=Q(tracking_record__isnull=True) | Q(external_tracking_record__isnull=True), name="document_one_tracking_origin"),
+            models.CheckConstraint(condition=Q(tracking_record__isnull=True) | Q(collection=Collection.OVPA), name="document_legacy_origin_collection"),
+            models.CheckConstraint(condition=Q(external_tracking_record__isnull=True) | Q(collection=Collection.EXTERNAL), name="document_external_origin_collection"),
+        ]
         indexes = [
             GinIndex(fields=["search_vector"], name="doc_search_vector_gin"),
             models.Index(fields=["office", "year"]),
@@ -213,6 +236,18 @@ class Document(DocumentTypesMixin, TimeStampedModel):
 
     def get_absolute_url(self) -> str:
         return reverse("documents:detail", args=[self.pk])
+
+    @property
+    def tracking_origin(self):
+        return self.external_tracking_record if self.external_tracking_record_id else self.tracking_record
+
+    @property
+    def repository_url(self):
+        return reverse("documents:external_repository" if self.collection == Collection.EXTERNAL else "documents:repository")
+
+    @property
+    def is_external(self):
+        return self.collection == Collection.EXTERNAL
 
     def save(self, *args, **kwargs):
         if not self.year:
@@ -257,7 +292,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
                 value.value for value in self.metadata_values.select_related("field") if value.field.is_searchable
             )
         self.index_title = " ".join(
-            filter(None, [self.title, self.reference_number, getattr(self.tracking_record, "tracking_number", "")])
+            filter(None, [self.title, self.reference_number, getattr(self.tracking_origin, "tracking_number", ""), getattr(self.tracking_origin, "original_reference", "")])
         )[:4000]
         self.index_meta = " ".join(
             filter(
@@ -267,6 +302,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
                     self.office.code if self.office_id else "",
                     self.document_type_names,
                     tags,
+                    " ".join(self.external_office_links.values_list("name_snapshot", flat=True)) if self.pk and self.is_external else "",
                     str(self.year or ""),
                 ],
             )
@@ -323,6 +359,8 @@ class Document(DocumentTypesMixin, TimeStampedModel):
             return False
         if user.is_system_admin:
             return True
+        if self.is_external and not user.is_office_admin:
+            return False
         if not self.can_user_view(user):
             return False
         # Authorship and grants can preserve read access after a transfer.
@@ -345,6 +383,21 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     @property
     def deletion_recovery_open(self):
         return bool(not self.is_active and self.deletion_purge_at and timezone.now() < self.deletion_purge_at)
+
+
+class ExternalDocumentOffice(models.Model):
+    """Counterpart names are retained even when directory entries are renamed."""
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="external_office_links")
+    external_office = models.ForeignKey("tracking.ExternalOffice", on_delete=models.PROTECT, related_name="document_links")
+    name_snapshot = models.CharField(max_length=255)
+    code_snapshot = models.CharField(max_length=32, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["document", "external_office"], name="unique_external_document_office")]
+
+    def __str__(self):
+        return self.name_snapshot
 
 
 class DeletionReview(models.Model):
