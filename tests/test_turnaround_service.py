@@ -24,7 +24,7 @@ def _at(day, hour, minute=0):
 
 
 def _finished(users, offices, memo_type, *, created, sent, received, completed, due=None):
-    """A completed record whose one handover and whose life took exactly this."""
+    """A completed record whose one endorsement and whose life took exactly this."""
     record = create_draft_record(
         user=users["med"], subject="Measured", instructions="x", document_type=memo_type,
     )
@@ -104,7 +104,7 @@ def test_a_month_holds_only_what_finished_inside_it(users, offices, memo_type):
 
 @pytest.mark.django_db
 def test_work_done_entirely_outside_office_hours_is_never_fastest(users, offices, memo_type):
-    """A handover sent and confirmed on a Saturday took no office time. It is
+    """An endorsement sent and confirmed on a Saturday took no office time. It is
     counted in the average, and said to be outside office hours, but calling it
     the fastest would name the same weekend every month."""
     saturday, monday = date(2026, 8, 8), date(2026, 8, 10)
@@ -157,13 +157,13 @@ def test_an_empty_month_says_so_rather_than_inventing_a_figure(users):
 def test_a_period_costs_the_same_few_queries_however_much_is_in_it(
     august, django_assert_num_queries
 ):
-    """One schedule snapshot, holidays, handovers, documents, and waiting count."""
+    """One schedule snapshot, holidays, endorsements, documents, and waiting count."""
     with django_assert_num_queries(5):
         analytics.turnaround(TrackingRecord.objects.all(), month=date(2026, 8, 1))
 
 
 @pytest.mark.django_db
-def test_short_waits_keep_precision_and_count_handovers_separately(users, offices, memo_type):
+def test_short_waits_keep_precision_and_count_endorsements_separately(users, offices, memo_type):
     day = date(2026, 8, 10)
     record = _finished(
         users, offices, memo_type, created=_at(day, 8), sent=_at(day, 8),

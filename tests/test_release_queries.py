@@ -192,7 +192,8 @@ def test_search_renders_valid_stages_when_another_selected_stage_is_invalid(clie
     assert response.context["has_searched"]
     assert {result.pk for result in response.context["results"]} == {deadline_records["late"].pk}
     assert deadline_records["late"].tracking_number in response.content.decode()
-    assert "status" in response.context["form"].errors
+    assert "status" in response.context["resolved"].invalid
+    assert "Could not apply: status" in response.content.decode()
 
 
 @pytest.mark.django_db

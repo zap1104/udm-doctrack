@@ -1,0 +1,10 @@
+{
+  "checks": 663,
+  "roles": [
+    "SYSTEM_ADMIN",
+    "ADMIN",
+    "USER",
+    "VIEWER"
+  ],
+  "failures": []
+}

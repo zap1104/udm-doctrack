@@ -1,0 +1,21 @@
+{% if kind == "received" %}
+  {% if record.confirmed_receipt_offices %}
+    {% if all_offices %}
+      {% include "partials/_office_badges.html" with offices=record.confirmed_receipt_offices more=0 %}
+    {% else %}
+      {% include "partials/_office_badges.html" with offices=record.confirmed_receipt_offices_shown more=record.confirmed_receipt_more %}
+    {% endif %}
+  {% else %}
+    <span class="text-muted">No receipts confirmed</span>
+  {% endif %}
+{% else %}
+  {% if record.awaiting_receipt_offices %}
+    {% if all_offices %}
+      {% include "partials/_office_badges.html" with offices=record.awaiting_receipt_offices more=0 %}
+    {% else %}
+      {% include "partials/_office_badges.html" with offices=record.pending_receipt_offices_shown more=record.pending_receipt_more %}
+    {% endif %}
+  {% else %}
+    <span class="text-muted">{{ record.receipt_wait_label }}</span>
+  {% endif %}
+{% endif %}

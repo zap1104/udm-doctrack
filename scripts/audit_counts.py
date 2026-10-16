@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import timedelta
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -26,6 +26,7 @@ import django  # noqa: E402
 django.setup()
 
 from django.db import transaction  # noqa: E402
+from django.http import QueryDict  # noqa: E402
 from django.test import Client, override_settings  # noqa: E402
 from django.test.utils import setup_test_environment  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -37,6 +38,7 @@ from apps.core.notifications import unread_for  # noqa: E402
 from apps.documents.models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document  # noqa: E402
 from apps.search.services import search_documents  # noqa: E402
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord  # noqa: E402
+from scripts.audit_tracking_stages import loaded_records, manual_stage  # noqa: E402
 
 
 class Links(HTMLParser):
@@ -62,14 +64,37 @@ class Links(HTMLParser):
 
 def replaced(url, **changes):
     parts = urlsplit(url)
-    params = dict(parse_qsl(parts.query))
+    params = QueryDict(parts.query, mutable=True)
     params.pop("page", None)
     for key, value in changes.items():
         if value is None:
             params.pop(key, None)
         else:
             params[key] = value
-    return parts.path + "?" + urlencode(params)
+    return parts.path + "?" + params.urlencode()
+
+
+def processing_reference(start, end, steps, holidays):
+    """Independent endpoint partition: count only spans outside receipt waits."""
+    valid_sends = [step for step in steps if step["sent_at"] and step["sent_at"] <= end]
+    waits = []
+    for step in valid_sends:
+        sent, received = step["sent_at"], step["received_at"]
+        if received and received < sent:
+            continue
+        later = [item for item in valid_sends if item["batch"] > step["batch"]]
+        next_batch = min((item["batch"] for item in later), default=None)
+        superseded = min((item["sent_at"] for item in later if item["batch"] == next_batch), default=end)
+        left, right = max(start, sent), min(end, received or end, superseded)
+        if left < right:
+            waits.append((left, right))
+    boundaries = sorted({start, end, *(point for interval in waits for point in interval)})
+    office = elapsed = 0.0
+    for left, right in zip(boundaries, boundaries[1:], strict=False):
+        if not any(begin <= left < stop for begin, stop in waits):
+            office += business_seconds_between(left, right, holidays)
+            elapsed += (right - left).total_seconds()
+    return office, elapsed
 
 
 class Audit:
@@ -82,6 +107,11 @@ class Audit:
         self.client = None
         self.sample_cache = {}
         self.integrity = {}
+        self.stage_records = {}
+        self.user = None
+
+    def stage_office(self, office):
+        return office or (None if self.user.is_system_admin else self.user.office)
 
     def equal(self, name, actual, expected):
         self.checked += 1
@@ -116,38 +146,49 @@ class Audit:
         local_steps = [step for step in steps if step["record_id"] in ids]
         office = context["filters"]["office"]
         docs = [row for row in documents if not office or row["office_id"] == office.pk]
-        statuses = Counter(row["status"] for row in scoped)
-        self.equal("report tracked documents", context["total_records"], len(scoped))
+        statuses = Counter(manual_stage(self.stage_records[row["pk"]], self.stage_office(office)) for row in scoped)
+        current = [row for row in scoped if row["status"] not in COMPLETED_STATUSES]
+        self.equal("report tracked documents", context["total_records"], len(scoped) if context["is_repository_report"] else len(current))
         self.equal("report Pending Receipt stage", context["pending_receipt"], statuses[Status.PENDING_RECEIPT])
         self.equal("report completed", context["completed_records"], sum(statuses[key] for key in COMPLETED_STATUSES))
         late = sum(bool(row["due_at"] and row["due_at"] < timezone.now() and row["status"] not in COMPLETED_STATUSES) for row in scoped)
         self.equal("report overdue", context["overdue_all"], late)
-        self.equal("stage partition", sum(row["total"] for row in context["by_status"]), len(scoped))
+        self.equal("stage partition", sum(row["total"] for row in context["by_status"]), sum(row["status"] in (Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS) for row in current))
         self.equal("repository report total", context["total_documents"], len(docs))
         self.equal("type chart partition", sum(row["total"] for row in context["document_types"]), len(docs))
         for row in context["by_status"]:
             self.equal("stage " + row["status"], row["total"], statuses[row["status"]])
             if not context["is_repository_report"]:
-                self.equal("stage drilldown " + row["status"], self.listed(replaced(url, record_status=row["status"])), row["total"])
-        self.turnaround(context["turnaround"], scoped, local_steps)
+                self.equal("stage drilldown " + row["status"], self.listed(row["workspace_url"]), row["total"])
+        for group in context.get("direction_stages", []):
+            self.equal("direction partition", sum(row["total"] for row in group["stages"]), group["total"])
+            self.equal("direction list", self.listed(group["workspace_url"]), group["total"])
+            for row in group["stages"]:
+                self.equal("direction status list", self.listed(row["workspace_url"]), row["total"])
+        self.turnaround(context["turnaround"], scoped, local_steps, office)
         if not context["is_repository_report"]:
             self.trend(context["turnaround_trend"], scoped, local_steps)
         for state in ("due", "soon", "unscheduled"):
             self.equal("retention report " + state, context["retention"][state], self.listed(context["retention"][state + "_url"]))
         for row in context["document_months"]["rows"]:
-            added = [doc for doc in docs if timezone.localtime(doc["created_at"]).date().replace(day=1) == row["month"]]
+            labelled_months = [item["month"] for item in context["document_months"]["rows"] if item["month"]]
+            def belongs(doc, row=row, labelled_months=labelled_months):
+                month = timezone.localtime(doc["created_at"]).date().replace(day=1)
+                return month == row["month"] if row["month"] else month < min(labelled_months) if row["label"] == "Earlier" else month > max(labelled_months)
+            added = [doc for doc in docs if belongs(doc)]
             self.equal("filed month", row["total"], len(added))
             self.equal("filed month from tracking", row["completed"], sum(doc["source"] == COMPLETED_SOURCE for doc in added))
+        self.equal("repository chart partition", sum(row["total"] for row in context["document_months"]["rows"]), len(docs))
         if context["university_wide"]:
             flow = context["office_flow"]
             volume = context["office_volume"]
-            self.equal("handovers", flow["handovers"], len(local_steps))
-            self.equal("handover sender partition", sum(row["sent"] for row in flow["rows"]), sum(step["from_office_id"] is not None for step in local_steps))
-            self.equal("confirmed handovers", volume["receipts"], sum(step["received_at"] is not None for step in local_steps))
+            self.equal("endorsements", flow["endorsements"], len(local_steps))
+            self.equal("endorsement sender partition", sum(row["sent"] for row in flow["rows"]), sum(step["from_office_id"] is not None for step in local_steps))
+            self.equal("confirmed endorsements", volume["receipts"], sum(step["received_at"] is not None for step in local_steps))
             self.equal("receipt office partition", sum(row["cumulative"] for row in volume["rows"]), volume["receipts"])
         if context["is_repository_report"]:
             for row in context["document_types"]:
-                self.equal("repository type drilldown", self.listed(replaced(url, record_type=row["type_value"])), row["total"])
+                self.equal("repository type drilldown", self.listed(row["workspace_url"]), row["total"])
         else:
             for link in Links(response.content.decode()).links:
                 classes = link.get("class", "").split()
@@ -165,9 +206,14 @@ class Audit:
         active = [row for row in scoped if row["status"] != Status.COMPLETED]
         self.equal("dashboard tracking total", context["tracking_total_count"], len(active))
         self.equal("tracking-total link", self.listed(context["tracking_total_url"]), len(active))
-        for queue in context["desk_queues"]:
+        queues = list(context["desk_attention_queues"])
+        for group in context["desk_direction_groups"]:
+            queues.extend([group, *group["stages"]])
+            if group["count"] is not None:
+                self.equal("direction stage partition " + group["key"], sum(stage["count"] for stage in group["stages"]), group["count"])
+        for queue in queues:
             if queue["count"] is not None:
-                self.equal("Action Centre " + queue["slug"], queue["count"], self.listed(queue["tracking_url"]))
+                self.equal("Action Centre " + queue["label"], queue["count"], self.listed(queue["tracking_url"]))
         breakdown = context["breakdown"]
         self.equal("dashboard partition", sum(row["total"] for row in breakdown["slices"]), breakdown["total"])
         for row in breakdown["slices"]:
@@ -180,12 +226,12 @@ class Audit:
                     self.equal("ring slice", row["total"], self.listed(row["url"]))
         ids = {row["pk"] for row in scoped}
         local_steps = [step for step in steps if step["record_id"] in ids]
-        self.turnaround(context["turnaround"], scoped, local_steps)
+        self.turnaround(context["turnaround"], scoped, local_steps, context["scope"]["office"])
         self.trend(context["turnaround_trend"], scoped, local_steps, daily=True)
         for row in context["monthly"]["rows"]:
             month = row["month"]
             self.equal("cumulative created", row["created"], sum(timezone.localtime(item["created_at"]).date().replace(day=1) <= month for item in scoped))
-            self.equal("cumulative handovers", row["transferred"], sum(timezone.localtime(step["sent_at"]).date().replace(day=1) <= month for step in local_steps))
+            self.equal("cumulative endorsements", row["transferred"], sum(timezone.localtime(step["sent_at"]).date().replace(day=1) <= month for step in local_steps))
             self.equal("cumulative completed", row["completed"], sum(bool(item["status"] in COMPLETED_STATUSES and item["completed_at"] and timezone.localtime(item["completed_at"]).date().replace(day=1) <= month) for item in scoped))
 
     def samples(self, records, steps):
@@ -203,11 +249,13 @@ class Audit:
             if row["status"] in COMPLETED_STATUSES and end and row["created_at"] <= end <= now:
                 samples["lifetime"].append((timezone.localdate(end), business_seconds_between(row["created_at"], end, holidays), row["pk"], (end - row["created_at"]).total_seconds()))
                 if row["first_received_at"] and row["created_at"] <= row["first_received_at"] <= end:
-                    samples["processing"].append((timezone.localdate(end), business_seconds_between(row["first_received_at"], end, holidays), row["pk"], (end - row["first_received_at"]).total_seconds()))
+                    local_steps = [step for step in steps if step["record_id"] == row["pk"]]
+                    office, elapsed = processing_reference(row["first_received_at"], end, local_steps, holidays)
+                    samples["processing"].append((timezone.localdate(end), office, row["pk"], elapsed))
         self.sample_cache[cache_key] = samples
         return samples
 
-    def turnaround(self, panel, records, steps):
+    def turnaround(self, panel, records, steps, office=None):
         samples = self.samples(records, steps)
         for stage in panel["stages"]:
             selected = [sample for sample in samples[stage["key"]] if sample[0].replace(day=1) == panel["month"]]
@@ -224,9 +272,10 @@ class Audit:
         self.equal("on-time numerator", panel["on_time"], sum(row["completed_at"] <= row["due_at"] for row in closed))
         batches = {row["pk"]: row for row in records}
         outstanding = [step for step in steps if step["received_at"] is None and step["sent_at"] <= panel["as_of"] and step["batch"] == batches[step["record_id"]]["current_batch"] and batches[step["record_id"]]["status"] not in COMPLETED_STATUSES]
-        self.equal("outstanding handovers", panel["awaiting_confirmation"], len(outstanding))
+        self.equal("outstanding endorsements", panel["awaiting_confirmation"], len(outstanding))
         self.equal("documents awaiting receipt", panel["awaiting_confirmation_documents"], len({step["record_id"] for step in outstanding}))
-        pending_ids = {step["record_id"] for step in outstanding if batches[step["record_id"]]["status"] == Status.PENDING_RECEIPT}
+        pending_ids = {step["record_id"] for step in outstanding
+                       if manual_stage(self.stage_records[step["record_id"]], self.stage_office(office)) == Status.PENDING_RECEIPT}
         self.equal("waiting Pending Receipt documents", panel["awaiting_confirmation_pending_documents"], len(pending_ids))
         self.equal("waiting additional recipients", panel["awaiting_confirmation_other_documents"], len({step["record_id"] for step in outstanding} - pending_ids))
 
@@ -260,9 +309,11 @@ class Audit:
         offices = list(Office.active.order_by("pk"))
         users = [User.objects.filter(role=role, is_active=True, office__isnull=False).order_by("pk").first() for role in User.Role.values]
         for user in filter(None, users):
+            self.user = user
             self.client = Client()
             self.client.force_login(user)
             self.responses = {}
+            self.stage_records = {record.pk: record for record in loaded_records(user)}
             records = list(TrackingRecord.objects.visible_to(user).values("pk", "status", "originating_office_id", "current_office_id", "created_at", "completed_at", "first_received_at", "current_batch", "due_at"))
             documents = list(Document.objects.visible_to(user).filter(is_active=True).values("pk", "office_id", "source", "created_at"))
             steps = list(RoutingStep.objects.filter(record_id__in=[row["pk"] for row in records]).values("record_id", "from_office_id", "to_office_id", "batch", "sent_at", "received_at"))
@@ -292,14 +343,31 @@ class Audit:
             for extra in ("view=pending", "q=memorandum", f"source={HISTORICAL_FILTER}", "retention=unscheduled", "month=9", "view=folders&q=memorandum", "view=pending&q=memorandum&month=9"):
                 self.repository("/documents/?" + extra)
             for status in Status.values:
-                for extra in ("", "&record_q=memorandum", "&record_month=2026-09&record_overdue=yes"):
-                    url = f"/tracking/reports/?record_status={status}{extra}"
-                    report = self.get(url).context
-                    exported = self.get(report["report_export_url"])
+                for extra in ("", "&overdue=yes", "&scope=incoming"):
+                    url = f"/tracking/?status={status}{extra}"
+                    page = self.get(url)
+                    report = page.context
+                    export_link = next(link["href"] for link in Links(page.content.decode()).links if link["text"].strip() == "Export CSV")
+                    exported = self.get(export_link)
                     rows = list(csv.reader(io.StringIO(exported.content.decode())))
                     header = next(index for index, row in enumerate(rows) if row and row[0] == "Tracking number")
-                    self.equal("CSV matches filtered list", len(rows) - header - 1, report["report_records_count"])
-                    self.equal("CSV cap metadata", int(rows[2][1]), min(report["report_records_count"], 5000))
+                    self.equal("CSV matches filtered list", len(rows) - header - 1, min(report["total"], 5000))
+                    self.equal("CSV cap metadata", int(rows[2][1]), min(report["total"], 5000))
+                    exported_rows = [dict(zip(rows[header], row, strict=True)) for row in rows[header + 1:]]
+                    if report["total"] <= 5000:
+                        self.equal(
+                            "CSV exact record set",
+                            sorted(row["Tracking number"] for row in exported_rows),
+                            sorted(report["page_obj"].paginator.object_list.values_list("tracking_number", flat=True)),
+                        )
+                    csv_directions = {row["Tracking number"]: row["Direction"] for row in exported_rows}
+                    for record in report["records"]:
+                        if record.tracking_number not in csv_directions:
+                            continue  # A large export may stop at its explicit 5,000-row cap.
+                        expected = "—" if report["resolved"].all_offices else {
+                            "incoming": "Incoming", "outgoing": "Outgoing", "": "Passed on",
+                        }[record.direction]
+                        self.equal("CSV direction matches table", csv_directions[record.tracking_number], expected)
             badge = self.get("/notifications/count/").context
             self.equal("notification badge", badge["unread_notifications"], unread_for(user).count() if badge["notification_in_app_enabled"] else 0)
             browse = search_documents(user=user, limit=2, log=False)
@@ -312,11 +380,11 @@ class Audit:
             if user.is_office_admin:
                 admin = self.get("/administration/").context
                 self.equal("active user card", admin["user_count"], self.get("/accounts/users/?status=active").context["page_obj"].paginator.count)
-                for name, model in (("document-types", DocumentType), ("tags", Tag), ("metadata-rules", TagRule), ("metadata-fields", MetadataFieldDefinition)):
-                    self.equal("active master data " + name, model.objects.filter(is_active=True).count(), self.get(f"/administration/{name}/?status=active").context["page_obj"].paginator.count)
-                for tag in self.get("/administration/tags/?per_page=all").context["objects"]:
-                    self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).filter(is_active=True, tags=tag).distinct().count())
                 if user.is_system_admin:
+                    for name, model in (("document-types", DocumentType), ("tags", Tag), ("metadata-rules", TagRule), ("metadata-fields", MetadataFieldDefinition)):
+                        self.equal("active master data " + name, model.objects.filter(is_active=True).count(), self.get(f"/administration/{name}/?status=active").context["page_obj"].paginator.count)
+                    for tag in self.get("/administration/tags/?per_page=all").context["objects"]:
+                        self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).filter(is_active=True, tags=tag).distinct().count())
                     self.equal("active offices", admin["office_count"], self.get("/administration/offices/?status=active").context["page_obj"].paginator.count)
                     self.equal("search query partition", sum(row["total"] for row in admin["top_searches"]), admin["search_analytics"]["queries"])
                     self.equal("search click partition", sum(row["clicks"] for row in admin["top_searches"]), admin["search_analytics"]["clicks"])

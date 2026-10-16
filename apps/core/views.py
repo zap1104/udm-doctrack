@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import csv
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -28,6 +29,7 @@ from apps.documents.models import (
     Source,
 )
 from apps.tracking import services as tracking_services
+from apps.tracking.filter_navigation import DIRECTION_STAGES, direction_groups
 from apps.tracking.models import (
     ACTIVE_STATUSES,
     COMPLETED_STATUSES,
@@ -41,7 +43,6 @@ from apps.tracking.models import (
 from . import analytics
 from . import filters as core_filters
 from .analytics import bar as _bar
-from .analytics import month_series as _month_series
 from .analytics import month_window as _month_window
 from .analytics import percent as _percent
 from .business_time import humanise_hours, load_holidays, office_hours_caveat, saved_schedule
@@ -166,7 +167,14 @@ class DashboardMemoMixin:
         # Through the same gate the Tracking page, the Repository and Reports
         # use. It was a fourth reading of `office` with its own rules, which is
         # how the system ended up with four answers to one question.
-        office = tracking_services.scope_office(self.request.user, self.request.GET.get("office"))
+        asked = (self.request.GET.get("office") or "").strip()
+        office = tracking_services.scope_office(user, asked)
+        if asked and office is None:
+            messages.warning(
+                self.request,
+                f"Could not apply: office. “{asked[:64]}” was not recognised, so this "
+                "overview covers every office you can see.",
+            )
         # The sentinel is "every office", not an office. `scope_office` returns it
         # for a system administrator's `?office=all`, and this method called
         # `.name` on the string: `/?office=all` was a 500 on the dashboard while
@@ -196,7 +204,7 @@ class DashboardMemoMixin:
         """The two base querysets the analytics panels and the memo read from."""
         records = TrackingRecord.objects.visible_to(user)
         # Active only, as the repository lists them — see ReportsView.
-        documents = Document.objects.visible_to(user).filter(is_active=True)
+        documents = Document.objects.visible_to(user).in_collection().filter(is_active=True)
         if office:
             # The same definition Reports uses, called rather than restated —
             # see core_filters.office_touches_record_q. The two-condition copy
@@ -206,7 +214,8 @@ class DashboardMemoMixin:
             # different records under one office name.
             records = records.filter(core_filters.office_touches_record_q(office))
             documents = documents.filter(office=office)
-        return records.distinct(), documents.distinct()
+        stage_office = office if office is not None else (None if user.is_system_admin else user.office)
+        return records.with_stage_for(stage_office).distinct(), documents.distinct()
 
     @staticmethod
     def _memo_line(label, value):
@@ -499,13 +508,11 @@ class DashboardMemoMixin:
 #: and none of these lists is a queue you work down from the dashboard.
 DASHBOARD_ROWS = 5
 
-#: The Action Centre's queues, in the order its chips run: the scope each one
-#: counts and opens on the Tracking page, its label, and whether it needs an
-#: office. Incoming and Outgoing describe a document relative to one office, so
-#: across every office they are shown disabled, exactly as the Tracking page
-#: shows its own pills. Every one is an `apply_scope` queue: the Action Centre
-#: invents no queue of its own, so a chip's count is the list it opens.
+#: Existing desk scopes remain valid bookmarks. The visible navigator groups
+#: each direction with native document stages, and separates receipt reminders
+#: from stage counts. Every count opens the same permission-scoped Tracking set.
 DESK_QUEUES = (
+    (tracking_services.SCOPE_AWAITING, "Awaiting receipt", False),
     (tracking_services.SCOPE_INCOMING, "Incoming", True),
     (tracking_services.SCOPE_PENDING_RECEIPT, Status.PENDING_RECEIPT.label, False),
     (tracking_services.SCOPE_RECEIVED, Status.RECEIVED.label, False),
@@ -516,7 +523,7 @@ DESK_QUEUES = (
 DESK_PARAM = "desk"
 #: What the Action Centre shows until a chip is picked, and what Clear returns
 #: to: the documents somebody has to sign for.
-DESK_DEFAULT = tracking_services.SCOPE_PENDING_RECEIPT
+DESK_DEFAULT = tracking_services.SCOPE_AWAITING
 #: The element a chip swaps with HTMX, and the header that asks for it alone.
 DESK_TARGET = "action-centre-queue"
 
@@ -547,11 +554,20 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         """
         counts = counts or {}
         all_offices = scope["all_offices"]
+        direction_disabled = all_offices or not (scope["office"] or user.office_id)
         scope_office = tracking_services.ALL_OFFICES if all_offices else scope["office"]
-        desk = tracking_services.active_for(user)
+        stage_office = None if all_offices else (scope["office"] or user.office)
+        desk = tracking_services.active_for(user).with_stage_for(stage_office)
         known = {slug for slug, _label, _needs in DESK_QUEUES}
-        usable = [slug for slug, _label, needs_office in DESK_QUEUES if not (needs_office and all_offices)]
+        usable = [slug for slug, _label, needs_office in DESK_QUEUES if not (needs_office and direction_disabled)]
         raw = (self.request.GET.get(DESK_PARAM) or "").strip()
+        stage_choices = {
+            f"{direction}-{slug}": (direction, status)
+            for direction in ("incoming", "outgoing") for status, slug in DIRECTION_STAGES
+        }
+        known.update(stage_choices)
+        if not direction_disabled:
+            usable.extend(stage_choices)
         chosen = raw if raw in usable else DESK_DEFAULT
         # Old dashboard bookmarks still open the new filing panel beside the
         # default active queue. Completion is no longer an active-queue chip.
@@ -561,7 +577,7 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 if raw in known else "is not one of the tracking queues"
             )
             messages.warning(
-                self.request, f"Showing {Status.PENDING_RECEIPT.label}: “{raw[:30]}” {reason}."
+                self.request, f"Showing Awaiting receipt: “{raw[:30]}” {reason}."
             )
 
         dashboard = reverse("core:dashboard")
@@ -569,7 +585,11 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         office_param = "all" if all_offices else (scope["office"].pk if scope["office"] else None)
         queues, selected_rows = [], []
         for slug, label, needs_office in DESK_QUEUES:
-            disabled = needs_office and all_offices
+            # These saved custody shortcuts are only displayed when selected.
+            # Direction groups supply the visible stage counts in one query.
+            if slug in ("pending-receipt", "received", "in-process") and slug != chosen:
+                continue
+            disabled = needs_office and direction_disabled
             queue = None
             if not disabled:
                 # As the Tracking page builds it, so the count is its row count.
@@ -593,12 +613,59 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                 }
             )
 
+        directional_counts = {}
+        if not direction_disabled:
+            for direction in ("incoming", "outgoing"):
+                records = tracking_services.office_queue(desk, direction, user, office=scope_office).filter(
+                    stage__in=[status for status, _ in DIRECTION_STAGES],
+                )
+                directional_counts[direction] = dict(
+                    records.order_by().values_list("stage").annotate(total=Count("pk", distinct=True))
+                )
+
+        def direction_link(direction, status):
+            slug = direction if status is None else next(
+                f"{direction}-{stage_slug}" for value, stage_slug in DIRECTION_STAGES if value == status
+            )
+            return {
+                "href": core_filters.link(dashboard, self.request, **{DESK_PARAM: slug}),
+                "tracking_url": core_filters.link(tracking_list, scope=direction, status=status, office=office_param),
+            }
+
+        selected_direction, selected_status = stage_choices.get(chosen, (chosen, None))
+        groups = direction_groups(
+            disabled=direction_disabled, make_link=direction_link,
+            scope=selected_direction, statuses=[selected_status] if selected_status else [], counts=directional_counts,
+        )
+        if chosen in stage_choices:
+            group = next(group for group in groups if group["key"] == selected_direction)
+            stage = next(stage for stage in group["stages"] if stage["status"] == selected_status)
+            selected_queue = {**stage, "label": f"{group['label']} · {stage['label']}"}
+            selected_rows = list(tracking_services.office_queue(
+                desk, selected_direction, user, office=scope_office,
+            ).filter(stage=selected_status).distinct()[:DASHBOARD_ROWS])
+        else:
+            selected_queue = next(queue for queue in queues if queue["active"])
+        attention_queues = [
+            {**queue, "label": "Awaiting receipt" if queue["slug"] == DESK_DEFAULT else queue["label"]}
+            for queue in queues if queue["slug"] in (DESK_DEFAULT, "overdue")
+        ]
+        # Saved custody shortcuts still resolve; they no longer masquerade as stages.
+        if chosen in ("pending-receipt", "received", "in-process"):
+            label = (
+                "Pending Receipt · both directions" if chosen == "pending-receipt"
+                else f"Confirmed receipt · {selected_queue['label']}"
+            )
+            selected_queue = {**selected_queue, "label": label}
+            attention_queues.append(selected_queue)
+        tracking_services.annotate_stage(selected_rows, user, office=scope_office)
         tracking_services.annotate_can_confirm(selected_rows, user)
         if user.is_records_staff:
             _annotate_destinations(selected_rows)
         return {
-            "desk_queues": queues,
-            "desk_queue": next(queue for queue in queues if queue["active"]),
+            "desk_direction_groups": groups,
+            "desk_attention_queues": attention_queues,
+            "desk_queue": selected_queue,
             "desk_clear_href": core_filters.link(dashboard, self.request, **{DESK_PARAM: None}),
             "desk_target": DESK_TARGET,
             "attention_records": selected_rows,
@@ -644,7 +711,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
         # They used to come from inbox_for / outgoing_for / in_custody_for,
         # which are narrower than the scopes the cards link to: on the demo data
         # an office saw "Held by your office 1" over a page listing 9.
-        desk = tracking_services.active_for(user)
+        stage_office = None if scope["all_offices"] else (scope["office"] or user.office)
+        desk = tracking_services.active_for(user).with_stage_for(stage_office)
 
         def queue(scope):
             # `scope["office"]` when the picker names one, so an administrator
@@ -710,7 +778,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             recent_records_qs = recent_records_qs.filter(
                 core_filters.office_touches_record_q(scope["office"])
             ).distinct()
-        recent = list(recent_records_qs[:DASHBOARD_ROWS])
+        recent = list(recent_records_qs.with_stage_for(stage_office)[:DASHBOARD_ROWS])
+        tracking_services.annotate_stage(recent, user, office=scope_office)
         if user.is_records_staff:
             _annotate_destinations(recent)
 
@@ -924,10 +993,10 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
 
         for key, title, queryset, narrowing in directions:
             grouped = {
-                row["status"]: row
+                row["stage"]: row
                 # `.order_by()`: these querysets are `.distinct()`, and a distinct
                 # queryset puts Meta.ordering in the GROUP BY. See 6753354.
-                for row in queryset.order_by().values("status").annotate(
+                for row in queryset.order_by().values("stage").annotate(
                     total=Count("id", distinct=True),
                     overdue=Count("id", filter=tracking_services.overdue_q(), distinct=True),
                 )
@@ -1052,8 +1121,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
     #: mauve, and the whole life ends Completed green, so a line and the stage
     #: it measures are one colour across the page.
     TREND_SERIES = (
-        ("receipt", Status.PENDING_RECEIPT.label, Status.PENDING_RECEIPT, "sent until confirmed", "handover"),
-        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "first receipt until completed", "document"),
+        ("receipt", Status.PENDING_RECEIPT.label, Status.PENDING_RECEIPT, "sent until confirmed", "endorsement"),
+        ("processing", Status.IN_PROCESS.label, Status.IN_PROCESS, "first receipt until completed, excluding receipt waits", "document"),
         ("lifetime", "Total lifetime", Status.COMPLETED, "created until completed", "document"),
     )
 
@@ -1161,7 +1230,8 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
                     count = f"{point['samples']} confirmed {point['unit']} across {point['documents']} {document_unit}"
                 office_text = humanise_hours(point["office_seconds"]) if point["office_seconds"] is not None else point["text"]
                 calendar_text = humanise_hours(point["calendar_seconds"]) if point["calendar_seconds"] is not None else point["calendar"]
-                summary = f"{point['label']} {office_text} within office hours, {calendar_text} total wait, over {count}"
+                calendar_measure = "elapsed processing time" if point["key"] == "processing" else "total wait"
+                summary = f"{point['label']} {office_text} within office hours, {calendar_text} {calendar_measure}, over {count}"
                 if point["zero_working_time"]:
                     summary += f"; {point['zero_working_time']} with zero working time"
                 summaries.append(summary)
@@ -1223,9 +1293,9 @@ class DashboardView(AppLoginRequiredMixin, DashboardMemoMixin, TemplateView):
             return round(x, 1), round(y, 1)
 
         # "Receipt" is time-to-confirm-receipt, and "In process" is the span
-        # from that confirmation to completion. The second is a stage, not the
-        # IN_PROCESS status: a document is in somebody's hands for the whole of
-        # it, whether the record reads RECEIVED or IN_PROCESS at any moment.
+        # from that confirmation to completion, excluding subsequent receipt
+        # waits. Processing includes Received time while an office holds the
+        # document, even before its first work update.
         built = []
         for key, label, status, measures, _unit in self.TREND_SERIES:
             colour = STATUS_COLOURS[status]
@@ -1272,54 +1342,15 @@ def _unique_offices(offices) -> list:
 
 
 def _annotate_destinations(records) -> None:
-    """Attach the office(s) each record's current batch was sent to.
-
-    Sets two lists, because the two dashboard panels ask different questions:
-
-    * `destination_offices` — every office in the current batch. What "where is
-      this headed" means on the recent-activity list.
-    * `pending_offices_shown` — only the offices that have not confirmed
-      receipt yet. What "who are we waiting on" means on the pending-receipt
-      panel. Rows that are there for another reason (overdue, or already in
-      this office's custody) have nothing outstanding, so they fall back to the
-      full list.
-
-    Records staff and administrators watch traffic between offices, not just
-    their own queue. Done as one grouped query rather than
-    `record.current_offices()` per row, which would be a query per record.
-    """
+    """Keep endorsement metadata separate from outstanding receipt actions."""
     if not records:
         return
-    steps = (
-        RoutingStep.objects.filter(record__in=records)
-        .select_related("to_office")
-        # received_at is read below, and the badge needs the office name and
-        # colour. Leaving any of them out here would defer the field and fetch
-        # it one row at a time, reintroducing the per-row query this avoids.
-        .only(
-            "record_id", "batch", "received_at",
-            "to_office__code", "to_office__name", "to_office__colour",
-        )
-    )
-    by_record: dict[int, list[RoutingStep]] = {}
-    for step in steps:
-        by_record.setdefault(step.record_id, []).append(step)
-
+    tracking_services.annotate_receiving_offices(records, shown=DESTINATIONS_SHOWN)
     for record in records:
-        current = [
-            step for step in by_record.get(record.pk, []) if step.batch == record.current_batch
-        ]
-        destinations = _unique_offices(step.to_office for step in current)
-        awaiting = _unique_offices(
-            step.to_office for step in current if step.received_at is None
-        )
-        # A document sent to every office would make one row several lines
-        # tall, so the tail collapses to a count; the record page has them all.
-        record.destination_offices = destinations[:DESTINATIONS_SHOWN]
-        record.destination_more = max(0, len(destinations) - DESTINATIONS_SHOWN)
-        outstanding = awaiting or destinations
-        record.pending_offices_shown = outstanding[:DESTINATIONS_SHOWN]
-        record.pending_more = max(0, len(outstanding) - DESTINATIONS_SHOWN)
+        record.destination_offices = record.receiving_offices_shown
+        record.destination_more = record.receiving_more
+        record.pending_offices_shown = record.pending_receipt_offices_shown
+        record.pending_more = record.pending_receipt_more
 
 
 def _greeting() -> str:
@@ -1524,7 +1555,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         # Active documents only, as the repository and search list them. A
         # document deactivated from Django's admin site vanished from every list
         # while still counting here, so a figure could exceed the page it opens.
-        documents = Document.objects.visible_to(user).filter(is_active=True)
+        documents = Document.objects.visible_to(user).in_collection().filter(is_active=True)
         if filters["office"]:
             documents = documents.filter(office=filters["office"])
         documents = documents.distinct()
@@ -1534,8 +1565,10 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         # panels then say so rather than inventing a split.
         scope_office = report_scope_office(self.request, filters)
         university_wide = user.is_system_admin and scope_office is None
+        records = records.with_stage_for(scope_office)
 
-        total_records = records.count()
+        current_records = records.exclude(status__in=COMPLETED_STATUSES)
+        total_records = (records if self.report_domain == "documents" else current_records).count()
         total_documents = documents.count()
         overdue_all = records.filter(tracking_services.overdue_q()).distinct().count()
         # The month the turnaround panel answers for: the dashboard's twelve
@@ -1567,16 +1600,20 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         awaiting_qs = tracking_services.awaiting_receipt(records, user)
         awaiting_counts = awaiting_qs.aggregate(
             total=Count("pk", distinct=True),
-            partial=Count("pk", filter=~Q(status=Status.PENDING_RECEIPT), distinct=True),
+            partial=Count("pk", filter=~Q(stage=Status.PENDING_RECEIPT), distinct=True),
         )
         awaiting = awaiting_counts["total"]
         # The rows the batch scope removes: an unconfirmed step, but not in the
         # batch the record is actually on. Not an error — a batch can be
         # superseded before every recipient signs — but it is a receipt nobody
         # will ever give, so it is worth naming rather than either counting as
-        # live work or dropping without a word. Shown only when non-zero.
+        # live work or dropping it. Require an actual older routing step: a
+        # null reverse relation also matches an unsent draft with no steps.
         stale_receipts = (
-            records.filter(routing_steps__received_at__isnull=True)
+            records.filter(
+                routing_steps__received_at__isnull=True,
+                routing_steps__batch__lt=F("current_batch"),
+            )
             .exclude(status__in=COMPLETED_STATUSES)
             .exclude(pk__in=awaiting_qs.values("pk"))
             .distinct()
@@ -1616,7 +1653,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "overdue_elsewhere": overdue_split["elsewhere"],
                 "awaiting_split": awaiting_split,
                 "stale_receipts": stale_receipts,
-                "by_status": self._by_status(records, total_records, scope_office),
+                "by_status": self._by_status(current_records, total_records, scope_office),
                 "turnaround": self._turnaround(records, month),
                 "month_picker": core_filters.month_picker(self.request, months, month),
                 "overdue_accountability": self._overdue_accountability(records, overdue_all),
@@ -1626,14 +1663,20 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 "university_wide": university_wide,
             }
         )
-        # Pending Receipt is a document stage, not the broader queue of any
-        # outstanding recipient. Partly confirmed multi-office batches remain
-        # Received / In Process and must not inflate the stage's headline.
+        # The stage is measured from the selected office, as on Tracking.
+        # Another recipient's work cannot clear this office's pending receipt.
         context["pending_receipt"] = next(
             (row["total"] for row in context["by_status"] if row["status"] == Status.PENDING_RECEIPT),
             0,
         )
         context["partial_receipts"] = awaiting_counts["partial"]
+        context["direction_stages"] = self._direction_stages(context["by_status"], scope_office, filters)
+        context["incoming_records"] = context["direction_stages"][0]["total"] if scope_office else None
+        context["outgoing_records"] = context["direction_stages"][1]["total"] if scope_office else None
+        context["all_office_stages"] = (
+            self._all_office_stages(context["by_status"], total_records, filters)
+            if university_wide and self.report_domain != "documents" else []
+        )
         # Rankings of offices only where the report covers every office. For one
         # office the other rows were built from the documents that office
         # touched, so each read as another office's figure while counting a
@@ -1642,8 +1685,6 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         if university_wide:
             context["office_flow"] = self._office_flow(records)
             context["office_volume"] = self._office_volume(records)
-        elif scope_office:
-            context["office_activity"] = self._office_activity(records, scope_office)
         # Repository upkeep is an administrator's work: an office clerk cannot
         # retry an extraction or change the tag vocabulary, so the figures are
         # not computed for anyone else.
@@ -1694,14 +1735,17 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     def _workspace_context(self, filters, context):
         """Open the existing workspaces without building another record list.
 
-        Tracking's completed, filed history is part of the report but no longer
-        belongs in its live workspace. Only live stage counts link to Tracking;
-        lifetime totals remain figures. Repository type links use its native
-        filter, so unclassified and grouped types remain informational.
+        Current-work links exclude both completion stages. Historical analytics
+        still use the full permission-scoped records. Repository type links use
+        its native filter, so unclassified and grouped types stay informational.
         """
         repository = self.report_domain == "documents"
         office = filters["office"]
-        office_value = office.pk if office else ("all" if self.request.user.is_system_admin else None)
+        # Repository folders use an omitted office for all available documents.
+        # Tracking alone accepts the explicit "all" queue scope.
+        office_value = office.pk if office else (
+            "all" if self.request.user.is_system_admin and not repository else None
+        )
         params = {"office": office_value}
         base_url = reverse("documents:repository" if repository else "tracking:list")
         if repository:
@@ -1719,34 +1763,56 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         links = {"report_workspace_url": core_filters.link(base_url, **params)}
         if not repository:
             links.update({
+                "report_workspace_url": self._tracking_report_link(filters),
                 "report_pending_receipt_url": core_filters.link(base_url, **params, status=Status.PENDING_RECEIPT),
                 "report_overdue_url": core_filters.link(base_url, **params, overdue="yes"),
             })
         return links
 
-    def _office_activity(self, records, office):
-        """What one office itself received and sent, counted in handovers.
+    def _tracking_report_link(self, filters, *, scope=None, status=None):
+        office = filters["office"]
+        office_value = office.pk if office else ("all" if self.request.user.is_system_admin else None)
+        base = core_filters.link(reverse("tracking:list"), office=office_value, scope=scope)
+        # Repeated native status filters preserve the existing Tracking view and
+        # keep the current-work Total's destination out of Pending filing.
+        statuses = [status] if status else [Status.DRAFT, Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS]
+        query = urlencode([("status", value) for value in statuses])
+        return f"{base}{'&' if '?' in base else '?'}{query}"
 
-        The office's own row of the two office rankings, and complete: every
-        handover to or from an office is on a record that touches it, so the
-        records this report covers hold all of them. One grouped query.
-        """
-        months, _ = _month_window()
-        month_start = timezone.make_aware(
-            datetime.combine(months[-1], time.min), timezone.get_current_timezone()
-        )
-        steps = RoutingStep.objects.filter(record__in=records.order_by().values("pk"))
-        figures = steps.aggregate(
-            received=Count("id", filter=Q(to_office=office, received_at__isnull=False)),
-            received_this_month=Count(
-                "id", filter=Q(to_office=office, received_at__gte=month_start)
-            ),
-            sent=Count("id", filter=Q(from_office=office)),
-            sent_confirmed=Count("id", filter=Q(from_office=office, received_at__isnull=False)),
-        )
-        figures["sent_waiting"] = figures["sent"] - figures["sent_confirmed"]
-        figures["month"] = months[-1]
-        return figures
+    def _direction_stages(self, rows, office, filters):
+        if office is None:
+            return []
+        statuses = (Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS)
+        by_status = {row["status"]: row for row in rows}
+        directions = []
+        for key, label in (("incoming", "Incoming"), ("outgoing", "Outgoing")):
+            total = sum(by_status.get(status, {}).get(key, 0) for status in statuses)
+            stages = []
+            for status in statuses:
+                count = by_status.get(status, {}).get(key, 0)
+                stages.append({
+                    "status": status, "total": count, "percent": _percent(count, total),
+                    "share": analytics.share_text(count, total), "colour": STATUS_COLOURS[status],
+                    "workspace_url": self._tracking_report_link(filters, scope=key, status=status),
+                })
+            directions.append({
+                "key": key, "label": label, "total": total, "stages": stages,
+                "workspace_url": self._tracking_report_link(filters, scope=key),
+            })
+        return directions
+
+    def _all_office_stages(self, rows, total, filters):
+        """One disjoint stage breakdown of current records, not endorsements."""
+        counts = {row["status"]: row["total"] for row in rows}
+        # Current records have four stages. Reuse the three routed-stage
+        # aggregates and the current total instead of querying drafts again.
+        counts[Status.DRAFT] = total - sum(counts.values())
+        return [{
+            "status": status, "total": counts.get(status, 0),
+            "share": analytics.share_text(counts.get(status, 0), total),
+            "colour": STATUS_COLOURS[status],
+            "workspace_url": self._tracking_report_link(filters, status=status),
+        } for status in (Status.DRAFT, Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS)]
 
     def _retention(self, documents, filters):
         """How many documents are due for their retention review, and when.
@@ -1766,9 +1832,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
 
         return {
             "due": documents.due_for_retention_review(today).count(),
-            "soon": documents.filter(
-                retention_until__gt=today, retention_until__lte=today + timedelta(days=90)
-            ).count(),
+            "soon": documents.upcoming_deletion_review(today).count(),
             "unscheduled": documents.filter(retention_until__isnull=True).count(),
             "due_url": link("due"),
             "soon_url": link("soon"),
@@ -1781,14 +1845,10 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
     # dashboard shows the same figures. Kept as thin methods rather than
     # inlined at the call site so a subclass can still override one panel.
     def _by_status(self, records, total, scope_office=None):
-        """One row per live status, with direction columns when there is a
-        point of view to measure them from.
-
-        Same shape either way — without an office the direction figures are zero
-        and `total` still carries the row — so the template renders one table
-        rather than branching, and a system administrator who has picked nothing
-        sees honest totals beside a prompt instead of a fabricated split.
-        """
+        """Three working stages, split by their current-batch direction."""
+        records = records.with_stage_for(scope_office).filter(
+            stage__in=(Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS),
+        )
         rows = analytics.by_status(records, total)
         split = {
             row["status"]: row
@@ -1810,14 +1870,14 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         office confirmed. Counting records by `originating_office` (what this
         panel used to do) misses every forward after the first hop.
 
-        Both bars are shares of one whole, every handover, so a row's two bars
+        Both bars are shares of one whole, every endorsement, so a row's two bars
         compare with each other as well as with the rows around them: an office
         that sent 5 and confirmed 5 draws two bars of one length. The whole is
         read off the sent grouping, sender or none, rather than counted again.
         """
         steps = RoutingStep.objects.filter(record__in=records)
         sent_rows = list(steps.values("from_office__code").annotate(total=Count("id")))
-        handovers = sum(row["total"] for row in sent_rows)
+        endorsements = sum(row["total"] for row in sent_rows)
         sent = {
             row["from_office__code"]: row["total"]
             for row in sent_rows
@@ -1859,9 +1919,9 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                 }
             )
         for row in rows:
-            row["sent_percent"] = _bar(row["sent"], handovers)
-            row["received_percent"] = _bar(row["received"], handovers)
-        return {"rows": rows, "handovers": handovers}
+            row["sent_percent"] = _bar(row["sent"], endorsements)
+            row["received_percent"] = _bar(row["received"], endorsements)
+        return {"rows": rows, "endorsements": endorsements}
 
     def _office_volume(self, records):
         """Which office handled the most documents, per month and cumulatively.
@@ -1984,10 +2044,7 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             return empty
         overdue = records.filter(tracking_services.overdue_q()).distinct()
         ours = overdue.filter(
-            Q(routing_steps__to_office=office, routing_steps__received_at__isnull=True,
-              routing_steps__batch=F("current_batch"))
-            | Q(current_office=office, routing_steps__received_at__isnull=False,
-                routing_steps__batch=F("current_batch"))
+            routing_steps__to_office=office, routing_steps__batch=F("current_batch"),
         ).distinct().count()
         elsewhere = overdue.filter(
             Exists(_unreceived_current_steps(from_office=office)),
@@ -2096,9 +2153,13 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
             row["label"] = row["document_type__name"] or "Unclassified"
             row["type_value"] = str(row["document_type_id"] or "none")
         documents_total = sum(row["total"] for row in rows)
+        unclassified = [row for row in rows if row["document_type_id"] is None]
+        classified = [row for row in rows if row["document_type_id"] is not None]
         rows, cut, remainder_label = analytics.cap_with_remainder(
-            rows, analytics.TOP_N, "type"
+            classified, analytics.TOP_N, "type"
         )
+        rows.extend(unclassified)
+        rows.sort(key=lambda row: row["total"], reverse=True)
         if cut:
             rows.append(
                 {
@@ -2130,29 +2191,46 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         repository tile and the dashboard ring cannot disagree about what a
         scanned document is.
         """
-        months, since = _month_window()
-        completed_series = _month_series(
-            documents.filter(source=COMPLETED_SOURCE), "created_at", since
-        )
-        historical_series = _month_series(
-            documents.exclude(source=COMPLETED_SOURCE), "created_at", since
-        )
+        months, _ = _month_window()
+        # Partition the entire visible repository, including dates outside the
+        # twelve labelled months. Otherwise the bars silently omit older files.
+        grouped = list(documents.annotate(filed_month=TruncMonth("created_at"))
+                       .values("filed_month").annotate(
+                           total=Count("pk", distinct=True),
+                           completed=Count("pk", filter=Q(source=COMPLETED_SOURCE), distinct=True),
+                       ).order_by("filed_month"))
+        completed_series, historical_series = {}, {}
+        outside = {"earlier": [0, 0], "later": [0, 0]}
+        for item in grouped:
+            month = timezone.localtime(item["filed_month"]).date()
+            completed, historical = item["completed"], item["total"] - item["completed"]
+            if month < months[0] or month > months[-1]:
+                bucket = outside["earlier" if month < months[0] else "later"]
+                bucket[0] += completed
+                bucket[1] += historical
+            else:
+                completed_series[month], historical_series[month] = completed, historical
+        buckets = [(month, month.strftime("%b"), month.strftime("%B %Y"),
+                    completed_series.get(month, 0), historical_series.get(month, 0)) for month in months]
+        if sum(outside["earlier"]):
+            buckets.insert(0, (None, "Earlier", f"Before {months[0]:%B %Y}", *outside["earlier"]))
+        if sum(outside["later"]):
+            buckets.append((None, "Later dates", f"After {months[-1]:%B %Y}", *outside["later"]))
         # Scaled against the tallest *month*, not the tallest bar, so the two
         # series stay comparable to each other within a month and across them.
         ceiling = max(
             [
-                completed_series.get(month, 0) + historical_series.get(month, 0)
-                for month in months
+                completed + historical for _, _, _, completed, historical in buckets
             ],
             default=0,
         )
         rows = []
-        for month in months:
-            completed = completed_series.get(month, 0)
-            historical = historical_series.get(month, 0)
+        for month, label, full_label, completed, historical in buckets:
             rows.append(
                 {
                     "month": month,
+                    "label": label,
+                    "full_label": full_label,
                     "completed": completed,
                     "historical": historical,
                     "total": completed + historical,
@@ -2173,7 +2251,12 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
                     "has_values": bool(completed or historical),
                 }
             )
-        return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling)}
+        return {"rows": rows, "ceiling": ceiling, "ticks": analytics.axis_ticks(ceiling),
+                "total": sum(row["total"] for row in rows),
+                "completed_total": sum(row["completed"] for row in rows),
+                "historical_total": sum(row["historical"] for row in rows),
+                "window_total": sum(completed_series.values()) + sum(historical_series.values()),
+                "earlier_total": sum(outside["earlier"]), "later_total": sum(outside["later"])}
 
 # ---------------------------------------------------------------------------
 # Search activity — university-wide, so system administrators only
@@ -2328,7 +2411,7 @@ class NotificationListView(AppLoginRequiredMixin, View):
         if active_kind:
             notification_query = notification_query.filter(kind=active_kind)
 
-        notification_query = notification_query.order_by("is_read", "-created_at")
+        notification_query = notification_query.order_by("is_read", "-created_at", "-pk")
         page_context = paginate(request, notification_query, self.PAGE_SIZE)
         page_obj = page_context["page_obj"]
         today = timezone.localdate()
@@ -2446,8 +2529,11 @@ class PrintLogView(AppLoginRequiredMixin, View):
         target_id = request.POST.get("target_id", "").strip()
         target = None
         if target_type or target_id:
+            from apps.tracking.models import ExternalTrackingRecord
+
             targets = {
                 "TrackingRecord": TrackingRecord.objects.visible_to(request.user),
+                "ExternalTrackingRecord": ExternalTrackingRecord.objects.visible_to(request.user),
                 "Document": Document.objects.visible_to(request.user).filter(is_active=True),
             }
             if (target_type not in targets or not target_id.isascii() or not target_id.isdigit()
@@ -2498,11 +2584,37 @@ class ReportExportView(AppLoginRequiredMixin, View):
 
     def get(self, request):
         filters = report_filters_from_request(request)
-        records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters).with_related().prefetch_related("document_types").distinct().order_by("-created_at", "-pk")
-        records, selected = filter_report_records(records, request)
+        if request.GET.get("source") == "tracking":
+            from apps.tracking.views import tracking_workspace_queryset
+
+            records, form, data, resolved, _ = tracking_workspace_queryset(request)
+            scope_office = resolved.as_office
+            selected = {
+                "status": ", ".join(resolved.statuses),
+                "scope": resolved.scope if "scope" not in form.errors else "",
+                "offices": ", ".join(office.code for office in (data.get("offices") or [])),
+                "owner": data.get("owner") or "",
+                "q": data.get("q") or "",
+                "sort": data.get("sort") or "",
+                "overdue": resolved.overdue,
+                "office": scope_office.code if scope_office else "All visible offices",
+            }
+            # Match the table's default direction perspective without adding
+            # an office filter to the already-selected record population.
+            if scope_office is None and not resolved.all_offices:
+                scope_office = request.user.office
+        else:
+            records = apply_report_filters(TrackingRecord.objects.visible_to(request.user), filters)
+            scope_office = report_scope_office(request, filters)
+            records = records.with_stage_for(scope_office)
+            records, selected = filter_report_records(records, request)
+        records = records.with_stage_for(scope_office).with_related().prefetch_related("document_types").distinct()
+        if request.GET.get("source") == "tracking":
+            records = tracking_services.order_records(records, data.get("sort") or "")
+        else:
+            records = records.order_by("-created_at", "-pk")
         # The same point of view the page uses, so the Direction column means
         # what the screen it was exported from meant.
-        scope_office = report_scope_office(request, filters)
         direction = tracking_services.direction_annotation(scope_office)
         if direction is not None:
             records = records.annotate(_direction=direction)
@@ -2532,7 +2644,7 @@ class ReportExportView(AppLoginRequiredMixin, View):
         writer.writerow(["Record filters", *(f"{key}={value}" for key, value in selected.items() if value)])
         # The basis of the three duration columns, which are plain numbers of
         # office hours so a spreadsheet can sort and add them.
-        writer.writerow(["Durations", office_hours_caveat()])
+        writer.writerow(["Durations", office_hours_caveat(), "In Process excludes time awaiting receipt between endorsements."])
         writer.writerow(
             # Overdue as its own column. The Status column used to carry
             # "Overdue" in place of the stage, so an exported sheet had no
@@ -2560,9 +2672,9 @@ class ReportExportView(AppLoginRequiredMixin, View):
                     record.document_type_names,
                     record.originating_office.code,
                     record.current_office.code if record.current_office_id else "",
-                    record.get_status_display(),
+                    record.get_display_status_display(),
                     "Yes" if record.is_overdue else "No",
-                    _DIRECTION_WORDS.get(getattr(record, "_direction", ""), "—"),
+                    _DIRECTION_WORDS.get(getattr(record, "_direction", None), "—"),
                     timezone.localtime(record.created_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.last_movement_at).strftime("%Y-%m-%d %H:%M"),
                     timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M") if record.completed_at else "",
@@ -2625,7 +2737,7 @@ MASTER_DATA = {
         "label": "Document types",
         "singular": "document type",
         "fields": ["code", "name", "description", "retention_years", "sort_order", "is_active"],
-        "columns": [("name", "Name"), ("code", "Code"), ("retention_years", "Retention (years)"), ("is_active", "Active")],
+        "columns": [("name", "Name"), ("code", "Code"), ("retention_years", "Years before deletion review"), ("is_active", "Active")],
         "help": "Memorandum, letter, work order… Types drive filing, filters and search weighting.",
     },
     "tags": {
@@ -2740,6 +2852,7 @@ def audit_entries_for(user):
     if not user.office_id:
         return entries.none()
     from apps.accounts.models import User
+    from apps.tracking.models import ExternalOffice, ExternalTrackingRecord
 
     def ids(queryset):
         return queryset.order_by().annotate(audit_pk=Cast("pk", output_field=CharField())).values("audit_pk")
@@ -2752,6 +2865,9 @@ def audit_entries_for(user):
         | Q(target_type="TrackingRecord", target_id__in=ids(TrackingRecord.objects.visible_to(user)))
         | Q(target_type="Document", target_id__in=ids(Document.objects.visible_to(user)))
         | Q(target_type="Office", target_id=str(user.office_id))
+        | Q(target_type="ExternalTrackingRecord", target_id__in=ids(ExternalTrackingRecord.objects.visible_to(user)))
+        | Q(target_type="ExternalOffice", target_id__in=ids(ExternalOffice.objects.visible_to(user)))
+        | (Q(target_type="Document", action=AuditLog.Action.DELETE, extra__permanent_repository_deletion=True) & own_target)
     )
     # Legacy rows have no verifiable office snapshot. Keep them available to
     # system administrators, rather than guessing from an actor's new office.
@@ -2831,7 +2947,7 @@ class MasterDataListView(MasterDataAccessMixin, AdminRequiredMixin, View):
         model = config["model"]
         objects = model.objects.all()
         if model is Tag:
-            visible_documents = Document.objects.visible_to(request.user).filter(is_active=True)
+            visible_documents = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
             # The stored usage counter includes retired documents and can
             # become stale after direct m2m edits. Display a live count scoped
             # to records this administrator can actually open.
@@ -2912,7 +3028,9 @@ class MasterDataEditView(MasterDataAccessMixin, AdminRequiredMixin, View):
         form_class = _model_form(self.config["model"], self.config["fields"], self.config.get("widgets"))
         form = form_class(request.POST, instance=instance)
         if form.is_valid():
-            obj = form.save()
+            from apps.search.indexing import save_masterdata_form
+
+            obj = save_masterdata_form(form)
             from .utils import log_action
 
             log_action(
@@ -3084,7 +3202,7 @@ class AuditLogView(AdminRequiredMixin, TemplateView):
         # Two paginators, two sets of parameters. The template renders a
         # `{% pager %}` per panel against its own page object, so filtering or
         # paging one leaves the other where the administrator left it.
-        system_page = paginate(self.request, entries, AUDIT_ROWS)
+        system_page = paginate(self.request, entries.order_by("-created_at", "-pk"), AUDIT_ROWS)
         access_page = paginate(
             self.request,
             access_entries,

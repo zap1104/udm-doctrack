@@ -541,7 +541,7 @@ if not received:
 ```
 
 That is **correct and was not changed.** The last office with *confirmed
-custody* is the sender; showing `to_office` there would claim a handover nobody
+custody* is the sender; showing `to_office` there would claim an endorsement nobody
 has acknowledged, which is the same rule the whole system enforces under "sent
 is not received".
 

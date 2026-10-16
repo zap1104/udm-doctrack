@@ -1,10 +1,11 @@
-from django.urls import path
+from django.urls import include, path
 
 from . import views
 
 app_name = "tracking"
 
 urlpatterns = [
+    path("external/", include("apps.tracking.external_urls")),
     path("", views.RecordListView.as_view(), name="list"),
     path("new/", views.RecordCreateView.as_view(), name="create"),
     path("bulk-receipt/", views.BulkConfirmReceiptView.as_view(), name="bulk_confirm_receipt"),

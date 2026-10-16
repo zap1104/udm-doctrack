@@ -12,6 +12,8 @@ TRACKING_PANELS and REPOSITORY_PANELS.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from django.utils import timezone
 
@@ -78,8 +80,8 @@ TRACKING_PANELS = (
     "Documents by stage",
     "Turnaround Time for the Month of {month}",
     "Overdue: who must act next",
-    "Documents received by office",
-    "Handovers by office: sent and confirmed",
+    "Confirmed receipts by office",
+    "Endorsements by office: sent and confirmed",
 )
 
 #: Document Repository Report, in order.
@@ -98,11 +100,7 @@ def test_the_report_carries_exactly_the_specified_panels(client, finished_record
     client.force_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
-    headings = [
-        line.split("<h2>", 1)[1].split("</h2>", 1)[0]
-        for line in body.splitlines()
-        if "<h2>" in line and "</h2>" in line
-    ]
+    headings = re.findall(r'<h2(?: id="report-document-stages-title")?>(.*?)</h2>', body)
 
     month = f"{timezone.localdate():%B %Y}"
     expected = [panel.format(month=month) for panel in TRACKING_PANELS]
@@ -311,7 +309,7 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
     assert "this_month_percent" not in row, "no second scale"
 
     body = client.get(REPORTS).content.decode()
-    assert "Documents received by office" in body
+    assert "Confirmed receipts by office" in body
 
 
 # --- 3.10 naming -----------------------------------------------------------
@@ -337,7 +335,7 @@ def test_an_administrator_gets_the_office_filter(client, users, who):
     # is gone, and Apply re-scopes the page after the selection is finished.
     assert 'id="report-office-name"' not in body
     assert "data-auto-submit" not in body
-    assert 'type="submit">Apply</button>' in body
+    assert 'data-filter-fallback>Apply</button>' in body
 
 
 @pytest.mark.django_db
@@ -614,7 +612,7 @@ def test_the_completion_rate_leaves_drafts_out_of_its_denominator(
     client.force_login(users["admin"])
     context = client.get(REPORTS).context
 
-    assert context["total_records"] == 2, "the card still counts the draft"
+    assert context["total_records"] == 1, "current total counts the draft but excludes finished work"
     assert context["completion_rate"] == 100, "one finished of one in circulation"
 
 

@@ -7,6 +7,7 @@ from django.contrib.messages import get_messages
 
 from apps.tracking.models import COMPLETED_STATUSES, Status, TrackingRecord
 from apps.tracking.services import complete_record, confirm_receipt, create_draft_record, route_record
+from tests.test_action_centre import _queues
 from tests.test_filter_agreement import page_records, traffic  # noqa: F401
 
 
@@ -30,11 +31,17 @@ def test_split_previews_match_visible_full_lists(client, users, offices, complet
     assert {r.pk for r in pending["records"]} <= listed
     assert len(pending["records"]) == min(5, len(listed))
     assert all(r.status == Status.COMPLETED_PENDING_UPLOAD for r in pending["records"])
-    for queue in response.context["desk_queues"]:
+    for queue in _queues(response).values():
         assert queue["slug"] != "pending-upload"
         assert queue["count"] == len(page_records(client, queue["tracking_url"]))
         selected = client.get(queue["href"])
         assert all(r.status not in COMPLETED_STATUSES for r in selected.context["attention_records"])
+    for group in response.context["desk_direction_groups"]:
+        parent = page_records(client, group["tracking_url"])
+        stages = [page_records(client, stage["tracking_url"]) for stage in group["stages"]]
+        assert set().union(*stages) == parent
+        assert sum(len(stage) for stage in stages) == len(parent)
+        assert parent.isdisjoint(listed)
     assert {r.pk for r in response.context["attention_records"]}.isdisjoint(listed)
 
 
@@ -140,7 +147,7 @@ def test_workload_breakdown_handles_empty_drafts_and_completed_work(client, user
 def test_old_pending_dashboard_link_keeps_both_panels_usable(client, users, completed_traffic):
     client.force_login(users["sup"])
     response = client.get("/?desk=pending-upload")
-    assert response.context["desk_queue"]["slug"] == "pending-receipt"
+    assert response.context["desk_queue"]["slug"] == "awaiting"
     assert response.context["pending_filing"]["count"] == 1
     assert not list(get_messages(response.wsgi_request))
     assert 'id="dashboard-filing-title"' in response.content.decode()

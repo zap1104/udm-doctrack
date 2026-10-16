@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
@@ -186,8 +187,8 @@ def test_the_record_page_names_all_three_offices(client, users, offices, memo_ty
     body = client.get(record.get_absolute_url()).content.decode()
 
     assert "Originating office" in body
-    assert "Current office" in body
-    assert "Receiving office" in body
+    assert "Received by" in body
+    assert "Awaiting receipt" in body
 
 
 @pytest.mark.django_db
@@ -215,7 +216,7 @@ def test_the_list_shows_the_receiving_office_column(client, users, offices, memo
     client.force_login(users["med"])
     body = client.get("/tracking/").content.decode()
 
-    assert "Receiving office" in body
+    assert "Awaiting receipt" in body
 
 
 @pytest.mark.django_db
@@ -266,7 +267,9 @@ def test_a_record_awaiting_receipt_does_not_name_a_person_who_does_not_exist(
     client.force_login(users["med"])
     body = client.get(record.get_absolute_url()).content.decode()
 
-    assert "Nobody yet — awaiting receipt" in body
+    receipt_person = re.search(r">Latest receipt by</th>\s*<td>(.*?)</td>", body, re.S).group(1)
+    assert "No receipts confirmed" in receipt_person
+    assert re.sub(r"<[^>]*>", "", receipt_person).strip() == "No receipts confirmed"
 
 
 # --- 4.7 repository folders -------------------------------------------------

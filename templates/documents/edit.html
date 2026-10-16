@@ -3,7 +3,7 @@
 {% block content %}
 <div class="workspace-page workspace-form workspace-edit">
 <div class="page-head"><div>
-  <div class="eyebrow">Document Repository</div>
+  <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
   <h1>Edit Document Metadata</h1>
   <p class="sub">{{ document.title }}</p>
 </div></div>
@@ -41,7 +41,9 @@
 
     <div class="col-lg-4 workspace-support">
       <div class="help-note">
-        Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters. Changing OCR privacy or language does not contact a provider until you deliberately run text extraction again.
+        <p>Saving rebuilds the document search index immediately, so corrected values appear in Search and repository filters.</p>
+        <p>The deletion review date schedules a human decision to keep the document or remove it from the repository. Documents are never removed automatically; files and history are retained.</p>
+        <p class="mb-0">Changing OCR privacy or language does not contact a provider until you deliberately run text extraction again.</p>
       </div>
     </div>
   </div>

@@ -15,7 +15,7 @@ def _safe_url(url: str) -> str:
     return value[:255]
 
 
-def _notification_kwargs(*, kind, title, message, url="", tracking_record=None, document=None):
+def _notification_kwargs(*, kind, title, message, url="", tracking_record=None, document=None, external_record=None):
     return {
         "kind": kind,
         "title": title[:160],
@@ -23,10 +23,11 @@ def _notification_kwargs(*, kind, title, message, url="", tracking_record=None, 
         "url": _safe_url(url),
         "tracking_record": tracking_record,
         "document": document,
+        "external_record": external_record,
     }
 
 
-def notify_office(office, *, kind, title, message, url="", tracking_record=None, document=None):
+def notify_office(office, *, kind, title, message, url="", tracking_record=None, document=None, external_record=None):
     if office is None:
         return None
     return Notification.objects.create(
@@ -38,11 +39,12 @@ def notify_office(office, *, kind, title, message, url="", tracking_record=None,
             url=url,
             tracking_record=tracking_record,
             document=document,
+            external_record=external_record,
         ),
     )
 
 
-def notify_offices(offices, *, kind, title, message, url="", tracking_record=None, document=None):
+def notify_offices(offices, *, kind, title, message, url="", tracking_record=None, document=None, external_record=None):
     offices = [office for office in offices if office is not None]
     if not offices:
         return []
@@ -53,8 +55,23 @@ def notify_offices(offices, *, kind, title, message, url="", tracking_record=Non
         url=url,
         tracking_record=tracking_record,
         document=document,
+        external_record=external_record,
     )
     return Notification.objects.bulk_create([Notification(office=office, **kwargs) for office in offices])
+
+
+def overdue_notice_text(record, *, awaiting_receipt):
+    """Use the same deadline wording when a chase or receipt updates a notice."""
+    message = (
+        f"{record.tracking_number} was due "
+        f"{timezone.localtime(record.due_at):%d %b %Y}."
+    )
+    if awaiting_receipt:
+        title = "A document awaiting your office's receipt is past its deadline"
+        message += " Your office still needs to confirm receipt."
+    else:
+        title = "A document with your office is past its deadline"
+    return title[:160], message[:255]
 
 
 def unread_for(user):
@@ -93,6 +110,14 @@ def mark_all_read(user, notifications=None) -> int:
 
 def resolve_for_record(record, *, kinds=None):
     queryset = Notification.objects.filter(tracking_record=record, resolved_at__isnull=True)
+    if kinds:
+        queryset = queryset.filter(kind__in=kinds)
+    return queryset.update(resolved_at=timezone.now())
+
+
+def resolve_for_external_record(record, *, kinds=None):
+    """External and OVPA primary keys belong to independent namespaces."""
+    queryset = Notification.objects.filter(external_record=record, resolved_at__isnull=True)
     if kinds:
         queryset = queryset.filter(kind__in=kinds)
     return queryset.update(resolved_at=timezone.now())

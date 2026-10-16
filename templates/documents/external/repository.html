@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load doctrack %}
+{% block title %}External Document Repository · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-repository">
+  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Document Repository</h1><p class="sub">Filed external cases, historical uploads and scanned documents. {{ total }} matching document{{ total|pluralize }} of {{ all_count }} available.</p></div>{% if can_upload %}<a class="btn btn-udm" href="{% url 'documents:external_upload' %}">Upload external document</a>{% endif %}</div>
+  {% include "documents/external/_nav.html" %}
+  {% include "documents/external/_filters.html" %}
+  <div class="row g-3">
+    {% for document in documents %}
+      <div class="col-md-6 col-xl-4"><article class="card-udm h-100"><div class="card-udm-body">
+        <div class="eyebrow">{{ document.get_source_display }}</div>
+        <h2 class="h5"><a href="{{ document.get_absolute_url }}">{{ document.title }}</a></h2>
+        <p>{{ document.office.name }} · {{ document.year }}</p>
+        {% if document.reference_number %}<p class="mono">{{ document.reference_number }}</p>{% endif %}
+        <p class="supporting-copy">{{ document.snippet }}</p>
+      </div></article></div>
+    {% empty %}<div class="col-12"><div class="card-udm"><div class="card-udm-body">No external documents match these filters.</div></div></div>{% endfor %}
+  </div>
+  {% pager %}
+</div>
+{% endblock %}

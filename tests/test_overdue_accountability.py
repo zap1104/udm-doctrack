@@ -6,7 +6,7 @@ Only SUP or HR can.
 
 `recalculate_status()` sets `current_office` to the *sending* office while a
 batch is unreceived, and that is correct — the last office with confirmed
-custody is the sender, and showing `to_office` there would claim a handover
+custody is the sender, and showing `to_office` there would claim an endorsement
 nobody has acknowledged. The bug was a panel captioned "who to chase" grouping
 by a field that answers "where is the paper". Two questions, two functions.
 
@@ -103,7 +103,7 @@ def test_a_confirmed_office_holds_while_the_other_still_owes_a_receipt(
 
 # --- 3. everyone has signed for it, and it is still late ---------------------
 @pytest.mark.django_db
-def test_once_everybody_has_received_it_the_holder_owes_the_work(
+def test_once_everybody_has_received_it_each_confirmed_office_owes_work(
     med_to_sup_and_hr, users, offices
 ):
     confirm_receipt(med_to_sup_and_hr, user=users["sup"])
@@ -113,7 +113,8 @@ def test_once_everybody_has_received_it_the_holder_owes_the_work(
     rows = _rows(users["admin"])
     holders = {code: row for code, row in rows.items() if row["holding"]}
 
-    assert list(holders) == [med_to_sup_and_hr.current_office.code]
+    assert set(holders) == {offices["SUP"].code, offices["HR"].code}
+    assert all(row["holding"] == 1 for row in holders.values())
     assert sum(row["awaiting"] for row in rows.values()) == 0
 
 
@@ -169,11 +170,10 @@ def test_direction_needs_an_office_to_be_measured_from():
 
 # --- 6. a system administrator with no office --------------------------------
 @pytest.mark.django_db
-def test_an_admin_with_no_office_is_asked_for_one_rather_than_shown_zeroes(
+def test_an_admin_with_no_office_sees_combined_stages_without_zeroed_directions(
     client, med_to_sup_and_hr, users
 ):
-    """A zeroed split reads as "nothing is moving", which is a different claim
-    from "there is nobody to measure this from"."""
+    """All offices is a combined count, with no invented direction."""
     admin = users["admin"]
     admin.office = None
     admin.save(update_fields=["office"])
@@ -184,18 +184,18 @@ def test_an_admin_with_no_office_is_asked_for_one_rather_than_shown_zeroes(
 
     assert response.status_code == 200
     assert response.context["scope_office"] is None
-    assert "Pick an office above to split these by incoming and outgoing" in body
+    assert response.context["incoming_records"] is None
+    assert response.context["outgoing_records"] is None
+    assert sum(row["total"] for row in response.context["all_office_stages"]) == 1
+    assert 'id="report-all-offices-chart"' in body
+    assert "Choose an office" not in body
 
 
 @pytest.mark.django_db
-def test_an_admin_who_can_pick_and_has_not_is_asked_rather_than_assumed(
+def test_an_admins_assigned_office_does_not_narrow_the_combined_chart(
     client, med_to_sup_and_hr, users
 ):
-    """The fallback is for accounts that cannot pick, whose report *is* their
-    office. A system administrator based in Records, viewing every office,
-    measured direction from Records and read "Passed on 30" of 40 — records that
-    had never been near Records, under a label claiming Records handed them on.
-    """
+    """An admin's own office is not a direction or filter for All offices."""
     admin = users["admin"]
     assert admin.office is not None, "the point of the test: they do have one"
     client.force_login(admin)
@@ -203,9 +203,12 @@ def test_an_admin_who_can_pick_and_has_not_is_asked_rather_than_assumed(
     response = client.get(REPORTS)
 
     assert response.context["scope_office"] is None
-    assert "Pick an office above to split these by incoming and outgoing" in (
-        response.content.decode()
-    )
+    assert response.context["direction_stages"] == []
+    assert response.context["incoming_records"] is None
+    assert response.context["outgoing_records"] is None
+    assert sum(row["total"] for row in response.context["all_office_stages"]) == 1
+    assert 'id="report-all-offices-chart"' in response.content.decode()
+    assert "Choose an office" not in response.content.decode()
 
 
 @pytest.mark.django_db

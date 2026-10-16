@@ -32,7 +32,11 @@
       <button class="sidebar-backdrop no-print" type="button" data-sidebar-close aria-label="Close navigation" tabindex="-1"></button>
       <div class="app-main">
         {% include "partials/_topbar.html" %}
-        <main id="main-content" class="app-content" tabindex="-1">
+        <div id="filter-update-status" class="filter-update-status no-print" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <span data-filter-message></span>
+          <button class="btn btn-sm btn-udm-outline" type="button" data-filter-retry hidden>Retry</button>
+        </div>
+        <main id="main-content" class="app-content" tabindex="-1" hx-history-elt hx-history="false">
           {% include "partials/_messages.html" %}
           {% block content %}{% endblock %}
         </main>
@@ -71,6 +75,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
   {% endif %}
   <script src="{% static 'js/doctrack.js' %}"></script>
+  <script src="{% static 'js/auto-filters.js' %}"></script>
   <script src="{% static 'js/document-types.js' %}"></script>
   <script src="{% static 'js/form-errors.js' %}"></script>
   {% block extra_scripts %}{% endblock %}

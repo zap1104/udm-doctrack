@@ -44,7 +44,7 @@
     tip.querySelector("[data-column-tooltip-value]").textContent = value;
     tip.querySelector("[data-column-tooltip-label]").textContent = label;
     var bar = item.querySelector(".column");
-    var colors = {created: "var(--chart-created)", handover: "var(--status-pending)", completed: "var(--status-completed)"};
+    var colors = {created: "var(--chart-created)", endorsement: "var(--status-pending)", completed: "var(--status-completed)"};
     tip.querySelector("[data-column-tooltip-key]").style.backgroundColor = bar
       ? window.getComputedStyle(bar).backgroundColor
       : colors[item.getAttribute("data-column-series")] || "var(--udm-muted)";

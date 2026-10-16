@@ -2,9 +2,9 @@
 
 This runbook is for the person responsible for keeping the Document Tracking and Management System available after deployment. It assumes PostgreSQL 14 or newer and a storage backend configured through `STORAGE_BACKEND`. The database and the document files are one recovery set: restoring only one of them produces an archive whose records and files no longer agree.
 
-## Production checks before handover
+## Production checks before release
 
-Set a random `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, a specific `DJANGO_ALLOWED_HOSTS` value, `ENABLE_CSP=True`, `SECURE_SSL_REDIRECT=True`, and a durable `STORAGE_BACKEND` such as `s3` or `azure`. Run `python manage.py check --deploy --fail-level ERROR`; the deployment must not be handed over while it reports an error. Set `ENABLE_BACKGROUND_TASKS=True` and run `python manage.py qcluster` as a separate worker process. Point the platform probe at `/healthz/`. The default probe checks the database, cache table, migrations, and storage. `/healthz/?deep=1` additionally checks for a recent successful django-q2 task.
+Set a random `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, a specific `DJANGO_ALLOWED_HOSTS` value, `ENABLE_CSP=True`, `SECURE_SSL_REDIRECT=True`, and a durable `STORAGE_BACKEND` such as `s3` or `azure`. Run `python manage.py check --deploy --fail-level ERROR`; the deployment must not be released while it reports an error. Set `ENABLE_BACKGROUND_TASKS=True` and run `python manage.py qcluster` as a separate worker process. Point the platform probe at `/healthz/`. The default probe checks the database, cache table, migrations, and storage. `/healthz/?deep=1` additionally checks for a recent successful django-q2 task.
 
 ## What to back up
 
@@ -92,9 +92,15 @@ If only the search index is corrupted, do not restore older metadata. Run `pytho
 
 If the django-q2 worker is down, existing records remain available but new uploads with `ENABLE_BACKGROUND_TASKS=True` stay in the pending extraction state. Start the worker and inspect the queue. Authorized users can use the document's **Run text extraction again** action after the worker recovers; do not bypass the pending state by editing OCR fields directly.
 
-## Retention and privacy
+## Deletion review and privacy
 
-`DocumentType.retention_years` and `Document.retention_until` describe when a record becomes due for human disposition. Migration backfills missing dates only where the document type and year or date are sufficient. The system must never silently delete, hide, or deactivate a document because a date passed. Records personnel should approve disposition, record the reason, and preserve the disposition register.
+`DocumentType.retention_years` and `Document.retention_until` describe when a record becomes due for human deletion review. Reaching that review date does not remove, hide, or deactivate an active document. An authorized owning-office administrator or system administrator must record a reason and explicitly approve removal.
+
+Approved removal records `Document.deleted_at` and starts a 30-day recovery period. Before the displayed recovery deadline, an authorized administrator can restore the same repository document and set its next review date. Once the deadline passes, restoration is rejected even if cleanup has not run. Permanent cleanup deletes the repository document and its repository file objects, associated metadata, detailed review decisions, and document notifications. Completed Tracking records and their original attachments remain, together with a minimal disposal audit entry. Backup snapshots and object-store version history follow the university's separate disposal policy.
+
+With `ENABLE_BACKGROUND_TASKS=True`, run `python manage.py ensure_schedules` after migrations to register the **deleted-document-purging** schedule for `apps.documents.tasks.purge_deleted_documents`. Keep `python manage.py qcluster` running. For a direct cleanup run, use `python manage.py purge_deleted_documents`; it processes only removed documents whose 30-day period has ended. Do not remove repository rows or file objects manually to bypass this workflow.
+
+When storage deletion fails, cleanup retains the expired repository row for a later retry. The document stays hidden from normal repository access and appears as **Awaiting permanent deletion** to authorized administrators. A stopped worker delays permanent cleanup but does not reopen restoration or expose removed documents. Restart the worker, inspect task errors and storage availability, and let the scheduled task retry or run the management command.
 
 Before enabling an OCR provider, have the university privacy officer approve the provider and its data-processing terms. Each document stores whether external OCR is allowed. Sensitive uploads can remain local-only, and records archived from tracking default to external OCR disabled. Temporary provider failures retry a bounded number of times; document-visible notes report retries or permanent failure without including extracted content in email.
 
@@ -105,7 +111,7 @@ The archive contains personal data and is operated by a Philippine university. A
 
 ## Notification maintenance
 
-Notifications are a user-interface convenience, not the audit trail. `AuditLog` remains append-only and is never removed by notification maintenance. When background tasks are enabled, run `python manage.py ensure_schedules` once after migrations to register the daily `notification-pruning`, `notification-chase` and `security-throttle-pruning` django-q2 schedules. The notification task resolves informational notifications older than `NOTIFICATION_INFO_RESOLVE_DAYS` (default 30 days) and deletes only notifications already resolved for longer than `NOTIFICATION_RETENTION_DAYS` (default 90 days). Security cleanup removes expired request-limit counters and preserves active limits. These tasks never delete routing records, documents, files, activities, receipts, or audit entries.
+Notifications are a user-interface convenience, not the audit trail. `AuditLog` remains append-only and is never removed by notification maintenance. When background tasks are enabled, run `python manage.py ensure_schedules` once after migrations to register the daily `notification-pruning`, `notification-chase` and `security-throttle-pruning` django-q2 schedules, alongside deletion cleanup described above. The notification task resolves informational notifications older than `NOTIFICATION_INFO_RESOLVE_DAYS` (default 30 days) and deletes only notifications already resolved for longer than `NOTIFICATION_RETENTION_DAYS` (default 90 days). Security cleanup removes expired request-limit counters and preserves active limits. Notification and security maintenance do not delete routing records, documents, files, activities, receipts, or audit entries. The separate deletion cleanup task removes only approved repository removals after their recovery period.
 
 If the scheduled worker is unavailable, notification rows remain available and the application continues to function. Start `python manage.py qcluster`, then inspect the django-q2 schedule and worker logs. Adjust the two retention settings only after the records owner and privacy officer agree that the shorter or longer UI-history window is appropriate.
 

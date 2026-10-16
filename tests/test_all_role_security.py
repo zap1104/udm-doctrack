@@ -296,7 +296,7 @@ def test_receipt_after_completion_and_draft_completion_are_refused(users, office
 
 
 def test_receiving_offices_are_deduplicated(users, offices):
-    draft = tracking.create_draft_record(user=users["med"], subject="One handover", instructions="")
+    draft = tracking.create_draft_record(user=users["med"], subject="One endorsement", instructions="")
     tracking.route_record(draft, [offices["SUP"], offices["SUP"]], user=users["med"])
     assert draft.routing_steps.count() == 1
 

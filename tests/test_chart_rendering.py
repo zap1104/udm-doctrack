@@ -149,11 +149,11 @@ def test_each_label_sits_at_the_height_of_its_own_bar(users, charted):
 
     for row in volume["rows"]:
         assert [column["label"] for column in row["columns"]] == [
-            "Created", "Handovers", "Completed",
+            "Created", "Endorsements", "Completed",
         ]
         for column in row["columns"]:
             assert column["value"] == row[
-                {"Created": "created", "Handovers": "transferred", "Completed": "completed"}[
+                {"Created": "created", "Endorsements": "transferred", "Completed": "completed"}[
                     column["label"]
                 ]
             ]
@@ -162,9 +162,9 @@ def test_each_label_sits_at_the_height_of_its_own_bar(users, charted):
 
 
 @pytest.mark.django_db
-def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
+def test_endorsements_are_drawn_and_named_as_endorsements(client, users, charted):
     """They count moves between offices where the other two count documents —
-    one document endorsed four times is four handovers — so the bar is there,
+    one document endorsed four times is four endorsements — so the bar is there,
     labelled with its own number, and the legend and the note say what it
     counts rather than leaving the reader to assume documents."""
     client.force_login(users["admin"])
@@ -172,10 +172,10 @@ def test_handovers_are_drawn_and_named_as_handovers(client, users, charted):
     chart = body[body.index('class="column-chart"'):body.index('class="chart-table"')]
     text = " ".join(body.split())
 
-    assert "column--handover" in chart, "the handovers bar is drawn"
-    assert "Handovers</span>" in text, "and named in the legend"
-    assert "Handovers count moves between offices" in text
-    assert ">Handovers</th>" in body, "the table calls it the same thing"
+    assert "column--endorsement" in chart, "the endorsements bar is drawn"
+    assert "Endorsements</span>" in text, "and named in the legend"
+    assert "Endorsements count moves between offices" in text
+    assert ">Endorsements</th>" in body, "the table calls it the same thing"
 
 
 @pytest.mark.django_db

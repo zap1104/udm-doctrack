@@ -15,7 +15,7 @@
   <div class="card-udm-head action-centre-head">
     <div>
       <h2>Currently tracking</h2>
-      <div class="card-udm-caption">{% if user.is_viewer %}Review permitted documents by queue.{% else %}Review documents by queue and confirm receipts.{% endif %}</div>
+      <div class="card-udm-caption">Filter by direction and document stage.{% if not user.is_viewer %} Confirm receipts for documents at your office.{% endif %}</div>
     </div>
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
        aria-label="Open {{ desk_queue.label }} in Tracking{% if desk_queue.count %}, {{ desk_queue.count }} documents{% endif %}">
@@ -23,8 +23,10 @@
       {% include "partials/_dashboard_action_arrow.html" %}
     </a>
   </div>
-  <nav class="desk-chips" aria-label="Tracking queues">
-    {% for queue in desk_queues %}
+  {% include "partials/_direction_filters.html" with groups=desk_direction_groups prefix="desk-direction" %}
+  <nav class="desk-chips" aria-label="Receipt reminders and overdue work">
+    <span class="desk-attention-label">Needs attention</span>
+    {% for queue in desk_attention_queues %}
       {% if queue.disabled %}
         <span class="pill-toggle is-disabled" aria-disabled="true"
               title="{{ queue.label }} describes a document relative to one office. Pick an office to use it.">{{ queue.label }}</span>
@@ -36,11 +38,14 @@
         </a>
       {% endif %}
     {% endfor %}
-    {% if desk_queue.slug != "pending-receipt" %}
+    {% if desk_queue.slug != "awaiting" %}
       <a class="pill-toggle desk-chip-clear" href="{{ desk_clear_href }}"
          hx-get="{{ desk_clear_href }}" hx-target="#{{ desk_target }}" hx-swap="outerHTML" hx-push-url="true">Reset queue</a>
     {% endif %}
   </nav>
+  {% if desk_queue.slug == 'awaiting' %}
+    <p class="desk-block-caption">Awaiting receipt shows routes with an unconfirmed recipient, including documents another recipient has already received.</p>
+  {% endif %}
 
       {% comment %}
         The form wraps the selected queue only. Latest tracking activity is read-only, and
@@ -71,7 +76,7 @@
                 <thead>
                   <tr>
                     {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}
-                    <th scope="col">Document</th><th scope="col">Originating office</th><th scope="col">Receiving offices</th><th scope="col"><span class="visually-hidden">Status or action</span></th>
+                    <th scope="col">Document</th><th scope="col">Originating office</th><th scope="col">Awaiting receipt</th><th scope="col"><span class="visually-hidden">Status or action</span></th>
                   </tr>
                 </thead>
               {% else %}
@@ -95,7 +100,7 @@
                   {% endif %}
                   {% if show_office_columns %}
                     <td class="desk-cell">
-                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
+                      <a class="mono" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                       {% comment %}
                         The subject decides the width of this whole panel if it
                         is allowed to. .desk-cell-title caps it and wraps to a
@@ -110,10 +115,10 @@
                       </div>
                     </td>
                     <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                    <td class="office-cell">{% include "partials/_office_badges.html" with offices=record.pending_offices_shown more=record.pending_more %}</td>
+                    <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" %}</td>
                   {% else %}
                     <td class="desk-cell desk-cell--wide">
-                      <a class="mono" href="{{ record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
+                      <a class="mono" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                       {# Same cap as the records-staff view above, one column wider. #}
                       <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
                       <div class="text-muted" style="font-size:12.5px;">
@@ -123,12 +128,12 @@
                   {% endif %}
                   <td class="text-end">
                     {% if record.can_confirm_now %}
-                      <a class="btn btn-receipt btn-sm" href="{{ record.get_absolute_url }}">
+                      <a class="btn btn-receipt btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}">
                         <span class="btn-receipt-icon" aria-hidden="true">✓</span>
                         <span>Confirm Receipt</span>
                       </a>
                     {% else %}
-                      {% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
+                      {% include "partials/_status_pill.html" with status=record.display_status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}
                     {% endif %}
                   </td>
                 </tr>

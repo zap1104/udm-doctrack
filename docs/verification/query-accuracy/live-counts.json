@@ -1,0 +1,11 @@
+{
+  "checks": 21224,
+  "scopes": 26,
+  "data_integrity": {
+    "pending_stage_without_current_unreceived_step": 0,
+    "completed_without_completion_timestamp": 0,
+    "completion_before_creation": 0,
+    "received_without_first_receipt_timestamp": 0
+  },
+  "failures": []
+}

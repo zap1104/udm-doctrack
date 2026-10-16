@@ -1,0 +1,46 @@
+{# Shared grouped navigation. Every child chooses BOTH direction and stage. #}
+<nav class="direction-filters{% if desk_target %} direction-filters--desk{% endif %}" aria-label="Direction and document stage">
+  <div class="direction-filter-groups">
+    {% for group in groups %}
+      <div class="direction-filter-group{% if group.disabled %} is-disabled{% endif %}">
+        <div class="direction-filter-heading">
+          <strong id="{{ prefix }}-{{ group.key }}-label">{{ group.label }}</strong>
+          {% if group.disabled %}
+            <span class="pill-toggle is-disabled" aria-disabled="true">All {{ group.label|lower }}</span>
+          {% else %}
+            <a id="{{ prefix }}-{{ group.key }}-all" class="pill-toggle{% if group.active %} is-active{% endif %}" href="{{ group.href }}"
+               aria-label="All {{ group.label|lower }} documents{% if group.count != None %}, {{ group.count }} documents{% endif %}"{% if group.active %} aria-current="true"{% endif %}
+               {% if desk_target %}hx-get="{{ group.href }}" hx-target="#{{ desk_target }}" hx-swap="outerHTML" hx-push-url="true"{% endif %}>
+              All{% if group.count != None %} <span class="desk-chip-count num">{{ group.count }}</span>{% endif %}
+            </a>
+          {% endif %}
+        </div>
+        <div class="direction-filter-stages" role="group" aria-labelledby="{{ prefix }}-{{ group.key }}-label">
+          {% for stage in group.stages %}
+            {% if group.disabled %}
+              <span class="pill-toggle is-disabled" aria-disabled="true">{{ stage.label }}</span>
+            {% else %}
+              <a id="{{ prefix }}-{{ stage.slug }}" class="pill-toggle{% if stage.active %} is-active{% endif %}" href="{{ stage.href }}"
+                 aria-label="{{ group.label }} · {{ stage.label }}{% if stage.count != None %}, {{ stage.count }} documents{% endif %}"{% if stage.active %} aria-current="true"{% endif %}
+                 {% if desk_target %}hx-get="{{ stage.href }}" hx-target="#{{ desk_target }}" hx-swap="outerHTML" hx-push-url="true"{% endif %}>
+                {{ stage.label }}{% if stage.count != None %} <span class="desk-chip-count num">{{ stage.count }}</span>{% endif %}
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% if groups.0.disabled %}
+    <p class="direction-filter-note">{% if user.is_system_admin %}Choose an office to use Incoming and Outgoing.{% else %}Incoming and Outgoing require an assigned office.{% endif %}</p>
+  {% endif %}
+  {% if resolved.scope == 'awaiting' %}
+    <p class="direction-filter-note"><strong>Current view: Awaiting receipt.</strong> Routes with an unconfirmed recipient, including documents another recipient has already received.</p>
+  {% elif resolved.scope == 'pending-receipt' %}
+    <p class="direction-filter-note"><strong>Current view: Pending Receipt in both directions.</strong> Choose a stage under Incoming or Outgoing to narrow the direction.</p>
+  {% elif resolved.scope == 'received' %}
+    <p class="direction-filter-note"><strong>Current view: Confirmed receipts · Received.</strong> This saved view requires a confirmed receipt{% if not resolved.all_offices %} at this office{% endif %}.</p>
+  {% elif resolved.scope == 'in-process' %}
+    <p class="direction-filter-note"><strong>Current view: Confirmed receipts · In Process.</strong> This saved view requires a confirmed receipt{% if not resolved.all_offices %} at this office{% endif %}.</p>
+  {% endif %}
+</nav>

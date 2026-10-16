@@ -28,7 +28,7 @@ from django.db.models import (
 from django.utils import timezone
 
 from apps.core.models import AuditLog, Notification
-from apps.core.notifications import notify_office, notify_offices, resolve_for_record
+from apps.core.notifications import notify_office, notify_offices, overdue_notice_text, resolve_for_record
 from apps.core.pagination import DEFAULT_PAGE_SIZE
 from apps.core.permissions import active_writer, locked_mutation
 from apps.core.utils import checksum_of, log_action, truncate, validate_upload
@@ -136,12 +136,20 @@ def generate_tracking_number(office, when=None) -> str:
 # Timeline helper
 # ---------------------------------------------------------------------------
 def add_activity(record, event, message, *, actor=None, detail="", batch=None) -> RecordActivity:
+    work_office = None
+    if event in {RecordActivity.Event.REMARK, RecordActivity.Event.ATTACHMENT}:
+        actor_office = getattr(actor, "office", None)
+        if actor_office and record.has_custody(actor_office):
+            work_office = actor_office
+        elif getattr(actor, "is_system_admin", False) and record.has_custody(record.current_office):
+            work_office = record.current_office
     return RecordActivity.objects.create(
         record=record,
         event=event,
         batch=record.current_batch if batch is None else batch,
         actor=actor,
         actor_office=getattr(actor, "office", None),
+        work_office=work_office,
         message=message[:255],
         detail=detail or "",
     )
@@ -305,6 +313,7 @@ def attach_files(record, files, *, user, note="", routing_step=None) -> list[Att
             actor=user,
         )
     if created:
+        record.recalculate_status()
         record.touch_movement()
     return created
 
@@ -455,6 +464,9 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
         target=record,
         extra={"offices": office_labels, "action": action},
     )
+    resolve_for_record(record, kinds=[
+        Notification.Kind.ROUTED, Notification.Kind.UNRECEIVED, Notification.Kind.OVERDUE,
+    ])
     notify_offices(
         offices,
         kind=Notification.Kind.ROUTED,
@@ -513,15 +525,36 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
         kind=Notification.Kind.ROUTED,
         resolved_at__isnull=True,
     ).update(resolved_at=timezone.now())
-    # The sender's "still not received" nudge is answered by this receipt, so it
-    # is resolved here rather than left for somebody to dismiss. A chase that
-    # stays on screen after the thing was chased is how a queue stops being read.
-    Notification.objects.filter(
+    # Keep the sender's existing reminder accurate immediately after a partial
+    # receipt, without creating another notice or changing its read state.
+    remaining_steps = list(record.current_step_queryset.filter(
+        from_office=step.from_office, received_at__isnull=True,
+    ).select_related("to_office"))
+    receipt_reminders = Notification.objects.filter(
         tracking_record=record,
         office=step.from_office,
         kind=Notification.Kind.UNRECEIVED,
         resolved_at__isnull=True,
-    ).update(resolved_at=timezone.now())
+    )
+    if remaining_steps:
+        recipients = ", ".join(dict.fromkeys(item.to_office.name for item in remaining_steps))
+        message = f"{record.tracking_number} is awaiting receipt from {recipients}."
+        if len(message) > 255:
+            recipients = ", ".join(dict.fromkeys(item.to_office.code for item in remaining_steps))
+            message = f"{record.tracking_number} is awaiting receipt from {recipients}."
+        receipt_reminders.update(message=message[:255])
+    else:
+        receipt_reminders.update(resolved_at=timezone.now())
+    overdue_notices = Notification.objects.filter(
+        tracking_record=record,
+        kind=Notification.Kind.OVERDUE,
+        resolved_at__isnull=True,
+    )
+    if record.is_overdue:
+        title, message = overdue_notice_text(record, awaiting_receipt=False)
+        overdue_notices.filter(office_id=user.office_id).update(title=title, message=message)
+    else:
+        overdue_notices.update(resolved_at=timezone.now())
     notify_office(
         step.from_office, kind=Notification.Kind.RECEIVED, title="A document you sent was received",
         message=f"{record.tracking_number} was received by {user.office.name}.",
@@ -536,13 +569,16 @@ def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
     record_ids = [record.pk for record in records]
     if not record_ids:
         raise ValidationError("Select at least one document to receive.")
+    # Match locked_mutation's account-before-record order so a concurrent
+    # individual receipt by the same user cannot deadlock with this batch.
+    actor = active_writer(user)
     locked = {
         record.pk: record
         for record in TrackingRecord.objects.select_for_update().filter(pk__in=record_ids).order_by("pk")
     }
     if len(locked) != len(set(record_ids)):
         raise ValidationError("One of the selected documents is no longer available.")
-    return [confirm_receipt(locked[record_id], user=user, note=note) for record_id in record_ids]
+    return [confirm_receipt(locked[record_id], user=actor, note=note) for record_id in record_ids]
 
 
 @locked_mutation
@@ -589,10 +625,9 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
     if not record.can_user_act(user):
         raise PermissionDenied("Only the office holding the document can change its status.")
 
-    if record.status == Status.IN_PROCESS:
+    work_office = user.office if record.has_custody(user.office) else record.current_office
+    if record.has_activity_after_receipt(work_office):
         return record
-    record.status = Status.IN_PROCESS
-    record.save(update_fields=["status", "updated_at"])
     add_activity(
         record,
         RecordActivity.Event.REMARK,
@@ -600,6 +635,7 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
         actor=user,
         detail=note or "",
     )
+    record.recalculate_status()
     record.touch_movement()
     log_action(
         AuditLog.Action.UPDATE,
@@ -652,6 +688,7 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
     resolve_for_record(
         record,
         kinds=[
+            Notification.Kind.ROUTED,
             Notification.Kind.RECEIVED,
             Notification.Kind.OVERDUE,
             Notification.Kind.UNRECEIVED,
@@ -738,7 +775,7 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
     record.recalculate_status()
     add_activity(
         record,
-        RecordActivity.Event.REMARK,
+        RecordActivity.Event.REOPENED,
         f"Returned to tracking by {user.display_name}",
         actor=user,
         detail=reason,
@@ -934,14 +971,23 @@ def on_time_q():
     )
 
 
+def order_records(records, sort=""):
+    """The workspace, Search and its export use the same stable ordering."""
+    from .forms import SORT_DEADLINE_ASC, SORT_DEADLINE_DESC
+
+    ordering = {
+        SORT_DEADLINE_ASC: (F("due_at").asc(nulls_last=True), "-last_movement_at"),
+        SORT_DEADLINE_DESC: (F("due_at").desc(nulls_last=True), "-last_movement_at"),
+    }.get(sort, ("-last_movement_at",))
+    return records.distinct().order_by(*ordering, "-pk")
+
+
 def filter_records(records, *, query=None, status=None, offices=None, overdue=None):
     """Free-text, stage and originating-office filtering for tracking records.
 
     Kept here rather than inline in a view because two pages need it: the
-    Tracking workspace, and the tracking half of the unified search page. The
-    second one is why the text branch exists at all — the workspace has no
-    search box, having traded it for the queue pills, so `query` is only ever
-    passed by search.
+    Tracking workspace and the tracking half of the unified search page. Both
+    query boxes narrow the chosen queue through this same implementation.
 
     Scope narrowing is deliberately *not* here. It depends on the user, this
     does not, and the queues compose with these filters rather than replacing
@@ -952,6 +998,8 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
     person writing it, so the only person who can match one that way is its
     author searching their own unsent work.
     """
+    if "stage" not in records.query.annotations:
+        records = records.with_stage_for()
     if query:
         records = records.filter(
             Q(tracking_number__icontains=query)
@@ -967,7 +1015,8 @@ def filter_records(records, *, query=None, status=None, offices=None, overdue=No
         # multi-select row; a lone string here would have filtered on its first
         # character through __in.
         wanted = [status] if isinstance(status, str) else list(status)
-        records = records.filter(status__in=wanted)
+        field = "stage" if "stage" in records.query.annotations else "status"
+        records = records.filter(**{f"{field}__in": wanted})
     # Independent of the stage, which is the point: a record can be pending
     # receipt *and* overdue, and "overdue" used to occupy the status parameter
     # so the two could not both be asked for.
@@ -1079,9 +1128,8 @@ def overdue_accountability(records, whole=None):
 
       awaiting — a step in the current batch nobody has received. Owed by each
                  unreceived `to_office`. Chase them for a receipt.
-      holding  — the batch has at least one confirmed receipt, so somebody really
-                 does have it. Owed by `current_office`. Chase them for the
-                 action.
+      holding  — each confirmed receiving office in the current batch has
+                 custody and can act. Chase each of them for the action.
 
     A record can appear in both when a batch went to several offices and only
     some confirmed, and one awaiting record can raise rows against two offices.
@@ -1111,18 +1159,13 @@ def overdue_accountability(records, whole=None):
     }
 
     holding = {
-        (row["current_office__code"], row["current_office__name"]): row["total"]
-        # Filtered on the `Exists` directly, not annotated and then filtered: an
-        # annotation made before `.values()` joins the GROUP BY by the columns it
-        # references from outside, which here is the record's primary key — one
-        # row per record, and the dict kept the last. Every holder read 1.
-        for row in overdue.filter(
-            Exists(_current_batch_steps(received_at__isnull=False)),
-            current_office__isnull=False,
+        (row["to_office__code"], row["to_office__name"]): row["total"]
+        for row in RoutingStep.objects.filter(
+            record__in=overdue, received_at__isnull=False, batch=F("record__current_batch"),
         )
         .order_by()
-        .values("current_office__code", "current_office__name")
-        .annotate(total=Count("id", distinct=True))
+        .values("to_office__code", "to_office__name")
+        .annotate(total=Count("record", distinct=True))
     }
 
     rows = []
@@ -1160,8 +1203,7 @@ def overdue_unattributed(records):
             _awaited=Exists(_current_batch_steps(received_at__isnull=True)),
             _held=Exists(_current_batch_steps(received_at__isnull=False)),
         )
-        .filter(_awaited=False)
-        .exclude(_held=True, current_office__isnull=False)
+        .filter(_awaited=False, _held=False)
         .distinct()
         .count()
     )
@@ -1264,7 +1306,7 @@ def by_status_direction(records, office) -> list[dict]:
     renders one table rather than two and the template has no branch of its own.
     """
     annotation = direction_annotation(office)
-    live = records.filter(status__in=ACTIVE_STATUSES).exclude(status=Status.DRAFT)
+    live = records.with_stage_for(office).filter(status__in=ACTIVE_STATUSES).exclude(status=Status.DRAFT)
 
     tally: dict[str, dict] = {}
     if annotation is None:
@@ -1272,21 +1314,21 @@ def by_status_direction(records, office) -> list[dict]:
         # distinct puts Meta.ordering in the GROUP BY: a row per record, and the
         # assignment below kept the last. Every status read 1 for a system
         # administrator viewing every office.
-        rows = live.order_by().values("status").annotate(total=Count("id", distinct=True))
+        rows = live.order_by().values("stage").annotate(total=Count("id", distinct=True))
         for row in rows:
-            tally[row["status"]] = {
+            tally[row["stage"]] = {
                 "incoming": 0, "outgoing": 0, "other": 0, "total": row["total"],
             }
     else:
         rows = (
             live.annotate(_direction=annotation)
             .order_by()
-            .values("status", "_direction")
+            .values("stage", "_direction")
             .annotate(total=Count("id", distinct=True))
         )
         for row in rows:
             bucket = tally.setdefault(
-                row["status"], {"incoming": 0, "outgoing": 0, "other": 0, "total": 0}
+                row["stage"], {"incoming": 0, "outgoing": 0, "other": 0, "total": 0}
             )
             key = {
                 DIRECTION_INCOMING: "incoming",
@@ -1342,22 +1384,19 @@ def scope_office(user, requested):
     Overdue went from 32 records to 3.
 
     Naming an office grants nothing. It is applied on top of `visible_to`, never
-    instead of it, so it can only narrow what the viewer already sees. Anything
-    that is not a digit, or comes from somebody without the picker, is ignored
-    rather than refused — a stale link should show the reader their own desk,
-    not an error.
+    instead of it, so it can only narrow what the viewer already sees. Active
+    office IDs and codes resolve identically on every consumer. Unknown values
+    and requests from accounts without the picker return None; page-level
+    resolvers apply the role's default and report invalid selections.
     """
     raw = str(requested or "").strip()
     if not getattr(user, "is_system_admin", False):
         return None
     if raw == "all":
         return ALL_OFFICES if getattr(user, "is_system_admin", False) else None
-    if not raw.isascii() or not raw.isdigit() or len(raw) > 19:
-        return None
+    from apps.core.filters import _office_by_pk_or_code
 
-    from apps.accounts.models import Office
-
-    return Office.active.filter(pk=raw).first()
+    return _office_by_pk_or_code(raw)
 
 
 def office_queue(records, scope, user, office=None):
@@ -1471,17 +1510,16 @@ def apply_scope(records, scope, user, office=None):
         # queue show no button.
         return records.filter(
             to_office | from_office,
-            status=Status.PENDING_RECEIPT,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
-        )
+        ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_IN_PROCESS:
         # SCOPE_RECEIVED with the stage pinned. Same custody predicate, so the
         # two pills are halves of one queue rather than two different questions
         # sitting next to each other.
-        return records.filter(
+        return records.with_stage_for(office_id).filter(
             to_office,
-            status=Status.IN_PROCESS,
+            stage=Status.IN_PROCESS,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
@@ -1493,9 +1531,9 @@ def apply_scope(records, scope, user, office=None):
         # or started". Signed for and not yet started is a real queue and the
         # one this pill is named for; In Process is its other half, and the two
         # are now disjoint.
-        return records.filter(
+        return records.with_stage_for(office_id).filter(
             to_office,
-            status=Status.RECEIVED,
+            stage=Status.RECEIVED,
             routing_steps__received_at__isnull=False,
             routing_steps__batch=F("current_batch"),
         )
@@ -1543,41 +1581,109 @@ def awaiting_receipt(records, user):
     ).exclude(status__in=COMPLETED_STATUSES)
 
 
-#: Office badges shown in a "Receiving office" cell before it collapses to "+N".
+#: Office badges shown in a receipt cell before it collapses to "+N".
 RECEIVING_SHOWN = 3
 
 
-def annotate_receiving_offices(records) -> None:
-    """Attach the current batch's destination offices to each record.
+def annotate_receiving_offices(records, steps=None, *, shown=RECEIVING_SHOWN) -> None:
+    """Attach endorsement and receipt facts for each record's current batch.
 
-    One grouped query rather than `record.receiving_offices` per row, which on a
-    twenty-row page is twenty queries for something one `IN` clause answers.
+    Endorsed offices include every recipient. Confirmed offices have a receipt;
+    awaiting offices have none and only apply while the record is active. The
+    cached `current_office` is deliberately not used as a receipt: it can still
+    identify the sender and only retains one office in a parallel batch.
 
-    `.only()` names every field the badge renders — code, name and colour — as
-    well as the two used to group. Leaving one out would defer it and fetch it a
-    row at a time, which is the per-row query this exists to avoid, reappearing
-    somewhere harder to spot.
+    One grouped query supplies receipt fields and all office badge fields, so
+    rendering does not fetch deferred fields per row. Detail pages can supply
+    their already loaded steps instead. Existing destination attributes remain
+    available for metadata, including on completed records.
     """
     if not records:
         return
-    steps = (
-        RoutingStep.objects.filter(record__in=records)
-        .select_related("to_office")
-        .only("record_id", "batch", "to_office__code", "to_office__name", "to_office__colour")
-    )
+    if steps is None:
+        # Match the batch already displayed on each row. A new endorsement
+        # committed during rendering must not make that row's receipts vanish.
+        records_by_batch = {}
+        for record in records:
+            records_by_batch.setdefault(record.current_batch, []).append(record.pk)
+        displayed_batches = Q()
+        for batch, record_ids in records_by_batch.items():
+            displayed_batches |= Q(record_id__in=record_ids, batch=batch)
+        steps = (
+            RoutingStep.objects.filter(displayed_batches)
+            .select_related("to_office")
+            .only(
+                "record_id", "batch", "received_at", "to_office_id",
+                "to_office__code", "to_office__name", "to_office__colour",
+            )
+        )
     by_record: dict[int, list] = {}
     for step in steps:
         by_record.setdefault(step.record_id, []).append(step)
 
     for record in records:
-        seen, offices = set(), []
+        offices_by_id, confirmed_ids = {}, set()
         for step in by_record.get(record.pk, []):
-            if step.batch != record.current_batch or step.to_office_id in seen:
+            if step.batch != record.current_batch:
                 continue
-            seen.add(step.to_office_id)
-            offices.append(step.to_office)
-        record.receiving_offices_shown = offices[:RECEIVING_SHOWN]
-        record.receiving_more = max(0, len(offices) - RECEIVING_SHOWN)
+            offices_by_id.setdefault(step.to_office_id, step.to_office)
+            if step.received_at is not None:
+                confirmed_ids.add(step.to_office_id)
+
+        endorsed = list(offices_by_id.values())
+        confirmed = [office for office_id, office in offices_by_id.items() if office_id in confirmed_ids]
+        active = record.status != Status.DRAFT and record.status not in COMPLETED_STATUSES
+        awaiting = [
+            office for office_id, office in offices_by_id.items()
+            if active and office_id not in confirmed_ids
+        ]
+        record.endorsed_offices = endorsed
+        record.confirmed_receipt_offices = confirmed
+        record.awaiting_receipt_offices = awaiting
+        record.receiving_offices_shown = endorsed[:shown]
+        record.receiving_more = max(0, len(endorsed) - shown)
+        record.confirmed_receipt_offices_shown = confirmed[:shown]
+        record.confirmed_receipt_more = max(0, len(confirmed) - shown)
+        record.pending_receipt_offices_shown = awaiting[:shown]
+        record.pending_receipt_more = max(0, len(awaiting) - shown)
+
+        if record.status == Status.DRAFT:
+            record.receipt_wait_label = "Not sent yet"
+        elif record.status == Status.COMPLETED_PENDING_UPLOAD:
+            record.receipt_wait_label = "Work completed"
+        elif record.status == Status.COMPLETED:
+            record.receipt_wait_label = "Filed in repository"
+        elif not endorsed:
+            record.receipt_wait_label = "No endorsement recorded"
+        elif not awaiting:
+            record.receipt_wait_label = "All receipts confirmed"
+        else:
+            record.receipt_wait_label = "Awaiting receipt"
+
+
+def annotate_stage(records, user, office=None) -> None:
+    """Batch-load the same stage used by queues, retaining selected perspective."""
+    if not records:
+        return
+    effective = office
+    if effective == ALL_OFFICES:
+        effective = None
+    elif effective is None:
+        effective = getattr(user, "office", None)
+    office_id = getattr(effective, "pk", effective)
+    missing = [record for record in records
+               if "stage" not in record.__dict__ or getattr(record, "_stage_office_id", object()) != office_id]
+    stages = {}
+    if missing:
+        rows = TrackingRecord.objects.filter(pk__in=[record.pk for record in missing]).with_stage_for(effective)
+        stages = dict(rows.values_list("pk", "stage"))
+    for record in records:
+        record.stage = stages.get(record.pk, getattr(record, "stage", record.status))
+        record._stage_office_id = office_id
+        record.stage_url = record.get_absolute_url()
+        if getattr(user, "is_system_admin", False) and office is not None:
+            value = "all" if office == ALL_OFFICES else getattr(office, "pk", office)
+            record.stage_url += f"?office={value}"
 
 
 def annotate_direction(records, user, office=None) -> None:

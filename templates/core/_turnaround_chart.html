@@ -94,14 +94,14 @@
                         {% for point in month.points %}<span class="trend-dot" data-trend-stage="{{ point.key }}" style="top:{{ point.top_percent|unlocalize }}%;--dot:{{ point.colour }}" aria-hidden="true">{% include "core/_trend_marker.html" with key=point.key %}</span>{% endfor %}
                         <div class="trend-tip" aria-hidden="true">
                           <div class="trend-tip-month">{{ month.label }}</div>
-                          <div class="trend-tip-formula-key">Total wait − excluded ≈ office time<br>h = hours · m = minutes</div>
+                          <div class="trend-tip-formula-key">Elapsed time − excluded ≈ office time<br>In Process excludes receipt waits<br>h = hours · m = minutes</div>
                           {% for point in month.points %}
                             <div class="trend-tip-row">
                               <i style="background:{{ point.colour }}"></i>
                               <strong>{% if point.office_seconds is not None %}{{ point.office_seconds|duration_hours }}{% else %}{{ point.text }}{% endif %}</strong>
                               <span>{{ point.label }} · within office hours</span>
                               <span>{% include "core/_turnaround_sample_count.html" with item=point %}</span>
-                              {% if point.outside_seconds is not None %}<span class="trend-tip-equation">{{ point.calendar_seconds|duration_compact }} − {{ point.outside_seconds|duration_compact }} ≈ {{ point.office_seconds|duration_compact }}</span>{% else %}<span>{{ point.calendar }} total wait</span>{% endif %}
+                              {% if point.outside_seconds is not None %}<span class="trend-tip-equation">{{ point.calendar_seconds|duration_compact }} − {{ point.outside_seconds|duration_compact }} ≈ {{ point.office_seconds|duration_compact }}</span>{% else %}<span>{{ point.calendar }} {% if point.key == "processing" %}elapsed processing time{% else %}total wait{% endif %}</span>{% endif %}
                               {% if point.zero_working_time %}<span>{{ point.zero_working_time }} with 0 working mins</span>{% endif %}
                             </div>
                           {% empty %}
@@ -122,13 +122,13 @@
                 <div class="chart-scale">
                   Hours within the office schedule, averaged {% if turnaround_trend.daily %}per day{% else %}per month{% endif %} &middot; excludes lunch, closed days and configured holidays
                 </div>
-                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Markers show average working time for handovers confirmed or documents completed on that date. Pending Receipt uses a yellow circle, In Process a pink diamond, and Total lifetime a green cross, matching the legend. These small shapes can share a position when times are equal or very close; point at the date or use the table to compare exact figures. The popup equation is total wait minus excluded time, approximately equal to office time; display times round down to minutes. Lines connect available observations; dates without markers have no valid samples. Zero is a recorded measurement. Monthly averages use the individual observations and their counts, so do not average the daily markers. {{ turnaround_trend.office_hours_caveat }}</p>
+                <p class="form-text mb-0" data-help-title="Reading the turnaround chart">Markers show average working time for endorsements confirmed or documents completed on that date. Pending Receipt uses a yellow circle, In Process a pink diamond, and Total lifetime a green cross, matching the legend. In Process excludes receipt waits and includes Received time. These small shapes can share a position when times are equal or very close; point at the date or use the table to compare exact figures. The popup equation is elapsed time minus excluded time, approximately equal to office time; display times round down to minutes. Lines connect available observations; dates without markers have no valid samples. Zero is a recorded measurement. Monthly averages use the individual observations and their counts, so do not average the daily markers. {{ turnaround_trend.office_hours_caveat }}</p>
               </div>
             </div>
             <details class="chart-table">
               <summary class="disclosure-control">{% include "core/_disclosure_content.html" with label="View trend as table" description="Read average times and the number of observations." %}</summary>
               <div class="table-responsive"><table class="table-udm">
-                <caption>Average time within office hours, total wait and counts. Both times use total hours and minutes. A dash means no valid observations.</caption>
+                <caption>Average time within office hours, elapsed time and counts. In Process excludes receipt waits. Both times use total hours and minutes. A dash means no valid observations.</caption>
                 <thead><tr>
                   <th>{% if turnaround_trend.daily %}Day{% else %}Month{% endif %}</th>{% for series in turnaround_table_series %}<th class="text-end">{{ series.label }}</th>{% endfor %}
                   {% if turnaround_show_on_time %}<th class="text-end">On time</th>{% endif %}
@@ -140,7 +140,7 @@
                       {% for cell in row.cells %}<td class="text-end turnaround-table-value">
                         {% if cell.samples %}
                           <strong class="num">{% if cell.office_seconds is not None %}{{ cell.office_seconds|duration_hours }}{% else %}{{ cell.label }}{% endif %} within office hours</strong>
-                          <span>{% if cell.calendar_seconds is not None %}{{ cell.calendar_seconds|duration_hours }}{% else %}{{ cell.calendar }}{% endif %} total wait</span>
+                          <span>{% if cell.calendar_seconds is not None %}{{ cell.calendar_seconds|duration_hours }}{% else %}{{ cell.calendar }}{% endif %} {% if cell.key == "processing" %}elapsed processing time{% else %}total wait{% endif %}</span>
                           <span>{% include "core/_turnaround_sample_count.html" with item=cell %}</span>
                           {% if cell.zero_working_time %}<span>{{ cell.zero_working_time }} with 0 working mins</span>{% endif %}
                         {% else %}<span aria-label="No valid observations">&mdash;</span>{% endif %}

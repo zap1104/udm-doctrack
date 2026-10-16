@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import replace
 
 from django.conf import settings
 from django.contrib import messages
@@ -13,17 +13,26 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
+from apps.accounts.models import Office
 from apps.core import filters as core_filters
 from apps.core.document_types import document_type_counts, document_type_match, document_type_options
-from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
+from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.utils import log_action
+from apps.search.services import search_documents
 from apps.tracking.services import pending_upload_for
 
 from . import services
-from .forms import AddFilesForm, DocumentMetadataForm, RepositoryFilterForm, UploadForm
-from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document, DocumentFile
+from .forms import (
+    AddFilesForm,
+    DeletionQueueForm,
+    DeletionReviewForm,
+    DocumentMetadataForm,
+    RepositoryFilterForm,
+    UploadForm,
+)
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Collection, Document, DocumentFile
 from .suggestions import Suggestion
 
 #: Documents per page when the reader has not asked for another size. The
@@ -41,7 +50,7 @@ RETENTION_DUE_SHOWN = 8
 
 
 def _get_document(request, pk) -> Document:
-    documents = Document.objects.with_related()
+    documents = Document.objects.filter(is_active=True).with_related()
     if request.user.is_office_admin and not request.user.is_system_admin:
         documents = documents.visible_to(request.user)
     document = get_object_or_404(documents, pk=pk)
@@ -58,10 +67,12 @@ class RepositoryView(AppLoginRequiredMixin, View):
     template_name = "documents/repository.html"
 
     @staticmethod
-    def _filter_documents(documents, data, *, omit=None):
+    def _filter_documents(documents, data, *, omit=None, search_ids=None):
         """A counted facet omits only the filter its link replaces."""
         data = {key: value for key, value in data.items() if key != omit}
-        if data.get("q"):
+        if search_ids is not None:
+            documents = documents.filter(pk__in=search_ids)
+        elif data.get("q"):
             query = data["q"]
             documents = documents.filter(
                 Q(title__icontains=query) | Q(reference_number__icontains=query)
@@ -70,6 +81,10 @@ class RepositoryView(AppLoginRequiredMixin, View):
         for key, field in (("year", "year"), ("month", "document_date__month"), ("tag", "tags")):
             if data.get(key):
                 documents = documents.filter(**{field: data[key]})
+        if data.get("date_from"):
+            documents = documents.filter(document_date__gte=data["date_from"])
+        if data.get("date_to"):
+            documents = documents.filter(document_date__lte=data["date_to"])
         if data.get("document_type"):
             documents = documents.filter(document_type=data["document_type"]) if data.get("type_scope") == "main" else documents.filter(document_type_match(data["document_type"]))
         if data.get("source") == HISTORICAL_FILTER:
@@ -80,7 +95,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         if data.get("retention") == "due":
             documents = documents.due_for_retention_review(today)
         elif data.get("retention") == "soon":
-            documents = documents.filter(retention_until__gt=today, retention_until__lte=today + timedelta(days=90))
+            documents = documents.upcoming_deletion_review(today)
         elif data.get("retention") == "unscheduled":
             documents = documents.filter(retention_until__isnull=True)
         return documents.distinct()
@@ -126,9 +141,9 @@ class RepositoryView(AppLoginRequiredMixin, View):
         }
 
     def get(self, request):
-        documents = Document.objects.visible_to(request.user).filter(is_active=True).with_related()
-        visible = Document.objects.visible_to(request.user).filter(is_active=True)
-        pending_visible = pending_upload_for(request.user).filter(is_archived=False)
+        documents = Document.objects.visible_to(request.user).in_collection().filter(is_active=True).with_related()
+        visible = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
+        pending_visible = pending_upload_for(request.user)
         if request.user.is_office_admin and not request.user.is_system_admin:
             pending_visible = pending_visible.filter(originating_office_id=request.user.office_id) if request.user.office_id else pending_visible.none()
         pending_view = request.GET.get("view") == "pending"
@@ -159,8 +174,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         elif "office" in resolved.invalid:
             messages.warning(
                 request,
-                "That office was not recognised, so every office is shown. "
-                "It may have been archived.",
+                "That office was not recognised. The office filter was not applied.",
             )
 
         folder_pending = pending_visible
@@ -176,13 +190,20 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 document_types=document_type_options(folder_pending),
                 tags=Tag.active.none(), sources=set(),
             )
-        form = RepositoryFilterForm(request.GET or None, **options)
+        params = request.GET.copy()
+        if folder_office_id:
+            params["office"] = str(folder_office_id)
+        elif "office" in params:
+            params.pop("office")
+        options["offices"] = Office.objects.filter(pk__in=allowed_offices).order_by("name")
+        form = RepositoryFilterForm(params or None, **options)
         if pending_view:
             form.fields["q"].widget.attrs["placeholder"] = "Search subject or tracking number…"
-            for field in ("tag", "source", "retention"):
+            filed_only = ("tag", "source", "retention", "date_from", "date_to", "min_relevance", "show_all")
+            for field in filed_only:
                 form.fields.pop(field)
-            if any(request.GET.get(field) for field in ("tag", "source", "retention")):
-                messages.warning(request, "Tags, origin, and retention apply only to filed documents. They were ignored for records awaiting filing.")
+            if any(request.GET.get(field) for field in filed_only):
+                messages.warning(request, "Tags, origin, document dates, relevance, and deletion review apply only to filed documents. They were ignored for records awaiting filing.")
 
         # Apply every filter that validated, not the all-or-nothing case. The
         # whole block used to hang off `if form.is_valid()`, so one unrecognised
@@ -193,7 +214,37 @@ class RepositoryView(AppLoginRequiredMixin, View):
         data = getattr(form, "cleaned_data", {})
 
         folder_documents = documents
-        documents = self._filter_documents(folder_documents, data)
+        search_ids = None
+        repository_search = None
+        if not pending_view and data.get("q"):
+            # Score every accessible match once. Metadata filters and counted
+            # facets then narrow the same scored IDs, so a type/tag/deletion
+            # count never uses a different substring search or a top-N cutoff.
+            scored = search_documents(
+                user=request.user, query=data["q"],
+                base_documents=folder_documents.annotate(file_count=Count("files", distinct=True)),
+                min_relevance=0, show_below_threshold=True, exhaustive=True, log=False,
+            )
+            matching_ids = set(self._filter_documents(
+                folder_documents, data, search_ids=[result.document.pk for result in scored.results],
+            ).values_list("pk", flat=True))
+            qualifying = [result for result in scored.results if data.get("show_all") or result.relevance >= data.get("min_relevance", form.fields["min_relevance"].initial)]
+            search_ids = [result.document.pk for result in qualifying]
+            filtered_results = [result for result in qualifying if result.document.pk in matching_ids]
+            repository_search = replace(
+                scored, results=filtered_results, total_matches=len(matching_ids),
+                evaluated_count=len(matching_ids), hidden_count=len(matching_ids) - len(filtered_results),
+                result_limit=len(matching_ids),
+            )
+            documents = []
+            for result in filtered_results:
+                document = result.document
+                document.relevance = result.relevance
+                document.snippet_html = result.snippet_html
+                document.matched_in = result.matched_in
+                documents.append(document)
+        else:
+            documents = self._filter_documents(folder_documents, data)
         today = timezone.localdate()
 
         if form.errors:
@@ -204,7 +255,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 + ". Showing the rest.",
             )
 
-        documents = documents.annotate(file_count=Count("files", distinct=True)).distinct().order_by("-document_date", "-created_at", "-pk")
+        if repository_search is None:
+            documents = documents.annotate(file_count=Count("files", distinct=True)).distinct().order_by("-document_date", "-created_at", "-pk")
         # `?per_page=` decides how many cards a page carries. See
         # apps/core/pagination.py.
         page_context = paginate(request, documents, PAGE_SIZE)
@@ -248,7 +300,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         for folder in smart_folders:
             # Badges count whole folders, so opening one clears list filters.
             folder["url"] = core_filters.link(base_url, office=folder["office__id"])
-        type_base = self._filter_pending(folder_pending, data, omit="document_type") if pending_view else self._filter_documents(folder_documents, data, omit="document_type")
+        type_base = self._filter_pending(folder_pending, data, omit="document_type") if pending_view else self._filter_documents(folder_documents, data, omit="document_type", search_ids=search_ids)
         type_folders = [{"document_type_id": row["pk"], "document_type__name": row["name"], "total": row["total"]}
                         for row in document_type_counts(type_base).order_by("name")]
         # Unclassified remains visible in the list; only selectable types become folders.
@@ -258,11 +310,11 @@ class RepositoryView(AppLoginRequiredMixin, View):
             folder["selected"] = bool(data.get("type_scope") != "main" and data.get("document_type") and data["document_type"].pk == folder["document_type_id"])
 
         # Retention reviews cover only filed documents in the selected folder.
-        retention_base = self._filter_documents(folder_documents, data, omit="retention")
+        retention_base = self._filter_documents(folder_documents, data, omit="retention", search_ids=search_ids)
         retention_due_query = retention_base.due_for_retention_review(today).with_related().order_by("retention_until")
         retention_due_count = retention_due_query.count()
         retention_due = list(retention_due_query[:RETENTION_DUE_SHOWN])
-        tag_base = self._filter_documents(folder_documents, data, omit="tag")
+        tag_base = self._filter_documents(folder_documents, data, omit="tag", search_ids=search_ids)
         popular_tags = Tag.active.filter(documents__in=tag_base).annotate(
             visible_usage=Count("documents", filter=Q(documents__in=tag_base), distinct=True)
         ).order_by("-visible_usage", "name")[:8]
@@ -270,7 +322,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         # zero-count tab into a link to every accessible record instead.
         folder_params = {"office": folder_office_id}
         selected_filters = []
-        filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "retention": "Retention"}
+        filter_labels = {"q": "Search", "document_type": "Type", "year": "Year", "month": "Month", "tag": "Tag", "source": "Origin", "date_from": "From", "date_to": "To", "retention": "Deletion review"}
         if data.get("type_scope") == "main":
             filter_labels["document_type"] = "Main type"
         for name, label in filter_labels.items():
@@ -288,7 +340,8 @@ class RepositoryView(AppLoginRequiredMixin, View):
             {
                 "form": form,
                 "selected_filters": selected_filters,
-                "more_filters_open": bool(any(data.get(name) for name in ("tag", "source", "retention")) or form.errors),
+                "more_filters_open": bool(any(data.get(name) for name in ("tag", "source", "retention", "date_from", "date_to")) or data.get("q") or form.errors),
+                "repository_search": repository_search,
                 **page_context,
                 "documents": [] if pending_view else page.object_list,
                 "pending_view": pending_view,
@@ -300,7 +353,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
                 "pending_url": core_filters.link(base_url, **folder_params, view="pending"),
                 "filed_url": core_filters.link(base_url, **folder_params),
                 "all_folders_url": base_url,
-                "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, type_scope=None, tag=None, source=None, year=None, month=None, retention=None, page=None),
+                "folder_reset_url": core_filters.link(base_url, request, q=None, document_type=None, type_scope=None, tag=None, source=None, year=None, month=None, retention=None, date_from=None, date_to=None, min_relevance=None, show_all=None, page=None),
                 "type_folders": type_folders,
                 "filed_count": folder_documents.count(),
                 # Hides the create/upload button from the accounts the
@@ -372,11 +425,13 @@ class MetadataReviewView(OfficeAssignedMixin, View):
     template_name = "documents/review.html"
 
     def _suggestion(self, request, document) -> dict:
+        latest = document.suggestions.first()
+        if latest:
+            return latest.suggested
         stored = request.session.get(f"suggestion_{document.pk}")
         if stored:
             return stored
-        latest = document.suggestions.first()
-        return latest.suggested if latest else Suggestion().as_dict()
+        return Suggestion().as_dict()
 
     def _initial(self, document, suggestion) -> dict:
         main_type = document.document_type_id if len(document.selected_document_types) > 1 else (
@@ -385,7 +440,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
         return {
             "title": suggestion.get("title") or document.title,
             "description": suggestion.get("subject", ""),
-            "office": suggestion.get("office_id") or document.office_id,
+            "office": document.office_id if document.is_external else (suggestion.get("office_id") or document.office_id),
             "document_type": main_type,
             "document_date": suggestion.get("document_date") or None,
             "year": document.year,
@@ -395,6 +450,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
             "access_level": document.access_level,
             "ocr_language": document.ocr_language,
             "allow_external_ocr": document.allow_external_ocr,
+            "retention_until": document.retention_until,
             "tags": ", ".join(suggestion.get("tags", [])),
             **{f"meta_{key}": value for key, value in (suggestion.get("metadata") or {}).items()},
         }
@@ -417,7 +473,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                 "suggestion": suggestion,
                 "confidence": suggestion.get("confidence", {}),
                 "text_preview": (document.ocr_text or "")[:4000],
-                "all_tags": services.suggested_tags_for(request.user)[:50],
+                "all_tags": services.suggested_tags_for(request.user, collection=document.collection)[:50],
             },
         )
 
@@ -439,11 +495,13 @@ class MetadataReviewView(OfficeAssignedMixin, View):
                     "suggestion": suggestion,
                     "confidence": suggestion.get("confidence", {}),
                     "text_preview": (document.ocr_text or "")[:4000],
-                    "all_tags": services.suggested_tags_for(request.user)[:50],
+                    "all_tags": services.suggested_tags_for(request.user, collection=document.collection)[:50],
                 },
             )
 
         data = form.cleaned_data
+        if "retention_until" not in request.POST:
+            data.pop("retention_until", None)
         accepted = {
             "title": data["title"],
             "document_type_id": data["document_type"].pk if data.get("document_type") else None,
@@ -484,8 +542,10 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
                 "suggestion": document.suggestions.first(),
                 "add_files_form": AddFilesForm(),
                 "can_edit": document.can_user_edit(request.user),
+                "can_review_deletion": document.can_user_review_deletion(request.user),
+                "deletion_reviews": document.deletion_reviews.select_related("reviewed_by")[:20],
                 "related": Document.objects.visible_to(request.user)
-                .filter(office=document.office)
+                .in_collection(document.collection).filter(office=document.office, is_active=True)
                 .exclude(pk=document.pk)
                 .order_by("-created_at")[:5],
             },
@@ -520,7 +580,8 @@ class DocumentEditView(OfficeAssignedMixin, View):
         services.save_document_metadata(
             document,
             user=request.user,
-            data=form.cleaned_data,
+            data={key: value for key, value in form.cleaned_data.items()
+                  if key != "retention_until" or "retention_until" in request.POST},
             tag_names=form.cleaned_data.get("tags", []),
             metadata_values=form.metadata_cleaned(),
         )
@@ -613,3 +674,95 @@ class TagSuggestJsonView(AppLoginRequiredMixin, View):
         prefix = request.GET.get("q", "").strip().lower()
         tags = services.suggested_tags_for(request.user).filter(name__icontains=prefix)[:10]
         return JsonResponse({"results": [tag.name for tag in tags]})
+
+
+def _reviewable_documents(user, *, collection=Collection.OVPA):
+    documents = Document.objects.visible_to(user).in_collection(collection)
+    if not user.is_system_admin:
+        documents = documents.filter(office_id=user.office_id)
+    return documents
+
+
+class DeletionQueueView(AdminRequiredMixin, View):
+    """A human decision queue scoped to offices the administrator may manage."""
+
+    permission_message = "Only administrators can manage deletion reviews."
+    collection = Collection.OVPA
+
+    def get(self, request):
+        base = _reviewable_documents(request.user, collection=self.collection)
+        office_options = Office.objects.filter(pk__in=base.values("office_id")).order_by("name")
+        values = request.GET.copy()
+        if not values.get("status"):
+            values["status"] = "due"
+        form = DeletionQueueForm(values, offices=office_options)
+        valid = form.is_valid()
+        data = form.cleaned_data
+        if not valid:
+            base = base.none()
+        if data.get("office"):
+            base = base.filter(office=data["office"])
+        if data.get("q"):
+            base = base.filter(Q(title__icontains=data["q"]) | Q(reference_number__icontains=data["q"]))
+        active = base.filter(is_active=True)
+        queues = {
+            "due": active.due_for_retention_review(), "soon": active.upcoming_deletion_review(),
+            "unscheduled": active.filter(retention_until__isnull=True), "deleted": base.filter(is_active=False),
+        }
+        status = data.get("status", "due")
+        documents = queues.get(status, base.none()).with_related().order_by("retention_until", "pk")
+        context = paginate(request, documents)
+        context.update({
+            "form": form, "status": status, "total": context["page_obj"].paginator.count,
+            "is_external_collection": self.collection == Collection.EXTERNAL,
+            "queue_counts": {key: query.count() for key, query in queues.items()},
+            "queue_links": {key: core_filters.link(request.path, request, status=key) for key in queues},
+        })
+        return render(request, "documents/deletion_queue.html", context)
+
+
+class DeletionReviewView(AdminRequiredMixin, View):
+    template_name = "documents/deletion_review.html"
+    permission_message = "Only administrators can record deletion review decisions."
+
+    def _document(self, request, pk):
+        document = get_object_or_404(Document.objects.visible_to(request.user).with_related(), pk=pk)
+        if not document.can_user_review_deletion(request.user, include_deleted=True):
+            raise PermissionDenied("Only an authorized administrator for the owning office can review deletion.")
+        return document
+
+    def _render(self, request, document, form):
+        return render(request, self.template_name, {
+            "document": document, "form": form, "files": document.files.all(),
+            "deletion_reviews": document.deletion_reviews.select_related("reviewed_by"),
+        })
+
+    def get(self, request, pk):
+        document = self._document(request, pk)
+        return self._render(request, document, DeletionReviewForm(document=document))
+
+    def post(self, request, pk):
+        document = self._document(request, pk)
+        form = DeletionReviewForm(request.POST, document=document)
+        if form.is_valid():
+            data = form.cleaned_data
+            try:
+                services.review_document_deletion(
+                    document, user=request.user, decision=data["decision"], reason=data["reason"],
+                    next_review_date=data.get("next_review_date"), confirmed=data.get("confirmed"),
+                    expected_state=data["state_token"],
+                )
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            except Document.DoesNotExist as exc:
+                raise Http404("This repository document has been permanently deleted.") from exc
+            else:
+                messages.success(request, "Deletion review recorded. " + (
+                    "The document moved to Deleted documents. It can be restored for 30 days before permanent deletion."
+                    if not document.is_active else "The document is available in the repository with its next review date."
+                ))
+                if document.is_active:
+                    return redirect(document.get_absolute_url())
+                queue = "documents:external_deletion_queue" if document.is_external else "documents:deletion_queue"
+                return redirect(core_filters.link(reverse(queue), status="deleted"))
+        return self._render(request, document, form)

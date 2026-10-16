@@ -35,7 +35,7 @@ class Command(BaseCommand):
                             help="Export only the examples a human corrected (the most informative ones).")
 
     def handle(self, *args, **options):
-        queryset = MetadataSuggestion.objects.filter(reviewed_at__isnull=False).select_related("document")
+        queryset = MetadataSuggestion.objects.filter(reviewed_at__isnull=False, document__is_active=True).select_related("document")
 
         path = Path(options["out"])
         path.parent.mkdir(parents=True, exist_ok=True)

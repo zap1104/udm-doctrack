@@ -13,6 +13,7 @@ from django.contrib.auth import get_user_model
 
 from apps.accounts.models import Office
 from apps.documents.models import Document
+from tests.test_action_centre import _queues
 from tests.test_dashboard_reports_agreement import agreement  # noqa: F401 — fixture, used by name
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
@@ -28,8 +29,9 @@ def test_every_office_reconciles_for_a_system_administrator(client, users, agree
     """Every Action Centre chip and every ring segment, for every office."""
     client.force_login(users["admin"])
     for code in CODES:
-        context = client.get(f"/?office={_office(code).pk}").context
-        for queue in context["desk_queues"]:
+        response = client.get(f"/?office={_office(code).pk}")
+        context = response.context
+        for queue in _queues(response).values():
             listed = client.get(queue["tracking_url"]).context["total"]
             assert queue["count"] == listed, (code, queue["slug"])
         for segment in context["breakdown"]["slices"]:

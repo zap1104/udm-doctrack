@@ -43,13 +43,13 @@ combined current tracking/repository total is 340.
 - Full live reconciliation: **12,851 comparisons**, **26 role/office views**, no mismatches.
 - Follow-up reconciliation: **3,795 comparisons**, six representative scopes across all four roles, no mismatches.
 - Final checks after the last changes: **197 checks**, covering exact CSV record sets, capped search totals, individual file badges, denied-folder navigation, stable tag ordering, and compilation of every HTML template. All passed.
-- The matrix covers dashboard totals, Action Centre queues, chart segments, stage drilldowns, monthly additions, cumulative activity, handovers, confirmed receipts, monthly turnaround sample counts and averages, annual/daily graph points, completion deadlines, retention links, repository facets, notifications, administration counts, and tracking/search agreement.
+- The matrix covers dashboard totals, Action Centre queues, chart segments, stage drilldowns, monthly additions, cumulative activity, endorsements, confirmed receipts, monthly turnaround sample counts and averages, annual/daily graph points, completion deadlines, retention links, repository facets, notifications, administration counts, and tracking/search agreement.
 - Data integrity checks found zero Pending Receipt records without a current outstanding step, finished records without completion timestamps, completions before creation, or Received/In Process records without first-receipt timestamps.
 - Django application checks and Ruff passed; the diff has no whitespace errors.
 
 All live audit sessions and request log writes were rolled back. No stored
 document data was corrected or removed. Charts count documents, receipt events,
-or handovers according to their stated units; these are not interchangeable.
+or endorsements according to their stated units; these are not interchangeable.
 Tracking office scopes include routing history, while repository folders use
 the document's owning office and pending folders use its originating office.
 These legitimate scope differences must remain explicit.

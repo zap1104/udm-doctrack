@@ -841,7 +841,7 @@ def test_a_queue_pill_keeps_the_filters_already_applied(client, users, traffic):
     client.force_login(users["sup"])
     body = client.get(f"{TRACKING}?owner=mine&status={Status.RECEIVED}").content.decode()
 
-    pill = re.search(r'href="([^"]*scope=incoming[^"]*)"', body).group(1)
+    pill = re.search(r'<a[^>]*href="([^"]*scope=incoming[^"]*)"[^>]*aria-label="Incoming · Received"', body).group(1)
 
     assert "owner=mine" in pill
     assert f"status={Status.RECEIVED}" in pill
@@ -857,7 +857,7 @@ def test_the_action_centre_is_the_queue_its_button_opens(client, users, traffic)
     panel = {record.pk for record in response.context["attention_records"]}
     body = response.content.decode()
 
-    href = re.search(r'href="(/tracking/\?scope=pending-receipt[^"]*)"', body).group(1)
+    href = re.search(r'href="(/tracking/\?scope=awaiting[^"]*)"', body).group(1)
 
     assert panel <= page_records(client, href)
 
@@ -1125,7 +1125,7 @@ def test_the_picker_carries_the_filters_already_applied(client, users, offices, 
     the same way the queue pills used to drop the owner filter."""
     client.force_login(users["admin"])
     body = client.get(
-        f"{TRACKING}?scope=incoming&owner=mine&overdue=yes&offices={offices['SUP'].pk}"
+        f"{TRACKING}?office={offices['SUP'].pk}&scope=incoming&owner=mine&overdue=yes&offices={offices['SUP'].pk}"
     ).content.decode()
     form = re.search(r'<form class="dashboard-scope".*?</form>', body, re.S).group(0)
 
@@ -1145,7 +1145,7 @@ def test_no_picker_submits_through_an_inline_handler(client, users):
         body = client.get(path).content.decode()
         assert "onchange=" not in body, path
         assert "data-auto-submit" not in body, path
-        assert 'type="submit">Apply</button>' in body, path
+        assert 'data-filter-fallback>Apply</button>' in body, path
 
 
 # --- viewing as every office -----------------------------------------------

@@ -16,7 +16,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import Case, CharField, Exists, F, IntegerField, OuterRef, Q, Value, When
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,7 +31,7 @@ def attachment_upload_path(instance, filename: str) -> str:
 
 class Status(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
-    #: Sent and nobody has confirmed it yet. Named for what the reader needs to
+    #: Sent and at least one current recipient still owes receipt. Named for what the reader needs to
     #: do about it — somebody owes a receipt — rather than for where the paper
     #: is, which "In transit" described and which no office can act on.
     #:
@@ -194,6 +194,46 @@ class RoutingSLA(TimeStampedModel):
 
 
 class TrackingRecordQuerySet(models.QuerySet):
+    def with_stage_for(self, office=None):
+        """One disjoint stage per document, from the selected office's view.
+
+        A recipient follows its own receipt and later work. Senders and the
+        university summary wait for every current recipient's receipt. The
+        expressions also correct stale cached stages without changing history.
+        """
+        office_id = getattr(office, "pk", office)
+        if office_id == "__all__":
+            office_id = None
+        work = RecordActivity.objects.filter(
+            record_id=OuterRef("record_id"), batch=OuterRef("batch"),
+            created_at__gte=OuterRef("received_at"),
+            event__in=[RecordActivity.Event.REMARK, RecordActivity.Event.ATTACHMENT],
+        ).filter(
+            Q(work_office_id=OuterRef("to_office_id"))
+            | Q(work_office__isnull=True, actor_office_id=OuterRef("to_office_id"))
+        ).exclude(message__startswith="Returned to tracking by ")
+        steps = RoutingStep.objects.filter(record_id=OuterRef("pk"), batch=OuterRef("current_batch"))
+        working = steps.filter(received_at__isnull=False).annotate(_worked=Exists(work)).filter(_worked=True)
+        aggregate = Case(
+            When(Exists(steps.filter(received_at__isnull=True)), then=Value(Status.PENDING_RECEIPT)),
+            When(Exists(working), then=Value(Status.IN_PROCESS)),
+            When(Exists(steps.filter(received_at__isnull=False)), then=Value(Status.RECEIVED)),
+            default=F("status"), output_field=CharField(),
+        )
+        local = aggregate
+        if office_id:
+            local_steps = steps.filter(to_office_id=office_id)
+            local = Case(
+                When(Exists(local_steps.filter(received_at__isnull=True)), then=Value(Status.PENDING_RECEIPT)),
+                When(Exists(working.filter(to_office_id=office_id)), then=Value(Status.IN_PROCESS)),
+                When(Exists(local_steps.filter(received_at__isnull=False)), then=Value(Status.RECEIVED)),
+                default=aggregate, output_field=CharField(),
+            )
+        return self.annotate(_stage_office_id=Value(office_id, output_field=IntegerField()), stage=Case(
+            When(status__in=[Status.DRAFT, *COMPLETED_STATUSES], then=F("status")),
+            default=local, output_field=CharField(),
+        ))
+
     def visible_to(self, user):
         """Records the user is allowed to see at all."""
         if (not user.is_authenticated or not user.is_active
@@ -429,13 +469,9 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
     def awaiting_receipt(self) -> bool:
         return self.status in AWAITING_RECEIPT_STATUSES
 
-    # `display_status` and `display_status_label` stood here and returned
-    # "Overdue" in place of the stage whenever the deadline had passed. Three of
-    # six records then showed a stage the reader could not see: "overdue" says
-    # the deadline went by, not whether anybody has signed for the document,
-    # which is the part somebody has to act on. Overdue is a tag beside the
-    # status now — see templates/partials/_overdue_tag.html — so read `status`
-    # and `get_status_display()` directly and render the tag alongside.
+    # Overdue is a separate deadline tag, never a replacement stage. Screens
+    # use display_status for the viewing office; permissions and terminal
+    # lifecycle checks use the stored status.
 
     @property
     def has_tracking_number(self) -> bool:
@@ -463,13 +499,11 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
 
     @property
     def receiving_offices(self):
-        """Where the document is going in its current batch.
+        """Every office endorsed to in the current batch, received or not.
 
-        Distinct from `current_office`, which is where it *is*. Three offices
-        matter to a reader — who raised it, who holds it, and who owes the next
-        act — and showing only the first two leaves the most useful of the three
-        off the page: "which office are we waiting on" is the question the
-        record is usually opened to answer.
+        This is recipient metadata, not a list of confirmed holders or offices
+        still awaiting receipt. Receipt displays use the routing steps' receipt
+        fields to distinguish those facts.
         """
         return [step.to_office for step in self.current_step_queryset.select_related("to_office")]
 
@@ -478,6 +512,10 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
         return self.routing_steps.filter(batch=self.current_batch)
 
     def current_offices(self):
+        """Return all current-batch recipients, including unconfirmed offices.
+
+        The historical helper name refers to the batch, not confirmed custody.
+        """
         return [step.to_office for step in self.current_step_queryset.select_related("to_office")]
 
     def pending_receipt_offices(self):
@@ -637,6 +675,13 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
         return TrackingRecord.objects.filter(pk=self.pk).visible_to(user).exists()
 
     # -- status bookkeeping ------------------------------------------------
+    @property
+    def display_status(self):
+        return getattr(self, "stage", self.status)
+
+    def get_display_status_display(self):
+        return dict(Status.choices).get(self.display_status, self.display_status)
+
     def recalculate_status(self, *, save: bool = True) -> str:
         """Single source of truth for `status`, `current_office` and `current_holder`."""
         if self.status == Status.DRAFT or self.status in COMPLETED_STATUSES:
@@ -664,17 +709,30 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
                 latest = max(received, key=lambda step: step.received_at)
                 self.current_office = latest.to_office
                 self.current_holder = latest.received_by
-                self.status = Status.IN_PROCESS if self.has_activity_after_receipt() else Status.RECEIVED
+                if len(received) < len(steps):
+                    self.status = Status.PENDING_RECEIPT
+                else:
+                    self.status = Status.IN_PROCESS if self.has_activity_after_receipt() else Status.RECEIVED
 
         if save:
             self.save(update_fields=["status", "current_office", "current_holder", "updated_at"])
+        self.__dict__.pop("stage", None)
         return self.status
 
-    def has_activity_after_receipt(self) -> bool:
-        return self.activities.filter(
+    def has_activity_after_receipt(self, office=None) -> bool:
+        steps = self.current_step_queryset.filter(received_at__isnull=False)
+        if office:
+            steps = steps.filter(to_office_id=getattr(office, "pk", office))
+        matching = Q(pk__in=[])
+        for step in steps:
+            matching |= Q(created_at__gte=step.received_at) & (
+                Q(work_office_id=step.to_office_id)
+                | Q(work_office__isnull=True, actor_office_id=step.to_office_id)
+            )
+        return self.activities.filter(matching,
             batch=self.current_batch,
             event__in=[RecordActivity.Event.REMARK, RecordActivity.Event.ATTACHMENT],
-        ).exists()
+        ).exclude(message__startswith="Returned to tracking by ").exists()
 
     def touch_movement(self) -> None:
         self.last_movement_at = timezone.now()
@@ -756,6 +814,7 @@ class RecordActivity(models.Model):
         COMPLETED = "COMPLETED", "Marked completed"
         ARCHIVED = "ARCHIVED", "Archived"
         ACCESS = "ACCESS", "Access granted"
+        REOPENED = "REOPENED", "Returned to tracking"
         #: Read and print are acts on the document too. A view-only account
         #: leaves no other trace, so without these two the people who can only
         #: look at a record are the people the history says nothing about.
@@ -770,6 +829,10 @@ class RecordActivity(models.Model):
     )
     actor_office = models.ForeignKey(
         "accounts.Office", null=True, blank=True, on_delete=models.SET_NULL, related_name="record_activities"
+    )
+    work_office = models.ForeignKey(
+        "accounts.Office", null=True, blank=True, on_delete=models.SET_NULL, related_name="tracking_work_activities",
+        help_text="Office whose confirmed custody this work advances; actor office remains the audit snapshot.",
     )
     message = models.CharField(max_length=255)
     detail = models.TextField(blank=True)
@@ -846,3 +909,14 @@ class RecordAccessGrant(models.Model):
 
         if self.office_id is None and self.user_id is None:
             raise ValidationError("Choose an office or a user to grant access to.")
+
+# Separate ledger: external offices never enter the account-office population.
+from .external_models import (  # noqa: E402,F401
+    ExternalActionRevision,
+    ExternalActivity,
+    ExternalAttachment,
+    ExternalNumberSequence,
+    ExternalOffice,
+    ExternalRoutingStep,
+    ExternalTrackingRecord,
+)

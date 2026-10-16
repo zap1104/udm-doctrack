@@ -1154,7 +1154,7 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
 
     assert "Newest in the Document Repository" not in body, "removed in the consultation"
     for heading in ("Currently tracking",
-                    "Created, handed over and completed &mdash; running totals",
+                    "Created, endorsed and completed &mdash; running totals",
                     "Turnaround Time for the Month of"):
         assert f"<h2>{heading}" in body, heading
 
@@ -1198,14 +1198,16 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
     client.force_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
-    # The queue block is titled by the queue picked, Pending Receipt until
-    # another chip is chosen, and it still comes first.
+    # The default attention queue is Awaiting receipt. It stays ahead of the
+    # separate recent-activity disclosure.
     import re
 
-    queue = re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
+    queue = re.search(r'<h3 class="desk-block-title">\s*Awaiting receipt', body)
     assert queue
     assert "Latest tracking activity" in body
-    assert queue.start() < body.index('<h3 class="desk-block-title">Latest tracking activity</h3>')
+    assert queue.start() < body.index('class="fold dashboard-recent-activity"')
+    assert 'aria-label="Receipt reminders and overdue work"' in body
+    assert 'aria-label="Direction and document stage"' in body
 
 
 @pytest.mark.django_db
@@ -1217,8 +1219,9 @@ def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_rece
 
     import re
 
-    assert re.search(r'<h3 class="desk-block-title">\s*Pending Receipt', body)
+    assert re.search(r'<h3 class="desk-block-title">\s*Awaiting receipt', body)
     assert '<h3 class="desk-block-title">Latest tracking activity</h3>' in body
+    assert 'aria-label="Latest tracking activity documents"' in body
 
 
 @pytest.mark.django_db
@@ -1385,7 +1388,8 @@ def test_the_desk_keeps_both_empty_states(client, users):
     client.force_login(users["hr"])
     body = client.get(DASHBOARD).content.decode()
 
-    assert "No incoming documents are waiting" in body
+    assert "Nothing in &ldquo;Awaiting receipt&rdquo;" in body
+    assert "is in this queue right now." in body
     assert "No tracking records to show." in body
 
 
@@ -1604,7 +1608,7 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: headings; historical Tracking charts follow both summaries at full width.
 TRACKING_SIDE = ["Tracking overview"]
 REPOSITORY_SIDE = ["Repository", "Added to the repository"]
-TRACKING_TRENDS = ["Created, handed over and completed", "Turnaround Time"]
+TRACKING_TRENDS = ["Created, endorsed and completed", "Turnaround Time"]
 
 
 def _side(body, name):

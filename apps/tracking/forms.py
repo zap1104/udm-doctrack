@@ -432,6 +432,8 @@ class GrantAccessForm(BootstrapFormMixin, forms.Form):
         cleaned = super().clean()
         if not cleaned.get("office") and not cleaned.get("user"):
             raise forms.ValidationError("Choose an office or a user.")
+        if cleaned.get("office") and cleaned.get("user"):
+            raise forms.ValidationError("Choose either an office or a user, not both.")
         return cleaned
 
 
@@ -522,6 +524,13 @@ class TrackingFilterForm(BootstrapFormMixin, forms.Form):
     would sail past the form and be handed to `apply_scope` unchecked.
     """
 
+    q = forms.CharField(
+        required=False,
+        label="Search tracking",
+        widget=forms.TextInput(attrs={
+            "placeholder": "Search tracking no., subject or office…", "autocomplete": "off",
+        }),
+    )
     status = forms.MultipleChoiceField(
         required=False,
         label="",

@@ -991,7 +991,25 @@ a:hover { text-decoration: underline; }
 .repository-list-head>a { font-size:13px; white-space:nowrap; }
 .repository-filters { padding:16px 18px; margin-bottom:14px; }
 .repository-filters label { display:block; margin-bottom:5px; color:var(--udm-muted); font-size:12px; font-weight:600; }
-.repository-filters input:not([type=hidden]),.repository-filters select { min-height:42px; }
+.repository-filters input:not([type=hidden]):not([type=checkbox]),.repository-filters select { min-height:42px; }
+.deletion-review-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.deletion-review-tabs a { display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
+.deletion-review-tabs a[aria-current=page] { background:var(--udm-green-soft); border-color:var(--udm-green); font-weight:700; }
+.deletion-review-filters { margin-top:0; }
+.deletion-review-list { display:grid; gap:12px; }
+.deletion-review-item { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px; }
+.deletion-review-item>div { min-width:0; }
+.deletion-review-item h2 { font-size:17px; overflow-wrap:anywhere; margin:0 0 6px; }
+.deletion-review-item .btn { flex-shrink:0; min-height:44px; display:inline-flex; align-items:center; }
+.deletion-review-metadata dt { color:var(--udm-muted); font-weight:400; font-size:13px; }
+.deletion-review-metadata dd { margin-bottom:14px; overflow-wrap:anywhere; }
+.deletion-review-history summary { padding:18px 20px; font-weight:700; cursor:pointer; }
+.deletion-review-history li+li { border-top:1px solid var(--udm-line); margin-top:16px; padding-top:16px; }
+.deletion-review-page [data-review-removal] .form-field { display:grid; grid-template-columns:20px minmax(0,1fr); gap:8px; align-items:start; }
+.deletion-review-page [data-review-removal] .form-check-input { margin-top:4px; }
+.deletion-review-page [data-review-removal] .form-check-label { margin-left:0 !important; }
+.deletion-review-page [data-review-removal] .field-errors { grid-column:1 / -1; }
+@media(max-width:767.98px) { .deletion-review-item { align-items:flex-start; flex-direction:column; padding:16px; } }
 .repository-search { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:end; gap:8px; }
 .repository-search .btn { min-height:42px; display:inline-flex; align-items:center; justify-content:center; }
 .repository-filter-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:14px; }
@@ -1188,7 +1206,7 @@ a:hover { text-decoration: underline; }
 .column-chart--turned .column-value { writing-mode:vertical-rl; transform:translateX(-50%) rotate(180deg); margin-bottom:4px; letter-spacing:0; }
 .column { display:block; width:100%; max-width:12px; border-radius:4px 4px 0 0; }
 .column--created { background:var(--chart-created); }
-.column--handover { background:var(--status-pending); }
+.column--endorsement { background:var(--status-pending); }
 .column--completed { background:var(--status-completed); }
 .column--historical { background:var(--chart-historical); }
 .column-label { height:22px; color:var(--udm-muted); font-size:11px; text-align:center; line-height:22px; }
@@ -1200,7 +1218,7 @@ a:hover { text-decoration: underline; }
 /* A date input's native width is wider than a narrow column; let it fit. */
 .admin-filter-date .form-control { min-width:0; padding-inline:8px; }
 
-/* One office's own handover figures, where the rankings sit for every office. */
+/* One office's own endorsement figures, where the rankings sit for every office. */
 .office-activity { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; }
 .office-activity-figure { display:flex; flex-direction:column; gap:2px; padding:12px 14px; border:1px solid var(--chart-grid); border-radius:8px; }
 .office-activity-figure span { color:var(--udm-muted); font-size:12.5px; font-weight:600; }
@@ -1439,7 +1457,7 @@ details[open] > .disclosure-control .disclosure-hide { display:inline; }
   .stat-card { break-inside:avoid; box-shadow:none; }
 
   /* Break between rows, never through one. */
-  .status-row,.status-direction,.report-series-item,.report-office-row,
+  .status-row,.status-direction,.report-direction,.report-all-offices,.report-series-item,.report-office-row,
   .report-metric,.report-quality-row,.column-group,
   .column-chart,.meter { break-inside:avoid; }
 
@@ -1448,7 +1466,8 @@ details[open] > .disclosure-control .disclosure-hide { display:inline; }
   .h-100 { height:auto !important; }
   .row > [class*="col-"] { width:100% !important; max-width:100% !important; }
   /* Bars and columns are background paint; without this they print blank. */
-  .report-bar i,.column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill,.column-chart-grid i {
+  .report-bar i,.report-direction-bar,.report-direction-bar > span,
+  .column,.chart-swatch,.meter-fill,.meter-track,.report-bar,.pill,.column-chart-grid i {
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .chart-table { display:none; }
@@ -2239,6 +2258,18 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    scroll: seven pills and a Clear fit two rows on a phone, and a scrolling row
    hides the queues nobody sees. */
 .desk-chips { display:flex; flex-wrap:wrap; gap:8px; padding:14px 20px 12px; }
+.desk-attention-label { align-self:center; color:var(--udm-muted); font-size:13px; font-weight:600; }
+/* Keep direction above its stages in every tracking surface. */
+.direction-filters { margin:0 0 16px; }
+.direction-filters--desk { margin:0; padding:14px 20px 0; }
+.direction-filter-groups { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+.direction-filter-group { min-width:0; padding:12px; border:1px solid var(--udm-line); border-radius:10px; background:var(--udm-surface); }
+.direction-filter-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; color:var(--udm-navy-text); }
+.direction-filter-stages { display:flex; flex-wrap:wrap; gap:8px; }
+.direction-filter-stages .pill-toggle, .direction-filter-heading .pill-toggle { min-height:38px; }
+.direction-filter-note { margin:8px 0 0; color:var(--udm-muted); font-size:13px; }
+@media (max-width:991.98px) { .direction-filter-groups { grid-template-columns:1fr; } }
+@media print { .direction-filters { display:none; } }
 .desk-chip-count { margin-left:6px; padding:1px 7px; border-radius:999px; background:var(--udm-canvas); color:var(--udm-navy-text); font-size:11.5px; }
 /* Opaque, so its contrast is what it looks like: white on the next navy up. */
 .pill-toggle.is-active .desk-chip-count { background:var(--udm-selected-ink); color:var(--udm-selected-bg); }
@@ -3611,6 +3642,9 @@ input:focus {
 .repository-search > div { min-width: 0; }
 .repository-filter-grid { gap: 12px; margin: 14px 0 0; }
 .repository-filter-grid > div { min-width: 0; }
+@media (min-width: 992px) {
+  .repository-filter-grid--primary { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
 .repository-filters label { color: var(--udm-label-ink); font-size: 13px; font-weight: 600; }
 .repository-more-filters { border-top: 1px solid var(--udm-line); margin-top: 16px; padding-top: 4px; }
 .repository-more-filters > summary {
@@ -3634,6 +3668,23 @@ input:focus {
 
 .report-panel { border: 0; background: transparent; padding: 0; }
 .report-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-bottom: 24px; }
+.report-metrics--tracking { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.report-metric-incoming { background: var(--udm-slate-soft); }
+.report-metric-outgoing { background: var(--udm-surface); }
+.report-direction + .report-direction { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--udm-line); }
+.report-chart-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.report-chart-summary h3 { margin: 0; font-size: 16px; }
+.report-chart-summary strong { display: block; font-size: 44px; line-height: 1.2; color: var(--udm-navy-text); }
+.report-direction-bar { display: flex; width: 100%; height: 48px; overflow: hidden; border-radius: 8px; background: var(--chart-track); }
+.report-direction-bar > span { flex-basis: 0; min-width: 0; }
+.report-direction-bar > span + span { box-shadow: inset 1px 0 0 var(--udm-surface); }
+.report-direction-stages { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.report-stage-link { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; align-items: center; min-height: 44px; padding: 8px 10px; border: 1px solid var(--udm-line); border-radius: 5px; color: var(--udm-navy-text); }
+.report-stage-link .pill { justify-self: start; white-space: normal; }
+.report-stage-link:hover { background: var(--udm-slate-soft); }
+.report-all-offices-stages { grid-template-columns: repeat(4,minmax(0,1fr)); }
+@media (min-width: 768px) and (max-width: 1199.98px) { .report-all-offices-stages { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 767.98px) { .report-direction-stages { grid-template-columns: 1fr; } }
 .report-metrics > div { width: auto; min-width: 0; padding: 0; }
 .report-metrics .stat-card { min-height: 0; height: 100%; padding: 16px 18px; border-left: 3px solid var(--udm-navy-text); }
 .report-metrics .stat-card.gold { border-left-color: var(--status-pending); }
@@ -3663,6 +3714,7 @@ input:focus {
   .report-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 }
 @media (max-width: 575.98px) {
+  .report-metrics--tracking { grid-template-columns: 1fr; }
   .repository-filters { padding: 15px; }
   .repository-search { display: flex; flex-wrap: wrap; }
   .repository-search > div { flex: 1 1 100%; }
@@ -3742,3 +3794,7 @@ input:focus {
   .dashboard-secondary-stats .stat-card:nth-child(2) { border-left: 0; }
   .dashboard-secondary-stats .stat-card:not(:first-child) { border-top: 1px solid var(--udm-line); }
 }
+/* Routine filter feedback is visually hidden; only errors occupy this space. */
+.filter-update-status { padding: .45rem 1.5rem 0; color: var(--udm-muted); font-size: .8rem; }
+.filter-update-status.is-error { color: var(--udm-red-ink); }
+.filter-update-status [data-filter-retry] { margin-left: .5rem; }

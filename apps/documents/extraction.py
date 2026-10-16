@@ -386,12 +386,15 @@ def run_ocr(
     if backend == "ocrspace":
         return _ocr_space(file_obj, filename, language_hint=language_hint)
     # auto: try whichever is configured, cheapest first
+    result = None
     if settings.OCR_SPACE_API_KEY:
         result = _ocr_space(file_obj, filename, language_hint=language_hint)
         if result.status == "DONE":
             return result
     if settings.AZURE_DOCINT_ENDPOINT and settings.AZURE_DOCINT_KEY:
         return _ocr_azure(file_obj, filename, language_hint=language_hint)
+    if result is not None:
+        return result
     return ExtractionResult(status="SKIPPED", notes=["No OCR provider configured"])
 
 
@@ -426,7 +429,11 @@ def extract_document_text(
 
         layer.notes.extend(ocr.notes)
         if layer.status == "EMPTY":
-            layer.notes.append("No text found. Metadata can still be entered by hand.")
+            if ocr.status in {"FAILED", "SKIPPED"}:
+                layer.status = ocr.status
+                layer.engine = ocr.engine or layer.engine
+            else:
+                layer.notes.append("No text found. Metadata can still be entered by hand.")
         return _clip(layer)
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Text extraction crashed for %s", filename)

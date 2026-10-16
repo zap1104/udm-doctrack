@@ -11,8 +11,8 @@
   </button>
 
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
-    <label class="visually-hidden" for="topbar-search-input">Search records</label>
-    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search archive..." aria-label="Search the document archive" autocomplete="off">
+    <label class="visually-hidden" for="topbar-search-input">Search the repository</label>
+    <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search the repository" aria-label="Search the repository" autocomplete="off">
   </form>
 
   <div class="topbar-controls ms-auto d-flex align-items-center">

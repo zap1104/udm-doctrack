@@ -83,7 +83,7 @@ def test_a_whole_day_is_eight_hours_because_lunch_is_not_counted():
         ((8, 0), (12, 0), 4),      # a morning
         ((13, 0), (17, 0), 4),     # an afternoon
         ((12, 0), (13, 0), 0),     # lunch alone
-        ((12, 10), (12, 50), 0),   # handed over and received inside lunch
+        ((12, 10), (12, 50), 0),   # endorsed and received inside lunch
         ((11, 30), (13, 30), 1),   # half an hour either side of lunch
         ((8, 0), (16, 0), 7),      # a cap charged this as a whole day
         ((7, 0), (18, 0), 8),      # before opening and after closing

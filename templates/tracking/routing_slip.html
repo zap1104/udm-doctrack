@@ -305,7 +305,7 @@
 {% block content %}
 <div class="routing-slip-actions no-print">
   <button class="btn btn-udm" type="button" data-print-trigger>Print Routing Slip</button>
-  <a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to Record</a>
+  <a class="btn btn-udm-outline" href="{{ record_url }}">Back to Record</a>
 </div>
 
 <article class="routing-slip" data-bs-theme="light" aria-label="Document routing slip">
@@ -346,7 +346,7 @@
           <span>Tracking Number</span>
           <strong class="mono">{{ record.display_tracking_number }}</strong>
         </div>
-        <div class="routing-slip-header-status">{% include "partials/_status_pill.html" with status=record.status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</div>
+        <div class="routing-slip-header-status"><span>{{ stage_scope_label }}</span> {% include "partials/_status_pill.html" with status=record.display_status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</div>
       </div>
     </div>
   </header>

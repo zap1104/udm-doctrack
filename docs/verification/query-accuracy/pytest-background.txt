@@ -1,0 +1,12 @@
+..........................                                               [100%]
+============================== warnings summary ===============================
+apps\tracking\models.py:183
+  C:\Users\USER\Desktop\Projects\DocTrack Capstone\apps\tracking\models.py:183: RemovedInDjango60Warning: CheckConstraint.check is deprecated in favor of `.condition`.
+    models.CheckConstraint(
+
+tests/test_processing_regressions.py::test_partial_extraction_keeps_other_files_in_total_page_count
+  C:\Users\USER\Desktop\Projects\DocTrack Capstone\apps\tracking\migrations\0006_routingsla_routingsla_unique_routing_sla_scope_and_more.py:39: RemovedInDjango60Warning: CheckConstraint.check is deprecated in favor of `.condition`.
+    constraint=models.CheckConstraint(check=models.Q(('document_type__isnull', True), ('office__isnull', True), _negated=True), name='routing_sla_needs_a_scope'),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+26 passed, 2 warnings in 3.61s

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load static %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/external.css' %}">{% endblock %}
+{% block content %}
+<div class="external-workspace">
+  <nav class="external-nav" aria-label="External workspace">
+    <a href="{% url 'tracking:external_list' %}">External Tracking</a>
+    <a href="{% url 'tracking:external_reports' %}{% if filter_query %}?{{ filter_query }}{% endif %}">External Reports</a>
+    <a href="{% url 'tracking:external_offices' %}">External Offices</a>
+    {% url 'documents:external_repository' as external_repository_url %}{% if external_repository_url %}<a href="{{ external_repository_url }}">External Repository</a>{% endif %}
+  </nav>
+  {% block external_content %}{% endblock %}
+</div>
+{% endblock %}

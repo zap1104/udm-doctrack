@@ -11,6 +11,9 @@ from django.contrib.auth.forms import (
     SetPasswordForm,
     UserCreationForm,
 )
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils.crypto import constant_time_compare
 
 from apps.core.forms import BootstrapFormMixin, ColourInput
 from apps.core.models import NotificationPreference
@@ -48,11 +51,41 @@ class VerifiedEmailPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
         return super().save(**kwargs)
 
 
-class AccountPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
-    """Keep Django's password validation and use the shared form widgets."""
+class CurrentAccountPasswordSaveMixin:
+    """A password form may not overwrite newer account details or credentials."""
+
+    def save(self, commit=True):
+        if not commit:
+            return super().save(commit=False)
+        previous_hash = self.user.password
+        with transaction.atomic():
+            current = User.objects.select_for_update().filter(pk=self.user.pk).first()
+            if current is None or not constant_time_compare(current.password, previous_hash):
+                raise ValidationError(
+                    "Your password was updated while this form was open. Sign in again or request a new recovery link."
+                )
+            if not current.is_active:
+                raise ValidationError("This account is suspended. Contact the system administrator.")
+            self.user = current
+            user = super().save(commit=False)
+            # Django's default saves the entire user instance, including stale
+            # roles, office assignments, suspensions, and email verification.
+            user.save(update_fields=["password"])
+            return user
 
 
-class AccountSetPasswordForm(BootstrapFormMixin, SetPasswordForm):
+class AccountPasswordChangeForm(CurrentAccountPasswordSaveMixin, BootstrapFormMixin, PasswordChangeForm):
+    """Keep Django's validation and require a different forced-change password."""
+
+    def clean(self):
+        cleaned = super().clean()
+        password = cleaned.get("new_password1")
+        if self.user.must_change_password and password and self.user.check_password(password):
+            self.add_error("new_password1", "Choose a password different from the one the administrator gave you.")
+        return cleaned
+
+
+class AccountSetPasswordForm(CurrentAccountPasswordSaveMixin, BootstrapFormMixin, SetPasswordForm):
     """Password recovery uses the same widgets as the signed-in account forms."""
 
 

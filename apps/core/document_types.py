@@ -35,7 +35,7 @@ def resolve_document_types(selected, main=None, *, existing=()):
     if main and main.pk not in {kind.pk for kind in selected}:
         raise ValidationError("The main document type must be one of the selected types.")
     if len(selected) > 1 and main is None:
-        raise ValidationError("Choose a main document type for deadlines and retention.")
+        raise ValidationError("Choose a main document type for deadlines and the deletion review period.")
     return selected, allowed[main.pk] if main else (selected[0] if selected else None)
 
 

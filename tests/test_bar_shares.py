@@ -3,7 +3,7 @@
 The dashboard's "Added to the repository" panel printed "HR 3 — 20%" beside a
 bar that filled the card, because every horizontal bar in the app was measured
 against the busiest row: the leader always drew a full track whatever its share.
-The same was true of Reports' stages, overdue offices, receipts, handovers and
+The same was true of Reports' stages, overdue offices, receipts, endorsements and
 document types, and of Administration's most used searches.
 
 Now a bar's track is 100% of the whole the panel names in its caption, the bar
@@ -21,6 +21,7 @@ from apps.core import analytics
 from apps.core.models import DocumentType
 from apps.core.views import ReportsView, top_searches
 from apps.documents.models import Document, SearchQueryLog
+from apps.tracking.models import Status, TrackingRecord
 from tests.test_dashboard_reports_agreement import agreement  # noqa: F401 — fixture, used by name
 from tests.test_filter_agreement import traffic  # noqa: F401 — fixture, used by name
 
@@ -119,15 +120,15 @@ def test_the_other_row_is_drawn_at_its_share(client, users, agreement):  # noqa:
 
 
 @pytest.mark.django_db
-def test_stages_add_up_to_one_full_track(client, users, agreement):  # noqa: F811
-    """Every document is in exactly one stage, so the bars partition it."""
+def test_working_stages_and_drafts_reconcile_with_the_current_total(client, users, agreement):  # noqa: F811
     client.force_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
     rows = context["by_status"]
     for row in rows:
         assert row["bar_percent"] == analytics.bar(row["total"], context["total_records"])
-    assert abs(sum(row["bar_percent"] for row in rows) - 100) <= len(rows)
+    drafts = TrackingRecord.objects.visible_to(users["admin"]).filter(status=Status.DRAFT).count()
+    assert sum(row["total"] for row in rows) + drafts == context["total_records"]
 
 
 @pytest.mark.django_db
@@ -144,7 +145,7 @@ def test_overdue_bars_are_shares_of_every_overdue_document(client, users, agreem
 
 
 @pytest.mark.django_db
-def test_receipts_and_handovers_are_shares_of_every_one(client, users, agreement):  # noqa: F811
+def test_receipts_and_endorsements_are_shares_of_every_one(client, users, agreement):  # noqa: F811
     client.force_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
@@ -154,11 +155,11 @@ def test_receipts_and_handovers_are_shares_of_every_one(client, users, agreement
         assert row["cumulative_percent"] == analytics.bar(row["cumulative"], volume["receipts"])
 
     flow = context["office_flow"]
-    assert flow["handovers"] >= sum(row["sent"] for row in flow["rows"])
-    assert flow["handovers"] >= sum(row["received"] for row in flow["rows"])
+    assert flow["endorsements"] >= sum(row["sent"] for row in flow["rows"])
+    assert flow["endorsements"] >= sum(row["received"] for row in flow["rows"])
     for row in flow["rows"]:
-        assert row["sent_percent"] == analytics.bar(row["sent"], flow["handovers"])
-        assert row["received_percent"] == analytics.bar(row["received"], flow["handovers"])
+        assert row["sent_percent"] == analytics.bar(row["sent"], flow["endorsements"])
+        assert row["received_percent"] == analytics.bar(row["received"], flow["endorsements"])
 
 
 @pytest.mark.django_db

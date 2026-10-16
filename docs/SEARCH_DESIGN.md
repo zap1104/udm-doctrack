@@ -2,6 +2,16 @@
 
 The archive will hold thousands of documents. Search is what makes that useful instead of a landfill. This document explains exactly how a result gets its percentage — because a number nobody can explain is a number nobody should trust.
 
+## Workspace filters
+
+Tracking and Search's Tracking mode share the same tracking-number, subject and office query, queue filters, ownership filters and sort order. Tracking CSV exports use that same population and ordering. Relevance does not apply to tracking records.
+
+The Repository adds Search's document-date range and relevance controls to its existing office, type, year/month, tag, origin and deletion-review filters. Both pages validate dates and thresholds through the same form controls and calculate scores through `search_documents`. Office choices and every result remain bounded by `Document.objects.visible_to(user)`.
+
+Entering search text orders Repository documents by relevance and applies the selected minimum. Repository starts at zero to preserve existing title/text searches; Search keeps its configured default. Explicit thresholds and scores mean the same thing on both screens. “Include results below the threshold” keeps weaker matches visible. With no search text, browsing remains fully paginated and no relevance score is shown. Pending filing keeps subject/number, originating office, type and completion year/month filters; document-date and relevance controls are only for filed documents.
+
+Search continues to return its configured top-result set and explains any limit. The Repository evaluates all matching documents in batches, then paginates the complete qualifying set. Its type/tag/deletion-review counts use the same scored document IDs and existing metadata filters, so results after a page or a search limit are not omitted from those counts.
+
 ---
 
 ## The one terminology rule

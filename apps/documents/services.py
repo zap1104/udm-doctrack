@@ -19,9 +19,12 @@ from apps.tracking.services import add_activity
 from .extraction import extract_document_text
 from .models import (
     AccessLevel,
+    Collection,
+    DeletionReview,
     Document,
     DocumentFile,
     DocumentMetadata,
+    ExternalDocumentOffice,
     MetadataSuggestion,
     OcrStatus,
     Source,
@@ -31,14 +34,16 @@ from .suggestions import Suggestion, suggest_metadata
 logger = logging.getLogger("doctrack")
 
 
-def suggested_tags_for(user):
+def suggested_tags_for(user, *, collection=Collection.OVPA):
     """Tag suggestions must not disclose another office's document keywords."""
     tags = Tag.active.all()
     if not user.is_authenticated or not user.is_active:
         return tags.none()
     if user.is_system_admin:
-        return tags.order_by("-usage_count", "name")
-    documents = Document.objects.visible_to(user).filter(is_active=True)
+        from django.db.models import Q
+
+        return tags.filter(Q(documents__isnull=True) | Q(documents__collection=collection)).distinct().order_by("-usage_count", "name")
+    documents = Document.objects.visible_to(user).in_collection(collection).filter(is_active=True)
     return tags.filter(documents__in=documents).distinct().order_by("name")
 
 
@@ -48,7 +53,7 @@ def suggested_tags_for(user):
 @transaction.atomic
 def ingest_upload(
     *, user, uploaded_file, office=None, source=Source.UPLOAD,
-    ocr_language="auto", allow_external_ocr=False,
+    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
 ) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
 
@@ -57,6 +62,10 @@ def ingest_upload(
     while a third-party OCR request runs.
     """
     user = active_writer(user)
+    if collection not in Collection.values:
+        raise ValidationError("Choose a valid repository collection.")
+    if collection == Collection.EXTERNAL and not user.is_office_admin:
+        raise PermissionDenied("Only administrators can upload external documents.")
     validate_upload(uploaded_file)
     office = office or user.office
     if not user.is_authenticated or not user.is_active or user.is_viewer:
@@ -65,6 +74,14 @@ def ingest_upload(
         raise PermissionDenied("You can only upload to your own office.")
     if office is None:
         raise ValidationError("Your account has no office, so it cannot own a document.")
+    counterparts = []
+    if collection == Collection.EXTERNAL:
+        from apps.tracking.models import ExternalOffice
+
+        supplied = {getattr(entry, "pk", entry) for entry in (external_offices or [])}
+        counterparts = list(ExternalOffice.objects.select_for_update().filter(pk__in=supplied, managing_office=office, is_active=True))
+        if not supplied or len(counterparts) != len(supplied):
+            raise ValidationError("Choose at least one active external office managed by the owning office.")
 
     extraction = (
         extract_document_text(
@@ -79,6 +96,7 @@ def ingest_upload(
     document = Document.objects.create(
         title=(uploaded_file.name.rsplit(".", 1)[0][:255] or "Untitled document"),
         source=source,
+        collection=collection,
         office=office,
         year=timezone.localdate().year,
         uploaded_by=user,
@@ -106,6 +124,8 @@ def ingest_upload(
         extracted_chars=extraction.char_count if extraction else 0,
         uploaded_by=user,
     )
+    for counterpart in counterparts:
+        ExternalDocumentOffice.objects.create(document=document, external_office=counterpart, name_snapshot=counterpart.name, code_snapshot=counterpart.code)
 
     if extraction is None:
         _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk])
@@ -133,7 +153,7 @@ def ingest_upload(
     return document, suggestion
 
 
-def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False) -> None:
+def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False, robust=False) -> None:
     """Queue extraction only after the surrounding transaction commits."""
     if not settings.ENABLE_BACKGROUND_TASKS:
         return
@@ -146,11 +166,12 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False)
             user_id=user_id,
             file_ids=file_ids,
             replace=replace,
-        )
+        ),
+        robust=robust,
     )
 
 
-def duplicate_of(uploaded_file, *, user=None) -> Document | None:
+def duplicate_of(uploaded_file, *, user=None, collection=Collection.OVPA) -> Document | None:
     """Warn (never block) when the same file was already archived."""
     try:
         digest = checksum_of(uploaded_file)
@@ -158,7 +179,7 @@ def duplicate_of(uploaded_file, *, user=None) -> Document | None:
         return None
     if user is None:
         return None
-    visible = Document.objects.visible_to(user).filter(is_active=True)
+    visible = Document.objects.visible_to(user).in_collection(collection).filter(is_active=True)
     existing = DocumentFile.objects.filter(checksum=digest, document__in=visible).select_related("document").first()
     return existing.document if existing else None
 
@@ -173,6 +194,8 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
         raise PermissionDenied("Only the owning office can edit this record.")
     if data.get("office") and not user.is_system_admin and data["office"].pk != document.office_id:
         raise PermissionDenied("Only a system administrator can transfer ownership.")
+    if document.is_external and data.get("office") and data["office"].pk != document.office_id:
+        raise ValidationError("An external document must retain its managing office.")
     from apps.core.document_types import resolve_document_types
     previous_types = document.selected_document_types
     main = data.get("document_type")
@@ -189,10 +212,14 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
 
     if data.get("office"):
         document.office = data["office"]
+    first_classification = not document.document_type_id and main is not None
     document.document_type = main
     document.document_date = data.get("document_date")
     document.year = data.get("year") or (document.document_date or timezone.localdate()).year
-    document.retention_until = data.get("retention_until")
+    if "retention_until" in data:
+        document.retention_until = data["retention_until"]
+    if first_classification and document.retention_until is None:
+        document.retention_until = document.default_retention_until()
     document.ocr_language = data.get("ocr_language") or document.ocr_language
     if "allow_external_ocr" in data:
         document.allow_external_ocr = bool(data["allow_external_ocr"])
@@ -211,6 +238,68 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
 
     document.rebuild_index()
     log_action(AuditLog.Action.UPDATE, f"Saved metadata for “{document.title}”", actor=user, target=document)
+    return document
+
+
+def deletion_review_state(document):
+    return {
+        "updated_at": document.updated_at.isoformat(),
+        "retention_until": document.retention_until.isoformat() if document.retention_until else None,
+        "is_active": document.is_active,
+    }
+
+
+@locked_mutation
+def review_document_deletion(document, *, user, decision, reason, expected_state,
+                             next_review_date=None, confirmed=False):
+    """Make one audited decision against a fresh, locked repository document."""
+    if not document.can_user_review_deletion(user, include_deleted=True):
+        raise PermissionDenied("Only an authorized administrator for the owning office can review deletion.")
+    if expected_state != deletion_review_state(document):
+        raise ValidationError("This document changed after you opened it. Reload the review before deciding.")
+    reason = str(reason or "").strip()
+    if not reason or len(reason) > 2000:
+        raise ValidationError("Enter a reason of up to 2,000 characters.")
+    if decision not in DeletionReview.Decision.values:
+        raise ValidationError("Choose a valid review decision.")
+    restoring = decision == DeletionReview.Decision.RESTORE
+    if restoring == document.is_active:
+        raise ValidationError("This decision does not match the document's current state. Reload the review.")
+    if restoring and not document.deletion_recovery_open:
+        raise ValidationError("The 30-day recovery period has ended. This document cannot be restored.")
+    if decision == DeletionReview.Decision.DELETE:
+        if not document.retention_is_due:
+            raise ValidationError("Deletion review must be due before a document can be removed.")
+        if confirmed is not True:
+            raise ValidationError("Confirm that this document is approved for removal from the repository.")
+        if next_review_date is not None:
+            raise ValidationError("A removed document cannot have a next review date.")
+    elif next_review_date is None or next_review_date <= timezone.localdate():
+        raise ValidationError("Choose a next review date after today.")
+
+    # History is required, in the same transaction, unlike best-effort general logging.
+    DeletionReview.objects.create(
+        document=document, decision=decision, reason=reason,
+        previous_review_date=document.retention_until,
+        next_review_date=next_review_date, reviewed_by=user,
+        reviewer_label=user.display_name[:150],
+    )
+    document.is_active = decision != DeletionReview.Decision.DELETE
+    document.deleted_at = None if document.is_active else timezone.now()
+    document.purge_attempted_at = None
+    if document.is_active:
+        document.retention_until = next_review_date
+    update_fields = ["is_active", "deleted_at", "purge_attempted_at", "retention_until", "updated_at"]
+    if not document.is_active and document.ocr_status in {OcrStatus.PENDING, OcrStatus.RUNNING}:
+        document.ocr_status = OcrStatus.SKIPPED
+        document.ocr_notes = "Text extraction was cancelled when this document was removed from the repository. Restore the document before retrying."
+        update_fields.extend(["ocr_status", "ocr_notes"])
+    document.save(update_fields=update_fields)
+    log_action(
+        AuditLog.Action.DELETE if not document.is_active else AuditLog.Action.UPDATE,
+        f"Deletion review: {DeletionReview.Decision(decision).label} — {document.title}"[:255],
+        actor=user, target=document, extra={"decision": decision, "next_review_date": str(next_review_date or "")},
+    )
     return document
 
 
@@ -329,6 +418,23 @@ def re_extract_document(document: Document, *, user) -> dict:
 # ---------------------------------------------------------------------------
 @locked_mutation
 def archive_tracking_record(record, *, user, tag_names=None, description="") -> Document:
+    """File a completed record and clean up new copies if filing rolls back."""
+    created_files = []
+    try:
+        return _archive_tracking_record(
+            record, user=user, tag_names=tag_names, description=description,
+            created_files=created_files,
+        )
+    except Exception:
+        for storage, name in created_files:
+            try:
+                storage.delete(name)
+            except Exception:
+                logger.exception("Could not clean up a new repository copy after failed filing")
+        raise
+
+
+def _archive_tracking_record(record, *, user, tag_names, description, created_files) -> Document:
     """Approve a finished DTS record into the repository, keeping its identity.
 
     This is the act that files the document, and it is what moves the record
@@ -395,6 +501,7 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
             uploaded_by=user,
         )
         document_file.file.save(attachment.original_name, ContentFile(payload), save=False)
+        created_files.append((document_file.file.storage, document_file.file.name))
         document_file.save()
         created_file_ids.append(document_file.pk)
         if not settings.ENABLE_BACKGROUND_TASKS:

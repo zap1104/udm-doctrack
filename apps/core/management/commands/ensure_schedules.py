@@ -19,7 +19,9 @@ class Command(BaseCommand):
         wanted = [
             ("notification-pruning", "apps.core.tasks.prune_notifications"),
             ("notification-chase", "apps.core.tasks.chase_unreceived_and_overdue"),
+            ("external-notification-chase", "apps.core.tasks.chase_external_followups"),
             ("security-throttle-pruning", "apps.core.tasks.prune_security_throttles"),
+            ("deleted-document-purging", "apps.documents.tasks.purge_deleted_documents"),
         ]
         for name, func in wanted:
             schedule, created = Schedule.objects.update_or_create(

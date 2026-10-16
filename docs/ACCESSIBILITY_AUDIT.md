@@ -7,7 +7,7 @@
 
 This pass combined static template inspection, Django template validation, role-based page smoke testing, and keyboard-oriented markup review. The inspection checked the global skip link and main landmark, visible focus styles, explicit button types, label/control associations, image alternatives, table headings, non-colour status text, and status announcements. The smoke test requested every representative page as administrator, records officer, and regular office user.
 
-This is not a substitute for a person using NVDA, JAWS, VoiceOver, or another assistive technology on the university's actual workstations. That manual check remains a handover requirement.
+This is not a substitute for a person using NVDA, JAWS, VoiceOver, or another assistive technology on the university's actual workstations. That manual check remains an acceptance requirement.
 
 ## Results
 
@@ -46,7 +46,7 @@ lands somewhere sensible after the page reloads. If it does strand them, the
 fix is to drop `data-auto-submit` — the Apply button alone is already complete
 behaviour.
 
-## Remaining manual handover checks
+## Remaining manual acceptance checks
 
 On one Windows office workstation, complete the create → route → bulk receive → complete → archive → search flow using only Tab, Shift+Tab, Enter, Space, and arrow keys. Repeat the sign-in, password-reset request, upload privacy choice, retention filter, and report print actions with NVDA enabled. Confirm that focus never disappears behind the fixed top bar, validation errors are announced near their fields, and the browser print preview does not split a table heading from its rows.
 

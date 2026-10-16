@@ -53,9 +53,9 @@ function harness(width = 640, count = 6) {
   };
   for (let i = 0; i < count; i++) {
     const attrs = {
-      'data-column-label': ['Created', 'Handovers', 'Completed'][i % 3],
+      'data-column-label': ['Created', 'Endorsements', 'Completed'][i % 3],
       'data-column-month': i < 3 ? 'September 2026' : 'October 2026',
-      'data-column-value': String(100 + i), 'data-column-series': 'handover', title: 'Native fallback',
+      'data-column-value': String(100 + i), 'data-column-series': 'endorsement', title: 'Native fallback',
     };
     const bar = {getBoundingClientRect: () => ({left: 20 + i * width / count, top: 120, width: 12, height: 120})};
     const item = {
@@ -87,7 +87,7 @@ test('hover shows the exact category, month, value and key, then clears on exit'
   h.dispatch('pointermove', bar, {pointerType: 'mouse', clientX: 160, clientY: 160});
   assert.equal(h.tip.hidden, false);
   assert.equal(h.tipParts.value.textContent, '101');
-  assert.equal(h.tipParts.label.textContent, 'Handovers · September 2026');
+  assert.equal(h.tipParts.label.textContent, 'Endorsements · September 2026');
   assert.equal(h.tipParts.key.style.backgroundColor, 'rgb(193, 130, 0)');
   assert.ok(bar.classList.contains('is-active'));
   assert.ok(h.chart.classList.contains('has-active-column'));

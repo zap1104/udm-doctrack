@@ -98,7 +98,9 @@ def test_daily_monthly_summary_table_and_permissions_agree(client, offices, memo
                                            from_office=offices[code], to_office=offices[code],
                                            sent_by=users[code], sent_at=start, received_at=finish)
                 population["receipt"].append(quarter_hour_reference(start, finish))
-            population["processing"].append(quarter_hour_reference(received, end))
+            # The second endorsement starts at first receipt; its 9-11 wait
+            # pauses processing, which then resumes for Received/In Process.
+            population["processing"].append(quarter_hour_reference(at(day, 11), end))
             population["lifetime"].append(quarter_hour_reference(created, end))
         expected[code] = population
     expected["REC"] = {key: sum((population[key] for population in expected.values()), []) for key in ("receipt", "processing", "lifetime")}
@@ -184,11 +186,11 @@ def test_large_population_and_duplicate_joins_keep_counts_and_queries_correct(of
         for record in records for sequence in range(1, 6)
     ])
     # This deliberately produces five joined rows per document. The service
-    # must still count each completion once and every actual handover once.
+    # must still count each completion once and every actual endorsement once.
     joined = TrackingRecord.objects.filter(routing_steps__received_at__isnull=False)
     assert joined.count() == 5000
     # A bad membership plan used to rescan the complete joined population for
-    # every handover. Bound each query so that regression fails promptly instead
+    # every endorsement. Bound each query so that regression fails promptly instead
     # of leaving a report or CI waiting for many minutes. PostgreSQL restores
     # this transaction-local setting when pytest rolls back the test.
     with connection.cursor() as cursor:

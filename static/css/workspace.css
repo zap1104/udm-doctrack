@@ -271,3 +271,90 @@
   .app-shell :is(.form-control, .form-select, textarea.form-control) { font-size: 16px; min-height: 44px; }
   .app-shell .workspace-toolbar { align-items: stretch; }
 }
+
+/* Clearer hierarchy across the existing screens, using the same theme roles. */
+.app-shell .app-main,
+.app-shell .page-head > *,
+.app-shell .repository-section-head > *,
+.app-shell .repository-list-head > * { min-width: 0; }
+.app-shell .page-head { gap: 18px 24px; }
+.app-shell .page-head h1 {
+  font-size: clamp(24px, 2.2vw, 30px);
+  line-height: 1.25;
+  letter-spacing: -.025em;
+}
+.app-shell .page-head .sub { line-height: 1.6; margin-top: 6px; }
+.app-shell .eyebrow { margin-bottom: 7px; }
+.app-shell .card-udm { box-shadow: 0 2px 8px rgb(24 49 38 / 3%); }
+:root[data-theme="dark"] .app-shell .card-udm { box-shadow: none; }
+.app-shell .card-udm-head h2 { font-size: 18px; line-height: 1.4; }
+.app-shell .card-udm-head > :is(div, h2) { min-width: 0; }
+.app-shell .dashboard-side-title { font-size: 18px; line-height: 1.4; }
+.app-shell .dashboard-side-head { padding-bottom: 12px; }
+.app-shell .app-sidebar .nav-item { min-height: 44px; border-radius: 8px; }
+.app-shell .app-sidebar .nav-item.active { box-shadow: inset 3px 0 var(--udm-gold); }
+.app-shell .sidebar-office-mark {
+  min-height: 34px; height: auto; padding: 4px 2px;
+  overflow-wrap: anywhere; line-height: 1.2; text-align: center;
+}
+.app-shell .app-topbar .topbar-search input { min-height: 42px; border-radius: 9px; font-size: 14px; }
+.app-shell .topbar-account-office { font-size: 12px; line-height: 1.4; }
+
+/* Labels remain visible while typing; quieter supporting text stays readable. */
+.app-shell .form-label { font-weight: 600; line-height: 1.45; }
+.app-shell .search-query-card .row { row-gap: 12px; }
+.app-shell .workspace-toolbar .card-udm-body { padding-block: 18px; }
+.app-shell .table-udm thead th { font-size: 12.5px; line-height: 1.5; }
+.app-shell .table-udm td { line-height: 1.55; }
+.app-shell .table-responsive:focus-visible { outline: 2px solid var(--udm-focus); outline-offset: -3px; }
+.app-shell :is(.repository-document-meta, .newest-meta, .report-series-item) { font-size: 13px; line-height: 1.5; }
+.app-shell .repository-document-tags span { font-size: 12px; line-height: 1.5; padding: 3px 7px; }
+.app-shell .dashboard-filing-number { font-size: 12.5px; line-height: 1.5; }
+.app-shell .donut-hole-label { font-size: 11px; letter-spacing: .035em; }
+.app-shell .report-series-item > :first-child {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.app-shell :is(.repository-views, .repository-type-folders, .repository-tags) { gap: 8px; }
+.app-shell .workspace-toolbar :is(.form-control, .form-select) { min-width: 0; }
+
+/* Keep the real table scrollers and native disclosures; only controls grow. */
+@media (max-width: 991.98px) {
+  .app-shell .card-udm-head { flex-wrap: wrap; }
+  .app-shell .repository-section-head,
+  .app-shell .repository-list-head { flex-wrap: wrap; gap: 12px; }
+}
+/* The desktop sidebar starts at 901px; keep its narrower header controls usable. */
+@media (min-width: 901px) and (max-width: 1199.98px) {
+  .app-shell .topbar-account-copy,
+  .app-shell .topbar-account-arrow { display: none !important; }
+}
+@media (max-width: 575.98px) {
+  .app-shell .page-head { gap: 14px; }
+  .app-shell .card-udm-head { padding-block: 15px; }
+  .app-shell .card-udm-head h2 { font-size: 17px; }
+  .app-shell .app-topbar .topbar-search input { font-size: 16px; }
+}
+@media (pointer: coarse), (max-width: 767.98px) {
+  /* Shared dialogs are siblings of the app shell in base.html. */
+  #page-help-panel .btn-close,
+  #turnaround-calculation-dialog .btn-close { min-width: 44px; min-height: 44px; }
+  .app-shell .app-topbar .topbar-search input,
+  .app-shell :is(.form-control, .form-select) { min-height: 44px; font-size: 16px; }
+  .app-shell :is(.sidebar-toggle, .sidebar-close, .theme-toggle, .topbar-notifications, .topbar-account-button, .page-help-launch, .page-help-info) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .app-shell :is(.btn, .pill-toggle, .repository-view, .page-link, .page-size-option, .report-stage-link, .reports-tab),
+  .app-shell .repository-type-folders a,
+  .app-shell .repository-tags a,
+  .app-shell .module-subtabs a,
+  .app-shell .reports-tabs a,
+  .app-shell .btn.btn-sm,
+  .app-shell .table-udm .btn { min-height: 44px; }
+  .app-shell :is(.btn, .pill-toggle, .page-link, .page-size-option) { min-width: 44px; }
+  .app-shell .tracking-filters .pill-toggle { min-height: 44px; }
+}
