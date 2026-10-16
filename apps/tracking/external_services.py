@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
@@ -111,6 +111,16 @@ def _external(record, external):
     return external
 
 
+def _save_directory_entry(entry):
+    try:
+        entry.save()
+    except IntegrityError as exc:
+        diagnostic = getattr(exc.__cause__, "diag", None)
+        if getattr(diagnostic, "constraint_name", None) != "external_office_unique_owner_name":
+            raise
+        raise ValidationError("An external office with this name already exists in this managing office.") from exc
+
+
 @transaction.atomic
 def create_external_office(*, user, managing_office=None, **fields):
     user = active_writer(user)
@@ -122,7 +132,7 @@ def create_external_office(*, user, managing_office=None, **fields):
     fields["name"] = _text(fields.get("name"), 150)
     entry = ExternalOffice(managing_office=managing_office, **fields)
     entry.full_clean()
-    entry.save()
+    _save_directory_entry(entry)
     log_action("CREATE", "Created external directory office", actor=user, target=entry)
     return entry
 
@@ -140,7 +150,7 @@ def save_external_office(office, *, user, expected_revision, **fields):
         setattr(entry, field, _text(value, 150) if field == "name" else value)
     entry.revision += 1
     entry.full_clean()
-    entry.save()
+    _save_directory_entry(entry)
     office.refresh_from_db()
     log_action("UPDATE", "Updated external directory office", actor=user, target=entry)
     return office

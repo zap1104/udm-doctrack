@@ -256,6 +256,76 @@ def test_simultaneous_same_revision_only_one_route(users, offices):
     assert record.routing_steps.count() == 1
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("operation", ["create", "rename"])
+def test_concurrent_directory_names_show_validation_error_instead_of_database_error(
+    users, offices, monkeypatch, operation
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from django.db import connections
+
+    actors = [users["med_admin"], users["admin"]]
+    entries = []
+    if operation == "rename":
+        entries = [
+            services.create_external_office(user=actors[0], name=name)
+            for name in ("Original registrar", "Original college")
+        ]
+    validated = Barrier(2)
+    original_clean = ExternalOffice.full_clean
+
+    def clean_then_wait(entry, *args, **kwargs):
+        original_clean(entry, *args, **kwargs)
+        validated.wait(timeout=10)
+
+    monkeypatch.setattr(ExternalOffice, "full_clean", clean_then_wait)
+
+    def attempt(index):
+        try:
+            name = "Concurrent Registrar" if index == 0 else "  concurrent registrar  "
+            if operation == "create":
+                services.create_external_office(user=actors[index], managing_office=offices["MED"], name=name)
+            else:
+                services.save_external_office(entries[index], user=actors[index], expected_revision=1, name=name)
+            return "saved"
+        except ValidationError:
+            return "duplicate"
+        except IntegrityError:
+            return "database error"
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(attempt, range(2)))
+    assert sorted(outcomes) == ["duplicate", "saved"]
+    assert (
+        ExternalOffice.objects.filter(managing_office=offices["MED"], name__iexact="Concurrent Registrar").count() == 1
+    )
+    if operation == "rename":
+        for entry in entries:
+            entry.refresh_from_db()
+        assert sorted(entry.revision for entry in entries) == [1, 2]
+        loser = entries[outcomes.index("duplicate")]
+        assert loser.name in {"Original registrar", "Original college"}
+
+
+@pytest.mark.parametrize("constraint", [None, "unrelated_directory_constraint"])
+def test_directory_name_error_handling_preserves_unrelated_database_failures(users, monkeypatch, constraint):
+    from types import SimpleNamespace
+
+    def unrelated_failure(entry, *args, **kwargs):
+        cause = Exception("Unrelated database failure")
+        if constraint:
+            cause.diag = SimpleNamespace(constraint_name=constraint)
+        raise IntegrityError("Unrelated database failure") from cause
+
+    monkeypatch.setattr(ExternalOffice, "save", unrelated_failure)
+    with pytest.raises(IntegrityError, match="Unrelated database failure"):
+        services.create_external_office(user=users["med_admin"], name="Registrar")
+
+
 def test_sent_and_receipt_recording_times_cannot_be_corrected(case, users, offices):
     record, _ = case
     services.route_record(record, user=users["med_admin"], expected_revision=1, to_office=offices["MED"])

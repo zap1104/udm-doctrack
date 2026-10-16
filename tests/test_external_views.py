@@ -346,6 +346,58 @@ def test_directory_create_edit_and_deactivate_use_current_revision(client, users
     assert not entry.is_active
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("operation", ["create", "rename"])
+def test_concurrent_directory_requests_render_a_duplicate_message(client, users, offices, monkeypatch, operation):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from django.db import connections
+
+    from apps.tracking import external_services
+    from apps.tracking.models import ExternalOffice
+
+    actors = [users["med_admin"], users["admin"]]
+    browsers = [type(client)(), type(client)()]
+    for browser, actor in zip(browsers, actors, strict=True):
+        browser.force_login(actor)
+    entries = []
+    if operation == "rename":
+        entries = [
+            external_services.create_external_office(user=actors[0], name=name)
+            for name in ("Original registrar", "Original college")
+        ]
+    validated = Barrier(2)
+    original_clean = ExternalOffice.full_clean
+
+    def clean_then_wait(entry, *args, **kwargs):
+        original_clean(entry, *args, **kwargs)
+        # ModelForm validates first; synchronize only the service's final
+        # validation to reproduce a change arriving after both forms passed.
+        if not args and not kwargs:
+            validated.wait(timeout=10)
+
+    monkeypatch.setattr(ExternalOffice, "full_clean", clean_then_wait)
+
+    def submit(index):
+        try:
+            url = reverse("tracking:external_office_create")
+            data = {"name": "Concurrent Registrar", "managing_office": offices["MED"].pk, "is_active": "on"}
+            if operation == "rename":
+                url = reverse("tracking:external_office_edit", args=[entries[index].pk])
+                data["revision"] = 1
+            return browsers[index].post(url, data)
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(submit, range(2)))
+    assert sorted(response.status_code for response in responses) == [302, 400]
+    rejected = next(response for response in responses if response.status_code == 400)
+    assert b"already exists" in rejected.content
+    assert ExternalOffice.objects.filter(managing_office=offices["MED"], name="Concurrent Registrar").count() == 1
+
+
 def test_involved_staff_can_filter_a_counterpart_from_another_managing_office(client, users, offices, external_cases):
     from apps.tracking.external_services import route_record
 
