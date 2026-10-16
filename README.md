@@ -179,6 +179,7 @@ calculation, interaction, permission, and responsive checks and their limits.
 - **[docs/SETUP.md](docs/SETUP.md)** — install it, including the errors people actually hit
 - **[docs/GITHUB_GUIDE.md](docs/GITHUB_GUIDE.md)** — how to push your work without breaking anyone else's
 - **[docs/TEAM_CHECKLIST.md](docs/TEAM_CHECKLIST.md)** — who does what, in order
+- **[docs/TESTING_PLAN.md](docs/TESTING_PLAN.md)** — test levels, workflows, release checks and acceptance criteria
 - **[docs/METADATA_GUIDE.md](docs/METADATA_GUIDE.md)** — why metadata decides whether search works
 - **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)** — the relevance formula, written out
 - **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — how the AI phase plugs in later
