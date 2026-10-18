@@ -14,7 +14,7 @@ import pytest
 from apps.core.models import DocumentType
 from apps.documents.models import AccessLevel, Document, Source
 from apps.search.services import search_documents
-from apps.tracking.services import create_draft_record
+from apps.tracking.services import add_remark, confirm_receipt, create_draft_record, route_record
 from scripts.audit_counts import Links
 from tests.test_tracking_export_agreement import export_records as export_records  # noqa: F401
 
@@ -267,3 +267,37 @@ def test_ranked_search_cap_and_exhaustive_repository_have_distinct_contracts(
     client.force_login(users["admin"])
     repository = client.get("/documents/?q=Policy+needle&min_relevance=0&per_page=all")
     assert document_ids(repository) == expected
+
+
+@pytest.fixture
+def populated_direction_stages(users, offices):
+    rows = {}
+    for direction, sender, receiver in (("incoming", "sup", "med"), ("outgoing", "med", "sup")):
+        for stage in ("PENDING_RECEIPT", "RECEIVED", "IN_PROCESS"):
+            record = create_draft_record(
+                user=users[sender], subject=f"{direction} {stage}", instructions="Review",
+            )
+            route_record(record, [users[receiver].office], user=users[sender])
+            if stage != "PENDING_RECEIPT":
+                confirm_receipt(record, user=users[receiver])
+            if stage == "IN_PROCESS":
+                add_remark(record, user=users[receiver], remark="Work has started")
+            rows[direction, stage] = record.pk
+    return rows
+
+
+@pytest.mark.parametrize("actor", ["admin", "med_admin", "med", "viewer"])
+@pytest.mark.parametrize("direction", ["incoming", "outgoing"])
+@pytest.mark.parametrize("stage", ["PENDING_RECEIPT", "RECEIVED", "IN_PROCESS"])
+def test_populated_direction_stage_pairs_match_for_every_role(
+    client, users, offices, populated_direction_stages, actor, direction, stage,
+):
+    client.force_login(users[actor])
+    params = {"office": offices["MED"].pk, "scope": direction, "status": stage}
+    expected = {populated_direction_stages[direction, stage]}
+    for path in ("/tracking/", "/search/?mode=tracking"):
+        separator = "&" if "?" in path else "?"
+        response = client.get(path + separator + urlencode(params))
+        assert response.status_code == 200
+        assert {record.pk for record in response.context["page_obj"]} == expected
+        assert response.context["total"] == 1
