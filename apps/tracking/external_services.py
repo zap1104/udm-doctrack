@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Office
 from apps.core.permissions import active_writer
+from apps.core.storage import compensate_storage, create_stored_file
 from apps.core.utils import checksum_of, log_action, validate_upload
 
 from .models import (
@@ -379,13 +380,14 @@ def record_external_work(record, *, user, actual_at=None, message=""):
     _event(record, user, "EXTERNAL_WORK", "External work recorded", detail=_text(message), actual_at=when)
 
 
+@compensate_storage
 @_mutation
 def add_attachment(record, *, user, uploaded_file, description=""):
     _open(record)
     if not record.can_act(user):
         raise PermissionDenied("Only the confirmed custodian can add files.")
     validate_upload(uploaded_file)
-    attachment = ExternalAttachment.objects.create(
+    attachment = create_stored_file(ExternalAttachment,
         record=record,
         routing_step=record.current_step,
         file=uploaded_file,

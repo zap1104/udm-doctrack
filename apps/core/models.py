@@ -313,20 +313,16 @@ class NotificationQuerySet(models.QuerySet):
         notifications = self.filter(office_id=user.office_id).filter(
             Q(document__isnull=True) | Q(document__is_active=True)
         )
-        from apps.tracking.models import ExternalTrackingRecord
+        from apps.documents.models import Document
+        from apps.tracking.models import ExternalTrackingRecord, TrackingRecord
 
         notifications = notifications.filter(
             Q(external_record__isnull=True)
             | Q(external_record__in=ExternalTrackingRecord.objects.visible_to(user))
         )
-        if user.is_office_admin and not user.is_system_admin:
-            from apps.documents.models import Document
-            from apps.tracking.models import TrackingRecord
-
-            notifications = notifications.filter(
-                Q(tracking_record__isnull=True) | Q(tracking_record__in=TrackingRecord.objects.visible_to(user))
-            ).filter(Q(document__isnull=True) | Q(document__in=Document.objects.visible_to(user)))
-        return notifications
+        return notifications.filter(
+            Q(tracking_record__isnull=True) | Q(tracking_record__in=TrackingRecord.objects.visible_to(user))
+        ).filter(Q(document__isnull=True) | Q(document__in=Document.objects.visible_to(user)))
 
     def unread_for(self, user):
         if not getattr(user, "is_authenticated", False) or not user.office_id:

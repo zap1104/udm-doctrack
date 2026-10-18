@@ -194,6 +194,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
 
     ocr_text = models.TextField(blank=True)
     ocr_status = models.CharField(max_length=8, choices=OcrStatus.choices, default=OcrStatus.PENDING)
+    extraction_generation = models.PositiveBigIntegerField(default=0, editable=False)
     ocr_engine = models.CharField(max_length=32, blank=True)
     ocr_confidence = models.FloatField(null=True, blank=True)
     ocr_language = models.CharField(max_length=8, choices=OcrLanguage.choices, default=OcrLanguage.AUTO)

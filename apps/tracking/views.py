@@ -21,7 +21,8 @@ from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
 from apps.core.permissions import active_writer
-from apps.core.utils import log_action, qr_svg
+from apps.core.storage import cleanup_new_files
+from apps.core.utils import log_action, qr_svg, unsign_download
 
 from . import services
 from .filter_navigation import direction_filter_groups, tracking_view_link
@@ -343,7 +344,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
 
         deadline = form.deadline_datetime()
         try:
-            with transaction.atomic():
+            with cleanup_new_files(), transaction.atomic():
                 record = services.create_draft_record(
                     user=request.user,
                     subject=form.cleaned_data["subject"],
@@ -366,7 +367,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
         return redirect("tracking:review", pk=record.pk)
 
     def _edit_draft(self, request):
-        with transaction.atomic():
+        with cleanup_new_files(), transaction.atomic():
             request.user = active_writer(request.user)
             visible = self._draft(request)
             record = TrackingRecord.objects.select_for_update().get(pk=visible.pk)
@@ -380,7 +381,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
                 messages.error(request, "Check the highlighted fields.")
                 return self._render_form(request, form, record)
             try:
-                with transaction.atomic():
+                with cleanup_new_files(), transaction.atomic():
                     record = form.save(commit=False)
                     record.due_at = form.deadline_datetime()
                     record.save(update_fields=[field for field in form.Meta.fields if field != "document_types"] + ["due_at", "updated_at"])
@@ -665,7 +666,7 @@ class AddRemarkView(OfficeAssignedMixin, View):
             messages.error(request, "Write the remark before saving.")
             return redirect(_record_return_url(request, record))
         try:
-            with transaction.atomic():
+            with cleanup_new_files(), transaction.atomic():
                 services.add_remark(record, user=request.user, remark=form.cleaned_data["remark"])
                 services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
         except ValidationError as exc:
@@ -689,7 +690,7 @@ class RouteRecordView(OfficeAssignedMixin, View):
             ))
             return redirect(_record_return_url(request, record))
         try:
-            with transaction.atomic():
+            with cleanup_new_files(), transaction.atomic():
                 services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
                 services.route_record(
                     record,
@@ -896,6 +897,8 @@ class AttachmentDownloadView(AppLoginRequiredMixin, View):
         attachment = get_object_or_404(attachments, pk=pk)
         if not attachment.record.can_user_view(request.user):
             raise PermissionDenied("You do not have access to this document.")
+        if unsign_download(request.GET.get("token", "")) != f"attachment:{attachment.pk}:{request.user.pk}":
+            raise PermissionDenied("This download link has expired or is invalid. Open the record to get a new link.")
         log_action(
             AuditLog.Action.DOWNLOAD,
             f"Downloaded {attachment.original_name} from {attachment.record.tracking_number}",
@@ -906,6 +909,7 @@ class AttachmentDownloadView(AppLoginRequiredMixin, View):
         try:
             response = FileResponse(attachment.file.open("rb"), as_attachment=True, filename=attachment.original_name)
             response["X-Content-Type-Options"] = "nosniff"
+            response["Cache-Control"] = "private, no-store"
             return response
         except FileNotFoundError as exc:
             raise Http404("The file is missing from storage.") from exc

@@ -12,6 +12,7 @@ from django.views import View
 from apps.core.document_types import document_type_match
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.pagination import paginate
+from apps.core.storage import cleanup_new_files
 from apps.search.services import search_documents
 
 from . import services
@@ -69,7 +70,7 @@ class ExternalUploadView(AdminRequiredMixin, View):
         form = ExternalUploadForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             try:
-                with transaction.atomic():
+                with cleanup_new_files(), transaction.atomic():
                     document, suggestion = services.ingest_upload(
                         user=request.user, uploaded_file=form.cleaned_data["file"], office=form.cleaned_data["office"],
                         source=form.cleaned_data["source"], collection=Collection.EXTERNAL,

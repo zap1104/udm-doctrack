@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from math import isfinite
+from urllib.parse import urlencode
 
 from django import template
 from django.http import QueryDict
+from django.urls import reverse
 from django.utils.html import format_html
 
 from apps.core.analytics import share_text
@@ -13,9 +15,22 @@ from apps.core.business_time import humanise_hours
 from apps.core.colors import STATUS_PILLS
 from apps.core.filters import ResolvedFilters, tracking_params
 from apps.core.utils import human_size as _human_size
+from apps.core.utils import sign_download
 from apps.tracking.models import Status
 
 register = template.Library()
+
+
+@register.simple_tag(takes_context=True)
+def signed_download_url(context, view_name, file_pk):
+    """Issue a short-lived file link bound to the account viewing this page."""
+    kinds = {
+        "tracking:attachment_download": "attachment",
+        "documents:file_download": "document-file",
+    }
+    user = context["request"].user
+    token = sign_download(f"{kinds[view_name]}:{file_pk}:{user.pk}")
+    return reverse(view_name, args=[file_pk]) + "?" + urlencode({"token": token})
 
 
 @register.filter

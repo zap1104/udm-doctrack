@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.core.models import AuditLog, MetadataFieldDefinition, Tag
 from apps.core.permissions import active_writer, locked_mutation
+from apps.core.storage import compensate_storage, create_stored_file
 from apps.core.utils import checksum_of, log_action, normalise_text, validate_upload
 from apps.tracking.models import RecordActivity, Status
 from apps.tracking.services import add_activity
@@ -50,6 +51,7 @@ def suggested_tags_for(user, *, collection=Collection.OVPA):
 # ---------------------------------------------------------------------------
 # Upload → text → suggestion (step 1 of the upload wizard)
 # ---------------------------------------------------------------------------
+@compensate_storage
 @transaction.atomic
 def ingest_upload(
     *, user, uploaded_file, office=None, source=Source.UPLOAD,
@@ -112,7 +114,7 @@ def ingest_upload(
     )
 
     uploaded_file.seek(0)
-    document_file = DocumentFile.objects.create(
+    document_file = create_stored_file(DocumentFile,
         document=document,
         file=uploaded_file,
         original_name=uploaded_file.name[:255],
@@ -159,16 +161,28 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False,
         return
     from django_q.tasks import async_task
 
-    transaction.on_commit(
-        lambda: async_task(
-            "apps.documents.tasks.extract_document_task",
-            document.pk,
-            user_id=user_id,
-            file_ids=file_ids,
-            replace=replace,
-        ),
-        robust=robust,
-    )
+    if replace:
+        document.extraction_generation += 1
+        document.save(update_fields=["extraction_generation"])
+    # Appends share the current generation; only a full retry supersedes them.
+    generation = document.extraction_generation
+
+    def submit():
+        try:
+            async_task(
+                "apps.documents.tasks.extract_document_task", document.pk,
+                user_id=user_id, file_ids=file_ids, replace=replace, generation=generation,
+            )
+        except Exception:
+            logger.exception("Could not queue text extraction for document %s", document.pk)
+            current = Document.objects.filter(pk=document.pk, is_active=True, ocr_status=OcrStatus.PENDING)
+            if generation is not None:
+                current = current.filter(extraction_generation=generation)
+            current.update(ocr_status=OcrStatus.FAILED,
+                           ocr_notes="Text extraction could not be queued. Your files were saved. Retry extraction when the background service is available.",
+                           updated_at=timezone.now())
+
+    transaction.on_commit(submit, robust=True)
 
 
 def duplicate_of(uploaded_file, *, user=None, collection=Collection.OVPA) -> Document | None:
@@ -346,6 +360,7 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
             DocumentMetadata.objects.filter(document=document, field=definition).delete()
 
 
+@compensate_storage
 @locked_mutation
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
     if not document.can_user_edit(user):
@@ -363,7 +378,7 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
         else None
     )
     uploaded_file.seek(0)
-    document_file = DocumentFile.objects.create(
+    document_file = create_stored_file(DocumentFile,
         document=document,
         file=uploaded_file,
         original_name=uploaded_file.name[:255],
@@ -379,10 +394,10 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
         document.ocr_status = OcrStatus.PENDING
         document.save(update_fields=["ocr_status", "updated_at"])
         _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk], replace=False)
-    elif extraction and extraction.text:
+    elif extraction:
         combined = (document.ocr_text + "\n\n" + extraction.text).strip()
         document.ocr_text = combined[:200000]
-        document.ocr_status = OcrStatus.DONE
+        document.ocr_status = extraction.status if extraction.status in {OcrStatus.FAILED, OcrStatus.SKIPPED} else (OcrStatus.DONE if combined else OcrStatus.EMPTY)
         document.ocr_confidence = extraction.confidence
         document.ocr_notes = "\n".join(extraction.notes)[:4000]
         document.save(

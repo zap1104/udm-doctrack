@@ -1,6 +1,8 @@
 """Repository collections must stay separate even when permissions overlap."""
 
+import re
 from datetime import timedelta
+from html import unescape
 from unittest.mock import patch
 
 import pytest
@@ -311,7 +313,11 @@ def test_external_shared_detail_download_permissions(client, users, offices, set
     detail = client.get(document.get_absolute_url())
     assert detail.status_code == 200
     assert detail.context["can_edit"] == (role in {"med_admin", "admin"})
-    response = client.get(reverse("documents:file_download", args=[file.pk]))
+    endpoint = reverse("documents:file_download", args=[file.pk])
+    assert client.get(endpoint).status_code == 403
+    match = re.search(r'href="(' + re.escape(endpoint) + r'\?[^"]+)"', detail.content.decode())
+    assert match is not None
+    response = client.get(unescape(match.group(1)))
     assert response.status_code == 200 and b"".join(response.streaming_content) == b"External evidence"
 
 

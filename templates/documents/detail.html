@@ -18,7 +18,7 @@
     {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit Metadata</a>{% endif %}
     {% if can_review_deletion %}<a class="btn btn-udm-outline" href="{% url 'documents:deletion_review' document.pk %}">Deletion review</a>{% endif %}
     {% if document.primary_file %}
-      <a class="btn btn-udm" href="{% url 'documents:file_download' document.primary_file.pk %}">Download</a>
+      <a class="btn btn-udm" href="{% signed_download_url 'documents:file_download' document.primary_file.pk %}">Download</a>
     {% endif %}
   </div>
 </div>
@@ -92,7 +92,7 @@
           <div class="file-chip mb-2">
             <span class="ext">{{ file.extension|default:"FILE" }}</span>
             <div class="flex-grow-1" style="min-width:0;">
-              <a href="{% url 'documents:file_download' file.pk %}" class="body-copy">{{ file.original_name }}</a>
+              <a href="{% signed_download_url 'documents:file_download' file.pk %}" class="body-copy">{{ file.original_name }}</a>
               <div class="text-muted supporting-copy">{{ file.size|human_size }}{% if file.page_count %} · {{ file.page_count }} page{{ file.page_count|pluralize }}{% endif %}</div>
             </div>
           </div>

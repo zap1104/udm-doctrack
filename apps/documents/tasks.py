@@ -40,8 +40,11 @@ def _extraction_actor(document, user_id):
     return actor, filing_actor and not document.allow_external_ocr
 
 
-def _cancel_extraction(document):
-    Document.objects.filter(pk=document.pk, is_active=True).update(
+def _cancel_extraction(document, generation=None):
+    current = Document.objects.filter(pk=document.pk, is_active=True)
+    if generation is not None:
+        current = current.filter(extraction_generation=generation)
+    current.update(
         ocr_status=OcrStatus.SKIPPED,
         ocr_notes="Queued text extraction was cancelled because the requesting account no longer has permission. An authorized editor can retry.",
         updated_at=timezone.now(),
@@ -49,24 +52,23 @@ def _cancel_extraction(document):
     return {"document_id": document.pk, "status": OcrStatus.SKIPPED, "characters": 0, "failures": []}
 
 
-def extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False) -> dict:
+def extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False, generation=None) -> dict:
     """A queued or in-flight job can outlive permanent repository deletion."""
     try:
-        return _extract_document_task(document_id, user_id=user_id, file_ids=file_ids, replace=replace)
+        return _extract_document_task(document_id, user_id=user_id, file_ids=file_ids, replace=replace, generation=generation)
     except Document.DoesNotExist:
         return {"document_id": document_id, "status": OcrStatus.SKIPPED, "characters": 0, "failures": []}
 
 
-def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False) -> dict:
+def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False, generation=None) -> dict:
     """Extract one document's files outside the request transaction.
 
     The task marks the row RUNNING before opening storage, then writes the
     result and rebuilds PostgreSQL's search vector in a short transaction.
     """
     document = Document.objects.select_related("office", "uploaded_by").get(pk=document_id)
-    actor, allowed = _extraction_actor(document, user_id)
-    if not allowed:
-        return _cancel_extraction(document)
+    if generation is not None and document.extraction_generation != generation:
+        return _superseded_extraction(document)
     selected = DocumentFile.objects.filter(document=document)
     if file_ids is not None:
         selected = selected.filter(pk__in=file_ids)
@@ -75,9 +77,17 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
         if user_id is not None:
             User.objects.select_for_update().filter(pk=user_id).first()
         document = Document.objects.select_for_update().get(pk=document.pk)
+        if generation is not None and document.extraction_generation != generation:
+            return _superseded_extraction(document)
         actor, allowed = _extraction_actor(document, user_id)
         if not allowed:
-            return _cancel_extraction(document)
+            return _cancel_extraction(document, generation)
+        if generation is None:
+            if replace:
+                document.extraction_generation += 1
+                document.save(update_fields=["extraction_generation"])
+            # Legacy direct appends also need a fence before provider I/O.
+            generation = document.extraction_generation
         Document.objects.filter(pk=document.pk).update(ocr_status=OcrStatus.RUNNING, updated_at=timezone.now())
     parts = []
     engines = []
@@ -92,9 +102,11 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
     for pass_number in range(3):
         for document_file in pending_files:
             document.refresh_from_db()
+            if generation is not None and document.extraction_generation != generation:
+                return _superseded_extraction(document)
             actor, allowed = _extraction_actor(document, user_id)
             if not allowed:
-                return _cancel_extraction(document)
+                return _cancel_extraction(document, generation)
             processed_file_ids.add(document_file.pk)
             try:
                 document_file.file.open("rb")
@@ -117,9 +129,11 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                 if user_id is not None:
                     User.objects.select_for_update().filter(pk=user_id).first()
                 document = Document.objects.select_for_update().get(pk=document.pk)
+                if generation is not None and document.extraction_generation != generation:
+                    return _superseded_extraction(document)
                 actor, allowed = _extraction_actor(document, user_id)
                 if not allowed:
-                    return _cancel_extraction(document)
+                    return _cancel_extraction(document, generation)
                 if result.status not in {OcrStatus.FAILED, OcrStatus.SKIPPED}:
                     document_file.page_count = result.pages
                     document_file.extracted_chars = result.char_count
@@ -143,9 +157,11 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
             if user_id is not None:
                 User.objects.select_for_update().filter(pk=user_id).first()
             document = Document.objects.select_for_update().get(pk=document.pk)
+            if generation is not None and document.extraction_generation != generation:
+                return _superseded_extraction(document)
             actor, allowed = _extraction_actor(document, user_id)
             if not allowed:
-                return _cancel_extraction(document)
+                return _cancel_extraction(document, generation)
             if replace and file_ids is None:
                 pending_files = list(DocumentFile.objects.filter(document=document).exclude(
                     pk__in=processed_file_ids,
@@ -207,6 +223,12 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                 extra={"status": status, "failures": failures[:5], "notes": notes[:5], "confidence": confidence},
             )
         return {"document_id": document.pk, "status": status, "characters": len(combined), "failures": failures}
+
+
+def _superseded_extraction(document):
+    """An older retry cannot alter a newer request's text, metrics or status."""
+    return {"document_id": document.pk, "status": OcrStatus.SKIPPED,
+            "characters": 0, "failures": []}
 
 
 def purge_deleted_documents(*, now=None, limit=100):

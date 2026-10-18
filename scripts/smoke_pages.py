@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -32,6 +33,7 @@ from django.test.utils import setup_test_environment, teardown_test_environment 
 from django.urls import reverse  # noqa: E402
 
 from apps.accounts.models import User  # noqa: E402
+from apps.core.utils import sign_download  # noqa: E402
 from apps.documents.models import Document, DocumentFile  # noqa: E402
 from apps.tracking.models import Attachment, TrackingRecord  # noqa: E402
 from apps.tracking.services import create_draft_record  # noqa: E402
@@ -247,8 +249,9 @@ def _run() -> int:
 
             attachment = Attachment.objects.filter(record__in=records).first()
             if attachment:
+                token = sign_download(f"attachment:{attachment.pk}:{person.pk}")
                 smoke.named(client, "tracking:attachment_download", (attachment.pk,), who=label,
-                            expected=(200, 404))
+                            suffix="?" + urlencode({"token": token}), expected=(200, 404))
 
             documents = list(Document.objects.visible_to(person)[:4])
             for document in documents:
@@ -258,8 +261,9 @@ def _run() -> int:
                     smoke.named(client, "documents:review", (document.pk,), who=label)
             document_file = DocumentFile.objects.filter(document__in=documents).first()
             if document_file:
+                token = sign_download(f"document-file:{document_file.pk}:{person.pk}")
                 smoke.named(client, "documents:file_download", (document_file.pk,), who=label,
-                            expected=(200, 404))
+                            suffix="?" + urlencode({"token": token}), expected=(200, 404))
 
         transaction.set_rollback(True)
 

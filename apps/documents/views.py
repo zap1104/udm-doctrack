@@ -19,7 +19,7 @@ from apps.core.document_types import document_type_counts, document_type_match, 
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
-from apps.core.utils import log_action
+from apps.core.utils import log_action, unsign_download
 from apps.search.services import search_documents
 from apps.tracking.services import pending_upload_for
 
@@ -32,7 +32,7 @@ from .forms import (
     RepositoryFilterForm,
     UploadForm,
 )
-from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Collection, Document, DocumentFile
+from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Collection, Document, DocumentFile, OcrStatus
 from .suggestions import Suggestion
 
 #: Documents per page when the reader has not asked for another size. The
@@ -599,14 +599,24 @@ class AddFilesView(OfficeAssignedMixin, View):
             messages.error(request, "Choose at least one file.")
             return redirect(document.get_absolute_url())
         added = 0
+        extraction_failed = False
+        extracting = False
         for uploaded in form.cleaned_data["files"]:
             try:
                 services.add_file_to_document(document, uploaded, user=request.user)
                 added += 1
+                document.refresh_from_db()
+                extraction_failed |= document.ocr_status == OcrStatus.FAILED
+                extracting |= document.ocr_status in {OcrStatus.PENDING, OcrStatus.RUNNING}
             except ValidationError as exc:
                 messages.error(request, "; ".join(exc.messages))
         if added:
-            messages.success(request, f"Added {added} file(s) and refreshed the search index.")
+            if extraction_failed:
+                messages.warning(request, f"Saved {added} file(s), but some text extraction did not finish. See the extraction notes before retrying.")
+            elif extracting:
+                messages.success(request, f"Saved {added} file(s). Text extraction is running in the background.")
+            else:
+                messages.success(request, f"Added {added} file(s) and refreshed the search index.")
         return redirect(document.get_absolute_url())
 
 
@@ -618,6 +628,8 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
         document_file = get_object_or_404(files, pk=pk)
         if not document_file.document.can_user_view(request.user):
             raise PermissionDenied("You do not have access to this document.")
+        if unsign_download(request.GET.get("token", "")) != f"document-file:{document_file.pk}:{request.user.pk}":
+            raise PermissionDenied("This download link has expired or is invalid. Open the document to get a new link.")
         log_action(
             AuditLog.Action.DOWNLOAD,
             f"Downloaded {document_file.original_name}",
@@ -630,6 +642,7 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
                 document_file.file.open("rb"), as_attachment=True, filename=document_file.original_name
             )
             response["X-Content-Type-Options"] = "nosniff"
+            response["Cache-Control"] = "private, no-store"
             return response
         except FileNotFoundError as exc:
             raise Http404("The file is missing from storage.") from exc
@@ -649,7 +662,10 @@ class ReExtractView(OfficeAssignedMixin, View):
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return redirect(document.get_absolute_url())
-        if result["status"] == OcrStatus.PENDING:
+        document.refresh_from_db()
+        if result["status"] == OcrStatus.PENDING and document.ocr_status == OcrStatus.FAILED:
+            messages.warning(request, "Text extraction did not finish. See the extraction notes before retrying.")
+        elif result["status"] == OcrStatus.PENDING:
             messages.success(request, "Reading the document in the background. This page will update when it is ready.")
         elif result["failures"]:
             messages.warning(request, "Some files could not be read: " + "; ".join(result["failures"][:3]))

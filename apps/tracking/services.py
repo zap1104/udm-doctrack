@@ -31,6 +31,7 @@ from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, notify_offices, overdue_notice_text, resolve_for_record
 from apps.core.pagination import DEFAULT_PAGE_SIZE
 from apps.core.permissions import active_writer, locked_mutation
+from apps.core.storage import compensate_storage, create_stored_file
 from apps.core.utils import checksum_of, log_action, truncate, validate_upload
 
 from .models import (
@@ -281,6 +282,7 @@ def create_draft_record(*, user, subject, instructions, document_type=None, docu
     return record
 
 
+@compensate_storage
 @locked_mutation
 def attach_files(record, files, *, user, note="", routing_step=None) -> list[Attachment]:
     if files:
@@ -294,7 +296,7 @@ def attach_files(record, files, *, user, note="", routing_step=None) -> list[Att
     created: list[Attachment] = []
     for uploaded in files:
         validate_upload(uploaded)
-        attachment = Attachment.objects.create(
+        attachment = create_stored_file(Attachment,
             record=record,
             routing_step=routing_step,
             file=uploaded,
