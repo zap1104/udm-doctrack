@@ -1,0 +1,148 @@
+/* Dashboard-specific layout; shared type and colours live in app-theme.css. */
+@media screen {
+  body:has(.dashboard-workspace) .app-content { padding-top: 24px; }
+  .app-shell .dashboard-workspace { font-size: 14px; line-height: 1.55; }
+  .app-shell .dashboard-workspace .page-head { margin-bottom: 22px; }
+  .app-shell .dashboard-workspace .page-head h1 { font-size: 26px; }
+  .app-shell .dashboard-workspace .page-head .sub { font-size: 14px; }
+  .app-shell .dashboard-workspace .eyebrow { font-size: 14px; letter-spacing: .09em; }
+  .app-shell .dashboard-workspace :is(.btn, .form-select, .form-control, label, .dashboard-scope-label) { font-size: 14px; }
+  .app-shell .dashboard-workspace :is(.btn, .form-select) { min-height: 44px; }
+  .app-shell .dashboard-workspace .btn.btn-sm,
+  .app-shell .dashboard-workspace .btn.btn-dashboard-action { min-height: 40px; font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-view-tabs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    padding: 6px; margin-bottom: 24px; border: 1px solid var(--udm-line);
+    border-radius: 12px; background: var(--udm-surface-sunk);
+  }
+  .app-shell .dashboard-workspace .dashboard-view-tabs[hidden],
+  .app-shell .dashboard-workspace .dashboard-tab-panel[hidden] { display: none; }
+  .dashboard-workspace .dashboard-view-tabs button {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    padding: 12px 18px; border: 1px solid transparent; border-radius: 8px;
+    background: transparent; color: var(--udm-muted); text-align: left; line-height: 1.45;
+  }
+  .dashboard-workspace .dashboard-view-tabs button > span { font-size: 18px; font-weight: 700; }
+  .dashboard-workspace .dashboard-view-tabs small { font-size: 14px; }
+  .dashboard-workspace .dashboard-view-tabs button[aria-selected="true"] {
+    background: var(--udm-surface); border-color: var(--udm-gold);
+    color: var(--udm-navy-text); box-shadow: inset 0 -3px var(--udm-gold);
+  }
+  .dashboard-workspace .dashboard-view-tabs button:hover { color: var(--udm-navy-text); background: var(--udm-surface); }
+  .dashboard-workspace :is(.dashboard-view-tabs button, .dashboard-tab-panel):focus-visible { outline: 3px solid var(--udm-focus); outline-offset: 3px; }
+  .app-shell .dashboard-workspace :is(.card-udm-head h2, .dashboard-side-title, .dashboard-attention > h2, .desk-block-title) { font-size: 18px; line-height: 1.35; }
+  .app-shell .dashboard-workspace :is(.card-udm-caption, .dashboard-side-caption, .desk-block-caption, .form-text, .help-caption, .hint, .dashboard-filing-count, .dashboard-filing-open, .desk-update-time, .dashboard-turnaround-period) { font-size: 13px; line-height: 1.6; }
+  .app-shell .dashboard-workspace .dashboard-attention-grid > a { min-height: 144px; padding: 18px 20px; background: var(--udm-surface); border-color: var(--udm-line); }
+  .app-shell .dashboard-workspace .dashboard-attention-grid > a:first-child { border-top: 3px solid #286b45; }
+  .app-shell .dashboard-workspace .dashboard-attention-grid > a:last-child { border-top: 3px solid var(--udm-gold); }
+  .app-shell .dashboard-workspace .dashboard-attention-grid .label { font-size: 14px; color: var(--udm-label-ink); }
+  .app-shell .dashboard-workspace .dashboard-attention-grid .value { font-size: 26px; }
+  .app-shell .dashboard-workspace .dashboard-attention-grid .hint { font-size: 14px; }
+  .app-shell .dashboard-workspace .card-udm-head { padding: 18px 20px; }
+  .app-shell .dashboard-workspace .card-udm-head.has-page-help { padding-right: 64px; }
+  .app-shell .dashboard-workspace .card-udm-head > div { min-width: 0; flex: 1 1 0; }
+  .app-shell .dashboard-workspace .card-udm { border-top: 2px solid var(--udm-gold); }
+  .app-shell .dashboard-workspace .dashboard-queue-split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .app-shell .dashboard-workspace .dashboard-filing-head { flex-direction: row; align-items: center; }
+  .app-shell .dashboard-workspace .dashboard-filing-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-shell .dashboard-workspace .dashboard-filing-subject { font-size: 14px; }
+  .app-shell .dashboard-workspace :is(.dashboard-filing-number, .mono) { font-size: 13px; }
+  .app-shell .dashboard-workspace :is(.desk-cell-title, .table-udm td) { font-size: 14px; }
+  .app-shell .dashboard-workspace .desk-cell-title { font-size: 14px !important; line-height: 1.4; }
+  .app-shell .dashboard-workspace .desk-cell .text-muted { font-size: 13px !important; }
+  .app-shell .dashboard-workspace :is(.table-udm th, .office-badge, .status-pill, .overdue-tag, .pill-toggle, .direction-filter, .disclosure-control) { font-size: 14px; }
+  .app-shell .dashboard-workspace .table-udm :is(th, td) { padding: 12px 16px; }
+  .app-shell .dashboard-workspace .dashboard-side-head { border-bottom: 2px solid var(--udm-gold); padding-bottom: 12px; }
+  .app-shell .dashboard-workspace .stat-card .label { font-size: 14px; }
+  .app-shell .dashboard-workspace .stat-card .hint { font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-secondary-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: 0; background: transparent; overflow: visible; }
+  .app-shell .dashboard-workspace .dashboard-secondary-stats > a { grid-column: auto; }
+  .app-shell .dashboard-workspace :is(.breakdown-label, .breakdown-item .num, .ring-title, .segmented a) { font-size: 14px; }
+  .app-shell .dashboard-workspace .donut-hole-label { text-transform: none; letter-spacing: 0; line-height: 1.15; }
+  .app-shell .dashboard-workspace :is(.ring-title small, .ring-note, .ring-note a, .report-series-item, .status-share, .column-chart-axis span, .column-value, .column-label, .chart-scale, .disclosure-description, .disclosure-state, .trend-axis-values span, .trend-axis-labels span, .trend-summary-head, .turnaround-period-note, .turnaround-rounding-note, .meter-head, .meter-foot, .turnaround-waiting-note, .turnaround-table-value small) { font-size: 14px; }
+  .app-shell .dashboard-workspace .disclosure-title { font-size: 14px; }
+  .app-shell .dashboard-workspace :is(.direction-filter-heading, .desk-attention-label, .pill) { font-size: 14px; }
+  .app-shell .dashboard-workspace .direction-filter-note { font-size: 14px; }
+  .app-shell .dashboard-workspace :is(.desk-chip-count, .office-badge-more, .turnaround-table-count, .turnaround-table-value > span, .trend-key, .chart-key) { font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-calendar { font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-averages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .dashboard-workspace .dashboard-turnaround-extremes { margin: 12px 0 0; padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--udm-line); }
+  .app-shell .dashboard-workspace .column-chart { --column-value-band: 24px; --column-gutter: 48px; --column-slot: 30px; }
+  .app-shell .dashboard-workspace .column-chart--turned { --column-value-band: 46px; --column-slot: 16px; }
+  .app-shell .dashboard-workspace :is(.breakdown-percent, .donut-hole-label, .chart-legend, .column-chart-label, .column-chart-value, .dashboard-turnaround-measure, .turnaround-sample-basis, .turnaround-zero-note, .dashboard-turnaround-calculation, .turnaround-time-guide, .dashboard-turnaround-extremes, .dashboard-turnaround-stage dt) { font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-stage h3 { font-size: 18px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-primary { font-size: 22px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-stage { display: block; }
+  /* Details stay near their figures, with no dashboard data removed. */
+  .dashboard-workspace .dashboard-disclosure { margin: 0; border: 0; }
+  .dashboard-workspace .dashboard-disclosure > summary {
+    display: flex; align-items: center; gap: 9px; min-height: 40px;
+    padding: 8px 0; color: var(--udm-navy-text); cursor: pointer;
+    font-size: 14px; font-weight: 600; list-style: none;
+  }
+  .dashboard-workspace .dashboard-disclosure > summary::-webkit-details-marker { display: none; }
+  .dashboard-workspace .dashboard-disclosure > summary::before {
+    content: ""; width: 7px; height: 7px; flex: 0 0 7px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); margin: 0 3px 0 1px;
+  }
+  .dashboard-workspace .dashboard-disclosure[open] > summary::before { transform: rotate(45deg); }
+  .dashboard-workspace .dashboard-disclosure > summary:focus-visible { outline: 2px solid var(--udm-focus); outline-offset: 2px; border-radius: 4px; }
+  .dashboard-workspace .dashboard-disclosure-body { padding: 4px 0 12px; }
+  .dashboard-workspace .dashboard-time-explanation { margin-bottom: 12px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact { --stage-padding-y: 16px; --stage-padding-x: 16px; background: var(--udm-surface); }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-measure { font-size: 13px; margin: 0 0 8px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .turnaround-sample-basis { font-size: 13px; margin-bottom: 16px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-averages { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-averages dt { font-size: 13px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-calendar { font-size: 14px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-stage-details { border-top: 1px solid var(--udm-line-soft); margin-top: 16px; }
+  .app-shell .dashboard-workspace .dashboard-turnaround-stages { align-items: start; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-extremes { margin-top: 0; padding-top: 0; border-top: 0; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-extremes dt { font-size: 13px; }
+  .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-extremes :is(a, dd > span) { font-size: 13px; }
+  .app-shell .dashboard-workspace .dashboard-queue-explanation { padding-inline: 20px; }
+  .app-shell .dashboard-workspace .dashboard-queue-explanation > summary { font-size: 13px; min-height: 36px; }
+  .app-shell .dashboard-workspace .desk-block-title { font-size: 15px; letter-spacing: .03em; }
+  .app-shell .dashboard-workspace .desk-block-count { font-size: 13px; font-weight: 400; letter-spacing: 0; }
+  .app-shell .dashboard-workspace .table-udm thead th { font-size: 12px; letter-spacing: .04em; }
+  .app-shell .dashboard-workspace .desk-cell .mono { font-size: 12px; font-weight: 500; text-decoration: none; }
+  .app-shell .dashboard-workspace .desk-cell .mono:is(:hover, :focus-visible) { text-decoration: underline; }
+  .app-shell .dashboard-workspace .dashboard-queue-document { display: flex; flex-direction: column; gap: 3px; }
+  .app-shell .dashboard-workspace .dashboard-queue-document .desk-cell-title { order: -1; margin: 0; }
+  .app-shell .dashboard-workspace .dashboard-subject-link { color: var(--udm-ink); font-weight: 600; text-decoration: none; }
+  .app-shell .dashboard-workspace .dashboard-subject-link:is(:hover, :focus-visible) { color: var(--udm-navy-text); text-decoration: underline; }
+  .app-shell .dashboard-workspace .dashboard-queue-document .mono { color: var(--udm-muted); }
+  .app-shell .dashboard-workspace .dashboard-filing-record { position: relative; gap: 6px; padding: 14px 38px 14px 18px; }
+  .app-shell .dashboard-workspace .dashboard-filing-subject { order: -1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 600; line-height: 1.45; }
+  .app-shell .dashboard-workspace .dashboard-filing-number { font-size: 12px; color: var(--udm-muted); }
+  .app-shell .dashboard-workspace .dashboard-filing-open { position: absolute; top: 15px; right: 16px; font-size: 18px; text-decoration: none; }
+  @media (min-width: 1200px) {
+    .app-shell .dashboard-workspace .dashboard-turnaround-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .app-shell .dashboard-workspace .dashboard-stage-compact .dashboard-turnaround-extremes { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (min-width: 1440px) {
+    body:has(.dashboard-workspace) .app-content { padding-inline: 28px; }
+    .app-shell .dashboard-workspace .dashboard-queue-split { grid-template-columns: minmax(0, 1fr) 300px; }
+    .app-shell .dashboard-workspace .dashboard-filing-head { flex-direction: column; align-items: flex-start; }
+    .app-shell .dashboard-workspace .dashboard-filing-list { grid-template-columns: minmax(0, 1fr); }
+    .app-shell .dashboard-workspace .dashboard-turnaround-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .app-shell .dashboard-workspace :is(.dashboard-turnaround-averages, .dashboard-turnaround-extremes) { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 767px) {
+    .app-shell .dashboard-workspace .dashboard-secondary-stats { grid-template-columns: minmax(0, 1fr); }
+    .app-shell .dashboard-workspace .dashboard-attention-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .app-shell .dashboard-workspace .dashboard-attention-grid > a { min-height: 120px; }
+    .app-shell .dashboard-workspace .dashboard-filing-list { grid-template-columns: minmax(0, 1fr); }
+    .app-shell .dashboard-workspace .dashboard-filing-head { align-items: flex-start; flex-direction: column; }
+    .dashboard-workspace .dashboard-view-tabs button { padding: 12px 10px; }
+    .dashboard-workspace .dashboard-view-tabs button > span { font-size: 18px; }
+    .dashboard-workspace .dashboard-view-tabs small { font-size: 14px; }
+    .app-shell .dashboard-workspace .dashboard-head-actions { width: 100%; }
+    .app-shell .dashboard-workspace .dashboard-scope { width: 100%; }
+  }
+}
+@media print {
+  .dashboard-workspace .dashboard-tab-panel[hidden] { display: block !important; }
+  .dashboard-workspace .dashboard-view-tabs { display: none !important; }
+}

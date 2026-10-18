@@ -1,0 +1,147 @@
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/ibm-plex-sans/IBMPlexSans-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/ibm-plex-sans/IBMPlexSans-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/ibm-plex-sans/IBMPlexSans-Bold.woff2") format("woff2");
+}
+
+
+/* Shared screen typography and institutional palette, promoted from the dashboard.
+ * Paper layouts continue to use the document styles in doctrack.css.
+ */
+:root { --app-font: "IBM Plex Sans", "Segoe UI", sans-serif; --dashboard-font: var(--app-font); }
+@media screen {
+  body, body .app-shell { font-family: var(--app-font); font-size: 14px; line-height: 1.55; }
+  :root body :is(h1, h2, h3, h4, h5, h6, .display-face, .wordmark, .mono, .stat-card .value, .relevance .score, button, input, select, textarea) { font-family: var(--app-font); }
+  body .mono { font-variant-numeric: tabular-nums; }
+  body:has(.app-shell), body:has(.app-shell) .app-shell {
+    --udm-canvas: #f1eddf;
+    --udm-surface: #fffdf7;
+    --udm-surface-sunk: #ece8da;
+    --udm-line: #d6d5c4;
+    --udm-line-soft: #e4e3d5;
+    --udm-line-strong: #afbda8;
+    --udm-row-line: #e4e3d5;
+    --udm-ink: #183126;
+    --udm-navy-text: #174a37;
+    --udm-muted: #576b5c;
+    --udm-label-ink: #365146;
+    --udm-slate-text: #4f6358;
+    --udm-slate-soft: #e7ebdd;
+    --udm-navy-soft: #e7ebdd;
+    --udm-gold: #d5b86a;
+    --udm-gold-soft: #f4ecd8;
+    --udm-gold-ink: #725616;
+    --dt-selected: #e7ebdd;
+    --sidebar-width: 248px;
+    --bs-body-bg-rgb: 241, 237, 223;
+  }
+  :root[data-theme="dark"] body:has(.app-shell),
+  :root[data-theme="dark"] body:has(.app-shell) .app-shell {
+    --udm-canvas: #111e18;
+    --udm-surface: #1b2c22;
+    --udm-surface-sunk: #15241c;
+    --udm-line: #465947;
+    --udm-line-soft: #354b3b;
+    --udm-line-strong: #819b89;
+    --udm-row-line: #354b3b;
+    --udm-ink: #edf1e5;
+    --udm-navy-text: #e3eddf;
+    --udm-muted: #bcccb8;
+    --udm-label-ink: #d4dfca;
+    --udm-slate-text: #c6d4be;
+    --udm-slate-soft: #2b4432;
+    --udm-navy-soft: #2b4432;
+    --udm-gold-soft: #3c3623;
+    --udm-gold-ink: #eed596;
+    --dt-selected: #2b4432;
+    --bs-body-bg-rgb: 17, 30, 24;
+  }
+  body:has(.app-shell) .app-sidebar {
+    background: #174a37; color: #f5f1e3; border-right-color: #103326;
+  }
+  body:has(.app-shell) .app-sidebar :is(.sidebar-brand-title, .sidebar-office-name) { color: #fffdf7; }
+  body:has(.app-shell) .sidebar-brand-title { font-size: 24px; }
+  body:has(.app-shell) .app-sidebar :is(.sidebar-brand-subtitle, .nav-section, .sidebar-office-role) { color: #d6ddc7; font-size: 14px; }
+  body:has(.app-shell) .app-sidebar .nav-item { color: #f5f1e3; font-size: 14px; min-height: 48px; }
+  body:has(.app-shell) .app-sidebar .nav-item:is(.active, :hover, :focus-visible) { color: #fffdf7; background: #2b6047; box-shadow: inset 3px 0 #d5b86a; }
+  body:has(.app-shell) .app-sidebar .nav-item--child { font-size: 14px; border-color: #75917a; }
+  body:has(.app-shell) .sidebar-office { background: #103b2b; border-color: #527659; }
+  body:has(.app-shell) .sidebar-office-name { font-size: 14px; }
+  body:has(.app-shell) .sidebar-office-mark { color: #174a37; background: #d5b86a; font-size: 12px; }
+  body:has(.app-shell) :is(.topbar-location, .topbar-account-name, .topbar-search input) { font-size: 14px; }
+  body:has(.app-shell) .topbar-account-office { font-size: 14px; }
+  body:has(.app-shell) .app-shell .app-topbar .topbar-search input { font-size: 14px; }
+
+}
+
+@media screen {
+  /* The 14px reading size is shared by all working pages. Hierarchy uses size
+   * sparingly: 26px page titles, 18px panel titles, 12–13px secondary metadata.
+   */
+  :root body .app-shell :is(.btn, .form-control, .form-select, .form-label, .form-check-label, .multiselect-search, .multiselect-option, .multiselect-clear, .tag-chip, .module-subtabs a, .reports-tabs a, .external-nav a, .repository-view, .repository-folder-copy strong, .tracking-filter-label, .direction-filter-heading, .direction-filter, .pill-toggle, .page-back, .status-pill, .office-badge, .body-copy, .table-stacked td, .table-udm td, .segmented a, .disclosure-title, .result-snippet, .pagination, .dropdown-item) { font-size: 14px; }
+  :root body .app-shell :is(.btn, .form-control, .form-select) { min-height: 44px; }
+  :root body .app-shell .btn.btn-sm { min-height: 38px; }
+  :root body .app-shell h1 { font-size: 26px; line-height: 1.3; }
+  :root body .app-shell :is(.card-udm-head h2, .repository-section-head h2, .section-heading) { font-size: 18px; }
+  :root body .app-shell :is(.page-head .sub, .card-udm-caption, .phase2-card-caption, .form-text, .supporting-copy, .disclosure-description, .direction-filter-note, .tracking-filter-note, .repository-section-head p, .file-chip-meta, .multiselect-count, .app-footer) { font-size: 13px; line-height: 1.6; }
+  :root body .app-shell :is(.eyebrow, .table-udm thead th) { font-size: 12px; letter-spacing: .055em; }
+  :root body .app-shell .table-udm .mono { font-size: 12px; }
+  :root body .app-shell .table-udm :is(th, td) { padding-block: 12px; }
+  :root body .app-shell .stat-card .label { font-size: 14px; }
+  :root body .app-shell .stat-card .value { font-size: 26px; }
+  :root body .app-shell .stat-card .hint { font-size: 13px; }
+  :root body .app-shell .pill { font-size: 14px; }
+  :root body .app-shell .report-caption { font-size: 13px; }
+  :root body .app-shell .report-chart-summary strong { font-size: 26px; }
+  :root body .app-shell :is(.breakdown-label, .breakdown-item .num, .breakdown-percent, .donut-hole-label, .ring-title, .ring-note, .ring-note a, .report-series-item, .status-share, .column-chart-axis span, .column-value, .column-label, .chart-scale, .chart-key, .chart-legend, .chart-legend span, .trend-axis-values span, .trend-axis-labels span, .trend-summary-head, .trend-key, .turnaround-period-note, .turnaround-rounding-note, .meter-head, .meter-foot, .turnaround-waiting-note, .turnaround-table-value small, .turnaround-table-value > span, .turnaround-table-count, .turnaround-sample-basis, .turnaround-zero-note, .turnaround-time-guide) { font-size: 14px; }
+  :root body .app-shell .column-chart { --column-value-band: 24px; --column-gutter: 48px; --column-slot: 30px; }
+  :root body .app-shell .column-chart--turned { --column-value-band: 46px; --column-slot: 16px; }
+  :root body .app-shell .dashboard-turnaround-stage h3 { font-size: 18px; }
+  :root body .app-shell .dashboard-turnaround-primary { font-size: 22px; }
+  :root body .app-shell .card-udm { border-top: 2px solid var(--udm-gold); }
+  :root body .app-shell .page-head { margin-bottom: 22px; }
+  :root body .app-shell .app-content { padding-top: 24px; }
+  :root body .app-shell :is(.module-subtabs, .reports-tabs, .external-nav) :is(.active, .is-active, [aria-current="page"]) { border-bottom-color: var(--udm-gold); color: var(--udm-navy-text); }
+  :root body .app-shell .nav-item .nav-icon { transition: transform .18s; }
+  @media (hover: hover) and (pointer: fine) {
+    :root body .app-shell .nav-item:hover .nav-icon { transform: scale(1.12); }
+  }
+  /* Account screens retain a light local palette when the workspace is dark. */
+  :root body .login-wrap {
+    --udm-canvas: #f1eddf; --udm-surface: #fffdf7; --udm-line: #d6d5c4;
+    --udm-ink: #183126; --udm-muted: #576b5c; --udm-navy-text: #174a37;
+    --udm-surface-sunk: #ece8da; --udm-gold-soft: #f4ecd8; --udm-gold-ink: #725616;
+    --udm-label-ink: #365146;
+    font-size: 14px; background: var(--udm-surface);
+  }
+  :root body .login-form { background: var(--udm-surface); }
+  :root body .login-art { background-color: #174a37; }
+  :root body .login-form :is(input, label, button, .form-control, .form-label, p) { font-size: 14px; }
+  :root body .login-form .form-control { background-color: var(--udm-surface); color: var(--udm-ink); }
+  :root body .login-form-heading h2 { font-size: 26px; }
+  :root body .login-form :is(.login-account-note, .login-security-note, .form-text) { font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { :root body .app-shell .nav-item .nav-icon { transition: none; transform: none; } }
+}

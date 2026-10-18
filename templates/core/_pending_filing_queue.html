@@ -15,10 +15,11 @@
     <ul class="dashboard-filing-list">
       {% for record in pending_filing.records %}
         <li>
-          <a class="dashboard-filing-record" href="{{ record.get_absolute_url }}">
+          <a class="dashboard-filing-record" href="{{ record.get_absolute_url }}" title="{{ record.subject }}">
             <span class="mono dashboard-filing-number">{{ record.display_tracking_number }}</span>
             <span class="dashboard-filing-subject">{{ record.subject }}</span>
-            <span class="dashboard-filing-open">Open record <span aria-hidden="true">&rarr;</span></span>
+            <span class="visually-hidden">Open record</span>
+            <span class="dashboard-filing-open" aria-hidden="true">&rarr;</span>
           </a>
         </li>
       {% endfor %}

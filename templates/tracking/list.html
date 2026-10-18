@@ -10,7 +10,7 @@
       the word was describing a filter the page no longer applies.
     {% endcomment %}
     <h1>Document Tracking</h1>
-    <p class="sub">Tracking records, including drafts and completed work awaiting filing in the Document Repository.</p>
+
   </div>
   {% comment %}
     Hidden from the accounts RecordCreateView would turn away — a viewer, and an
@@ -282,11 +282,13 @@
   column's heading repeats its own definition on hover. The note under the
   table defined one of the three, a scroll away from the rows it explained.
 {% endcomment %}
+<details class="workspace-guide" data-help-title="Office columns"><summary>About office columns</summary>
 <dl class="office-terms">
   <div><dt>Originating office</dt><dd>raised the document. It never changes; it is under each subject.</dd></div>
   <div><dt>Received by</dt><dd>offices that confirmed receipt of the latest endorsement. More than one office can receive a document.</dd></div>
   <div><dt>Awaiting receipt</dt><dd>offices that still need to confirm receipt. Once confirmed, they appear under Received by.</dd></div>
 </dl>
+</details>
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
 <div class="card-udm">
   <div class="card-udm-head">
@@ -294,43 +296,40 @@
     <a class="small" href="{% url 'core:report_export' %}?{{ request.GET.urlencode }}&amp;source=tracking">Export CSV</a>
   </div>
   <div class="card-udm-body p-0 table-responsive" tabindex="0" role="region" aria-label="Tracking records">
-    <table class="table-udm tracking-records-table">
+    <table class="table-udm tracking-records-table" data-record-table>
+      <colgroup>
+        {% if can_bulk_receive %}<col class="record-selection-column">{% endif %}
+        <col class="record-document-column"><col class="record-received-column"><col class="record-awaiting-column">
+        <col class="record-updated-column"><col class="record-status-column"><col class="record-action-column">
+      </colgroup>
       <thead>
         <tr>
           {# Current and receiving both: where it is, and who owes the next act. #}
-          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Tracking number</th><th scope="col">Subject</th><th scope="col" title="Offices that confirmed receipt of the latest endorsement.">Received by</th><th scope="col" title="Offices that still need to confirm receipt of the latest endorsement.">Awaiting receipt</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
+          {% if can_bulk_receive %}<th scope="col"><span class="visually-hidden">Select for receipt</span></th>{% endif %}<th scope="col">Document</th><th scope="col" title="Offices that confirmed receipt of the latest endorsement.">Received by</th><th scope="col" title="Offices that still need to confirm receipt of the latest endorsement.">Awaiting receipt</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th>
         </tr>
       </thead>
       <tbody>
         {% for record in records %}
           <tr>
             {% if can_bulk_receive %}<td>{% if record.can_confirm_now %}<input class="form-check-input" type="checkbox" name="record_ids" value="{{ record.pk }}" aria-label="Select {{ record.display_tracking_number }} for receipt">{% endif %}</td>{% endif %}
-            <td class="mono"><a href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
-            <td class="tracking-subject">
-              {{ record.subject|truncatechars:60 }}
-              <div class="text-muted" style="font-size:12.5px;">
-                {% include "partials/_direction_tag.html" with direction=record.direction %}
-                {{ record.document_type_names|default:"No type" }} ·
-                {% comment %}
-                "Originating office", not "from". Every row here already
-                carries a Current office column, and the two are different
-                offices for any document in transit — so a bare "from SUP"
-                beside "Current office SUP" read as one fact stated twice
-                instead of two facts that happen to agree today.
-
-                It is the same ambiguity the office filter was split to remove:
-                the dropdown it replaced matched originating OR current office,
-                so picking Supply returned both what Supply raised and what was
-                merely passing through it. The row now uses the filter's word
-                and the detail page's word, so all three name the same thing.
-                {% endcomment %}
-                Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
+            <td class="tracking-subject record-document">
+              <a class="record-subject" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.subject }}</a>
+              <a class="mono record-number" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
+              <div class="record-metadata text-muted">
+                <div class="record-type">
+                  {% include "partials/_direction_tag.html" with direction=record.direction %}
+                  <span>{{ record.document_type_names|default:"No type" }}</span>
+                </div>
+                <div class="record-origin">
+                  <span title="Originating office">Origin</span>
+                  {% include "partials/_office_badge.html" with office=record.originating_office %}
+                </div>
               </div>
             </td>
-            <td class="office-cell" data-receipt-offices="received">{% include "partials/_receipt_offices.html" with kind="received" %}</td>
-            <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" %}</td>
+            <td class="office-cell" data-receipt-offices="received">{% include "partials/_receipt_offices.html" with kind="received" compact_receipts=True %}</td>
+            <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" compact_receipts=True %}</td>
             <td class="tracking-updated">{{ record.last_movement_at|date:"d M Y" }}<br>{{ record.last_movement_at|date:"g:i A" }}</td>
-          <td>
+          <td class="record-status">
               {% comment %}
                 Two pills, because they answer different questions: the stage
                 says what to do next, the tag says how urgent it is. They used
@@ -354,7 +353,7 @@
                 {% endif %}
               </div>
             </td>
-            <td class="text-end">
+            <td class="text-end record-action">
               {% if record.can_confirm_now %}
                 <a class="btn btn-receipt btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}">
                       <span class="btn-receipt-icon" aria-hidden="true">✓</span>
@@ -372,7 +371,7 @@
             "Incoming" and "Created by me" can never both hold. Saying so beats
             an empty table the reader reads as a broken filter.
           {% endcomment %}
-          <tr><td colspan="{% if can_bulk_receive %}8{% else %}7{% endif %}">
+          <tr><td colspan="{% if can_bulk_receive %}7{% else %}6{% endif %}">
             <div class="empty-state">
               <h3>No tracking records match this view</h3>
               {% if impossible_reason %}

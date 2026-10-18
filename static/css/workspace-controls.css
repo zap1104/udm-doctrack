@@ -1,0 +1,195 @@
+/* Workspace adaptations of the supplied Bencho Search, Liquid toggle and
+ * Checklist prompts (bencho.dev/licence). These use DocTrack's native controls
+ * and institutional colours; no React runtime or demo task behavior is introduced.
+ */
+@media screen {
+  /* ONE OBJECT, NOT TWO: a fixed lens inside one box whose width changes.
+   * The 44px height never changes; a fully round corner works at every width.
+   * Keep the lens 13px from the edge: (44 - 18) / 2 = 13.
+   */
+  body .app-shell .app-topbar .workspace-search.is-enhanced {
+    position: relative;
+    flex: 0 0 auto;
+    width: 44px;
+    min-width: 44px;
+    max-width: 300px;
+    height: 44px;
+    border: 1px solid var(--udm-line-strong);
+    border-radius: 999px;
+    background: var(--udm-surface-sunk);
+    overflow: hidden;
+    transition: width .42s cubic-bezier(.2, .85, .25, 1.08), background .2s, border-color .2s, box-shadow .2s;
+  }
+  body .app-shell .app-topbar .workspace-search.is-open { width: 300px; }
+  body .app-shell .app-topbar .workspace-search:focus-within {
+    border-color: var(--udm-gold-ink);
+    background: var(--udm-surface);
+    box-shadow: 0 0 0 3px var(--udm-gold-soft);
+  }
+  body .workspace-search.is-enhanced > .dt-icon {
+    z-index: 4; left: 12px; width: 18px; height: 18px; color: var(--udm-navy-text);
+  }
+  body .workspace-search-trigger:not([hidden]) {
+    display: block; position: absolute; z-index: 3; inset: 0 auto 0 0;
+    width: 44px; min-height: 42px; padding: 0; border: 0; border-radius: 999px;
+    background: transparent; color: var(--udm-navy-text); cursor: pointer;
+  }
+  body .workspace-search-trigger:hover { background: var(--udm-gold-soft); }
+  body .workspace-search-trigger:focus-visible { outline: 2px solid var(--udm-gold-ink); outline-offset: -4px; }
+  body .app-shell .app-topbar .workspace-search.is-enhanced input {
+    width: 100%; height: 42px; min-height: 42px; padding: 8px 14px 8px 48px;
+    border: 0; border-radius: inherit; background: transparent; box-shadow: none;
+    font-family: var(--app-font); font-size: 14px;
+    transition: opacity .15s;
+  }
+  body .workspace-search.is-enhanced:not(.is-open) input { opacity: 0; pointer-events: none; }
+
+  /* Two overlapping blobs, not one. The smaller drop follows late to stretch
+   * the bridge during travel. Everything on the filtered layer is OPAQUE:
+   * thresholding alpha would eat translucent fills or antialiased symbols.
+   * The unfiltered symbol follows the main thumb above the liquid layer.
+   */
+  body .workspace-control-filter { position: absolute; pointer-events: none; }
+  body .app-shell .theme-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 64px; width: 64px; min-width: 64px; height: 44px; min-height: 44px;
+    padding: 4px; border: 0; background: transparent; border-radius: 999px;
+  }
+  body .theme-toggle:focus-visible { outline: 2px solid var(--udm-gold-ink); outline-offset: 2px; }
+  body .workspace-theme-track {
+    display: block; position: relative; width: 56px; height: 32px;
+    border-radius: 999px; background: #c3cbb9;
+    box-shadow: inset 0 0 0 1px #7f947e; transition: background .3s;
+  }
+  body .workspace-theme-liquid { position: absolute; inset: 0; filter: url("#workspace-liquid-goo"); }
+  body :is(.workspace-theme-thumb, .workspace-theme-drop) {
+    display: block; position: absolute; border-radius: 50%; background: #fffdf7;
+    transition: transform .44s cubic-bezier(.2, .8, .25, 1.18), background .3s;
+  }
+  body .workspace-theme-thumb { width: 24px; height: 24px; left: 4px; top: 4px; }
+  body .workspace-theme-drop { width: 16px; height: 16px; left: 8px; top: 8px; transition-delay: .045s, 0s; }
+  body .workspace-theme-symbol {
+    display: grid; place-items: center; position: absolute; left: 4px; top: 4px;
+    width: 24px; height: 24px; color: #174a37; font-size: 18px; line-height: 1;
+    transition: transform .44s cubic-bezier(.2, .8, .25, 1.18);
+  }
+  body .theme-toggle[aria-pressed="true"] .workspace-theme-track { background: #286b45; box-shadow: inset 0 0 0 1px #82a384; }
+  body .theme-toggle[aria-pressed="true"] :is(.workspace-theme-thumb, .workspace-theme-drop, .workspace-theme-symbol) { transform: translateX(24px); }
+  body .theme-toggle[aria-pressed="true"] :is(.workspace-theme-thumb, .workspace-theme-drop) { background: #d5b86a; }
+
+  /* The fill may swell and settle; the native tick stays inside the box.
+   * Receipt selection is not task completion: records never strike through
+   * or reset themselves. Checked/required/disabled remain native form states.
+   */
+  .app-shell input[type="checkbox"]:not([role="switch"]) {
+    appearance: none; width: 20px; height: 20px; min-width: 20px;
+    border: 1.5px solid var(--udm-muted); border-radius: 6px;
+    background-color: var(--udm-surface); cursor: pointer; vertical-align: middle;
+    box-shadow: inset 0 1px 2px rgb(24 49 38 / 5%);
+    transition: background-color .16s, border-color .16s, box-shadow .16s;
+  }
+  .app-shell input[type="checkbox"]:not([role="switch"]):hover:not(:disabled) { border-color: #286b45; }
+  .app-shell input[type="checkbox"]:not([role="switch"]):checked,
+  .app-shell input[type="checkbox"]:not([role="switch"]):indeterminate {
+    background-color: #286b45; border-color: #286b45;
+    background-position: center; background-repeat: no-repeat; background-size: 100% 100%;
+    animation: workspace-check-pop .28s cubic-bezier(.2, .8, .3, 1);
+  }
+  .app-shell input[type="checkbox"]:not([role="switch"]):focus-visible {
+    outline: 2px solid var(--udm-gold-ink); outline-offset: 3px;
+    box-shadow: 0 0 0 4px var(--udm-gold-soft);
+  }
+  .app-shell input[type="checkbox"]:not([role="switch"]):disabled { cursor: not-allowed; opacity: .45; }
+  .app-shell .table-udm tr:has(input[name="record_ids"]:checked) > td { background: var(--dt-selected); }
+  .app-shell .table-udm tr:has(input[name="record_ids"]:checked) > td:first-child { box-shadow: inset 3px 0 var(--udm-gold); }
+  .app-shell .form-check:has(input[name="confirm_custody"]) { padding: 12px 14px 12px 44px; background: var(--udm-surface-sunk); border: 1px solid var(--udm-line); border-radius: 10px; }
+  .app-shell .form-check:has(input[name="confirm_custody"]:checked) { border-color: #286b45; }
+  .app-shell .form-check:has(input[name="confirm_custody"]) .form-check-input { margin-left: -30px; }
+  .app-shell .form-check:has(input[name="confirm_custody"]) label { cursor: pointer; }
+  .app-shell input[type="checkbox"]:checked:not([role="switch"]) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='m5 10 3 3 7-7'/%3E%3C/svg%3E"); }
+  .app-shell input[type="checkbox"]:indeterminate:not([role="switch"]) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-width='2.5' d='M5 10h10'/%3E%3C/svg%3E"); }
+  @keyframes workspace-check-pop { 0% { transform: scale(.88); } 60% { transform: scale(1.13); } 100% { transform: scale(1); } }
+  @media (max-width: 575px) {
+    body .app-shell .app-topbar .workspace-search.is-open { width: 100%; max-width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body .workspace-search,
+    body .workspace-search input,
+    body :is(.workspace-theme-track, .workspace-theme-thumb, .workspace-theme-drop, .workspace-theme-symbol),
+    .app-shell input[type="checkbox"]:not([role="switch"]) { transition: none !important; animation: none !important; }
+  }
+  @media (forced-colors: active) {
+    .app-shell input[type="checkbox"]:not([role="switch"]) { appearance: auto; }
+    body .workspace-theme-liquid { filter: none; }
+    body .workspace-theme-track { border: 1px solid ButtonText; }
+  }
+}
+
+@media screen {
+  /* Label input: ONE THING MOVES. The outline stays whole; only the label
+   * lifts into the top edge. No letter-by-letter motion during routine typing.
+   * The native label/ID relationship and original placeholder are preserved.
+   */
+  .label-input { position: relative; margin-top: 9px; }
+  :root body .label-input > label.form-label {
+    position: absolute; z-index: 1; left: 14px; top: 13px;
+    max-width: calc(100% - 30px); margin: 0; padding: 0;
+    color: var(--udm-muted); font-size: 14px; font-weight: 400; line-height: 22px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: text; transition: top .16s, transform .16s, font-size .16s, color .16s;
+  }
+  :root body .label-input > input.form-control { min-height: 48px; padding: 12px 14px; font-size: 14px; }
+  .label-input > input::placeholder { color: transparent; }
+  .label-input > input:focus::placeholder { color: var(--udm-muted); }
+  :root body .label-input:has(input:focus, input:not(:placeholder-shown), input:autofill) > label.form-label {
+    top: 0; transform: translateY(-50%); margin-left: -5px; padding-inline: 5px;
+    max-width: calc(100% - 20px); font-size: 13px; font-weight: 500;
+    background: var(--udm-surface); color: var(--udm-label-ink);
+  }
+  :root body .label-input:focus-within > input { border-color: var(--udm-gold-ink); box-shadow: 0 0 0 3px var(--udm-gold-soft); }
+  :root body .form-field--error .label-input > input,
+  :root body .label-input > input[aria-invalid="true"] { border-color: var(--udm-red); }
+  :root body .form-field--error .label-input > label { color: var(--udm-red-ink); }
+
+  /* Assignees: the selected items are the readout. Use real office/type names
+   * in pills instead of invented people or unlicensed avatar photographs.
+   * The existing checkbox list and underlying multiple select own selection.
+   */
+  :root body .multiselect { border-color: var(--udm-line-strong); border-radius: 12px; background: var(--udm-surface); overflow: hidden; }
+  :root body .multiselect-search { padding: 12px 14px; background: var(--udm-surface-sunk); }
+  :root body .multiselect-list { max-height: 220px; padding: 6px; }
+  :root body .multiselect-option { gap: 12px; min-height: 44px; padding: 9px 10px; border: 0; border-radius: 7px; }
+  :root body .multiselect-option.is-selected { background: var(--dt-selected); color: var(--udm-navy-text); }
+  :root body .multiselect-option input { flex-shrink: 0; margin: 0; }
+  :root body .multiselect-summary { padding: 10px 12px; gap: 7px; background: var(--udm-surface-sunk); border-top: 1px solid var(--udm-line); }
+  :root body .multiselect-summary:empty { display: none; }
+  :root body .multiselect-summary .tag-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; padding: 3px 6px 3px 10px; border: 1px solid var(--udm-line-strong); border-radius: 999px; background: var(--udm-surface); color: var(--udm-navy-text); }
+  :root body .multiselect-summary .tag-chip > span { min-width: 0; overflow-wrap: anywhere; }
+  :root body .multiselect-chip-remove { display: inline-grid; place-items: center; width: 30px; min-width: 30px; min-height: 30px; margin: 0; border-radius: 50%; font-size: 18px; }
+  :root body .multiselect-chip-remove:hover { background: var(--udm-gold-soft); }
+
+  /* Upload dropzone: the box answers a carried file before it is released.
+   * The supplied block's pretend files and rolling upload percentage are a demo.
+   * This version keeps actual filenames, server limits and the native chooser.
+   */
+  .app-dropzone { padding: 22px; border: 1px dashed var(--udm-line-strong); border-radius: 12px; background: var(--udm-surface-sunk); transition: background .18s, border-color .18s, box-shadow .18s; }
+  .dropzone-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--udm-navy-text); font-size: 14px; font-weight: 500; }
+  .dropzone-icon { display: inline-grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border: 1px solid var(--udm-line); border-radius: 50%; background: var(--udm-surface); color: var(--udm-gold-ink); font-size: 24px; transition: transform .18s; }
+  :root body .app-dropzone input[type="file"] { width: 100%; min-width: 0; padding: 4px; border: 0; background: transparent; font-size: 14px; }
+  .app-dropzone input[type="file"]::file-selector-button { padding: 8px 14px; margin: 0 12px 0 0; border: 0; border-radius: 999px; background: #286b45; color: #fff; font-family: inherit; font-size: 14px; cursor: pointer; }
+  .app-dropzone:is(.is-dragging, :focus-within) { border-color: var(--udm-gold-ink); background: var(--udm-gold-soft); box-shadow: 0 0 0 3px var(--udm-gold-soft); }
+  .app-dropzone.is-dragging .dropzone-icon { transform: translateY(-3px); }
+  .dropzone-status { margin-top: 10px; color: var(--udm-label-ink); font-size: 13px; }
+  .dropzone-status:empty { display: none; }
+  :root body .phase2-upload-box:has(.app-dropzone) { padding: 0; border: 0; background: transparent; }
+  @media (max-width: 575px) {
+    .app-dropzone { padding: 16px; }
+    .dropzone-intro { align-items: flex-start; }
+    :root body .multiselect-chip-remove { width: 44px; min-width: 44px; min-height: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .label-input > label, .app-dropzone, .dropzone-icon { transition: none !important; transform: none; } }
+}
+@media print {
+  .label-input > label.form-label { position: static; }
+  .dropzone-intro, .dropzone-status { display: none; }
+}

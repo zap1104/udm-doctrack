@@ -28,12 +28,16 @@
           <tr>
             <td class="mono"><a href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a></td>
             <td>
-              {{ record.subject|truncatechars:60 }}
-              <div class="text-muted" style="font-size:12.5px;">
-                {% include "partials/_direction_tag.html" with direction=record.direction %}
-                {{ record.document_type_names|default:"No type" }} ·
-                {# Same word as the filter row above and the detail page. See tracking/list.html. #}
-                Originating office {% include "partials/_office_badge.html" with office=record.originating_office %}
+              {{ record.subject }}
+              <div class="record-metadata text-muted">
+                <div class="record-type">
+                  {% include "partials/_direction_tag.html" with direction=record.direction %}
+                  <span>{{ record.document_type_names|default:"No type" }}</span>
+                </div>
+                <div class="record-origin">
+                  <span title="Originating office">Origin</span>
+                  {% include "partials/_office_badge.html" with office=record.originating_office %}
+                </div>
               </div>
             </td>
             <td class="office-cell" data-receipt-offices="received">{% include "partials/_receipt_offices.html" with kind="received" %}</td>

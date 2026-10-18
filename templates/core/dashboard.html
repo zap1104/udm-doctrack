@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% load doctrack static %}
 {% block title %}Dashboard · {{ SITE_NAME }}{% endblock %}
+{% block extra_head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
 {% block content %}
+<div class="dashboard-workspace" data-dashboard-workspace>
 <div class="page-head dashboard-page-head">
   <div>
     <div class="eyebrow">Workspace</div>
@@ -93,6 +98,15 @@
   Tracking trends follow both summaries at full width, so their long charts
   do not leave an empty repository column beside them.
 {% endcomment %}
+<nav class="dashboard-view-tabs no-print" aria-label="Dashboard views" role="tablist" hidden>
+  <button type="button" id="dashboard-tab-overview" role="tab" aria-controls="dashboard-overview" aria-selected="true" data-dashboard-tab="overview">
+    <span>Overview</span><small>Documents and actions</small>
+  </button>
+  <button type="button" id="dashboard-tab-statistics" role="tab" aria-controls="dashboard-statistics" aria-selected="false" tabindex="-1" data-dashboard-tab="statistics">
+    <span>Statistics</span><small>Charts and turnaround</small>
+  </button>
+</nav>
+<div class="dashboard-tab-panel" id="dashboard-overview" role="tabpanel" aria-labelledby="dashboard-tab-overview" tabindex="0" data-dashboard-panel="overview">
 <section class="dashboard-attention dashboard-urgent-shortcuts mb-4" aria-labelledby="dashboard-attention-title">
   <h2 id="dashboard-attention-title">Needs attention</h2>
   <div class="dashboard-attention-grid">
@@ -168,6 +182,8 @@
     </div>
 </section>
 
+</div>
+<div class="dashboard-tab-panel" id="dashboard-statistics" role="tabpanel" aria-labelledby="dashboard-tab-statistics" tabindex="0" data-dashboard-panel="statistics">
 <div class="row g-4 dashboard-sides dashboard-overview-row">
   <section class="col-xl-8 dashboard-side dashboard-side--tracking" aria-labelledby="side-tracking-title">
     <header class="dashboard-side-head">
@@ -265,7 +281,7 @@
           </div>
         </div>
         <p class="ring-note" data-ring-panel="status"{% if tracking_rings.view != 'status' %} hidden{% endif %}>
-          Completed work awaiting filing is shown in Pending filing above.
+          Completed work awaiting filing is shown in Pending filing on the Overview tab.
           <a href="{{ tracking_rings.pending_upload.url }}">View these records in Tracking</a>.
         </p>
         {% comment %}
@@ -276,10 +292,10 @@
         {% endcomment %}
         <p class="ring-note" data-ring-panel="overdue"{% if tracking_rings.view != 'overdue' %} hidden{% endif %}>
           {% if tracking_rings.split %}
-            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the Overview tab
             {{ tracking_rings.overdue_total|pluralize:"is,are" }} moving in or out of {{ tracking_rings.office_code }} on this hop.
           {% else %}
-            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the card above
+            {{ tracking_rings.overdue_total }} of the {{ overdue_count }} overdue document{{ overdue_count|pluralize }} on the Overview tab
             {{ tracking_rings.overdue_total|pluralize:"needs,need" }} action in Tracking.
           {% endif %}
         </p>
@@ -467,7 +483,7 @@
     <div class="card-udm dashboard-turnaround" id="turnaround-panel">
       <div class="card-udm-head">
         <div>
-          <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
+          <h2>Turnaround · {{ turnaround.month|date:"F Y" }}</h2>
             <div class="card-udm-caption" data-help-title="Turnaround time">
               Daily averages for the selected month, with its summary below. Receipts are counted on confirmation; completed work on completion.
             </div>
@@ -507,6 +523,8 @@
       </div>
   </div>
 </section>
+
+</div>
 
 {% comment %}
   Generate memo. The paragraphs are composed server-side in DashboardView._memo
@@ -598,7 +616,9 @@
 <span hidden data-print-log="the dashboard"
       data-print-log-url="{% url 'core:log_print' %}"
       data-print-log-csrf="{{ csrf_token }}"></span>
+</div>
 {% endblock %}
 {% block extra_scripts %}
   <script src="{% static 'js/column-hover.js' %}"></script>
+  <script src="{% static 'js/dashboard-tabs.js' %}"></script>
 {% endblock %}

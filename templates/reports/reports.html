@@ -251,10 +251,8 @@
       <div class="card-udm h-100">
         <div class="card-udm-head">
           <div>
-            <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
-            <div class="report-caption">
-              Working time and actual elapsed time for the selected month.
-            </div>
+            <h2>Turnaround · {{ turnaround.month|date:"F Y" }}</h2>
+
           </div>
           {% include "core/_month_picker.html" with picker=month_picker picker_id="report-turnaround-month" %}
         </div>

@@ -194,7 +194,7 @@ def test_the_turnaround_title_names_the_month_picked(client, users, two_months, 
     month = two_months["month"]
     body = client.get(f"{path}?month={_param(month)}").content.decode()
 
-    assert f"<h2>Turnaround Time for the Month of {month:%B %Y}</h2>" in body
+    assert f"<h2>Turnaround · {month:%B %Y}</h2>" in body
 
 
 @pytest.mark.django_db

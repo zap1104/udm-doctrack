@@ -27,7 +27,9 @@
     dialog.querySelector("[data-calculation-equation]").textContent = button.dataset.equation;
     dialog.querySelector("[data-calculation-average]").textContent = button.dataset.averageEquation;
     var scope = button.closest(".card-udm") || document;
-    var guide = scope.querySelector(".turnaround-time-guide");
+    // Help may have moved the visible guide; keep each card's schedule locally.
+    var storedGuide = scope.querySelector("template[data-turnaround-guide]");
+    var guide = storedGuide ? storedGuide.content.querySelector(".turnaround-time-guide") : scope.querySelector(".turnaround-time-guide");
     var schedule = dialog.querySelector("[data-calculation-schedule]");
     schedule.replaceChildren();
     if (guide) schedule.appendChild(guide.cloneNode(true));
@@ -75,6 +77,23 @@
       if (group.button) group.button.remove();
       if (group.head) group.head.classList.remove("has-page-help");
       return false;
+    });
+    // Longer chart captions are reference material. Keep their existing,
+    // permission-filtered action links on the page while moving the explanation.
+    document.querySelectorAll(".report-caption").forEach(function (caption) {
+      if (panel.contains(caption) || caption.dataset.compactCaption || caption.textContent.trim().length <= 160) return;
+      caption.dataset.compactCaption = "true";
+      caption.setAttribute("data-help-title", "Chart explanation");
+      var links = caption.querySelectorAll("a");
+      if (!links.length) return;
+      var actions = document.createElement("div");
+      actions.className = "report-caption-actions";
+      links.forEach(function (link) {
+        var copy = link.cloneNode(true);
+        copy.removeAttribute("id");
+        actions.appendChild(copy);
+      });
+      caption.parentNode.insertBefore(actions, caption.nextSibling);
     });
     document.querySelectorAll("details.chart-note, [data-help-title]").forEach(function (source) {
       if (panel.contains(source)) return;
@@ -1457,7 +1476,7 @@
     var plot = box.getBoundingClientRect();
     var hit = month.getBoundingClientRect();
     tip.style.minWidth = Math.min(200, plot.width) + "px";
-    tip.style.maxWidth = Math.min(260, plot.width) + "px";
+    tip.style.maxWidth = Math.min(320, plot.width) + "px";
     var centre = hit.left + hit.width / 2;
     var preferred = month.classList.contains("trend-hit--left")
       ? centre - tip.offsetWidth - 12 : centre + 12;

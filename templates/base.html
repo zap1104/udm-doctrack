@@ -23,7 +23,11 @@
   <link rel="stylesheet" href="{% static 'css/workspace.css' %}" media="screen">
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/redesign.css' %}" media="screen">
+  <link rel="preload" href="{% static 'fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/app-theme.css' %}" media="screen">
+  <link rel="stylesheet" href="{% static 'css/workspace-controls.css' %}" media="screen">
   {% block extra_head %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'css/workspace-layout.css' %}" media="screen">
 </head>
 <body data-max-upload-mb="{{ MAX_UPLOAD_MB }}">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -79,6 +83,9 @@
   <script src="{% static 'js/auto-filters.js' %}"></script>
   <script src="{% static 'js/document-types.js' %}"></script>
   <script src="{% static 'js/form-errors.js' %}"></script>
+  <script src="{% static 'js/workspace-controls.js' %}"></script>
+  <script src="{% static 'js/workspace-forms.js' %}"></script>
+  <script src="{% static 'js/workspace-layout.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

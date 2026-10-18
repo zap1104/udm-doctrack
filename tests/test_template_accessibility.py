@@ -287,5 +287,10 @@ def test_records_staff_dashboard_groups_document_identity_to_fit_split_panel():
     assert len(headers) == len(cells) == 4
     assert headers[0]["text"].strip() == "Document"
     identity = cells[0]
-    assert any(node["tag"] == "a" and node["parent"] is identity and node["attrs"].get("href") == "/tracking/1/" for node in html.nodes)
-    assert any(node["parent"] is identity and node["text"] == "Inspection request" for node in html.nodes)
+    links = [node for node in html.nodes if node["tag"] == "a" and node["attrs"].get("href") == "/tracking/1/"]
+    assert {node["text"].strip() for node in links} == {record.display_tracking_number, record.subject}
+    for link in links:
+        parent = link["parent"]
+        while parent is not None and parent["tag"] != "td":
+            parent = parent["parent"]
+        assert parent is identity

@@ -1,10 +1,10 @@
-<section class="dashboard-turnaround-stage dashboard-turnaround-stage--{{ stage.key }}{% if report_stage %} turnaround-stage{% endif %}" aria-labelledby="{{ id_prefix }}-{{ stage.key }}">
+<section class="dashboard-turnaround-stage dashboard-turnaround-stage--{{ stage.key }}{% if report_stage %} turnaround-stage{% endif %}{% if dashboard_compact %} dashboard-stage-compact{% endif %}" aria-labelledby="{{ id_prefix }}-{{ stage.key }}">
   {% load doctrack %}
   <div class="dashboard-turnaround-stage-head">
     <h3 id="{{ id_prefix }}-{{ stage.key }}">{{ stage.label }}</h3>
   </div>
   <p class="dashboard-turnaround-measure">
-    {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → work completed, excluding receipt waits{% else %}Created → work completed{% endif %}
+    {% if stage.key == "receipt" %}Sent → receipt confirmed{% elif stage.key == "processing" %}First receipt → completion{% else %}Created → work completed{% endif %}
   </p>
   <p class="turnaround-sample-basis">{% include "core/_turnaround_sample_count.html" with item=stage %}</p>
   {% if stage.excluded %}
@@ -21,6 +21,14 @@
         <dd class="dashboard-turnaround-calendar num">{{ stage.average_calendar_seconds|duration_hours }}</dd>
       </div>
     </dl>
+    {% if dashboard_compact %}
+      <details class="dashboard-disclosure dashboard-stage-details">
+        <summary aria-label="Details and calculation for {{ stage.label }}">Details &amp; calculation</summary>
+        <div class="dashboard-disclosure-body">
+    {% endif %}
+    {% if stage.key == "processing" %}
+      <p class="turnaround-stage-note">Receipt waits are excluded from both averages.</p>
+    {% endif %}
     {% if stage.samples > 1 %}
       <dl class="dashboard-turnaround-extremes" aria-label="Fastest and slowest records for {{ stage.label }}">
         <div>
@@ -47,6 +55,10 @@
               data-average-equation="{{ stage.total_office_seconds|duration_hours }} counted ÷ {{ stage.samples }} {% if stage.key == 'receipt' %}confirmed endorsement{{ stage.samples|pluralize }}{% else %}completed document{{ stage.samples|pluralize }}{% endif %} ≈ {{ stage.average_seconds|duration_hours }}."
               aria-label="View calculation for {{ stage.label }}">View calculation</button>
     </div>
+    {% if dashboard_compact %}
+        </div>
+      </details>
+    {% endif %}
   {% else %}
     <p class="dashboard-turnaround-empty">None {% if stage.key == "receipt" %}confirmed{% else %}completed{% endif %}{% if turnaround.is_current %} yet{% endif %} this month.</p>
   {% endif %}

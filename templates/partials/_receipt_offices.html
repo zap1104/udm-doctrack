@@ -6,7 +6,7 @@
       {% include "partials/_office_badges.html" with offices=record.confirmed_receipt_offices_shown more=record.confirmed_receipt_more %}
     {% endif %}
   {% else %}
-    <span class="text-muted">No receipts confirmed</span>
+    <span class="text-muted" aria-label="No receipts confirmed">{% if compact_receipts %}None{% else %}No receipts confirmed{% endif %}</span>
   {% endif %}
 {% else %}
   {% if record.awaiting_receipt_offices %}
@@ -16,6 +16,6 @@
       {% include "partials/_office_badges.html" with offices=record.pending_receipt_offices_shown more=record.pending_receipt_more %}
     {% endif %}
   {% else %}
-    <span class="text-muted">{{ record.receipt_wait_label }}</span>
+    <span class="text-muted" title="{{ record.receipt_wait_label }}">{% if compact_receipts and record.receipt_wait_label == "All receipts confirmed" %}All received{% else %}{{ record.receipt_wait_label }}{% endif %}</span>
   {% endif %}
 {% endif %}

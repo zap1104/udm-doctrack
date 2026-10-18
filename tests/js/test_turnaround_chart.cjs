@@ -49,7 +49,7 @@ function harness(length = 12, width = 640, left = 20) {
     for (let index = 0; index < length; index++) {
       const tip = {
         style: {},
-        get offsetWidth() { return Math.min(260, parseFloat(this.style.maxWidth) || 260); },
+        get offsetWidth() { return Math.min(320, parseFloat(this.style.maxWidth) || 320); },
       };
       const month = {
         classList: classes(index >= length / 2 ? ['trend-hit--left'] : []), tip,

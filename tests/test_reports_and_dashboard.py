@@ -78,7 +78,7 @@ def test_the_page_says_the_figure_excludes_weekends_and_holidays(
 #: three stat cards verbatim.
 TRACKING_PANELS = (
     "Documents by stage",
-    "Turnaround Time for the Month of {month}",
+    "Turnaround · {month}",
     "Overdue: who must act next",
     "Confirmed receipts by office",
     "Endorsements by office: sent and confirmed",

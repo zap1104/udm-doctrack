@@ -81,22 +81,23 @@
 
     <div class="col-lg-4 workspace-form-aside">
       <div class="card-udm phase2-sticky-card">
-        <div class="card-udm-head"><h2>Before You Continue</h2></div>
+        <div class="card-udm-head"><h2>Sending guide</h2></div>
         <div class="card-udm-body">
-          <ol class="phase2-checklist">
+          <p>Review destinations and instructions before sending.</p>
+          <details class="workspace-guide" data-help-title="Sending guide"><summary>Before sending</summary><ol class="phase2-checklist">
             <li><strong>Originating office is fixed.</strong> {% if record %}It is the office that created this draft.{% else %}It comes from the signed-in account.{% endif %}</li>
             <li><strong>Choose the destinations carefully.</strong> Every office selected receives the document and must confirm receipt.</li>
             <li><strong>Choose a deadline date and optional time.</strong> Leave the time blank for end of day.</li>
             <li><strong>Review before sending.</strong> Sending does not mean the document has been received.</li>
-          </ol>
+          </ol></details>
         </div>
       </div>
 
-      <div class="help-note mt-3">
+      <details class="workspace-guide help-note mt-3" data-help-title="Tracking numbers"><summary>Tracking numbers</summary>
         Tracking numbers currently follow this format:<br>
         <span class="mono">UDM-OVPA-{{ originating_office.code|default:"OFFICE" }}-YYYY-MM-0001</span><br>
         The final numbering format remains subject to approval.
-      </div>
+      </details>
     </div>
   </div>
 </form>

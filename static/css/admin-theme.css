@@ -1,0 +1,37 @@
+/* The built-in administration console keeps its forms, controls and theme cycle.
+ * Map its native colour and type variables onto the same institutional design.
+ */
+@media screen {
+  :root, html[data-theme="light"] {
+    --font-family-primary: "IBM Plex Sans", "Segoe UI", sans-serif;
+    --primary: #286b45; --secondary: #174a37; --accent: #d5b86a;
+    --header-bg: #174a37; --header-color: #f5f1e3; --header-link-color: #fffdf7;
+    --breadcrumbs-bg: #103b2b; --breadcrumbs-fg: #d5b86a;
+    --body-bg: #fffdf7; --body-fg: #183126; --body-quiet-color: #576b5c;
+    --body-medium-color: #365146; --body-loud-color: #174a37;
+    --link-fg: #1f5a42; --link-hover-color: #174a37; --link-selected-fg: #174a37;
+    --darkened-bg: #f1eddf; --selected-bg: #ece8da; --selected-row: #e7ebdd;
+    --hairline-color: #d6d5c4; --border-color: #afbda8;
+    --button-bg: #286b45; --button-hover-bg: #1d5034;
+    --default-button-bg: #174a37; --default-button-hover-bg: #286b45;
+  }
+  html[data-theme="dark"] {
+    --body-bg: #1b2c22; --body-fg: #edf1e5; --body-quiet-color: #bcccb8;
+    --body-medium-color: #d4dfca; --body-loud-color: #edf1e5;
+    --link-fg: #b6d6b0; --link-hover-color: #eed596; --link-selected-fg: #eed596;
+    --darkened-bg: #111e18; --selected-bg: #15241c; --selected-row: #2b4432;
+    --hairline-color: #354b3b; --border-color: #819b89;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      --body-bg: #1b2c22; --body-fg: #edf1e5; --body-quiet-color: #bcccb8;
+      --body-medium-color: #d4dfca; --body-loud-color: #edf1e5;
+      --link-fg: #b6d6b0; --link-hover-color: #eed596; --link-selected-fg: #eed596;
+      --darkened-bg: #111e18; --selected-bg: #15241c; --selected-row: #2b4432;
+      --hairline-color: #354b3b; --border-color: #819b89;
+    }
+  }
+  body #container, body #container :is(input, select, textarea, button, td, th, label, .button, .submit-row input) { font-family: var(--font-family-primary); font-size: 14px; }
+  body #container :is(input, select, textarea, button) { border-radius: 7px; }
+  body #header { border-bottom: 2px solid #d5b86a; }
+}

@@ -1,5 +1,5 @@
 <div class="dashboard-turnaround-stages report-turnaround-stages">
   {% for stage in turnaround.stages %}
-    {% include "core/_turnaround_stage.html" with id_prefix="report-turnaround-stage" report_stage=True %}
+    {% include "core/_turnaround_stage.html" with id_prefix="report-turnaround-stage" report_stage=True dashboard_compact=True %}
   {% endfor %}
 </div>

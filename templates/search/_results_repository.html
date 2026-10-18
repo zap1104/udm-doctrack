@@ -84,8 +84,9 @@
   </div>
 </div>
 
-<p class="text-muted mt-3" style="font-size:12.5px;">
+<details class="workspace-guide" data-help-title="Search ranking"><summary>About search results</summary>
+<p class="text-muted">
   {{ response.explanation }}
-  {% if not response.used_fuzzy %}Fuzzy (misspelling) matching is off — run <code>manage.py init_db</code> to enable pg_trgm.{% endif %}
+  Try different wording if a document is missing.
 </p>
-
+</details>

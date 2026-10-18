@@ -6,7 +6,7 @@
 <div class="page-head"><div>
   <div class="eyebrow">Administration</div>
   <h1>Administration</h1>
-  <p class="sub">{% if user.is_system_admin %}Accounts and controlled master data.{% else %}Manage accounts, permissions and audit activity for {{ user.office_label }} only.{% endif %} There is no public registration anywhere in the system.</p>
+  <p class="sub">{% if user.is_system_admin %}Accounts and controlled master data.{% else %}Manage accounts, permissions and audit activity for {{ user.office_label }} only.{% endif %}</p>
 </div></div>
 
 <div class="row g-3 mb-4 workspace-overview">
@@ -22,9 +22,11 @@
 
 <div class="row g-4 workspace-columns">
   <div class="col-lg-7 workspace-primary">
-    <div class="card-udm"><div class="card-udm-head"><h2>What lives where</h2></div>
+    <div class="card-udm"><div class="card-udm-head"><h2>Manage records</h2></div>
       <div class="card-udm-body">
         {% if user.is_system_admin %}
+        <p>Manage document types, tags, and metadata settings.</p>
+        <details class="workspace-guide" data-help-title="Master data"><summary>About master data</summary>
         <p class="body-copy">Master data drives filing, filters and the metadata recommendations. Change it here — no code edits, no redeploy.</p>
         <ul class="body-copy">
           <li><strong>Document types</strong> — memorandum, letter, work order… also sets the number of years before the initial deletion review.</li>
@@ -32,6 +34,7 @@
           <li><strong>Metadata rules</strong> — "if the text contains X, propose tag/type/office Y".</li>
           <li><strong>Metadata fields</strong> — extra fields that appear on every review screen.</li>
         </ul>
+        </details>
         {% else %}
         <p class="body-copy">Your administrator role applies to your office only. Add staff accounts, set their roles and review your office's audit activity.</p>
         <a class="btn btn-udm-outline" href="{% url 'accounts:user_list' %}">Manage your office's accounts</a>

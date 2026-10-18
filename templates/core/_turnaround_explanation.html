@@ -1,4 +1,6 @@
 {% load doctrack %}
+<details class="workspace-guide dashboard-disclosure dashboard-time-explanation" data-help-title="Turnaround guide">
+  <summary>How time is counted</summary>
 <p class="turnaround-period-note">Confirmed or completed in {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} so far{% endif %}.</p>
 <div class="turnaround-time-guide" aria-label="How turnaround time is counted">
   <p><strong>Elapsed time</strong> counts time in the measured interval, including closed hours. For In Process, receipt waits are removed from both clocks. <strong>Within office hours</strong> also excludes lunch, closed days and configured holidays. Neither clock measures hands-on work.</p>
@@ -8,9 +10,21 @@
   {% endwith %}
   <p class="turnaround-rounding-note">Averages use exact seconds; displayed hours and minutes are rounded down. ≈ means approximately equal. Excluded time varies with each document’s dates and times.</p>
 </div>
-<div data-help-title="Turnaround time">
+<div>
   <p><strong>What counts:</strong> Pending Receipt measures each confirmed endorsement from sending to confirmation. In Process measures each completed document from its first receipt to completion, with receipt waits paused. Received time before an office starts work remains included. If an endorsement has several recipients, processing stays paused until all receipts are confirmed or the endorsement is superseded. Parallel waits are deducted once. Total lifetime measures creation to completion without pauses. Receipt averages count endorsements; processing and lifetime averages count documents, so these averages must not be added.</p>
   <p><strong>Which month:</strong> An endorsement belongs to the month it was confirmed; a document belongs to the month it was completed, even if it started earlier. Completed documents waiting for repository upload are included. Approval and upload time are excluded. Only documents you are permitted to view in the selected office scope contribute.</p>
   <p><strong>How the average works:</strong> Add the valid times within office hours and divide by the count shown for that stage, including observations with zero counted minutes. The monthly average uses all individual observations, not an average of the daily dots. Both clocks are displayed in total hours so they can be compared directly. {{ turnaround.office_hours_caveat }}</p>
   <p><strong>Zero and missing data:</strong> 0 mins means a valid interval with no counted working time, including instant confirmations or intervals outside office hours. These observations stay in the average and are excluded from Fastest. A dash means no valid observation. Missing or reversed timestamps and future confirmations or completions are excluded. Waiting endorsements are a live count across all months and enter the average only after confirmation. Documents already Received or In Process can still await other recipients, so this count can exceed the Pending Receipt stage count.</p>
 </div>
+
+</details>
+<template data-turnaround-guide>
+<div class="turnaround-time-guide" aria-label="How turnaround time is counted">
+  <p><strong>Elapsed time</strong> counts time in the measured interval, including closed hours. For In Process, receipt waits are removed from both clocks. <strong>Within office hours</strong> also excludes lunch, closed days and configured holidays. Neither clock measures hands-on work.</p>
+  {% with schedule=turnaround.office_schedule %}
+    <p><strong>Office schedule:</strong> {{ schedule.days }}, {{ schedule.opens }}–{{ schedule.closes }}{% if schedule.lunch %}; lunch {{ schedule.lunch }} excluded{% endif %}. Holidays use the Administration holiday list.</p>
+    <p><strong>Example:</strong> On a regular open day, {{ schedule.opens }} to {{ schedule.closes }} = {{ schedule.example_total_seconds|duration_hours }} total wait − {{ schedule.example_excluded_seconds|duration_hours }} excluded = {{ schedule.example_office_seconds|duration_hours }} within office hours. {{ turnaround.working_day_hours|floatformat:"-2" }} hours is the length of a full working day, not a fixed deduction.</p>
+  {% endwith %}
+  <p class="turnaround-rounding-note">Averages use exact seconds; displayed hours and minutes are rounded down. ≈ means approximately equal. Excluded time varies with each document’s dates and times.</p>
+</div>
+</template>

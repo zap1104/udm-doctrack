@@ -3,7 +3,7 @@
   {% include "core/_turnaround_explanation.html" %}
   <div class="dashboard-turnaround-stages">
     {% for stage in turnaround.stages %}
-      {% include "core/_turnaround_stage.html" with id_prefix="turnaround-stage" %}
+      {% include "core/_turnaround_stage.html" with id_prefix="turnaround-stage" dashboard_compact=True %}
     {% endfor %}
   </div>
   {% if turnaround.has_on_time %}

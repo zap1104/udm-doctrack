@@ -10,13 +10,12 @@
     <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
   </button>
 
-  <div class="topbar-location" aria-label="Current section">
-    <span>Workspace</span><span class="topbar-location-divider" aria-hidden="true">/</span>
-    <strong>{% if nav_active == 'dashboard' %}Overview{% elif nav_active == 'search' %}Search{% elif nav_active == 'tracking' %}Tracking{% elif nav_active == 'documents' %}Repository{% elif nav_active == 'tracking_reports' or nav_active == 'repository_reports' %}Reports{% elif nav_active == 'external_tracking' %}External tracking{% elif nav_active == 'administration' %}Administration{% elif nav_active == 'notifications' %}Notifications{% else %}My account{% endif %}</strong>
-  </div>
 
-  <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
+  <form class="topbar-search workspace-search" action="{% url 'search:index' %}" method="get" role="search">
     {% include "partials/_icon.html" with name="search" %}
+    <button class="workspace-search-trigger" type="button" hidden
+              aria-controls="topbar-search-input" aria-expanded="false"
+              aria-label="Open repository search" title="Search the repository (/)"></button>
     <label class="visually-hidden" for="topbar-search-input">Search the repository</label>
     <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search the repository" aria-label="Search the repository" autocomplete="off">
   </form>
@@ -33,9 +32,17 @@
     {% endcomment %}
     <button class="theme-toggle no-print" type="button" data-theme-toggle
             aria-label="Switch to dark theme" title="Switch to dark theme">
-      <span class="theme-icon-light" aria-hidden="true">&#9789;</span>
-      <span class="theme-icon-dark" aria-hidden="true">&#9788;</span>
+      <span class="workspace-theme-track" aria-hidden="true">
+        <span class="workspace-theme-liquid"><span class="workspace-theme-drop"></span><span class="workspace-theme-thumb"></span></span>
+        <span class="workspace-theme-symbol"><span class="theme-icon-light">&#9789;</span><span class="theme-icon-dark">&#9788;</span></span>
+      </span>
     </button>
+    <svg class="workspace-control-filter" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs><filter id="workspace-liquid-goo" x="-50%" y="-100%" width="200%" height="300%" color-interpolation-filters="sRGB">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="smear" />
+        <feColorMatrix in="smear" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" />
+      </filter></defs>
+    </svg>
     {% include "partials/_notification_badge.html" %}
     <div class="dropdown">
       <button type="button" class="topbar-account-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu">

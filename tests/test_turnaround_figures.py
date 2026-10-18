@@ -354,10 +354,13 @@ def test_every_line_is_drawn_to_its_last_month(client, users, slow_then_fast):
 def test_the_legend_says_what_each_line_measures(client, users, slow_then_fast):
     body = " ".join(_dashboard(client, users).content.decode().split())
 
-    for words in ("Receipt</strong> sent until confirmed",
-                  "In Process</strong> first receipt until completed",
-                  "Total lifetime</strong> created until completed"):
-        assert words in body
+    # The compact legend keeps its interval explanation in the title.
+    for label, measures in (
+        ("Pending Receipt", "sent until confirmed"),
+        ("In Process", "first receipt until completed, excluding receipt waits"),
+        ("Total lifetime", "created until completed"),
+    ):
+        assert f'<span title="{measures}"><strong>{label}</strong></span>' in body
 
 
 def test_the_motion_is_skipped_for_readers_who_ask_and_never_printed():

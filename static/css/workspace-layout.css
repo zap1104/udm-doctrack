@@ -1,0 +1,82 @@
+/* Reading layouts fit their container at normal zoom. Long records wrap rather
+ * than forcing the actions beyond the edge; narrow lists become labelled rows.
+ */
+@media screen {
+  :root body .app-shell .app-content { container: workspace / inline-size; min-width: 0; }
+  :root body .app-shell .app-topbar { min-height: 64px; padding-block: 9px; }
+  :root body .app-shell .page-head .eyebrow { display: none; }
+  :root body .app-shell :is(.card-udm, .card-udm-head, .card-udm-body, .workspace-page, .workspace-panel, .workspace-primary, .workspace-support) { min-width: 0; max-width: 100%; }
+  :root body .app-shell .card-udm-head { flex-wrap: wrap; gap: 10px 16px; }
+  :root body .app-shell .card-udm-head > :is(div, h2) { min-width: 0; }
+  :root body .app-shell .card-udm-head h2 { overflow-wrap: anywhere; }
+  :root body .app-shell .table-responsive > .table-udm { width: 100%; min-width: 0; table-layout: fixed; }
+  :root body .app-shell .table-udm :is(th, td) { min-width: 0; white-space: normal; overflow-wrap: anywhere; padding-inline: 12px; }
+  :root body .app-shell .table-udm :is(.mono, .office-cell, .tracking-updated, .tracking-subject, .deadline-when-cell) { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  :root body .app-shell .table-udm .btn { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: normal; }
+  :root body .app-shell .table-udm .btn-receipt { gap: 6px; }
+  :root body .app-shell .table-udm .btn-receipt-icon { width: 18px; height: 18px; min-width: 18px; flex-basis: 18px; }
+  :root body .app-shell .pill-stack { display: flex; flex-wrap: wrap; gap: 5px; }
+  :root body .app-shell .table-udm :is(.pill, .overdue-tag, .direction-tag) { max-width: 100%; white-space: normal; font-size: 13px; line-height: 1.35; }
+  .record-cell-label { display: none; }
+  .record-selection-column { width: 42px; }
+  .record-received-column { width: 12%; }
+  .record-awaiting-column { width: 15%; }
+  .desk-awaiting-column { width: 22%; }
+  .record-updated-column { width: 12%; }
+  .record-status-column { width: 18%; }
+  .record-action-column { width: 132px; }
+  :root body .app-shell .record-subject { display: block; color: var(--udm-ink); font-weight: 600; line-height: 1.45; text-decoration: none; }
+  :root body .app-shell .record-subject:is(:hover, :focus-visible) { color: var(--udm-navy-text); text-decoration: underline; }
+  :root body .app-shell .record-number { display: block; margin-block: 4px; font-weight: 400; color: var(--udm-muted); font-size: 12px; text-decoration: none; }
+  :root body .app-shell .record-metadata { display: grid; gap: 5px; font-size: 12.5px; }
+  :root body .app-shell .record-type { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  :root body .app-shell .record-origin { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 6px; }
+  :root body .app-shell .record-origin .office-badge { justify-self: start; margin: 0; }
+  :root body .app-shell .record-action .btn { min-height: 36px; padding: 6px 9px; font-size: 13px; }
+  :root body .app-shell .dashboard-filing-subject { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  :root body .app-shell .desk-cell-title { max-width: none; overflow: visible; display: block; -webkit-line-clamp: unset; }
+  :root body .app-shell .dashboard-queue-document { min-width: 0; }
+
+  /* Native disclosures keep the guides accessible if JavaScript is unavailable.
+   * With JavaScript the existing Help panel collects these full explanations.
+   */
+  .workspace-guide { margin: 0; border: 0; }
+  .workspace-guide > summary,
+  .dashboard-stage-details > summary {
+    display: flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 7px 0; color: var(--udm-navy-text); font-size: 13px; font-weight: 500;
+    cursor: pointer; list-style: none;
+  }
+  .workspace-guide > summary::-webkit-details-marker,
+  .dashboard-stage-details > summary::-webkit-details-marker { display: none; }
+  .workspace-guide > summary::before,
+  .dashboard-stage-details > summary::before { content: "+"; font-size: 16px; }
+  .workspace-guide[open] > summary::before,
+  .dashboard-stage-details[open] > summary::before { content: "−"; }
+  :is(.workspace-guide, .dashboard-stage-details) > summary:focus-visible { outline: 2px solid var(--udm-gold-ink); outline-offset: 3px; }
+  .workspace-guide > :not(summary) { margin-top: 12px; }
+  .report-caption-actions { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; font-size: 13px; }
+  .page-help-panel .workspace-guide > summary { display: none; }
+  :root body .app-shell .report-turnaround-stages .dashboard-turnaround-extremes { margin-top: 10px; }
+  :root body .app-shell .report-turnaround-stages .dashboard-stage-details { margin-top: 12px; border-top: 1px solid var(--udm-line); }
+
+  @container workspace (max-width: 800px) {
+    .responsive-record-table, .responsive-record-table tbody { display: block; width: 100%; }
+    .responsive-record-table colgroup { display: none; }
+    .responsive-record-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .responsive-record-table tbody { padding: 12px; }
+    .responsive-record-table tbody tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--udm-line); border-radius: 10px; background: var(--udm-surface); }
+    :root body .app-shell .responsive-record-table tbody td { display: block; padding: 0; border: 0; text-align: left !important; }
+    .responsive-record-table .record-cell-label { display: block; margin-bottom: 4px; color: var(--udm-muted); font-size: 12px; font-weight: 500; }
+    .responsive-record-table td[data-cell-kind="primary"],
+    .responsive-record-table td[data-cell-kind="actions"],
+    .responsive-record-table td[colspan] { grid-column: 1 / -1; }
+    .responsive-record-table td[data-cell-kind="primary"] > .record-cell-label { display: none; }
+    .responsive-record-table td[data-cell-kind="selection"] { position: absolute; top: 16px; right: 16px; }
+    .responsive-record-table td[data-cell-kind="selection"] > .record-cell-label { display: none; }
+    .responsive-record-table tr:has(td[data-cell-kind="selection"]) td[data-cell-kind="primary"] { padding-right: 36px; }
+    .responsive-record-table td[data-cell-kind="actions"] > .record-cell-label { display: none; }
+    :root body .app-shell .responsive-record-table td[data-cell-kind="actions"] .btn { min-height: 40px; }
+    .responsive-record-table tr:has(input[name="record_ids"]:checked) { border-color: var(--udm-gold-ink); background: var(--dt-selected); }
+  }
+}

@@ -15,7 +15,7 @@
   <div class="card-udm-head action-centre-head">
     <div>
       <h2>Currently tracking</h2>
-      <div class="card-udm-caption">Filter by direction and document stage.{% if not user.is_viewer %} Confirm receipts for documents at your office.{% endif %}</div>
+      <div class="card-udm-caption">Review documents{% if not user.is_viewer %} and confirm arrivals{% endif %}.</div>
     </div>
     <a class="btn btn-dashboard-action btn-sm" href="{{ desk_queue.tracking_url }}"
        aria-label="Open {{ desk_queue.label }} in Tracking{% if desk_queue.count %}, {{ desk_queue.count }} documents{% endif %}">
@@ -44,7 +44,12 @@
     {% endif %}
   </nav>
   {% if desk_queue.slug == 'awaiting' %}
-    <p class="desk-block-caption">Awaiting receipt shows routes with an unconfirmed recipient, including documents another recipient has already received.</p>
+    <details class="dashboard-disclosure dashboard-queue-explanation">
+      <summary>About awaiting receipt</summary>
+      <div class="dashboard-disclosure-body">
+        <p class="desk-block-caption">Awaiting receipt shows routes with an unconfirmed recipient, including documents another recipient has already received.</p>
+      </div>
+    </details>
   {% endif %}
 
       {% comment %}
@@ -72,6 +77,12 @@
         <div class="card-udm-body p-0">
           {% if attention_records %}
             <div class="table-responsive" tabindex="0" role="region" aria-label="{{ desk_queue.label }} documents"><table class="table-udm desk-records-table">
+              <colgroup>
+                {% if can_bulk_receive %}<col class="record-selection-column">{% endif %}
+                <col>
+                {% if show_office_columns %}<col class="record-received-column"><col class="desk-awaiting-column">{% endif %}
+                <col class="record-action-column">
+              </colgroup>
               {% if show_office_columns %}
                 <thead>
                   <tr>
@@ -100,6 +111,7 @@
                   {% endif %}
                   {% if show_office_columns %}
                     <td class="desk-cell">
+                      <div class="dashboard-queue-document">
                       <a class="mono" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                       {% comment %}
                         The subject decides the width of this whole panel if it
@@ -109,20 +121,23 @@
                         the panel beside it half as wide. The full text is on
                         the title attribute and on the record page.
                       {% endcomment %}
-                      <div class="desk-cell-title" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
+                      <div class="desk-cell-title" title="{{ record.subject }}"><a class="dashboard-subject-link" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.subject }}</a></div>
                       <div class="text-muted" style="font-size:12.5px;">
                         updated {{ record.last_movement_at|timesince }} ago
                       </div>
+                      </div>
                     </td>
                     <td class="office-cell">{% include "partials/_office_badge.html" with office=record.originating_office %}</td>
-                    <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" %}</td>
+                    <td class="office-cell" data-receipt-offices="pending">{% include "partials/_receipt_offices.html" with kind="pending" compact_receipts=True %}</td>
                   {% else %}
                     <td class="desk-cell desk-cell--wide">
+                      <div class="dashboard-queue-document">
                       <a class="mono" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.display_tracking_number }}</a>
                       {# Same cap as the records-staff view above, one column wider. #}
-                      <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}">{{ record.subject|truncatechars:110 }}</div>
+                      <div class="desk-cell-title" style="font-size:14px;" title="{{ record.subject }}"><a class="dashboard-subject-link" href="{{ record.stage_url|default:record.get_absolute_url }}">{{ record.subject }}</a></div>
                       <div class="text-muted" style="font-size:12.5px;">
                         Originating office: {{ record.originating_office.code }} · updated {{ record.last_movement_at|timesince }} ago
+                      </div>
                       </div>
                     </td>
                   {% endif %}

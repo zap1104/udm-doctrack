@@ -2520,16 +2520,20 @@ textarea.form-control { resize: vertical; min-height: 64px; }
    transparent circle, diamond and cross retain their measured centres and
    expose portions of all three colours even when the measurements coincide. */
 .trend-dot { position:absolute; left:50%; width:10px; height:10px; margin:-5px 0 0 -5px; pointer-events:none; }
-.trend-tip { position:absolute; top:var(--plot-top); z-index:6; min-width:200px; max-width:260px; padding:9px 11px 10px;
+.trend-tip { position:absolute; top:var(--plot-top); z-index:6; width:320px; min-width:0; max-width:calc(100vw - 32px); padding:14px 16px;
   border:1px solid var(--udm-line); border-radius:9px; background:var(--udm-surface);
   box-shadow:0 10px 24px rgba(6,28,52,.16); pointer-events:none;
   opacity:0; visibility:hidden; transform:translateY(6px);
   transition:opacity 150ms ease, transform 170ms cubic-bezier(.2,.8,.2,1), visibility 0s; }
 .trend-hit--right .trend-tip { left:calc(50% + 12px); }
 .trend-hit--left .trend-tip { right:calc(50% + 12px); }
-.trend-tip-month { margin-bottom:6px; color:var(--udm-muted); font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
-.trend-tip-row { display:grid; grid-template-columns:14px auto; column-gap:8px; align-items:baseline; padding:2px 0; }
-.trend-tip-row i { grid-row:span 3; align-self:center; width:14px; height:3px; border-radius:2px; }
+.trend-tip-month { margin-bottom:3px; color:var(--udm-ink); font-size:14px; font-weight:600; line-height:1.4; }
+.trend-tip-caption { margin-bottom:2px; color:var(--udm-muted); font-size:12px; line-height:1.5; }
+.trend-tip-row { padding:10px 0; }
+.trend-tip-row + .trend-tip-row { border-top:1px solid var(--udm-line); }
+.trend-tip-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 10px; }
+.trend-tip-stage { display:inline-flex; align-items:center; gap:7px; color:var(--udm-ink); font-size:13px; font-weight:500; line-height:1.5; }
+.trend-tip-stage i { flex:0 0 12px; width:12px; height:3px; border-radius:2px; }
 .dashboard-context { padding:16px; background:var(--udm-surface); border:1px solid var(--udm-line); border-radius:12px; }
 .dashboard-metric-guide { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:16px; margin-top:16px; }
 .dashboard-metric-guide dt { margin-bottom:4px; }
@@ -2557,8 +2561,8 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .page-help-info,.page-help-launch { min-width:44px; height:44px; }
   .card-udm .card-udm-head.has-page-help { padding-right:68px; min-height:64px; }
 }
-.trend-tip-row strong { color:var(--udm-navy-text); font-size:13.5px; font-weight:800; line-height:1.2; }
-.trend-tip-row span { grid-column:2; color:var(--udm-muted); font-size:12px; line-height:1.4; }
+.trend-tip-row strong { color:var(--udm-ink); font-size:14px; font-weight:600; line-height:1.4; white-space:nowrap; }
+.trend-tip-meta { margin-top:3px; color:var(--udm-muted); font-size:12px; line-height:1.5; }
 .trend-tip-empty { display:block; color:var(--udm-muted); font-size:12.5px; }
 
 .trend-hover:not(.is-dismissed):not(:has(.is-active)) .trend-hit:hover .trend-cross,.trend-hit.is-active .trend-cross { opacity:1; }
@@ -2624,17 +2628,18 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .dashboard-turnaround-stages { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
 .report-turnaround-stages { container:dashboard-side / inline-size; }
 .report-turnaround-stages .dashboard-turnaround-stage { border-bottom:1px solid var(--udm-line); }
-.dashboard-turnaround-stage { min-width:0; padding:14px 16px; border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
+.dashboard-turnaround-stage { --stage-padding-y:14px; --stage-padding-x:16px; min-width:0; padding:var(--stage-padding-y) var(--stage-padding-x); border:1px solid var(--udm-line); border-radius:8px; background:var(--udm-surface); }
 .dashboard-turnaround-stage--receipt { --stage-colour:var(--status-pending); --stage-tint:var(--status-pending-soft); --stage-ink:var(--status-pending-ink); }
 .dashboard-turnaround-stage--processing { --stage-colour:var(--status-process); --stage-tint:var(--status-process-soft); --stage-ink:var(--status-process-ink); }
 .dashboard-turnaround-stage--lifetime { --stage-colour:var(--status-completed); --stage-tint:var(--status-completed-soft); --stage-ink:var(--status-completed-ink); }
-.dashboard-turnaround-stage { border-left:4px solid var(--stage-colour); background:linear-gradient(var(--stage-tint),var(--stage-tint)) top / 100% 46px no-repeat,var(--udm-surface); }
+.dashboard-turnaround-stage { border-left:4px solid var(--stage-colour); }
 .dashboard-turnaround-stage .dashboard-turnaround-stage-head h3 { color:var(--stage-ink); }
 .dashboard-turnaround-stage .dashboard-turnaround-primary { color:var(--stage-ink); }
-.dashboard-turnaround-stage-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; }
+.dashboard-turnaround-stage-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; margin:calc(-1 * var(--stage-padding-y)) calc(-1 * var(--stage-padding-x)) 12px; padding:12px var(--stage-padding-x); border-radius:4px 6px 0 0; background:var(--stage-tint); }
 .dashboard-turnaround-stage h3 { margin:0; color:var(--udm-navy-text); font-size:16px; font-weight:700; }
 .dashboard-turnaround-samples { color:var(--udm-slate-text); font-size:14px; white-space:nowrap; }
-.dashboard-turnaround-measure { margin:3px 0; color:var(--udm-slate-text); font-size:14px; }
+.dashboard-turnaround-measure { margin:0 0 6px; color:var(--udm-slate-text); font-size:14px; }
+.turnaround-stage-note { margin:0 0 12px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
 .turnaround-period-note { margin:0 0 12px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
 .turnaround-time-guide { margin:0 0 12px; padding:10px 12px; border-left:3px solid var(--udm-teal); background:var(--udm-surface); color:var(--udm-slate-text); font-size:13px; line-height:1.6; }
 .turnaround-time-guide p { margin:0; }
@@ -2643,8 +2648,9 @@ textarea.form-control { resize: vertical; min-height: 64px; }
 .turnaround-time-guide .turnaround-rounding-note { font-size:12px; }
 .turnaround-calculation-control { grid-column:1 / -1; margin-top:10px; padding-top:8px; border-top:1px solid var(--udm-line); }
 .turnaround-equation { padding:10px 12px; background:var(--udm-surface); border:1px solid var(--udm-line); border-radius:6px; color:var(--udm-navy-text); font-size:15px; line-height:1.7; overflow-wrap:anywhere; }
-.trend-tip-row .trend-tip-equation { padding-top:3px; color:var(--udm-slate-text); border-top:1px solid var(--udm-line); }
-.trend-tip-formula-key { margin:0 0 7px; color:var(--udm-slate-text); font-size:11px; line-height:1.45; }
+.trend-tip-equation { display:flex; flex-wrap:wrap; gap:0 5px; margin-top:5px; color:var(--udm-muted); font-size:12px; line-height:1.5; }
+.trend-tip-equation > span { white-space:nowrap; }
+.trend-tip-footnote { padding-top:8px; border-top:1px solid var(--udm-line); color:var(--udm-muted); font-size:12px; line-height:1.5; }
 .turnaround-sample-basis { margin:0 0 10px; color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
 .turnaround-zero-note { margin:8px 0 0; color:var(--udm-slate-text); font-size:12.5px; line-height:1.5; }
 .turnaround-waiting-note { margin:12px 0 0; padding-top:10px; border-top:1px solid var(--udm-line); color:var(--udm-slate-text); font-size:13px; line-height:1.5; }
@@ -2687,7 +2693,7 @@ textarea.form-control { resize: vertical; min-height: 64px; }
   .dashboard-turnaround-extremes > div + div { border-top:1px solid var(--udm-line); padding-top:10px; }
 }
 @container dashboard-side (max-width:400px) {
-  .dashboard-turnaround-stage { padding:14px; }
+  .dashboard-turnaround-stage { --stage-padding-x:14px; }
   .dashboard-turnaround-averages { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
   .dashboard-turnaround-primary { font-size:18px; }
   .dashboard-turnaround-calendar { font-size:16px; }

@@ -677,7 +677,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
-    assert body.index("trend-legend") > body.index("Turnaround Time for the Month of")
+    assert body.index("trend-legend") > body.index("Turnaround ·")
 
 
 @pytest.mark.django_db
@@ -1155,12 +1155,12 @@ def test_the_panels_all_render_inside_the_page_container(client, users, filed_re
     assert "Newest in the Document Repository" not in body, "removed in the consultation"
     for heading in ("Currently tracking",
                     "Created, endorsed and completed &mdash; running totals",
-                    "Turnaround Time for the Month of"):
+                    "Turnaround ·"):
         assert f"<h2>{heading}" in body, heading
 
     # The last panel must still precede the memo dialog, which is the final
     # thing in the content block.
-    assert body.index("Turnaround Time for the Month of") < body.index('id="dashboard-memo"')
+    assert body.index("Turnaround ·") < body.index('id="dashboard-memo"')
 
 
 # ============================================================== Tracking queues
@@ -1608,7 +1608,7 @@ def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt)
 #: headings; historical Tracking charts follow both summaries at full width.
 TRACKING_SIDE = ["Tracking overview"]
 REPOSITORY_SIDE = ["Repository", "Added to the repository"]
-TRACKING_TRENDS = ["Created, endorsed and completed", "Turnaround Time"]
+TRACKING_TRENDS = ["Created, endorsed and completed", "Turnaround"]
 
 
 def _side(body, name):
@@ -1631,7 +1631,7 @@ def _side(body, name):
             break
     markup = body[start:end]
     headings = [
-        re.split(r"&mdash;| — | for the Month of ", re.sub(r"<[^>]+>|\s+", " ", m.group(1)).strip())[0].strip()
+        re.split(r"&mdash;| — | · | for the Month of ", re.sub(r"<[^>]+>|\s+", " ", m.group(1)).strip())[0].strip()
         for m in re.finditer(r"<h2\b[^>]*>(.*?)</h2>", markup, re.S)
     ]
     return markup, headings

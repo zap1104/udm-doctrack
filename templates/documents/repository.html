@@ -4,13 +4,13 @@
 {% block content %}
 <div class="repository-page workspace-page workspace-repository">
   <div class="page-head">
-    <div><div class="eyebrow">Office records</div><h1>Document Repository</h1><p class="sub">Find filed documents by office, or review completed records waiting to be filed.</p></div>
+    <div><div class="eyebrow">Office records</div><h1>Document Repository</h1><p class="sub">Filed documents and records awaiting filing.</p></div>
     {% if can_start_work %}<a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload a document</a>{% endif %}
   </div>
   {% if folders_view %}{% include "documents/_subtabs.html" with active="folders" %}{% else %}{% include "documents/_subtabs.html" with active="repository" %}{% endif %}
   {% if folders_view %}
   <section class="repository-folders card-udm" aria-labelledby="repository-folders-title">
-    <div class="repository-section-head"><div><h2 id="repository-folders-title">Office Folders</h2><p>Choose an office to open its documents. Only records available to your account are counted.</p></div></div>
+    <div class="repository-section-head"><div><h2 id="repository-folders-title">Office Folders</h2><p>Choose an office.</p></div></div>
     <div class="repository-folder-grid" style="--folder-columns:{{ folder_columns }};">
       <a class="repository-folder{% if not selected_office %} is-selected{% endif %}" href="{{ all_folders_url }}"{% if not selected_office %} aria-current="true"{% endif %}>
         {% include "documents/_folder_icon.html" %}<span class="repository-folder-copy"><strong>All available offices</strong><span>{{ all_count }} filed{% if pending_all_count %} · {{ pending_all_count }} pending filing{% endif %}</span></span>
@@ -31,7 +31,7 @@
     </nav>
     {% if not pending_view and pending_count %}
     <section class="repository-pending-preview workspace-section" aria-labelledby="pending-preview-title">
-      <div class="repository-section-head"><div><h2 id="pending-preview-title">Pending filing <span class="num">{{ pending_count }}</span></h2><p>Completed in Tracking. An authorized administrator must approve these into the repository.{% if request.user.is_office_admin and not request.user.is_system_admin %} This repository queue shows documents created by your office.{% endif %}</p></div><a class="btn btn-sm btn-udm-outline" href="{{ pending_url }}">View pending filing</a></div>
+      <div class="repository-section-head"><div><h2 id="pending-preview-title">Pending filing <span class="num">{{ pending_count }}</span></h2><p>Completed records awaiting approval.{% if request.user.is_office_admin and not request.user.is_system_admin %} This repository queue shows documents created by your office.{% endif %}</p></div><a class="btn btn-sm btn-udm-outline" href="{{ pending_url }}">View pending filing</a></div>
       {% include "documents/_repository_pending.html" %}
     </section>
     {% endif %}
