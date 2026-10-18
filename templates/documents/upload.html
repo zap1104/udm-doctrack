@@ -2,6 +2,7 @@
 {% block title %}Upload Document · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-page workspace-form workspace-upload">
+<a class="page-back no-print" href="{% url 'documents:repository' %}">{% include "partials/_icon.html" with name="arrow-left" %}Back to Repository</a>
 <div class="page-head">
   <div>
     <div class="eyebrow">Document Repository · Step 1</div>

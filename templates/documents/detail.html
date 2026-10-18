@@ -3,10 +3,10 @@
 {% block title %}{{ document.title }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-page workspace-detail workspace-document-detail">
+<a class="page-back no-print" href="{{ document.repository_url }}">{% include "partials/_icon.html" with name="arrow-left" %}Back to {% if document.is_external %}External {% endif %}Repository</a>
 <div class="page-head">
   <div>
     <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
-    <a href="{{ document.repository_url }}">Back to {% if document.is_external %}external {% endif %}repository</a>
     <h1>{{ document.title }}</h1>
     <p class="sub">
       {{ document.office.name }} · {{ document.document_type_names|default:"Unclassified" }}

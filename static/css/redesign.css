@@ -1,0 +1,412 @@
+/* DocTrack screen design. Loaded last; paper layouts remain in doctrack.css.
+   Existing endpoints, state colours, office scopes and interaction hooks stay shared. */
+@media screen {
+  :root, :root .app-shell {
+    --udm-canvas: #f6f8fa;
+    --udm-surface: #ffffff;
+    --udm-surface-sunk: #f1f5f3;
+    --udm-line: #dce4e0;
+    --udm-line-soft: #e8eeeb;
+    --udm-line-strong: #a6b8ae;
+    --udm-row-line: #edf1ef;
+    --udm-ink: #24372e;
+    --udm-navy-text: #183c2e;
+    --udm-muted: #617268;
+    --udm-label-ink: #43594b;
+    --udm-slate-text: #52665a;
+    --udm-slate-soft: #f0f5f2;
+    --udm-navy-soft: #eaf3ed;
+    --udm-track: #e8eeeb;
+    --workspace-control-line: #a2b4a8;
+    --sidebar-width: 248px;
+    --radius: 12px;
+    --dt-selected: #e9f3ed;
+    --dt-sidebar-ink: #52665a;
+    --dt-shadow: 0 2px 4px rgb(24 60 46 / 2%);
+    --bs-body-bg: var(--udm-canvas);
+    --bs-body-bg-rgb: 246, 248, 250;
+    --bs-body-color: var(--udm-ink);
+    --bs-border-color: var(--udm-line);
+    --bs-secondary-bg: var(--udm-surface);
+    --bs-tertiary-bg: var(--udm-surface-sunk);
+  }
+  :root[data-theme="dark"], :root[data-theme="dark"] .app-shell {
+    --udm-canvas: #111b18;
+    --udm-surface: #1a2822;
+    --udm-surface-sunk: #15221c;
+    --udm-line: #3e5548;
+    --udm-line-soft: #304338;
+    --udm-line-strong: #819b89;
+    --udm-row-line: #2c4034;
+    --udm-ink: #e3ede6;
+    --udm-navy-text: #e3ede6;
+    --udm-muted: #afc2b5;
+    --udm-label-ink: #c4d4c9;
+    --udm-slate-text: #bbcdc0;
+    --udm-slate-soft: #223a2c;
+    --udm-navy-soft: #223a2c;
+    --udm-track: #324b3c;
+    --workspace-control-line: #819b89;
+    --dt-selected: #284633;
+    --dt-sidebar-ink: #bdcec2;
+    --dt-shadow: none;
+    --bs-body-bg-rgb: 17, 27, 24;
+  }
+  body { --bs-body-bg-rgb: 246, 248, 250; }
+  .form-error-summary { scroll-margin-top: 96px; }
+  :root[data-theme="dark"] body { --bs-body-bg-rgb: 17, 27, 24; }
+  .dt-icon { width: 20px; height: 20px; flex: 0 0 20px; vertical-align: middle; }
+
+  /* Persistent navigation, with the same destinations and role visibility. */
+  .app-shell .app-sidebar {
+    display: flex; flex-direction: column; padding: 24px 16px 16px;
+    background: var(--udm-surface); color: var(--dt-sidebar-ink);
+    border-right: 1px solid var(--udm-line); box-shadow: none;
+    scrollbar-width: thin;
+  }
+  .app-shell .app-sidebar .brand { padding: 0 10px 22px; }
+  .app-shell .sidebar-brand-content { gap: 10px; align-items: center; }
+  .app-shell .sidebar-brand-icon { width: 38px; height: 38px; filter: none; border-radius: 10px; }
+  .sidebar-brand-copy { display: flex; flex-direction: column; gap: 2px; }
+  .sidebar-brand-title { color: var(--udm-navy-text); font-size: 21px; font-weight: 750; letter-spacing: -.7px; line-height: 1.2; }
+  .sidebar-brand-subtitle { color: var(--udm-muted); font-size: 10px; font-weight: 600; letter-spacing: .035em; }
+  .app-shell .app-sidebar .nav-section {
+    color: var(--udm-muted); padding: 20px 12px 9px; margin: 0;
+    font-size: 10px; font-weight: 650; letter-spacing: .12em;
+  }
+  .app-shell .app-sidebar .nav-section--first { padding-top: 10px; }
+  .app-shell .app-sidebar .nav-item {
+    min-height: 44px; margin: 2px 0; padding: 10px 12px; gap: 11px;
+    border: 0; border-radius: 8px; background: transparent;
+    color: var(--dt-sidebar-ink); font-size: 13.5px; font-weight: 500; line-height: 1.4;
+    box-shadow: none; text-decoration: none;
+  }
+  .app-shell .app-sidebar .nav-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; flex: 0 0 20px; padding: 0;
+    color: inherit; background: transparent; border: 0; border-radius: 0;
+  }
+  .app-shell .app-sidebar .nav-item:hover { background: var(--udm-surface-sunk); color: var(--udm-navy-text); }
+  .app-shell .app-sidebar .nav-item.active,
+  .app-shell .app-sidebar .nav-item.active:hover {
+    background: var(--dt-selected); color: var(--udm-teal-ink); font-weight: 650; box-shadow: none;
+  }
+  .app-shell .app-sidebar .nav-item:is(.active, :hover, :focus-visible) .nav-icon {
+    background: transparent; color: inherit; border: 0;
+  }
+  .app-shell .app-sidebar .nav-item:focus-visible { outline: 2px solid var(--udm-focus); outline-offset: -2px; }
+  .app-shell .app-sidebar .nav-item--child {
+    min-height: 34px; margin: 0 0 0 22px; padding: 6px 12px 6px 21px;
+    border-left: 1px solid var(--udm-line); border-radius: 0 6px 6px 0;
+    font-size: 12px; color: var(--udm-muted);
+  }
+  .app-shell .sidebar-office-wrap { margin-top: auto; padding-top: 26px; }
+  .app-shell .sidebar-office-wrap .nav-section { padding-top: 0; }
+  .app-shell .sidebar-office {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 13px 11px; border: 1px solid var(--udm-line-soft);
+    border-radius: 10px; background: var(--udm-canvas);
+  }
+  .app-shell .sidebar-office-mark {
+    width: 34px; min-width: 34px; min-height: 34px; padding: 8px 2px;
+    color: var(--udm-teal-ink); background: var(--dt-selected); border: 0; border-radius: 8px;
+    font-size: 10px; font-weight: 700;
+  }
+  .app-shell .sidebar-office-name { color: var(--udm-ink); font-size: 11.5px; font-weight: 650; line-height: 1.5; }
+  .app-shell .sidebar-office-role { color: var(--udm-muted); font-size: 10.5px; line-height: 1.5; margin-top: 3px; }
+  .app-shell .sidebar-close { color: var(--udm-ink); background: var(--udm-surface-sunk); }
+
+  /* The top bar names the current module; repository search retains its scope. */
+  .app-shell .app-topbar {
+    min-height: 76px; padding: 13px 32px; gap: 22px;
+    background: var(--udm-surface); border-bottom: 1px solid var(--udm-line-soft);
+  }
+  .topbar-location { display: flex; align-items: center; gap: 10px; white-space: nowrap; font-size: 12px; color: var(--udm-muted); }
+  .topbar-location strong { color: var(--udm-ink); font-weight: 600; }
+  .topbar-location-divider { color: var(--udm-line-strong); }
+  .app-shell .app-topbar .topbar-search { position: relative; max-width: 300px; min-width: 100px; margin-left: auto; }
+  .topbar-search > .dt-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--udm-muted); pointer-events: none; }
+  .app-shell .app-topbar .topbar-search input {
+    height: 40px; min-height: 40px; border: 1px solid var(--udm-line);
+    padding: 9px 12px 9px 38px; border-radius: 8px;
+    background: var(--udm-canvas); color: var(--udm-ink); font-size: 12.5px;
+  }
+  .app-shell .topbar-controls { gap: 12px; margin-left: 0 !important; }
+  .app-shell .topbar-account-button { padding: 2px 0 2px 12px; border-left: 1px solid var(--udm-line) !important; border-radius: 0; gap: 9px; }
+  .app-shell .avatar { width: 34px; height: 34px; border-radius: 10px; font-size: 11px; }
+  .app-shell .topbar-account-name { font-size: 12px; }
+  .app-shell .topbar-account-office { font-size: 10.5px; max-width: 148px; }
+  .app-shell :is(.theme-toggle, .page-help-launch) { border-color: transparent; background: transparent; color: var(--udm-muted); border-radius: 8px; }
+  .app-shell :is(.theme-toggle, .page-help-launch):hover { background: var(--udm-surface-sunk); color: var(--udm-ink); }
+
+  /* One rhythm for all page families, including administration and external work. */
+  .app-shell .app-content { max-width: 1600px; padding: 32px 32px 48px; --panel-padding: 22px; }
+  .app-shell .page-head { padding-bottom: 0; border: 0; margin-bottom: 27px; align-items: center; gap: 16px 24px; }
+  .app-shell .page-head h1 { margin: 0; font-size: clamp(25px, 2.1vw, 32px); font-weight: 700; letter-spacing: -.035em; line-height: 1.25; }
+  .app-shell .page-head .sub { margin-top: 7px; max-width: 75ch; font-size: 13.5px; color: var(--udm-muted); }
+  .app-shell .eyebrow { margin-bottom: 7px; font-size: 10px; font-weight: 650; letter-spacing: .13em; color: var(--udm-muted); }
+  .page-back { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin: -8px 0 12px; color: var(--udm-muted); font-size: 12px; }
+  .page-back .dt-icon { width: 15px; height: 15px; flex-basis: 15px; }
+  .page-back:hover { color: var(--udm-teal-ink); }
+  .app-shell .card-udm { border-color: var(--udm-line); border-radius: var(--radius); box-shadow: var(--dt-shadow); }
+  .app-shell .card-udm .card-udm-head { padding: 20px var(--panel-padding); background: transparent; border-bottom-color: var(--udm-line-soft); }
+  .app-shell .card-udm .card-udm-head h2 { font-size: 16px; font-weight: 650; letter-spacing: -.015em; }
+  .app-shell :is(.card-udm-caption, .phase2-card-caption) { margin-top: 5px; font-size: 12px; line-height: 1.6; color: var(--udm-muted); }
+  .app-shell .card-udm .card-udm-body { padding: 22px var(--panel-padding); }
+  .app-shell .stat-card { min-height: 116px; padding: 20px; border: 1px solid var(--udm-line); border-radius: 12px; box-shadow: var(--dt-shadow); }
+  .app-shell .stat-card .label { font-size: 12px; text-transform: none; letter-spacing: 0; }
+  .app-shell .stat-card .value { font-size: 32px; font-weight: 700; letter-spacing: -.035em; }
+  .app-shell .report-scope-card .card-udm-head { border-bottom: 0; }
+  .app-shell .app-footer { padding: 18px 32px; border-top: 1px solid var(--udm-line-soft); color: var(--udm-muted); font-size: 11px; }
+  .app-shell .btn { border-radius: 8px; font-weight: 600; }
+  .app-shell .btn:is(.btn-udm, .btn-udm-outline, .btn-udm-gold, .btn-udm-teal, .btn-udm-green) { padding: 10px 16px; min-height: 40px; font-size: 12.5px; }
+  .app-shell .btn.btn-sm:is(.btn-udm, .btn-udm-outline, .btn-udm-gold, .btn-udm-teal, .btn-udm-green) { min-height: 34px; padding: 7px 12px; font-size: 12px; }
+  .app-shell .btn-udm-outline { border-color: var(--udm-line-strong); background: var(--udm-surface); color: var(--udm-navy-text); }
+  .app-shell .btn-udm-outline:hover { border-color: var(--udm-primary); background: var(--udm-teal-soft); }
+  :root:not([data-theme="dark"]) .app-shell .btn-dashboard-action { border-color: var(--udm-line); font-size: 12px; background: var(--udm-surface); }
+  .app-shell .btn-dashboard-action { border-radius: 8px; gap: 8px; }
+  .app-shell .btn-dashboard-action svg { width: 16px; height: 16px; }
+
+  /* Dashboard: workload and urgency together, followed by real working queues. */
+  .app-shell .dashboard-attention > h2 { font-size: 13px; margin-bottom: 12px; font-weight: 600; color: var(--udm-muted); }
+  .app-shell .dashboard-attention-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .app-shell .dashboard-attention-grid > a {
+    position: relative; display: grid; grid-template-columns: 1fr auto; align-content: start; gap: 10px;
+    min-height: 148px; height: auto; padding: 20px; background: var(--udm-surface);
+    border: 1px solid var(--udm-line); border-radius: 12px; box-shadow: var(--dt-shadow);
+    color: var(--udm-ink); text-decoration: none;
+  }
+  .app-shell .dashboard-attention-grid > a:hover { border-color: var(--udm-primary); }
+  :root .app-shell .dashboard-attention-grid > a {
+    background: var(--udm-surface); border: 1px solid var(--udm-line);
+    box-shadow: var(--dt-shadow);
+  }
+  :root .app-shell .dashboard-attention-grid > a:hover { border-color: var(--udm-primary); }
+  .app-shell .dashboard-attention-grid .label { grid-column: 1; grid-row: 1; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--udm-muted); }
+  .app-shell .dashboard-attention-grid .value { grid-column: 1; grid-row: 2; font-size: 36px; line-height: 1.15; font-weight: 700; letter-spacing: -.04em; color: var(--udm-navy-text); }
+  .app-shell .dashboard-attention-grid .hint { grid-column: 1 / -1; grid-row: 3; max-width: none; margin: 0; font-size: 11.5px; line-height: 1.6; color: var(--udm-muted); }
+  .app-shell .dashboard-attention-grid .hint strong { font-weight: 600; }
+  .metric-icon { grid-column: 2; grid-row: 1 / 3; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: var(--udm-teal-soft); color: var(--udm-teal-ink); }
+  .app-shell .dashboard-attention-grid .red .metric-icon { background: var(--udm-red-soft); color: var(--udm-red-ink); }
+  .app-shell .dashboard-attention-grid .red .value { color: var(--udm-red-ink); }
+  .app-shell .dashboard-attention-grid .repository-pending-filing .metric-icon { background: var(--udm-gold-soft); color: var(--udm-gold-ink); }
+  .app-shell .dashboard-head-actions { gap: 8px; max-width: 490px; }
+  .app-shell .dashboard-head-actions .dashboard-scope { flex-basis: 100%; }
+  .app-shell .dashboard-head-actions .form-select { max-width: 350px; font-size: 12px; }
+  .app-shell .dashboard-scope-label { font-size: 11px; }
+  .app-shell .dashboard-queue-split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .app-shell .dashboard-filing-head { flex-direction: row; align-items: center; }
+  .app-shell .dashboard-filing-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-shell .dashboard-filing-list li { min-width: 0; border-top: 1px solid var(--udm-line-soft); }
+  .app-shell .dashboard-filing-record { padding: 16px 20px; gap: 7px; height: 100%; }
+  .app-shell .dashboard-filing-number { font-size: 11px; }
+  .app-shell .dashboard-filing-subject { font-size: 13px; line-height: 1.55; }
+  .app-shell .dashboard-filing-open { font-size: 11.5px; }
+  .app-shell .dashboard-filing-count { padding-block: 12px; font-size: 11.5px; }
+  .app-shell .dashboard-secondary-stats:empty { display: none; }
+  .app-shell .dashboard-side-head { border: 0; margin-bottom: 16px; }
+  .app-shell .dashboard-side-title { font-size: 17px; letter-spacing: -.02em; }
+  .app-shell .dashboard-side-caption { font-size: 12px; }
+  .app-shell .dashboard-activity-card { margin-top: 20px !important; }
+  .app-shell .dashboard-recent-activity > summary { padding: 16px 22px; }
+  .app-shell .desk-chips { padding-block: 12px; gap: 8px; }
+  .app-shell .desk-attention-label { font-size: 11px; }
+  .app-shell .desk-block-caption { font-size: 11.5px; line-height: 1.6; }
+  .app-shell .desk-queue-bar { background: var(--udm-surface-sunk); }
+
+  /* Compact, visible filters; links and native form fallbacks retain their semantics. */
+  .app-shell .direction-filter-group { border-color: var(--udm-line-soft); border-radius: 9px; background: var(--udm-canvas); padding: 14px; }
+  .app-shell .direction-filter-heading { font-size: 12.5px; }
+  .app-shell .direction-filter-stages { gap: 6px; }
+  .app-shell .direction-filter-note { font-size: 11.5px; }
+  .app-shell .direction-filter-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .direction-filters--desk { padding: 18px 22px 0; }
+  .app-shell .pill-toggle { font-size: 12px; min-height: 34px; padding: 7px 12px; border-radius: 7px; border-color: var(--udm-line); }
+  .app-shell .pill-toggle.is-disabled { color: var(--udm-muted); opacity: .8; }
+  .app-shell .pill { font-size: 10.5px; letter-spacing: .01em; text-transform: none; font-weight: 600; padding: 4px 9px; }
+  .app-shell :is(.module-subtabs, .reports-tabs) { gap: 22px; padding: 0; border-bottom: 1px solid var(--udm-line); background: transparent; margin-bottom: 22px; }
+  .app-shell :is(.module-subtabs, .reports-tabs) a { min-height: 42px; padding: 10px 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--udm-muted); font-size: 12.5px; }
+  .app-shell :is(.module-subtabs, .reports-tabs) a:is(.active, .is-active, [aria-current="page"]) { background: transparent; color: var(--udm-teal-ink); border-bottom-color: var(--udm-teal); font-weight: 650; }
+  .app-shell .external-workspace .external-nav { gap: 22px; padding: 0; margin-bottom: 24px; border-bottom-color: var(--udm-line); }
+  .app-shell .external-workspace .external-nav a { display: inline-flex; align-items: center; min-height: 42px; padding: 10px 2px; border-bottom: 2px solid transparent; color: var(--udm-muted); font-size: 12.5px; text-decoration: none; }
+  .app-shell .external-workspace .external-nav a[aria-current="page"] { color: var(--udm-teal-ink); border-bottom-color: var(--udm-teal); font-weight: 650; }
+  .app-shell .external-workspace .external-table thead th { background: var(--udm-canvas); color: var(--udm-muted); font-size: 11px; font-weight: 650; letter-spacing: .03em; }
+  .app-shell .tracking-filter-disclosure { border-radius: 10px; margin-bottom: 20px; }
+  .app-shell .tracking-filter-disclosure > summary { padding: 13px 18px; font-size: 12px; }
+  .app-shell .tracking-filter-description { display: inline; margin-left: 10px; font-size: 11.5px; }
+  .app-shell .tracking-filters { background: var(--udm-surface); }
+  .app-shell .tracking-filter-scope .tracking-filter-row { gap: 14px; }
+  .app-shell .tracking-filter-note { font-size: 11.5px; line-height: 1.6; }
+  .tracking-list-controls { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+  .tracking-list-controls:not(:has(.tracking-filter-scope)) { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .tracking-list-controls .tracking-filter-scope {
+    padding: 20px; background: var(--udm-surface); border: 1px solid var(--udm-line); border-radius: 12px;
+  }
+  .app-shell .tracking-list-controls .tracking-filter-row { flex-direction: column; align-items: stretch; gap: 7px; }
+  .app-shell .tracking-list-controls .tracking-filter-row--scope form { max-width: none; }
+  .app-shell .tracking-list-controls .dashboard-scope { width: 100%; }
+  .app-shell .tracking-list-controls .form-select { flex-basis: auto; width: 100%; }
+  .app-shell .tracking-list-controls .tracking-filter-label { font-size: 12px; line-height: 1.5; }
+  .app-shell .tracking-list-controls .tracking-filter-note { margin-top: 10px; }
+  .app-shell .tracking-list-controls .workspace-toolbar .card-udm-body { padding: 20px; }
+  .tracking-list-controls > * { min-width: 0; }
+
+  /* Tables have a quiet header and a clear document title and identifier. */
+  .app-shell .table-udm thead th { background: var(--udm-canvas); color: var(--udm-muted); font-size: 10.5px; font-weight: 650; letter-spacing: .055em; padding: 13px 16px; line-height: 1.5; border-bottom-color: var(--udm-line); }
+  .app-shell .table-udm td { padding: 16px; font-size: 14px; border-bottom-color: var(--udm-row-line); line-height: 1.6; }
+  .app-shell .table-udm tbody tr:hover { background: var(--udm-canvas); }
+  .app-shell .table-udm .mono { font-size: 11.5px; color: var(--udm-teal-ink); }
+  .app-shell .desk-cell-title { font-size: 14px; font-weight: 550; color: var(--udm-ink); }
+  .app-shell .desk-update-time { margin-top: 4px; font-size: 11px; }
+  .app-shell .office-badge { font-size: 10.5px; border-radius: 5px; }
+  .app-shell .bulk-receipt-panel { background: var(--udm-canvas); border-top: 1px solid var(--udm-line-soft); }
+  .app-shell :is(.page-link, .page-size-option) { border-radius: 6px; font-size: 12px; }
+
+  /* Forms, review pages, details and the remaining workspace screens. */
+  .app-shell :is(.form-control, .form-select) { min-height: 42px; border: 1px solid var(--workspace-control-line); border-radius: 8px; background-color: var(--udm-surface); color: var(--udm-ink); font-size: 14px; padding: 9px 12px; box-shadow: none; }
+  .app-shell .form-select { padding-right: 34px; }
+  .app-shell textarea.form-control { min-height: 105px; }
+  .app-shell :is(.form-control, .form-select):focus { border-color: var(--udm-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--udm-focus) 15%, transparent); }
+  .app-shell :is(.form-control, .form-select):disabled { background-color: var(--udm-canvas); color: var(--udm-muted); }
+  .app-shell :is(.form-label, .repository-filters label) { margin-bottom: 7px; font-size: 12px; font-weight: 600; color: var(--udm-label-ink); }
+  .app-shell .form-text { font-size: 11.5px; color: var(--udm-muted); line-height: 1.6; }
+  .app-shell .phase2-form-section { padding-bottom: 24px; margin-bottom: 24px; border-bottom-color: var(--udm-line-soft); }
+  .app-shell .phase2-section-title { font-size: 14px; margin-bottom: 18px; font-weight: 650; }
+  .app-shell .phase2-upload-box { padding: 22px; background: var(--udm-canvas); border-color: var(--udm-line-strong); border-radius: 10px; }
+  .app-shell :is(.workspace-form-aside, .workspace-support) .card-udm-head { background: var(--udm-canvas); }
+  .app-shell .help-note { background: var(--udm-slate-soft); border-color: var(--udm-line); border-radius: 9px; font-size: 12.5px; }
+  .app-shell .step-indicator { gap: 12px; margin-top: 14px !important; }
+  .app-shell .step { font-size: 12px; }
+  .app-shell .form-actions { padding-top: 20px; border-top: 1px solid var(--udm-line-soft); }
+  .app-shell .table-stacked th { font-size: 12px; line-height: 1.6; }
+  .app-shell .table-stacked td { font-size: 14px; }
+  .app-shell .tracking-record-context .table-stacked { table-layout: fixed; width: 100%; }
+  .app-shell .tracking-record-context .table-stacked th { width: 40%; }
+  .app-shell .tracking-record-actions > .card-udm:first-child { border-top: 3px solid var(--udm-teal); }
+  .app-shell .tracking-record-history { margin-top: 22px; }
+  .app-shell .timeline .t-title { font-size: 13px; }
+  .app-shell .timeline .t-meta { font-size: 11.5px; }
+  .app-shell .timeline .t-detail { background: var(--udm-canvas); border-radius: 8px; }
+  .app-shell .repository-folder { background: var(--udm-surface); border-color: var(--udm-line); border-radius: 10px; padding: 20px; }
+  .app-shell .repository-folder:hover { background: var(--udm-canvas); border-color: var(--udm-primary); }
+  .app-shell .repository-folder.is-selected { background: var(--dt-selected); border-color: var(--udm-teal); }
+  .app-shell .repository-folder-copy strong { font-size: 13px; }
+  .app-shell .repository-section-head h2 { font-size: 17px; }
+  .app-shell .repository-section-head p { font-size: 12px; }
+  .app-shell .repository-folder-grid { gap: 14px; }
+  .app-shell .repository-view { border-radius: 7px; font-size: 12px; }
+  .app-shell .workspace-repository .repository-document { padding: 20px; border-color: var(--udm-line); border-radius: 10px; box-shadow: var(--dt-shadow); }
+  .app-shell .workspace-repository .repository-document h3 { font-size: 15px; }
+  .app-shell .workspace-search .result-item { padding: 22px; border-radius: 10px; border-color: var(--udm-line); }
+  .app-shell .workspace-search .result-item h3 { font-size: 16px; }
+  .app-shell .disclosure-title { font-size: 13px; }
+  .app-shell .disclosure-description { font-size: 11.5px; }
+
+  /* Account access stays a deliberate light composition in both app themes. */
+  .login-wrap { --udm-surface: #ffffff; --udm-canvas: #f6f8fa; --udm-line: #dce4e0; --udm-muted: #617268; --udm-ink: #24372e; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: #ffffff; }
+  .login-art { position: relative; overflow: hidden; padding: clamp(36px, 5vw, 80px); background: #153e2f; border: 0; }
+  .login-art .grid-lines { opacity: .12; background-size: 64px 64px; }
+  .login-art h1 { font-size: clamp(36px, 4vw, 58px); font-weight: 650; letter-spacing: -.04em; line-height: 1.08; max-width: 12ch; }
+  .login-art p { font-size: 14px; line-height: 1.8; }
+  .login-kicker { color: #d5b86a; font-size: 10px; letter-spacing: .15em; }
+  .login-art .rule { width: 48px; height: 2px; margin: 24px 0; }
+  .login-workflow { gap: 18px; margin-top: 36px; }
+  .login-workflow li { padding-top: 15px; border-color: #66836d; }
+  .login-workflow strong { font-size: 13px; }
+  .login-workflow span { font-size: 11px; line-height: 1.6; }
+  .login-form { padding: 48px; background: #ffffff; }
+  .login-form .inner { max-width: 370px; }
+  .login-form-heading h2 { margin-top: 8px; font-size: 30px; font-weight: 700; letter-spacing: -.035em; }
+  .login-form-heading p { font-size: 13px; margin-top: 8px; }
+  .login-form .eyebrow { font-size: 10px; color: #617268; }
+  .login-form .form-control { min-height: 48px; padding: 12px 14px; border-radius: 8px; border-color: #a2b4a8; background: #fff; color: #24372e; }
+  .login-form .form-label { font-size: 12px; font-weight: 600; }
+  .login-form .btn-udm { min-height: 48px; border-radius: 8px; font-size: 13px; margin-top: 8px; }
+  .login-security-note { padding: 15px; margin-top: 28px; border: 1px solid #dce4e0; border-radius: 8px; background: #f6f8fa; color: #52665a; font-size: 11.5px; line-height: 1.6; }
+  .login-account-note { font-size: 11px; line-height: 1.7; margin-top: 18px; }
+}
+
+@media screen and (min-width: 1440px) {
+  .app-shell .app-content { padding: 38px 40px 56px; }
+  .app-shell .app-topbar { padding-inline: 40px; }
+  .app-shell .dashboard-queue-split { grid-template-columns: minmax(0, 1fr) 300px; }
+  .app-shell .dashboard-filing-head { flex-direction: column; align-items: flex-start; }
+  .app-shell .dashboard-filing-list { grid-template-columns: minmax(0, 1fr); }
+}
+@media screen and (min-width: 901px) and (max-width: 1199.98px) {
+  .topbar-location { display: none; }
+}
+@media screen and (max-width: 991.98px) {
+  .app-shell .app-content { padding: 26px 22px 40px; --panel-padding: 20px; }
+  .app-shell .app-topbar { padding-inline: 22px; gap: 14px; }
+  .app-shell .dashboard-head-actions { justify-content: flex-start; }
+  .app-shell .dashboard-head-actions .dashboard-scope { justify-content: flex-start; }
+  .app-shell .dashboard-filing-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tracking-list-controls { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+@media screen and (max-width: 900px) {
+  .app-shell .app-sidebar { width: min(84vw, 286px); }
+  .topbar-location { display: none; }
+  .app-shell .app-topbar .topbar-search { max-width: none; margin-left: 0; }
+  .login-art { padding: 32px; }
+  .login-art h1 { font-size: 38px; }
+}
+@media screen and (max-width: 767.98px) {
+  .app-shell .dashboard-attention-grid { gap: 10px; }
+  .app-shell .dashboard-attention-grid > a { padding: 16px; min-height: 155px; }
+  .app-shell .dashboard-attention-grid .value { font-size: 30px; }
+  .metric-icon { width: 30px; height: 30px; border-radius: 8px; }
+  .metric-icon .dt-icon { width: 17px; height: 17px; }
+  .app-shell .direction-filter-groups { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .tracking-filter-description { display: block; margin: 3px 0 0; }
+  .app-shell .dashboard-filing-head { align-items: flex-start; }
+  .app-shell .pill-toggle { min-height: 44px; }
+  .app-shell :is(.btn, .btn.btn-sm, .module-subtabs a, .reports-tabs a, .repository-view, .page-link, .page-size-option) { min-height: 44px; }
+  .app-shell .external-workspace .external-nav a { min-height: 44px; }
+  .app-shell :is(.form-control, .form-select) { font-size: 16px; min-height: 44px; }
+  .app-shell .app-topbar .topbar-search input { font-size: 16px; min-height: 44px; }
+  .app-shell :is(.theme-toggle, .topbar-notifications, .page-help-launch, .topbar-account-button, .sidebar-toggle, .sidebar-close) { min-width: 44px; min-height: 44px; }
+  .login-wrap { grid-template-columns: minmax(0, 1fr); }
+  .login-art { min-height: auto; padding: 30px 24px; gap: 28px; }
+  .login-art h1 { font-size: 36px; max-width: 18ch; }
+  .login-art .login-workflow, .login-art .login-institution { display: none; }
+  .login-form { padding: 36px 24px; }
+}
+@media screen and (max-width: 575.98px) {
+  .form-error-summary { scroll-margin-top: 132px; }
+  .app-shell .app-content { padding: 22px 16px 32px; --panel-padding: 16px; }
+  .app-shell .page-head { gap: 16px; margin-bottom: 22px; }
+  .app-shell .page-head h1 { font-size: 27px; }
+  .app-shell .page-head .sub { font-size: 13px; }
+  .app-shell .app-topbar { min-height: 68px; padding: 10px 12px; gap: 8px; }
+  .app-shell .app-topbar { display: grid; grid-template-columns: 44px minmax(0, 1fr); }
+  .app-shell .app-topbar .sidebar-toggle { grid-column: 1; grid-row: 1; }
+  .app-shell .app-topbar .topbar-search { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .app-shell .app-topbar .topbar-controls { grid-column: 2; grid-row: 1; justify-self: end; }
+  .app-shell .topbar-controls { gap: 2px; }
+  .app-shell .app-topbar .topbar-search { min-width: 0; }
+  .app-shell .app-topbar .topbar-search input { padding-left: 30px; padding-right: 6px; }
+  .topbar-search > .dt-icon { left: 9px; width: 15px; }
+  .app-shell .topbar-account-button { border-left: 0 !important; padding-left: 2px; }
+  .app-shell .dashboard-attention-grid { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .dashboard-attention-grid > a { min-height: 0; padding: 16px; gap: 6px 14px; }
+  .app-shell .dashboard-attention-grid .value { grid-column: 2; grid-row: 1 / 3; align-self: center; padding-right: 48px; font-size: 30px; }
+  .app-shell .dashboard-attention-grid .label { grid-column: 1; padding-right: 0; }
+  .app-shell .dashboard-attention-grid .hint { grid-column: 1; grid-row: 2; font-size: 11.5px; }
+  .app-shell .dashboard-attention-grid .metric-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
+  .app-shell .dashboard-attention-grid > [data-tracking-total] { min-height: 112px; }
+  .app-shell .dashboard-attention-grid > [data-tracking-total] .hint { grid-column: 1 / -1; grid-row: 3; }
+  .app-shell .dashboard-head-actions { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .dashboard-head-actions .dashboard-scope { grid-template-columns: minmax(0, 1fr) auto; }
+  .app-shell .dashboard-filing-list { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .dashboard-filing-head { flex-direction: column; }
+  .app-shell .dashboard-recent-activity > summary { padding: 16px; }
+  .app-shell .direction-filters--desk { padding: 14px 16px 0; }
+  .app-shell .app-footer { padding-inline: 16px; }
+  .app-shell .tracking-filter-scope .tracking-filter-row { flex-direction: column; align-items: stretch; }
+  .app-shell .card-udm .card-udm-head { padding-block: 17px; }
+  .app-shell .card-udm .card-udm-body { padding-block: 18px; }
+  .app-shell .table-udm td { padding: 14px; }
+  .app-shell :is(.module-subtabs, .reports-tabs) { gap: 16px; }
+  .app-shell :is(.module-subtabs, .reports-tabs) a { font-size: 12px; }
+}

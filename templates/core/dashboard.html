@@ -96,13 +96,21 @@
 <section class="dashboard-attention dashboard-urgent-shortcuts mb-4" aria-labelledby="dashboard-attention-title">
   <h2 id="dashboard-attention-title">Needs attention</h2>
   <div class="dashboard-attention-grid">
+  <a class="stat-card navy" href="{{ tracking_total_url }}" data-tracking-total>
+    <div class="label">Tracking workload</div>
+    <span class="metric-icon">{% include "partials/_icon.html" with name="tracking" %}</span>
+    <div class="value">{{ tracking_total_count }}</div>
+    <div class="hint"><strong>{{ tracking_current_count }}</strong> currently tracking + <strong>{{ tracking_pending_filing_count }}</strong> pending filing = <strong>{{ tracking_total_count }}</strong> document{{ tracking_total_count|pluralize }}</div>
+  </a>
     <a class="stat-card red" href="{% url 'tracking:list' %}?overdue=yes{% if scope.office %}&amp;office={{ scope.office.pk }}{% endif %}">
       <div class="label">Overdue</div>
+      <span class="metric-icon">{% include "partials/_icon.html" with name="clock" %}</span>
       <div class="value">{{ overdue_count }}</div>
       <div class="hint">Past the action deadline</div>
     </a>
     <a class="repository-pending-filing" id="dashboard-pending-filing" href="{{ pending_filing.tracking_url }}">
       <div class="label">Pending filing</div>
+      <span class="metric-icon">{% include "partials/_icon.html" with name="folder" %}</span>
       <div class="value">{{ pending_filing.count }}</div>
       <div class="hint">Completed in Tracking · not yet filed.</div>
     </a>
@@ -172,11 +180,7 @@
     </header>
     <div class="dashboard-side-stack">
 <div class="dashboard-secondary-stats">
-  <a class="stat-card navy" href="{{ tracking_total_url }}" data-tracking-total>
-    <div class="label">Tracking workload</div>
-    <div class="value">{{ tracking_total_count }}</div>
-    <div class="hint"><strong>{{ tracking_current_count }}</strong> currently tracking + <strong>{{ tracking_pending_filing_count }}</strong> pending filing = <strong>{{ tracking_total_count }}</strong> document{{ tracking_total_count|pluralize }}</div>
-  </a>
+
   {% if not scope.all_offices %}
     <a class="stat-card" href="{% url 'tracking:list' %}?scope=incoming{% if scope.office %}&amp;office={{ scope.office.pk }}{% endif %}">
       <div class="label">Incoming</div>

@@ -2,6 +2,7 @@
 {% block title %}{% if record %}Edit Tracking Draft{% else %}New Tracking Slip{% endif %} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-form-page tracking-form-page">
+<a class="page-back no-print" href="{% url 'tracking:list' %}">{% include "partials/_icon.html" with name="arrow-left" %}Back to Tracking</a>
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking</div>

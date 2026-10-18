@@ -23,6 +23,7 @@
   {% endif %}
 </div>
 {% include "tracking/_subtabs.html" with active="tracking" %}
+<div class="tracking-list-controls">
 <form method="get" class="card-udm mb-3 workspace-toolbar no-print" aria-label="Search tracking records" {% include "partials/_auto_filter_attrs.html" %}>
   {% if resolved.as_office %}<input type="hidden" name="office" value="{{ resolved.as_office.pk }}">{% elif resolved.all_offices %}<input type="hidden" name="office" value="all">{% endif %}
   {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
@@ -37,28 +38,6 @@
     <div class="col-sm-3 d-grid"><button class="btn btn-udm" type="submit">Search</button></div>
   </div></div>
 </form>
-<div class="tracking-queue-nav mb-3" aria-label="Tracking views">
-  <div class="tracking-queue-list">
-    <a class="pill-toggle{% if not resolved.scope and not resolved.statuses %} is-active{% endif %}"
-       href="{{ all_tracking_href }}">All in Tracking</a>
-    {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue or query or selected_sort %}
-      <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
-    {% endif %}
-  </div>
-</div>
-{% include "partials/_direction_filters.html" with groups=direction_filter_groups prefix="tracking-direction" %}
-{% comment %}
-  The filters are pills too, because they are the same control as the queue nav
-  above: click a thing, narrow the list. The bordered card with checkboxes, a
-  radio group and an Apply button was a second UI language on one page for a job
-  the first language already did.
-
-  Every pill is a link whose href already contains the selection clicking it
-  would produce — see the `filter_url` tag. That is what removes the Apply
-  button even for the multi-select office row: there is no form state to submit,
-  so there is nothing to apply. It also means each pill carries the active queue
-  along, which is what the hidden inputs used to be for.
-{% endcomment %}
 {% if can_pick_office %}
 <div class="tracking-filter-scope mb-3 no-print">
     {% comment %}
@@ -133,14 +112,36 @@
         the tag to say. From and Receiving office still carry the movement.
       {% endcomment %}
       <p class="tracking-filter-note">
-        Incoming and Outgoing are relative to one office, so they are not shown
-        across all of them. Pick an office above to see which way each document
-        is moving for it.
+        Pick an office to see its Incoming and Outgoing documents.
       </p>
     {% endif %}
   </div>
 {% endif %}
 
+</div>
+
+<div class="tracking-queue-nav mb-3" aria-label="Tracking views">
+  <div class="tracking-queue-list">
+    <a class="pill-toggle{% if not resolved.scope and not resolved.statuses %} is-active{% endif %}"
+       href="{{ all_tracking_href }}">All in Tracking</a>
+    {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue or query or selected_sort %}
+      <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
+    {% endif %}
+  </div>
+</div>
+{% include "partials/_direction_filters.html" with groups=direction_filter_groups prefix="tracking-direction" %}
+{% comment %}
+  The filters are pills too, because they are the same control as the queue nav
+  above: click a thing, narrow the list. The bordered card with checkboxes, a
+  radio group and an Apply button was a second UI language on one page for a job
+  the first language already did.
+
+  Every pill is a link whose href already contains the selection clicking it
+  would produce — see the `filter_url` tag. That is what removes the Apply
+  button even for the multi-select office row: there is no form state to submit,
+  so there is nothing to apply. It also means each pill carries the active queue
+  along, which is what the hidden inputs used to be for.
+{% endcomment %}
 <details id="tracking-filter-options" class="tracking-filter-disclosure no-print"{% if selected_office_ids or selected_statuses or resolved.overdue or selected_sort or selected_owner %} open{% endif %}>
   <summary>
     <span><strong>More filters</strong><span class="tracking-filter-description">Multiple stages, originating office, deadline, sort, and ownership</span></span>

@@ -70,9 +70,15 @@
       </article>
     {% empty %}
       <div class="empty-state">
+        {% if response.hidden_count %}
+          <h3>No results meet the relevance threshold</h3>
+          <p>Matching documents are available below the selected threshold.
+             Select “Include results below the threshold” or lower the minimum relevance, then search again.</p>
+        {% else %}
         <h3>No records matched “{{ response.query }}”</h3>
         <p>Try fewer words, drop a filter, or lower the minimum relevance.
            Office codes (MED, HR, REC) and tags work well on their own.</p>
+        {% endif %}
       </div>
     {% endfor %}
   </div>

@@ -11,6 +11,10 @@ _LOCAL_VENDOR = (_VENDOR_DIR / "bootstrap.min.css").exists() and (_VENDOR_DIR / 
 
 
 NAV_MAP = (
+    ("/notifications", "notifications"),
+    ("/accounts/profile", "account"),
+    ("/accounts/password", "account"),
+    ("/accounts/email", "account"),
     ("/tracking/reports", "tracking_reports"),
     ("/documents/reports", "repository_reports"),
     ("/tracking", "tracking"),

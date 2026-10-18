@@ -4,6 +4,7 @@
 {% block content %}
 <div class="workspace-detail-page tracking-detail-page">
 
+<a class="page-back no-print" href="{% url 'tracking:list' %}{% if request.GET.office %}?office={{ request.GET.office|urlencode }}{% endif %}">{% include "partials/_icon.html" with name="arrow-left" %}Back to Tracking</a>
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking Record</div>

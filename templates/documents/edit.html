@@ -2,6 +2,7 @@
 {% block title %}Edit Metadata · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-page workspace-form workspace-edit">
+<a class="page-back no-print" href="{{ document.get_absolute_url }}">{% include "partials/_icon.html" with name="arrow-left" %}Back to document</a>
 <div class="page-head"><div>
   <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
   <h1>Edit Document Metadata</h1>

@@ -4,9 +4,9 @@
 {% block content %}
 <div class="external-workspace">
   <nav class="external-nav" aria-label="External workspace">
-    <a href="{% url 'tracking:external_list' %}">External Tracking</a>
-    <a href="{% url 'tracking:external_reports' %}{% if filter_query %}?{{ filter_query }}{% endif %}">External Reports</a>
-    <a href="{% url 'tracking:external_offices' %}">External Offices</a>
+    <a href="{% url 'tracking:external_list' %}"{% if request.resolver_match.url_name != 'external_reports' and request.resolver_match.url_name != 'external_offices' %} aria-current="page"{% endif %}>External Tracking</a>
+    <a href="{% url 'tracking:external_reports' %}{% if filter_query %}?{{ filter_query }}{% endif %}"{% if request.resolver_match.url_name == 'external_reports' %} aria-current="page"{% endif %}>External Reports</a>
+    <a href="{% url 'tracking:external_offices' %}"{% if request.resolver_match.url_name == 'external_offices' %} aria-current="page"{% endif %}>External Offices</a>
     {% url 'documents:external_repository' as external_repository_url %}{% if external_repository_url %}<a href="{{ external_repository_url }}">External Repository</a>{% endif %}
   </nav>
   {% block external_content %}{% endblock %}

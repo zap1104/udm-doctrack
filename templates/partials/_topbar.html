@@ -10,7 +10,13 @@
     <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
   </button>
 
+  <div class="topbar-location" aria-label="Current section">
+    <span>Workspace</span><span class="topbar-location-divider" aria-hidden="true">/</span>
+    <strong>{% if nav_active == 'dashboard' %}Overview{% elif nav_active == 'search' %}Search{% elif nav_active == 'tracking' %}Tracking{% elif nav_active == 'documents' %}Repository{% elif nav_active == 'tracking_reports' or nav_active == 'repository_reports' %}Reports{% elif nav_active == 'external_tracking' %}External tracking{% elif nav_active == 'administration' %}Administration{% elif nav_active == 'notifications' %}Notifications{% else %}My account{% endif %}</strong>
+  </div>
+
   <form class="topbar-search" action="{% url 'search:index' %}" method="get" role="search">
+    {% include "partials/_icon.html" with name="search" %}
     <label class="visually-hidden" for="topbar-search-input">Search the repository</label>
     <input id="topbar-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search the repository" aria-label="Search the repository" autocomplete="off">
   </form>

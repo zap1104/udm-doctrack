@@ -3,7 +3,9 @@
   "use strict";
   var summary = document.querySelector("[data-error-summary]");
   if (!summary) return;
-  summary.focus();
+  // Reveal the summary below the sticky header, including the two-row phone bar.
+  summary.focus({preventScroll: true});
+  summary.scrollIntoView({block: "start"});
   summary.querySelectorAll('a[href^="#"]').forEach(function (link) {
     link.addEventListener("click", function (event) {
       var target = document.getElementById(link.getAttribute("href").slice(1));

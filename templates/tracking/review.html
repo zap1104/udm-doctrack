@@ -3,6 +3,7 @@
 {% block title %}Review {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-form-page workspace-review-page tracking-review-page">
+<a class="page-back no-print" href="{% url 'tracking:list' %}">{% include "partials/_icon.html" with name="arrow-left" %}Back to Tracking</a>
 <div class="page-head">
   <div>
     <div class="eyebrow">Tracking · Step 2</div>
