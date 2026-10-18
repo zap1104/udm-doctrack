@@ -254,3 +254,56 @@ def test_cancelled_retry_cannot_hide_failure_when_authorized_sibling_succeeds(us
     assert "Earlier saved file failed to extract" in document.ocr_notes
     assert "Previously usable text" in document.ocr_text
     assert "Authorized sibling text" in document.ocr_text
+
+
+@pytest.mark.parametrize("cancelled_full_retry", [False, True])
+def test_clean_permission_cancellation_remains_disclosed_until_full_retry(
+    users, document, cancelled_full_retry,
+):
+    with patch("django_q.tasks.async_task") as queue:
+        unread_file = add_file_to_document(
+            document, SimpleUploadedFile("unread.txt", b"File whose actor loses permission"), user=users["med"],
+        )
+        original_append = queue.call_args
+        if cancelled_full_retry:
+            re_extract_document(document, user=users["med"])
+        cancelled = queue.call_args
+    User.objects.filter(pk=users["med"].pk).update(role=User.Role.VIEWER)
+    result = extract_document_task(*cancelled.args[1:], **cancelled.kwargs)
+    assert result["status"] == OcrStatus.SKIPPED
+    document.refresh_from_db()
+    assert document.ocr_status == OcrStatus.SKIPPED
+    assert "permission" in document.ocr_notes.lower()
+
+    with patch("django_q.tasks.async_task") as queue:
+        add_file_to_document(
+            document, SimpleUploadedFile("authorized.txt", b"Authorized actor's new file"), user=users["med_admin"],
+        )
+    authorized = queue.call_args
+    with patch("apps.documents.tasks.extract_document_text", return_value=ExtractionResult(
+        text="Authorized file's extracted text", status=OcrStatus.DONE, pages=1,
+    )):
+        extract_document_task(*authorized.args[1:], **authorized.kwargs)
+    document.refresh_from_db()
+    unread_file.refresh_from_db()
+    assert unread_file.extracted_chars == 0
+    assert document.ocr_status == OcrStatus.FAILED
+    assert "permission" in document.ocr_notes.lower()
+    assert "Previously usable text" in document.ocr_text
+    assert "Authorized file's extracted text" in document.ocr_text
+
+    with patch("django_q.tasks.async_task") as queue:
+        re_extract_document(document, user=users["med_admin"])
+    complete_retry = queue.call_args
+    with patch("apps.documents.tasks.extract_document_text", return_value=ExtractionResult(
+        text="All files successfully retried", status=OcrStatus.DONE, pages=1,
+    )):
+        extract_document_task(*complete_retry.args[1:], **complete_retry.kwargs)
+    document.refresh_from_db()
+    assert document.ocr_status == OcrStatus.DONE
+    assert document.extraction_failed_generation is None
+    assert not document.ocr_notes.strip()
+    assert all(file.extracted_chars > 0 for file in document.files.all())
+    extract_document_task(*original_append.args[1:], **original_append.kwargs)
+    document.refresh_from_db()
+    assert document.ocr_status == OcrStatus.DONE

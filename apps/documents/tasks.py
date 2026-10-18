@@ -49,11 +49,11 @@ def _cancel_extraction(document, generation=None):
         current = current.first()
         if current is not None:
             note = "Queued text extraction was cancelled because the requesting account no longer has permission. An authorized editor can retry."
-            if current.extraction_failed_generation is not None or current.ocr_status == OcrStatus.FAILED:
-                current.retain_extraction_failure(note)
-            else:
-                current.ocr_status = OcrStatus.SKIPPED
-                current.ocr_notes = note
+            # Cancellation can leave a newly saved file unread even when no
+            # earlier extraction failed. Retain attention across later appends
+            # while preserving this task's established cancelled/Skipped state.
+            current.retain_extraction_failure(note)
+            current.ocr_status = OcrStatus.SKIPPED
             current.save(update_fields=["ocr_status", "ocr_notes", "extraction_failed_generation", "updated_at"])
     return {"document_id": document.pk, "status": OcrStatus.SKIPPED, "characters": 0, "failures": []}
 
