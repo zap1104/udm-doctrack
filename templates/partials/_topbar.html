@@ -57,6 +57,7 @@
         <li><div class="dropdown-item-text account-dropdown-header"><div class="account-dropdown-name">{{ user.display_name|default:user.username }}</div><div class="small text-muted">{{ user.office_label }}</div><div class="small text-muted">{{ user.get_role_display }}</div></div></li>
         <li><hr class="dropdown-divider"></li>
         <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">My Profile</a></li>
+        <li><a class="dropdown-item" href="{% url 'accounts:accessibility' %}"{% if not accessibility_page %} data-bs-toggle="offcanvas" data-bs-target="#accessibility-panel" aria-controls="accessibility-panel"{% endif %}>Accessibility</a></li>
         <li><a class="dropdown-item" href="{% url 'accounts:password_change' %}">Change Password</a></li>
         {% if user.is_superuser %}<li><a class="dropdown-item" href="{% url 'admin:index' %}">Django Administration</a></li>{% endif %}
         <li><hr class="dropdown-divider"></li>

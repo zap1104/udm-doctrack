@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Accessibility · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page accessibility-page">
+  <div class="page-head"><div><h1>Accessibility</h1><p class="sub">Adjust the display for your account.</p></div></div>
+  <section class="card-udm"><div class="card-udm-body">
+    {% include "partials/_accessibility_form.html" %}
+  </div></section>
+</div>
+{% endblock %}

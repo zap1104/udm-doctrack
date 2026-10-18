@@ -117,7 +117,7 @@
             {% csrf_token %}
             {% include "partials/_field.html" with field=receipt_form.note %}
             <button class="btn btn-receipt" type="submit">
-              <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+              {% include "partials/_receipt_icon.html" with kind="confirm" only %}
               <span>Confirm Receipt</span>
             </button>
           </form>

@@ -24,7 +24,8 @@
   .desk-awaiting-column { width: 22%; }
   .record-updated-column { width: 12%; }
   .record-status-column { width: 18%; }
-  .record-action-column { width: 132px; }
+  .record-action-column { width: calc(184px * var(--a11y-scale, 1)); }
+  .desk-records-table .record-received-column { width: calc(124px * var(--a11y-scale, 1)); }
   :root body .app-shell .record-subject { display: block; color: var(--udm-ink); font-weight: 600; line-height: 1.45; text-decoration: none; }
   :root body .app-shell .record-subject:is(:hover, :focus-visible) { color: var(--udm-navy-text); text-decoration: underline; }
   :root body .app-shell .record-number { display: block; margin-block: 4px; font-weight: 400; color: var(--udm-muted); font-size: 12px; text-decoration: none; }

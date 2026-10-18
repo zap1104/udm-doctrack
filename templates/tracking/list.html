@@ -356,7 +356,7 @@
             <td class="text-end record-action">
               {% if record.can_confirm_now %}
                 <a class="btn btn-receipt btn-sm" href="{{ record.stage_url|default:record.get_absolute_url }}">
-                      <span class="btn-receipt-icon" aria-hidden="true">✓</span>
+                      {% include "partials/_receipt_icon.html" with kind="confirm" only %}
                       <span>Confirm Receipt</span>
                     </a>
               {% else %}

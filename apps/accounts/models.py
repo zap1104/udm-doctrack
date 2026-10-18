@@ -373,3 +373,42 @@ class User(AbstractUser):
         if self.is_system_admin:
             return True
         return self.office_id == getattr(office, "pk", office)
+
+
+# Defaults are also used by the form, server-rendered shell and reset action.
+ACCESSIBILITY_DEFAULTS = {
+    "text_size": "14", "high_contrast": False, "motion": "system",
+    "underline_links": False, "spacing": "standard", "larger_targets": False,
+}
+
+
+class AccessibilityPreference(models.Model):
+    """Personal presentation only, separate from roles and account security."""
+
+    class TextSize(models.TextChoices):
+        SMALLER = "12", "Smaller"
+        DEFAULT = "14", "Default"
+        LARGER = "16", "Larger"
+        LARGEST = "18", "Largest"
+
+    class Motion(models.TextChoices):
+        SYSTEM = "system", "Follow device"
+        REDUCE = "reduce", "Reduce motion"
+
+    class Spacing(models.TextChoices):
+        STANDARD = "standard", "Standard"
+        ROOMY = "roomy", "Roomy"
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="accessibility_preference")
+    text_size = models.CharField(max_length=2, choices=TextSize.choices, default=TextSize.DEFAULT)
+    high_contrast = models.BooleanField(default=False)
+    motion = models.CharField(max_length=6, choices=Motion.choices, default=Motion.SYSTEM)
+    underline_links = models.BooleanField(default=False)
+    spacing = models.CharField(max_length=8, choices=Spacing.choices, default=Spacing.STANDARD)
+    larger_targets = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Accessibility preferences for account {self.user_id}"
+
+    def as_dict(self):
+        return {name: getattr(self, name) for name in ACCESSIBILITY_DEFAULTS}

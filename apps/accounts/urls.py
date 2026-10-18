@@ -2,6 +2,7 @@ from django.conf import settings
 from django.urls import path
 
 from . import views
+from .accessibility import AccessibilitySettingsView
 
 app_name = "accounts"
 
@@ -15,6 +16,7 @@ urlpatterns = [
     path("password/", views.PasswordChangeViewCustom.as_view(), name="password_change"),
     path("session/keep-alive/", views.SessionKeepAliveView.as_view(), name="session_keep_alive"),
     path("profile/", views.ProfileView.as_view(), name="profile"),
+    path("accessibility/", AccessibilitySettingsView.as_view(), name="accessibility"),
     path("email/verify/", views.EmailVerificationRequestView.as_view(), name="verify_email"),
     path("email/verify/<int:pk>/<str:token>/", views.EmailVerificationConfirmView.as_view(), name="verify_email_confirm"),
     path("users/", views.UserListView.as_view(), name="user_list"),

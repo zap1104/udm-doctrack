@@ -1,0 +1,36 @@
+<form method="post" action="{% url 'accounts:accessibility' %}" data-accessibility-form>
+  {% csrf_token %}
+  {{ accessibility.form.non_field_errors }}
+  <div class="accessibility-setting">
+    <label for="accessibility-text_size">{% include "partials/_accessibility_icon.html" with name="text-size" only %}<span>Text size</span></label>
+    {{ accessibility.form.text_size }}{{ accessibility.form.text_size.errors }}
+  </div>
+  <div class="accessibility-setting accessibility-setting-switch form-switch">
+    <label for="accessibility-high_contrast">{% include "partials/_accessibility_icon.html" with name="contrast" only %}<span>Higher contrast<small>Stronger text and borders.</small></span></label>
+    {{ accessibility.form.high_contrast }}{{ accessibility.form.high_contrast.errors }}
+  </div>
+  <div class="accessibility-setting accessibility-setting-switch form-switch">
+    <label for="accessibility-motion">{% include "partials/_accessibility_icon.html" with name="motion" only %}<span>Reduce motion<small>Limit animations and transitions.</small></span></label>
+    {{ accessibility.form.motion }}{{ accessibility.form.motion.errors }}
+  </div>
+  <div class="accessibility-setting accessibility-setting-switch form-switch">
+    <label for="accessibility-underline_links">{% include "partials/_accessibility_icon.html" with name="links" only %}<span>Underline links<small>Make links in page content easier to spot.</small></span></label>
+    {{ accessibility.form.underline_links }}{{ accessibility.form.underline_links.errors }}
+  </div>
+  <div class="accessibility-setting accessibility-setting-switch form-switch">
+    <label for="accessibility-spacing">{% include "partials/_accessibility_icon.html" with name="spacing" only %}<span>Comfortable spacing<small>More space between rows and controls.</small></span></label>
+    {{ accessibility.form.spacing }}{{ accessibility.form.spacing.errors }}
+  </div>
+  <div class="accessibility-setting accessibility-setting-switch form-switch">
+    <label for="accessibility-larger_targets">{% include "partials/_accessibility_icon.html" with name="targets" only %}<span>Larger click targets<small>Easier to select checkboxes and small buttons.</small></span></label>
+    {{ accessibility.form.larger_targets }}{{ accessibility.form.larger_targets.errors }}
+  </div>
+  <div class="accessibility-save-state">
+    <p role="status" aria-live="polite" data-accessibility-status>Changes apply when you save.</p>
+    <button type="button" class="btn btn-udm-outline btn-sm" data-accessibility-retry hidden>Retry saving</button>
+  </div>
+  <div class="accessibility-actions">
+    <button type="submit" name="action" value="reset" class="btn btn-udm-outline" data-accessibility-reset formnovalidate>Reset to defaults</button>
+    <button type="submit" name="action" value="save" class="btn btn-udm" data-accessibility-save>Save settings</button>
+  </div>
+</form>

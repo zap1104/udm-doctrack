@@ -1,6 +1,11 @@
 {% load static %}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-a11y-text-size="{{ accessibility.values.text_size|default:'14' }}"
+      data-a11y-contrast="{% if accessibility.values.high_contrast %}high{% else %}standard{% endif %}"
+      data-a11y-motion="{{ accessibility.values.motion|default:'system' }}"
+      data-a11y-links="{% if accessibility.values.underline_links %}underline{% else %}default{% endif %}"
+      data-a11y-spacing="{{ accessibility.values.spacing|default:'standard' }}"
+      data-a11y-targets="{% if accessibility.values.larger_targets %}large{% else %}standard{% endif %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +33,7 @@
   <link rel="stylesheet" href="{% static 'css/workspace-controls.css' %}" media="screen">
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/workspace-layout.css' %}" media="screen">
+  <link rel="stylesheet" href="{% static 'css/accessibility.css' %}" media="screen">
 </head>
 <body data-max-upload-mb="{{ MAX_UPLOAD_MB }}">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -62,6 +68,7 @@
     {% endcomment %}
     {% if user.is_authenticated %}
       {% include "partials/_page_help.html" %}
+      {% if not accessibility_page %}{% include "partials/_accessibility_panel.html" %}{% endif %}
       {% include "core/_turnaround_calculation_dialog.html" %}
       <span hidden
             data-session-timeout="{{ SESSION_IDLE_SECONDS }}"
@@ -86,6 +93,7 @@
   <script src="{% static 'js/workspace-controls.js' %}"></script>
   <script src="{% static 'js/workspace-forms.js' %}"></script>
   <script src="{% static 'js/workspace-layout.js' %}"></script>
+  <script src="{% static 'js/accessibility.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

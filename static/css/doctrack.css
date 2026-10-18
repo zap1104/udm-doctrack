@@ -1760,6 +1760,13 @@ body.sidebar-open { overflow:hidden; }
   line-height: 1;
 }
 
+/* Decorative SVGs share the existing receipt labels and actions. */
+.receipt-emblem { display: inline-block; width: 18px; height: 18px; flex: 0 0 18px; vertical-align: middle; }
+.receipt-check-face { fill: var(--udm-gold); stroke: none; }
+.receipt-check-mark { stroke: #174a37; }
+.receipt-clock-face { fill: var(--udm-gold-soft); stroke: currentColor; }
+.receipt-clock-hands { stroke: currentColor; }
+
 .btn-receipt.btn-sm {
   min-height: 36px;
   padding: 7px 11px;
@@ -2062,7 +2069,7 @@ body.sidebar-open { overflow:hidden; }
    contrast, so nothing here has to guess whether the text will be readable. */
 .office-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  max-width: 100%; padding: 2px 8px 2px 4px;
+  max-width: 100%; padding: 2px 7px;
   border: 1px solid color-mix(in srgb, var(--office-ink, #63718a) 22%, transparent);
   border-radius: 6px;
   background: var(--office-tint, #eceff4);
@@ -2074,6 +2081,7 @@ body.sidebar-open { overflow:hidden; }
   width: 3px; align-self: stretch; min-height: 13px; flex: 0 0 3px;
   border-radius: 2px; background: var(--office-base, #63718a);
 }
+.office-emblem { display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; vertical-align: middle; }
 .office-badge-code { overflow: hidden; text-overflow: ellipsis; }
 .office-badge-name {
   overflow: hidden; font-weight: 500; opacity: 0.85; text-overflow: ellipsis; white-space: nowrap;

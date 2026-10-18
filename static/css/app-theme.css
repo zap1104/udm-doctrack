@@ -88,6 +88,11 @@
   body:has(.app-shell) .app-sidebar .nav-item { color: #f5f1e3; font-size: 14px; min-height: 48px; }
   body:has(.app-shell) .app-sidebar .nav-item:is(.active, :hover, :focus-visible) { color: #fffdf7; background: #2b6047; box-shadow: inset 3px 0 #d5b86a; }
   body:has(.app-shell) .app-sidebar .nav-item--child { font-size: 14px; border-color: #75917a; }
+  /* Sidebar option B: ivory structure with restrained gold details. */
+  body:has(.app-shell) .app-sidebar .nav-item .nav-icon { width: 20px; height: 20px; flex: 0 0 20px; color: #fffdf7; background: transparent; border: 0; border-radius: 0; }
+  .app-sidebar .sidebar-emblem { display: block; width: 20px; height: 20px; flex: 0 0 20px; }
+  .app-sidebar .sidebar-emblem-accent-stroke { stroke: #d5b86a; }
+  .app-sidebar .sidebar-emblem-accent-fill { fill: #d5b86a; }
   body:has(.app-shell) .sidebar-office { background: #103b2b; border-color: #527659; }
   body:has(.app-shell) .sidebar-office-name { font-size: 14px; }
   body:has(.app-shell) .sidebar-office-mark { color: #174a37; background: #d5b86a; font-size: 12px; }

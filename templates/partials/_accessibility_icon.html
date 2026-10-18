@@ -1,0 +1,15 @@
+<svg class="accessibility-emblem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+  {% if name == "text-size" %}
+    <path stroke-width="2.1" d="m2 20 5-15 5 15M4 14h6"/><path class="emblem-accent-stroke" stroke-width="2.1" d="m14 20 4-10 4 10m-6.4-4h4.8"/>
+  {% elif name == "contrast" %}
+    <circle class="emblem-soft-fill" cx="12" cy="12" r="8"/><path class="emblem-accent-fill" stroke="none" d="M12 4a8 8 0 0 0 0 16Z"/>
+  {% elif name == "motion" %}
+    <path d="M2 6h3M1 12h4m-3 6h3"/><rect x="9" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect class="emblem-accent-fill" x="17" y="4" width="4" height="16" rx="1" stroke="none"/>
+  {% elif name == "links" %}
+    <path class="emblem-accent-stroke" stroke-width="2.4" d="M10 13a4.6 4.6 0 0 0 6.5 0l3-3A4.6 4.6 0 0 0 13 3.5l-2 2"/><path stroke-width="2.4" d="M14 11a4.6 4.6 0 0 0-6.5 0l-3 3A4.6 4.6 0 0 0 11 20.5l2-2"/>
+  {% elif name == "spacing" %}
+    <path class="emblem-accent-stroke" stroke-width="2" d="M5 3v18M2 6l3-3 3 3M2 18l3 3 3-3"/><path stroke-width="2" d="M12 5h10M12 12h10M12 19h10"/>
+  {% elif name == "targets" %}
+    <path class="emblem-soft-fill" d="M5 3v16l4-4 4 7 3-2-4-7h7Z"/><path class="emblem-accent-stroke" d="M15 3v3m5-1-2 2m4 3h-3"/>
+  {% endif %}
+</svg>

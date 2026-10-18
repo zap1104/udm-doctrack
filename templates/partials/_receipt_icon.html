@@ -1,0 +1,9 @@
+<svg class="receipt-emblem" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+  {% if kind == "pending" %}
+    <circle class="receipt-clock-face" cx="12" cy="12" r="9"/>
+    <path class="receipt-clock-hands" d="M12 7v5l3 2"/>
+  {% else %}
+    <circle class="receipt-check-face" cx="12" cy="12" r="9"/>
+    <path class="receipt-check-mark" d="m8 12 2.7 2.8 5.3-6"/>
+  {% endif %}
+</svg>

@@ -2,7 +2,10 @@
 {% load static %}
 {% block extrastyle %}
   {{ block.super }}
+  {{ accessibility.values|json_script:"accessibility-seed" }}
+  <script src="{% static 'js/accessibility-init.js' %}"></script>
   <link rel="preload" href="{% static 'fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app-theme.css' %}" media="screen">
   <link rel="stylesheet" href="{% static 'css/admin-theme.css' %}" media="screen">
+  <link rel="stylesheet" href="{% static 'css/accessibility.css' %}" media="screen">
 {% endblock %}

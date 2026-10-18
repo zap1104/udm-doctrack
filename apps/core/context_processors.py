@@ -13,6 +13,7 @@ _LOCAL_VENDOR = (_VENDOR_DIR / "bootstrap.min.css").exists() and (_VENDOR_DIR / 
 NAV_MAP = (
     ("/notifications", "notifications"),
     ("/accounts/profile", "account"),
+    ("/accounts/accessibility", "account"),
     ("/accounts/password", "account"),
     ("/accounts/email", "account"),
     ("/tracking/reports", "tracking_reports"),
@@ -49,11 +50,16 @@ def site_context(request):
         from .notifications import in_app_enabled
         return in_app_enabled(request.user)
 
+    def accessibility_settings():
+        from apps.accounts.accessibility import accessibility_state
+        return accessibility_state(request)
+
     unread_notifications = SimpleLazyObject(badge_count)
     notification_in_app_enabled = SimpleLazyObject(in_app_preference)
     idle_seconds = idle_seconds_for_request(request)
     return {
         "nav_active": _nav_active(request.path or "/"),
+        "accessibility": SimpleLazyObject(accessibility_settings),
         "unread_notifications": unread_notifications,
         "notification_in_app_enabled": notification_in_app_enabled,
         "PALETTE": PALETTE,
