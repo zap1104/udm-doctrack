@@ -136,9 +136,14 @@ def test_directory_names_normalized_and_case_unique(case, users):
         services.create_external_office(user=users["med_admin"], name="  REGISTRAR  ")
 
 
-def test_timing_keeps_external_time_and_receipt_wait_separate(case, users, offices):
+def test_timing_keeps_external_time_and_receipt_wait_separate(case, users, offices, monkeypatch):
+    from datetime import datetime
+
     from apps.tracking.external_analytics import timing_for_record
 
+    # A known Tuesday keeps the following day inside the working week.
+    now = timezone.make_aware(datetime(2026, 10, 13, 10))
+    monkeypatch.setattr(timezone, "now", lambda: now)
     record, _ = case
     sent = timezone.now() - timedelta(days=3)
     services.route_record(record, user=users["med_admin"], expected_revision=1, to_office=offices["MED"], sent_at=sent)
@@ -359,9 +364,13 @@ def test_unknown_movement_times_remain_unmeasured(case):
     assert timing["overall_seconds"] is None
 
 
-def test_external_custody_still_reported_for_internal_office_perspective(case, users, offices):
+def test_external_custody_still_reported_for_internal_office_perspective(case, users, offices, monkeypatch):
+    from datetime import datetime
+
     from apps.tracking.external_analytics import timing_for_record
 
+    now = timezone.make_aware(datetime(2026, 10, 13, 10))
+    monkeypatch.setattr(timezone, "now", lambda: now)
     record, ext = case
     services.route_record(record, user=users["med_admin"], expected_revision=1, to_office=offices["MED"])
     services.confirm_receipt(record, user=users["med"], expected_revision=2)

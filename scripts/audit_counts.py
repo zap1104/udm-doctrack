@@ -188,7 +188,8 @@ class Audit:
             self.equal("receipt office partition", sum(row["cumulative"] for row in volume["rows"]), volume["receipts"])
         if context["is_repository_report"]:
             for row in context["document_types"]:
-                self.equal("repository type drilldown", self.listed(row["workspace_url"]), row["total"])
+                if row.get("workspace_url"):
+                    self.equal("repository type drilldown", self.listed(row["workspace_url"]), row["total"])
         else:
             for link in Links(response.content.decode()).links:
                 classes = link.get("class", "").split()
@@ -315,7 +316,7 @@ class Audit:
             self.responses = {}
             self.stage_records = {record.pk: record for record in loaded_records(user)}
             records = list(TrackingRecord.objects.visible_to(user).values("pk", "status", "originating_office_id", "current_office_id", "created_at", "completed_at", "first_received_at", "current_batch", "due_at"))
-            documents = list(Document.objects.visible_to(user).filter(is_active=True).values("pk", "office_id", "source", "created_at"))
+            documents = list(Document.objects.visible_to(user).in_collection().filter(is_active=True).values("pk", "office_id", "source", "created_at"))
             steps = list(RoutingStep.objects.filter(record_id__in=[row["pk"] for row in records]).values("record_id", "from_office_id", "to_office_id", "batch", "sent_at", "received_at"))
             if user.is_system_admin:
                 pending_ids = {step["record_id"] for step in steps if step["received_at"] is None and step["batch"] == next(row["current_batch"] for row in records if row["pk"] == step["record_id"])}
@@ -358,16 +359,16 @@ class Audit:
                         self.equal(
                             "CSV exact record set",
                             sorted(row["Tracking number"] for row in exported_rows),
-                            sorted(report["page_obj"].paginator.object_list.values_list("tracking_number", flat=True)),
+                            sorted(record.display_tracking_number for record in report["page_obj"].paginator.object_list),
                         )
                     csv_directions = {row["Tracking number"]: row["Direction"] for row in exported_rows}
                     for record in report["records"]:
-                        if record.tracking_number not in csv_directions:
+                        if record.display_tracking_number not in csv_directions:
                             continue  # A large export may stop at its explicit 5,000-row cap.
                         expected = "—" if report["resolved"].all_offices else {
                             "incoming": "Incoming", "outgoing": "Outgoing", "": "Passed on",
                         }[record.direction]
-                        self.equal("CSV direction matches table", csv_directions[record.tracking_number], expected)
+                        self.equal("CSV direction matches table", csv_directions[record.display_tracking_number], expected)
             badge = self.get("/notifications/count/").context
             self.equal("notification badge", badge["unread_notifications"], unread_for(user).count() if badge["notification_in_app_enabled"] else 0)
             browse = search_documents(user=user, limit=2, log=False)
@@ -384,7 +385,7 @@ class Audit:
                     for name, model in (("document-types", DocumentType), ("tags", Tag), ("metadata-rules", TagRule), ("metadata-fields", MetadataFieldDefinition)):
                         self.equal("active master data " + name, model.objects.filter(is_active=True).count(), self.get(f"/administration/{name}/?status=active").context["page_obj"].paginator.count)
                     for tag in self.get("/administration/tags/?per_page=all").context["objects"]:
-                        self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).filter(is_active=True, tags=tag).distinct().count())
+                        self.equal("live visible tag usage", tag.visible_usage, Document.objects.visible_to(user).in_collection().filter(is_active=True, tags=tag).distinct().count())
                     self.equal("active offices", admin["office_count"], self.get("/administration/offices/?status=active").context["page_obj"].paginator.count)
                     self.equal("search query partition", sum(row["total"] for row in admin["top_searches"]), admin["search_analytics"]["queries"])
                     self.equal("search click partition", sum(row["clicks"] for row in admin["top_searches"]), admin["search_analytics"]["clicks"])

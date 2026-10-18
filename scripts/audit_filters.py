@@ -68,6 +68,17 @@ class FilterAudit:
         self.equal("page responds: " + path, response.status_code, 200)
         return response
 
+    def listed_ids(self, path, params, *, response=None):
+        """Visit every real page: Show All still has a bounded page size."""
+        response = self.get(path, params) if response is None else response
+        page = response.context["page_obj"]
+        ids = {row.pk for row in page}
+        for number in range(1, page.paginator.num_pages + 1):
+            if number != page.number:
+                following = self.get(path, {**params, "page": number})
+                ids.update(row.pk for row in following.context["page_obj"])
+        return ids
+
     def run(self):
         for role in User.Role.values:
             self.user = User.objects.filter(role=role, is_active=True, office__isnull=False).order_by("pk").first()
@@ -76,7 +87,7 @@ class FilterAudit:
             self.roles.append(role)
             self.client = Client()
             self.client.force_login(self.user)
-            visible = Document.objects.visible_to(self.user).filter(is_active=True)
+            visible = Document.objects.visible_to(self.user).in_collection().filter(is_active=True)
             tracking = TrackingRecord.objects.visible_to(self.user)
             self.repository(visible)
             self.search(visible)
@@ -105,27 +116,30 @@ class FilterAudit:
             print(f"Checked filter validity for {role}", flush=True)
 
     def repository(self, visible):
-        for office in [None, *Office.active.filter(documents__in=visible).distinct()]:
+        for office in [None, *Office.objects.filter(documents__in=visible).distinct()]:
             params = {"office": office.pk} if office else {}
             base = visible.filter(office=office) if office else visible
             response = self.get("/documents/", {**params, "per_page": "all"})
-            self.equal("folder result IDs", {row.pk for row in response.context["documents"]}, set(base.values_list("pk", flat=True)))
+            self.equal("folder result IDs", self.listed_ids("/documents/", {**params, "per_page": "all"}, response=response), set(base.values_list("pk", flat=True)))
             form = response.context["form"]
             type_ids = set(base.exclude(document_type=None).values_list("document_type_id", flat=True)) | set(base.exclude(document_types=None).values_list("document_types__pk", flat=True))
             self.equal("type choices match accessible folder", set(form.fields["document_type"].queryset.values_list("pk", flat=True)), type_ids)
             self.equal("tag choices match accessible folder", set(form.fields["tag"].queryset.values_list("pk", flat=True)), set(Tag.active.filter(documents__in=base).values_list("pk", flat=True)))
             for field, model_field in (("document_type", "document_type_id"), ("year", "year"), ("month", "document_date__month"), ("tag", "tags__pk"), ("source", "source")):
-                value = base.exclude(**{model_field: None}).values_list(model_field, flat=True).first()
+                value = (Tag.active.filter(documents__in=base).values_list("pk", flat=True).first()
+                         if field == "tag" else base.exclude(**{model_field: None}).values_list(model_field, flat=True).first())
                 if value:
-                    result = self.get("/documents/", {**params, field: value, "per_page": "all"})
+                    selected = {**params, field: value, "per_page": "all"}
+                    result = self.get("/documents/", selected)
                     expected = base.filter(document_type_match(value)) if field == "document_type" else base.filter(**{model_field: value})
-                    self.equal("repository filter " + field, {row.pk for row in result.context["documents"]}, set(expected.values_list("pk", flat=True)))
+                    self.equal("repository filter " + field, self.listed_ids("/documents/", selected, response=result), set(expected.values_list("pk", flat=True)))
         pending = pending_upload_for(self.user)
         if self.user.is_office_admin and not self.user.is_system_admin:
             pending = pending.filter(originating_office_id=self.user.office_id)
-        result = self.get("/documents/", {"view": "pending", "retention": "due", "source": "DTS", "per_page": "all"})
+        pending_params = {"view": "pending", "retention": "due", "source": "DTS", "per_page": "all"}
+        result = self.get("/documents/", pending_params)
         self.equal("unsupported filed filters do not claim to filter pending uploads", result.context["selected_filters"], [])
-        self.equal("pending queue permission scope", {row.pk for row in result.context["pending_upload"]}, set(pending.values_list("pk", flat=True)))
+        self.equal("pending queue permission scope", self.listed_ids("/documents/", pending_params, response=result), set(pending.values_list("pk", flat=True)))
         other = Office.active.exclude(pk__in=set(visible.values_list("office_id", flat=True)) | set(pending.values_list("originating_office_id", flat=True))).first()
         if other:
             denied = self.get("/documents/", {"office": other.pk})
@@ -135,7 +149,7 @@ class FilterAudit:
     def search(self, visible):
         response = self.get("/search/")
         form = response.context["form"]
-        self.equal("search offices are permission scoped", set(form.fields["office"].queryset.values_list("pk", flat=True)), set(Office.active.filter(documents__in=visible).values_list("pk", flat=True)))
+        self.equal("search offices are permission scoped", set(form.fields["office"].queryset.values_list("pk", flat=True)), set(Office.objects.filter(documents__in=visible).values_list("pk", flat=True)))
         type_ids = set(visible.exclude(document_type=None).values_list("document_type_id", flat=True)) | set(visible.exclude(document_types=None).values_list("document_types__pk", flat=True))
         self.equal("search includes all types used by visible records", set(form.fields["document_type"].queryset.values_list("pk", flat=True)), type_ids)
         for data in ({"office": "²"}, {"document_type": "9" * 65}, {"year": "²"}, {"date_from": "2026-10-20", "date_to": "2026-10-01"}):
