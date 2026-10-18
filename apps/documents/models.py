@@ -195,6 +195,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     ocr_text = models.TextField(blank=True)
     ocr_status = models.CharField(max_length=8, choices=OcrStatus.choices, default=OcrStatus.PENDING)
     extraction_generation = models.PositiveBigIntegerField(default=0, editable=False)
+    extraction_failed_generation = models.PositiveBigIntegerField(null=True, blank=True, editable=False)
     ocr_engine = models.CharField(max_length=32, blank=True)
     ocr_confidence = models.FloatField(null=True, blank=True)
     ocr_language = models.CharField(max_length=8, choices=OcrLanguage.choices, default=OcrLanguage.AUTO)
@@ -237,6 +238,23 @@ class Document(DocumentTypesMixin, TimeStampedModel):
 
     def get_absolute_url(self) -> str:
         return reverse("documents:detail", args=[self.pk])
+
+    def retain_extraction_failure(self, notes=""):
+        """Retain a generation's failure while sibling jobs change run state.
+
+        Callers hold the document lock and persist these fields with their
+        extraction result. Legacy FAILED rows are adopted when next touched;
+        no historical text or notes need a bulk data migration.
+        """
+        prior = self.ocr_notes if (
+            self.extraction_failed_generation is not None or self.ocr_status == OcrStatus.FAILED
+        ) else ""
+        lines = list(dict.fromkeys(line for line in f"{prior}\n{notes}".splitlines() if line.strip()))
+        self.extraction_failed_generation = self.extraction_generation
+        self.ocr_status = OcrStatus.FAILED
+        self.ocr_notes = "\n".join(lines)[:4000] or (
+            "A saved file's text extraction did not finish. Retry extraction to read all document files."
+        )
 
     @property
     def tracking_origin(self):

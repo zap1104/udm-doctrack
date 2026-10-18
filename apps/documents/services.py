@@ -161,7 +161,7 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False,
         return
     from django_q.tasks import async_task
 
-    if replace:
+    if replace and file_ids is None:
         document.extraction_generation += 1
         document.save(update_fields=["extraction_generation"])
     # Appends share the current generation; only a full retry supersedes them.
@@ -175,12 +175,15 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False,
             )
         except Exception:
             logger.exception("Could not queue text extraction for document %s", document.pk)
-            current = Document.objects.filter(pk=document.pk, is_active=True, ocr_status=OcrStatus.PENDING)
-            if generation is not None:
-                current = current.filter(extraction_generation=generation)
-            current.update(ocr_status=OcrStatus.FAILED,
-                           ocr_notes="Text extraction could not be queued. Your files were saved. Retry extraction when the background service is available.",
-                           updated_at=timezone.now())
+            with transaction.atomic():
+                current = Document.objects.select_for_update().filter(
+                    pk=document.pk, is_active=True, extraction_generation=generation,
+                ).first()
+                if current is not None:
+                    current.retain_extraction_failure(
+                        "Text extraction could not be queued. Your files were saved. Retry extraction when the background service is available."
+                    )
+                    current.save(update_fields=["ocr_status", "ocr_notes", "extraction_failed_generation", "updated_at"])
 
     transaction.on_commit(submit, robust=True)
 
@@ -365,6 +368,9 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
     if not document.can_user_edit(user):
         raise PermissionDenied("Only the owning office can add files.")
+    if document.ocr_status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
+        document.retain_extraction_failure()
+        document.save(update_fields=["ocr_notes", "extraction_failed_generation"])
     validate_upload(uploaded_file)
     use_async = settings.ENABLE_BACKGROUND_TASKS and run_extraction
     extraction = (
@@ -397,11 +403,15 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
     elif extraction:
         combined = (document.ocr_text + "\n\n" + extraction.text).strip()
         document.ocr_text = combined[:200000]
-        document.ocr_status = extraction.status if extraction.status in {OcrStatus.FAILED, OcrStatus.SKIPPED} else (OcrStatus.DONE if combined else OcrStatus.EMPTY)
+        outcome_notes = "\n".join(extraction.notes)[:4000]
+        if extraction.status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
+            document.retain_extraction_failure(outcome_notes)
+        else:
+            document.ocr_status = extraction.status if extraction.status == OcrStatus.SKIPPED else (OcrStatus.DONE if combined else OcrStatus.EMPTY)
+            document.ocr_notes = outcome_notes
         document.ocr_confidence = extraction.confidence
-        document.ocr_notes = "\n".join(extraction.notes)[:4000]
         document.save(
-            update_fields=["ocr_text", "ocr_status", "ocr_confidence", "ocr_notes", "updated_at"]
+            update_fields=["ocr_text", "ocr_status", "ocr_confidence", "ocr_notes", "extraction_failed_generation", "updated_at"]
         )
         document.rebuild_index()
     document.page_count = document.file_page_count
@@ -416,6 +426,9 @@ def re_extract_document(document: Document, *, user) -> dict:
         raise PermissionDenied("Only the owning office can re-run extraction.")
     if not document.files.exists():
         raise ValidationError("This record has no file to read.")
+    if document.ocr_status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
+        document.retain_extraction_failure()
+        document.save(update_fields=["ocr_notes", "extraction_failed_generation"])
     if settings.ENABLE_BACKGROUND_TASKS:
         document.ocr_status = OcrStatus.PENDING
         document.save(update_fields=["ocr_status", "updated_at"])
