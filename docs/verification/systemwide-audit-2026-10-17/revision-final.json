@@ -1,0 +1,26 @@
+{
+  "baseline": "bb84ac863937a27dc871e115db694b2e84a78f73",
+  "branch": "codex/systemwide-bug-audit",
+  "final_product_commit": "9e2d34c7a1b2456cc281c73a22b0a49e4530490b",
+  "full_suite_and_browser_source": "cd4316aaca993b0218c9252d8683477739368a3f",
+  "final_delta": {
+    "commit": "9e2d34c7a1b2456cc281c73a22b0a49e4530490b",
+    "product_change": "One Reports hint literal: skipped or cancelled instead of blanket metadata-only search claim.",
+    "new_cases": 2,
+    "related_cases_passed": 56,
+    "full_suite_rerun_after_delta": false,
+    "backend_changed_after_full_run": false
+  },
+  "documentation_revision": "The local docs(audit) commit containing this file; no product changes in that commit.",
+  "acceptance_summary": "acceptance-summary.json",
+  "source_before": "tested-source-before.json",
+  "source_after": "tested-source-after.json",
+  "reported_local_date": "2026-10-19",
+  "business_database_mutated": false,
+  "pushed": false,
+  "deployed": false,
+  "required_business_release_migrations": [
+    "documents.0012_document_extraction_generation",
+    "documents.0013_document_extraction_failed_generation"
+  ]
+}

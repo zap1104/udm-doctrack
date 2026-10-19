@@ -1,0 +1,114 @@
+{
+  "main_full_run": {
+    "source_commit": "cd4316aaca993b0218c9252d8683477739368a3f",
+    "collected": 7572,
+    "passed": 7568,
+    "skipped": 4,
+    "failed": 0,
+    "errors": 0,
+    "exact_node_identity_reconciliation": true,
+    "duplicate_nodes": 0,
+    "workers": [
+      {
+        "artifact": "full-suite-verified/worker-0.xml",
+        "reported": 1893,
+        "passed": 1892,
+        "skipped": 1
+      },
+      {
+        "artifact": "full-suite-verified/worker-1.xml",
+        "reported": 1893,
+        "passed": 1892,
+        "skipped": 1
+      },
+      {
+        "artifact": "full-suite-verified/worker-2.xml",
+        "reported": 1893,
+        "passed": 1891,
+        "skipped": 2
+      },
+      {
+        "artifact": "full-suite-verified/worker-3.xml",
+        "reported": 1893,
+        "passed": 1893,
+        "skipped": 0
+      }
+    ],
+    "skips": [
+      {
+        "node_id": "tests/test_systemwide_live_browser.py::test_real_browser_filters_workflows_and_responsive_views",
+        "reason": "Opt-in live Chromium audit; run documented command.",
+        "details": "C:\\Users\\USER\\Desktop\\Projects\\DocTrack Capstone\\tests\\test_systemwide_live_browser.py:22: Opt-in live Chromium audit; run documented command."
+      },
+      {
+        "node_id": "tests/test_filter_agreement.py::test_every_routed_row_carries_a_direction[scope=incoming-med_admin]",
+        "reason": "med_admin has no routed rows for ?scope=incoming",
+        "details": "C:\\Users\\USER\\Desktop\\Projects\\DocTrack Capstone\\tests\\test_filter_agreement.py:1433: med_admin has no routed rows for ?scope=incoming"
+      },
+      {
+        "node_id": "tests/test_deletion_purge.py::test_background_schedule_is_registered_once",
+        "reason": "Requires the background-enabled regression run.",
+        "details": "C:\\Users\\USER\\Desktop\\Projects\\DocTrack Capstone\\tests\\test_deletion_purge.py:211: Requires the background-enabled regression run."
+      },
+      {
+        "node_id": "tests/test_security_maintenance.py::test_worker_schedules_register_security_cleanup_without_duplicates",
+        "reason": "Exercised by the background-enabled CI step.",
+        "details": "C:\\Users\\USER\\Desktop\\Projects\\DocTrack Capstone\\tests\\test_security_maintenance.py:27: Exercised by the background-enabled CI step."
+      }
+    ]
+  },
+  "focused_report_wording_delta": {
+    "junit_artifact": "extraction-wording-related.xml",
+    "related_passed": 56,
+    "related_already_in_main": 54,
+    "new_passed": 2,
+    "new_node_ids": [
+      "tests/test_extraction_report_wording.py::test_skipped_report_does_not_claim_existing_text_is_unsearchable[Previously extracted searchable text]",
+      "tests/test_extraction_report_wording.py::test_skipped_report_does_not_claim_existing_text_is_unsearchable[]"
+    ],
+    "note": "The full run predates the final report-literal change. Its two new regressions and 54 existing related report cases passed afterward. No main cases are double-counted."
+  },
+  "unique_main_plus_delta": {
+    "final_collection_artifact": "collection-final.txt",
+    "collected": 7574,
+    "passed": 7570,
+    "skipped": 4,
+    "failed": 0,
+    "errors": 0,
+    "exact_node_identity_reconciliation": true,
+    "missing_nodes": [],
+    "extra_nodes": [],
+    "duplicate_nodes": 0,
+    "note": "This is a union of verified runs, not a claim that one final-source full-suite run executed all 7574 cases."
+  },
+  "main_statement_coverage": {
+    "artifact": "full-suite-verified/coverage.json",
+    "statements": 10588,
+    "covered": 9212,
+    "missing": 1376,
+    "percent": 87.00415564790329,
+    "percent_display": "87",
+    "branch_coverage": false
+  },
+  "source_manifest_reconciliation": {
+    "before_artifact": "tested-source-before.json",
+    "existing_files_checked": 452,
+    "changed_existing_files": [
+      {
+        "file": "templates/reports/reports.html",
+        "before_sha256": "5fbd2120dced44f1137e0ccf56f912d5cabf11bd9d270d119018f5c9c9aaf382",
+        "after_sha256": "e6765eef1aef57717a9a92231b0fe471a9b64dcf301a52ab6b0ff59c4c3fb855"
+      }
+    ],
+    "new_test_file": {
+      "file": "tests/test_extraction_report_wording.py",
+      "sha256": "9f7d6bbb1bbd02714018e83f5a865406cf71bdc922e0c5da9375fe9ec7f35329"
+    },
+    "note": "All 451 other files in the frozen 452-file manifest have identical bytes. The report template change is a display-only extraction hint, covered by the focused run."
+  },
+  "reproduction": {
+    "collection": "$env:DJANGO_SETTINGS_MODULE='config.audit_settings'; $env:DOCTRACK_AUDIT_SLOT='collection'; $env:ENABLE_BACKGROUND_TASKS='False'; $env:RUN_LIVE_BROWSER_AUDIT='0'; & .venv\\Scripts\\python.exe -m pytest --collect-only -q *> docs\\verification\\systemwide-audit-2026-10-17\\collection-final.txt",
+    "reconciliation": ".venv\\Scripts\\python.exe docs\\verification\\systemwide-audit-2026-10-17\\reconcile_acceptance.py",
+    "database_mutations": false
+  }
+}

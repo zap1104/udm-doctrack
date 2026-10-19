@@ -64,7 +64,7 @@ Office administrators can manage a separate External Tracking and External Repos
 - Printable routing slip carrying the full movement history.
 
 **Documents**
-- Completed records archive themselves into the repository, files and all.
+- Completed records remain in Tracking as **Completed - Pending Filing** until an authorized administrator approves them into the repository, including their attachments.
 - Text is read locally from digital PDFs, Word and Excel files. Scanned pages use OCR only when there is no text layer and the record permits an external provider; with background tasks enabled, the upload returns immediately and the repository shows a plain-language pending state.
 - The system proposes a title, type, office, date and tags. **A person reviews and corrects before anything is saved.**
 - Smart folders are saved views over metadata — one file, many folders, no duplicates on disk. Initial deletion review dates are computed from the main document type. An authorized administrator decides whether to keep a document or remove it from the repository. Approved removals can be restored for 30 days, after which their repository files and metadata are permanently deleted. Completed Tracking history, original Tracking attachments, and a minimal audit entry remain. See [docs/DELETION_REVIEW.md](docs/DELETION_REVIEW.md).
