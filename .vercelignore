@@ -1,0 +1,31 @@
+# Deployment settings and credentials are supplied by Vercel, never uploaded.
+/.env
+/.env.*
+!/.env.example
+/.aws/
+/.azure/
+/.codex/
+/.agents/
+/.claude/
+*.pem
+*.key
+
+# Development environments, uploaded records, and generated verification output.
+/.venv/
+/venv/
+/env/
+/media/
+/uploads/
+/staticfiles/
+/docs/verification/
+/review-packets/
+/tests/
+/htmlcov/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+/.coverage
+**/__pycache__/
+*.py[cod]
+*.log
+training_data*.jsonl

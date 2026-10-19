@@ -181,6 +181,7 @@ calculation, interaction, permission, and responsive checks and their limits.
 ## For the team
 
 - **[docs/SETUP.md](docs/SETUP.md)** — install it, including the errors people actually hit
+- **[docs/VERCEL.md](docs/VERCEL.md)** — Vercel settings, required services, and verification limits
 - **[docs/GITHUB_GUIDE.md](docs/GITHUB_GUIDE.md)** — how to push your work without breaking anyone else's
 - **[docs/TEAM_CHECKLIST.md](docs/TEAM_CHECKLIST.md)** — who does what, in order
 - **[docs/METADATA_GUIDE.md](docs/METADATA_GUIDE.md)** — why metadata decides whether search works
