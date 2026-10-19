@@ -1,20 +1,14 @@
-[tool.ruff]
+# Keep tooling separate from dependency discovery; deployments use requirements.txt.
 line-length = 120
 target-version = "py311"
 exclude = ["migrations", ".venv", "staticfiles", ".claude"]
 
-[tool.ruff.lint]
+[lint]
 select = ["E", "F", "I", "UP", "B", "DJ"]
 ignore = [
     "E501",   # long lines are handled by the formatter
     "B008",   # Django uses callables in defaults all the time
 ]
 
-[tool.ruff.lint.isort]
+[lint.isort]
 known-first-party = ["apps", "config"]
-
-[tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
-python_files = ["test_*.py"]
-testpaths = ["tests"]
-addopts = "-ra --strict-markers"
