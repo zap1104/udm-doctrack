@@ -551,7 +551,7 @@
           <div class="hint">
             {{ extraction.failed }} failed · {{ extraction.empty }} found no text
             {% if extraction.in_progress %}<br>{{ extraction.in_progress }} still extracting{% endif %}
-            {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped, searchable by metadata only{% endif %}
+            {% if extraction.skipped %}<br>{{ extraction.skipped }} skipped or cancelled{% endif %}
           </div>
         </div>
       </div>
