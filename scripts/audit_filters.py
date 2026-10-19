@@ -64,7 +64,7 @@ class FilterAudit:
             self.failures.append({"role": self.user.role, "check": label, "actual": str(actual), "expected": str(expected)})
 
     def get(self, path, params=None):
-        response = self.client.get(path, params or {})
+        response = self.client.get(path, params or {}, secure=True)
         self.equal("page responds: " + path, response.status_code, 200)
         return response
 

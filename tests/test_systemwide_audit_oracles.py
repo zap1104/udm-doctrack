@@ -48,8 +48,9 @@ def test_count_diagnostic_population_is_legacy_collection(users, diagnostic_docu
 
 
 def test_filter_diagnostic_accepts_collection_isolation_and_retired_office_choices(
-    users, diagnostic_documents,
+    users, diagnostic_documents, settings,
 ):
+    settings.SECURE_SSL_REDIRECT = True
     type(users["admin"]).objects.exclude(pk=users["admin"].pk).update(is_active=False)
     audit = FilterAudit()
     audit.run()
@@ -91,8 +92,9 @@ def test_count_diagnostic_compares_displayed_drafts_and_ovpa_tag_usage(
 
 
 def test_full_diagnostics_reconcile_all_roles_with_mixed_collections(
-    users, export_records, request,
+    users, export_records, request, settings,
 ):
+    settings.SECURE_SSL_REDIRECT = True
     # Retire HR only after the real routing fixture has completed. This explicit
     # sequencing avoids relying on the relative order of independent fixtures.
     request.getfixturevalue("diagnostic_documents")
