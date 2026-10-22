@@ -1,6 +1,8 @@
 """Recover committed processing intents, preserving the original authority."""
+
 from django.core.management.base import BaseCommand
 
+from apps.documents.inference_jobs import recover_suggestions
 from apps.documents.processing import recover_processing
 
 
@@ -13,4 +15,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         result = recover_processing(limit=options["limit"], dry_run=not options["apply"])
-        self.stdout.write(f"{'Dry run' if result['dry_run'] else 'Recovered'}: {result['count']} eligible processing intent(s).")
+        self.stdout.write(
+            f"{'Dry run' if result['dry_run'] else 'Recovered'}: {result['count']} eligible processing intent(s)."
+        )
+        suggestions = recover_suggestions(limit=options["limit"], dry_run=not options["apply"])
+        self.stdout.write(f"{len(suggestions['intent_ids'])} eligible suggestion intent(s).")

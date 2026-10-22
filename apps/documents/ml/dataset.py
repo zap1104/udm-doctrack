@@ -44,13 +44,37 @@ def _sysadmin(user):
 
 
 def content_zones(document):
+    from django.db.models import Count, OuterRef, Subquery, Sum
+    from django.db.models.functions import Length
+
+    from ..file_versions import DocumentFileVersion
     from ..processing_contracts import coverage_summary
     from ..processing_models import ExtractionUnit
 
+    latest = (
+        DocumentFileVersion.objects.filter(document_file_id=OuterRef("run__file_version__document_file_id"))
+        .order_by("-version_number", "-pk")
+        .values("pk")[:1]
+    )
+    current_units = ExtractionUnit.objects.filter(
+        run__document=document,
+        run__is_current=True,
+        run__file_version__document_file__document=document,
+        run__file_version_id=Subquery(latest),
+    )
+    budget = current_units.aggregate(chars=Sum(Length("normalized_text")), units=Count("pk"))
+    if (budget["chars"] or 0) + budget["units"] > MAX_INPUT_CHARS:
+        raise ValidationError("This document exceeds the model input budget. No prefix was substituted.")
     units = list(
-        ExtractionUnit.objects.filter(run__document=document, run__is_current=True)
-        .order_by("run__file_version__document_file_id", "ordinal")
-        .values("pk", "locator_key", "normalized_text", "coverage", "truncated")
+        current_units.order_by("run__file_version__document_file_id", "ordinal").values(
+            "pk",
+            "locator_key",
+            "normalized_text",
+            "coverage",
+            "truncated",
+            "run__generation",
+            "run__file_version__original_name",
+        )
     )
     body = "\n".join(row["normalized_text"] for row in units) if units else document.ocr_text
     header = "\n".join(
@@ -60,8 +84,25 @@ def content_zones(document):
     result = {"title": document.title, "header": header, "body": body}
     if sum(map(len, result.values())) > MAX_INPUT_CHARS:
         raise ValidationError("This document exceeds the model input budget. No prefix was substituted.")
-    result["coverage_complete"] = coverage_summary(document)["coverage"] == "complete" if units else False
-    result["evidence"] = [{"unit_id": row["pk"], "locator": row["locator_key"]} for row in units]
+    result["coverage_complete"] = bool(
+        units
+        and coverage_summary(document)["coverage"] == "complete"
+        and all(row["run__generation"] == document.extraction_generation and not row["truncated"] for row in units)
+    )
+    result["evidence"] = []
+    offset = 0
+    for row in units:
+        end = offset + len(row["normalized_text"])
+        result["evidence"].append(
+            {
+                "unit_id": row["pk"],
+                "locator": row["locator_key"],
+                "filename": row["run__file_version__original_name"],
+                "start": offset,
+                "end": end,
+            }
+        )
+        offset = end + 1
     return result
 
 
@@ -132,7 +173,9 @@ def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synth
                 **zones,
                 "labels": {str(k): v for k, v in labels.items()},
                 "family_tokens": tokens,
-                "review_ids": list(document.tag_reviews.filter(input_revision=revision).values_list("pk", flat=True)),
+                "review_ids": list(
+                    document.tag_reviews.filter(input_revision=revision).order_by("pk").values_list("pk", flat=True)
+                ),
             }
         )
     _assign_families(examples)
@@ -192,6 +235,11 @@ def validate_snapshot(snapshot):
         ):
             raise ValidationError("A training source changed or its eligibility was withdrawn.")
         example = next(row for row in snapshot.payload["examples"] if row["document_id"] == doc.pk)
-        if list(doc.tag_reviews.filter(input_revision=source.input_revision).values_list("pk", flat=True)) != example["review_ids"]:
+        if (
+            list(
+                doc.tag_reviews.filter(input_revision=source.input_revision).order_by("pk").values_list("pk", flat=True)
+            )
+            != example["review_ids"]
+        ):
             raise ValidationError("The reviewed labels changed after this snapshot was prepared.")
     return True

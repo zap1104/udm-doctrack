@@ -528,8 +528,8 @@ class DocumentMetadata(models.Model):
 class MetadataSuggestion(models.Model):
     """What the engine proposed, and what the uploader kept.
 
-    Every row is one training example for the future AI engine — export with
-    `manage.py export_training_data`.
+    Historical metadata is not a supervised negative-label dataset. Explicit
+    TagReview decisions are captured separately for scoped training snapshots.
     """
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="suggestions")
@@ -538,6 +538,7 @@ class MetadataSuggestion(models.Model):
     engine = models.CharField(max_length=32, default="rules")
     engine_version = models.CharField(max_length=16, default="1.0")
     suggested = models.JSONField(default=dict)
+    input_revision = models.CharField(max_length=64, blank=True)
     accepted = models.JSONField(default=dict, blank=True)
     text_sample = models.TextField(blank=True, help_text="First part of the extracted text the engine saw.")
     reviewed_by = models.ForeignKey(
@@ -627,5 +628,5 @@ class SearchResultClick(models.Model):
 
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
 from .ml.models import SnapshotSource, TagModel, TrainingSnapshot  # noqa: E402,F401
-from .processing_models import ExtractionRun, ExtractionUnit, SearchChunk  # noqa: E402,F401
+from .processing_models import ExtractionRun, ExtractionUnit, InferenceIntent, SearchChunk  # noqa: E402,F401
 from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview  # noqa: E402,F401

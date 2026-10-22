@@ -29,7 +29,21 @@ The new OCR.space unit adapter uses conservative1,000,000-byte file and whole-re
 
 Every transport attempt invokes a fresh authorization callback. Overall and per-page result codes and missing/mismatched results determine coverage; HTTP200 is insufficient. Optional confidence stays null when absent/unusable. Bounded transient retries use jitter. Rate/quota errors create finite resumable waits, not an automatic request loop. Returned errors are generic and do not expose keys or provider bodies.
 
-OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is not yet wired into the default runtime. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
+OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is wired into the opt-in unit pipeline and remains off by default. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
+
+## Scoped local topic models
+
+Install the optional CPU profile with `.venv\Scripts\python.exe -m pip install -r requirements-ml.txt`. It is separate from the base web requirements. Model artifacts pin Python major/minor and exact NumPy/SciPy/scikit-learn versions; incompatible bundles fail closed. No pickle, public document service or new API key is used.
+
+Only explicitly eligible, active, nonrestricted documents from the selected internal office and collection enter a dataset. Existing records default to ineligible. Explicit confirm/add/reject/unsure decisions are scoped to content and vocabulary revisions. Missing labels remain unknown. A complete review covers only its selected canonical tag IDs. A source change, withdrawn eligibility, new review or vocabulary change makes an old snapshot unusable.
+
+System administrators can inventory with `manage.py prepare_tag_dataset --actor USER_ID --office OFFICE_ID --collection OVPA`; add `--apply` to save the private snapshot. Use `manage.py train_tag_model SNAPSHOT_ID --actor USER_ID`, then `manage.py evaluate_tag_model MODEL_ID --actor USER_ID`. Training creates an inactive candidate. `manage.py activate_tag_model MODEL_ID --actor USER_ID --mode shadow` explicitly enables shadow predictions; `suggestion` mode exposes model topic proposals. Other metadata proposals remain rule-based. `ENABLE_TAG_ML=True` and `SUGGESTION_ENGINE=ai` opt into inference. These commands are not run against original data during implementation.
+
+Snapshots contain bounded text and review provenance in private PostgreSQL tables. Numeric artifacts remain in the private model registry with digests and origin/runtime checks, not media/static storage. Never copy private snapshots, coefficients or vocabularies into review packets or public downloads. The artifact reader accepts bounded uncompressed members, validates NPY headers before allocation and loads numeric arrays with `allow_pickle=False`.
+
+The shared vectorizers fit only training families; per-topic classifiers use only known labels. Calibration, threshold selection and final evaluation use separate family partitions. Automatic qualification requires calibrated real-data evaluation, independent support, both precision gates and explicit enablement. Authored fixtures test mechanics and cannot qualify production automation. Uncalibrated scores are labelled suggestions, not confidence percentages.
+
+Extraction and suggestion stages have separate durable intents. `manage.py recover_extraction --limit 100` inventories both; `--apply` recovers under the original actor and current permissions. Each stage has finite attempts and leases. A missing/invalid model preserves rule/manual operation. Source flags and automatic tagging remain disabled by default until migration, setup and deployment-specific verification are complete.
 
 ## Opt-in processing and recovery
 

@@ -1,20 +1,19 @@
 """Metadata and tag recommendation.
 
-The engine returns a `Suggestion` — it never writes to the database on its own.
-The uploader reviews and edits everything on screen before saving; that review
-is exactly what makes the archive trustworthy.
+The engine returns a `Suggestion` without changing document metadata. Local
+model predictions have separate immutable provenance. Assignment requires a
+human review or the qualified automatic-contribution service.
 
 Two engines share one interface:
 
 * `RuleBasedEngine`  — ships today. Regex + keyword rules that an administrator
   can edit from the Administration screen (no code change, no retraining).
-* `AIEngine`         — the placeholder for later. Because both engines return
-  the same `Suggestion` object, switching is a settings change
-  (`SUGGESTION_ENGINE=ai`) and the UI stays identical.
+* `AIEngine`         — an explicitly activated, scoped local CPU model for
+  topics, with separately identified rule metadata and truthful fallback.
 
 Every suggestion, plus what the user actually kept, is stored in
-`MetadataSuggestion`. That table is the labelled dataset for training the AI
-engine later — see `manage.py export_training_data`.
+`MetadataSuggestion`. Historical accepted metadata does not establish negative
+topic labels. Training uses explicit TagReview decisions and private snapshots.
 """
 
 from __future__ import annotations
@@ -87,6 +86,7 @@ class Suggestion:
     engine: str = "rules"
     engine_version: str = ENGINE_VERSION
     notes: list[str] = field(default_factory=list)
+    topic_decisions: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -106,6 +106,7 @@ class Suggestion:
             "notes": self.notes,
             "engine": self.engine,
             "engine_version": self.engine_version,
+            "topic_decisions": self.topic_decisions,
         }
 
 
@@ -277,19 +278,30 @@ class RuleBasedEngine(BaseEngine):
 
 
 class AIEngine(BaseEngine):
-    """Placeholder for the trained model.
-
-    Implement `suggest()` here later (call your model, map the output onto the
-    same `Suggestion` fields) and set SUGGESTION_ENGINE=ai. Nothing else in the
-    project has to change. Until then it falls back to the rules engine so the
-    setting is always safe to flip.
-    """
+    """Scoped local topic inference with separately identified rule metadata."""
 
     name = "ai"
 
-    def suggest(self, *, text: str, filename: str = "", office=None, user=None) -> Suggestion:
+    def suggest(self, *, text: str, filename: str = "", office=None, user=None, document=None) -> Suggestion:
         suggestion = RuleBasedEngine().suggest(text=text, filename=filename, office=office, user=user)
-        suggestion.notes.append("AI engine is not trained yet — rule-based results were used.")
+        if document is None:
+            suggestion.notes.append("No document context is available; rule-based suggestions were used.")
+            return suggestion
+        from dataclasses import asdict
+
+        from .ml.inference import predict_tags
+
+        result = predict_tags(document, user=user)
+        if result.mode in {"fallback", "shadow"}:
+            suggestion.notes.append(result.reason or "Shadow topic predictions were recorded; visible suggestions use rules.")
+            return suggestion
+        selected = [decision for decision in result if decision.action == "suggest"]
+        names = dict(Tag.objects.filter(pk__in=[d.tag_id for d in selected], is_active=True).values_list("pk", "name"))
+        suggestion.tags = list(dict.fromkeys([*suggestion.tags, *(names[d.tag_id] for d in selected if d.tag_id in names)]))
+        suggestion.topic_decisions = [asdict(decision) for decision in result]
+        suggestion.engine = "ml"
+        suggestion.engine_version = f"local-topic-{result[0].model_id}" if result else "local-topic"
+        suggestion.notes.append("Topic suggestions use the scoped local model. Other metadata suggestions use rules. Uncalibrated topic scores are not confidence percentages.")
         return suggestion
 
 
@@ -298,8 +310,10 @@ def get_engine() -> BaseEngine:
     return {"rules": RuleBasedEngine, "none": NullEngine, "ai": AIEngine}.get(name, RuleBasedEngine)()
 
 
-def suggest_metadata(*, text: str, filename: str = "", office=None, user=None) -> Suggestion:
-    return get_engine().suggest(text=text, filename=filename, office=office, user=user)
+def suggest_metadata(*, text: str, filename: str = "", office=None, user=None, document=None) -> Suggestion:
+    engine = get_engine()
+    kwargs = {"document": document} if isinstance(engine, AIEngine) else {}
+    return engine.suggest(text=text, filename=filename, office=office, user=user, **kwargs)
 
 
 # ---------------------------------------------------------------------------

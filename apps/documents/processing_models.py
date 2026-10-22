@@ -1,4 +1,5 @@
 """Derived processing provenance; original file/version records remain immutable."""
+
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
@@ -8,9 +9,26 @@ from django.db import models
 from .processing_contracts import EXTRACTOR_VERSION, Coverage, WorkState
 
 
+class InferenceIntent(models.Model):
+    run = models.OneToOneField("documents.ExtractionRun", on_delete=models.CASCADE, related_name="suggestion_intent")
+    state = models.CharField(max_length=24, default=WorkState.PENDING)
+    input_revision = models.CharField(max_length=64, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    lease_token = models.CharField(max_length=32, blank=True)
+    lease_expires_at = models.DateTimeField(null=True)
+    next_attempt_at = models.DateTimeField(null=True)
+    last_reason = models.CharField(max_length=128, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Suggestions for run {self.run_id}: {self.state}"
+
+
 class ExtractionRun(models.Model):
     document = models.ForeignKey("documents.Document", on_delete=models.CASCADE, related_name="extraction_runs")
-    file_version = models.ForeignKey("documents.DocumentFileVersion", on_delete=models.CASCADE, related_name="extraction_runs")
+    file_version = models.ForeignKey(
+        "documents.DocumentFileVersion", on_delete=models.CASCADE, related_name="extraction_runs"
+    )
     generation = models.PositiveBigIntegerField()
     content_hash = models.CharField(max_length=64, blank=True)
     settings_digest = models.CharField(max_length=64)
@@ -35,7 +53,11 @@ class ExtractionRun(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["file_version", "generation", "settings_digest"], name="extraction_run_identity")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["file_version", "generation", "settings_digest"], name="extraction_run_identity"
+            )
+        ]
         indexes = [models.Index(fields=["state", "next_attempt_at"], name="extraction_recovery_due")]
 
     def __str__(self):
@@ -46,7 +68,11 @@ class ExtractionRun(models.Model):
         return super().save(*args, **kwargs)
 
     def clean(self):
-        if self.file_version_id and self.document_id and self.file_version.document_file.document_id != self.document_id:
+        if (
+            self.file_version_id
+            and self.document_id
+            and self.file_version.document_file.document_id != self.document_id
+        ):
             raise ValidationError("Extraction must belong to its file version's document.")
 
 
@@ -89,7 +115,9 @@ class SearchChunk(models.Model):
     search_vector = SearchVectorField(null=True, editable=False)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["unit", "ordinal", "index_revision"], name="source_chunk_identity")]
+        constraints = [
+            models.UniqueConstraint(fields=["unit", "ordinal", "index_revision"], name="source_chunk_identity")
+        ]
         indexes = [GinIndex(fields=["search_vector"], name="source_chunk_vector_gin")]
 
     def __str__(self):

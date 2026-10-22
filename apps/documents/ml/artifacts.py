@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 
 SCHEMA = "topic-bundle-1"
 ORIGIN = "local-training-1"
-MAX_BYTES = 128_000_000
+MAX_BYTES = 64_000_000
 MAX_MANIFEST_BYTES = 20_000_000
 MAX_ARRAY_ELEMENTS = 10_000_000
 
@@ -71,7 +71,7 @@ def _checked_array(value, *, expected=None):
         raise ValidationError("Invalid numeric model array.")
     if expected is not None and array.size != expected:
         raise ValidationError("Model array dimensions do not match.")
-    return array.astype(np.float64)
+    return array.astype(np.float64, copy=False)
 
 
 def _validate(bundle):
@@ -203,7 +203,7 @@ def load_bundle(model, *, scope, runtime=None):
                     ):
                         raise ValidationError("Unsafe model array header.")
                     array = _checked_array(np.load(io.BytesIO(raw), allow_pickle=False, max_header_size=10_000))
-                    entry["idf" if container is manifest["branches"] else "coef"] = array.tolist()
+                    entry["idf" if container is manifest["branches"] else "coef"] = array
             if names != expected_names:
                 raise ValidationError("Unexpected model archive member.")
     except ValidationError:

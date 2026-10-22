@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 
-from .models import Document, ExtractionRun, ExtractionUnit, MetadataSuggestion
+from .models import Document, ExtractionRun, ExtractionUnit
 from .ocr_provider import ocr_unit, prepare_unit_payload
 from .processing_contracts import (
     EXTRACTOR_VERSION,
@@ -33,7 +33,7 @@ from .processing_contracts import (
     resolve_file_version,
 )
 from .source_readers import read_source_units
-from .suggestions import suggest_metadata
+from .suggestions import suggest_metadata as suggest_metadata
 
 logger = logging.getLogger("doctrack")
 TERMINAL = {WorkState.COMPLETE, WorkState.BLOCKED, WorkState.UNSUPPORTED, WorkState.FAILED, WorkState.ACTION_REQUIRED}
@@ -282,6 +282,10 @@ def _publish(run, document, actor, *, next_state=None):
 
         publish_chunks(run, document=document, expected_revision=str(document.extraction_generation))
     document.rebuild_index()
+    if next_state in TERMINAL:
+        from .inference_jobs import ensure_intent
+
+        ensure_intent(run)
     if next_state == WorkState.PENDING:
         transaction.on_commit(lambda: _enqueue([(run.pk, run.generation)]), robust=True)
     return {"status": str(next_state), "document_id": document.pk, "characters": len(document.ocr_text)}
@@ -291,6 +295,14 @@ def process_run(run_id: int, *, expected_generation: int) -> dict:
     """At most one external OCR unit per invocation, with fenced publication."""
     if not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         return {"status": "blocked", "reason": "source_processing_disabled"}
+    completed = ExtractionRun.objects.filter(pk=run_id, generation=expected_generation, state__in=TERMINAL).first()
+    if completed is not None:
+        from .inference_jobs import ensure_intent, process_intent
+
+        with transaction.atomic():
+            intent = ensure_intent(completed)
+        result = process_intent(intent.pk)
+        return {"status": str(completed.state), "suggestion_status": result["status"]}
     with _locked(run_id) as (run, document, actor):
         if run is None:
             return {"status": "skipped"}
@@ -378,15 +390,10 @@ def process_run(run_id: int, *, expected_generation: int) -> dict:
                         unit.next_attempt_at = timezone.now()+timedelta(seconds=min(3600, max(1, result.metadata.get("retry_after_seconds", 300))))
                 unit.save()
             outcome = _publish(run, document, actor)
-        # Inference/rules run outside publication locks. Store only after a
-        # fresh generation/permission check, and only once per run.
-        if outcome["status"] in TERMINAL and not MetadataSuggestion.objects.filter(extraction_run_id=run_id).exists():
-            suggestion = suggest_metadata(text=document.ocr_text, filename=document.title, office=document.office, user=actor)
-            with _locked(run_id) as (fresh_run, fresh_document, fresh_actor):
-                if _eligible(fresh_run, fresh_document, fresh_actor, expected_generation) and not MetadataSuggestion.objects.filter(extraction_run_id=run_id).exists():
-                    MetadataSuggestion.objects.create(document=fresh_document, engine=suggestion.engine,
-                        extraction_run=fresh_run, engine_version=suggestion.engine_version,
-                        suggested=suggestion.as_dict(), text_sample=fresh_document.ocr_text[:4000])
+        if outcome["status"] in TERMINAL:
+            from .inference_jobs import process_intent
+
+            process_intent(run.suggestion_intent.pk)
         return outcome
     except (OSError, ValidationError, ValueError):
         with _locked(run_id) as (run, document, actor):

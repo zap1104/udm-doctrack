@@ -65,7 +65,7 @@ def ingest_upload(
         # the pending review stays usable and loads suggestions on next GET.
         actor = User.objects.filter(pk=user.pk, is_active=True).first()
         if actor and actor.can_start_work and document.suggestions.exists() and document.can_user_view(actor):
-            suggestion = suggest_metadata(text=document.ocr_text, filename=document.title, office=document.office, user=actor)
+            suggestion = suggest_metadata(text=document.ocr_text, filename=document.title, office=document.office, user=actor, document=document)
     return document, suggestion
 
 
@@ -588,7 +588,9 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
             suggested=suggestion.as_dict(),
             text_sample=document.ocr_text[:4000],
         )
-    set_tags(document, tag_names or suggestion.tags, user=user)
+    from .tagging import initialize_filing_tags
+
+    initialize_filing_tags(document, tag_names or [], user=user, record=record)
     document.rebuild_index()
 
     # Only now does the record become COMPLETED: the status and the Document

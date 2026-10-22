@@ -147,7 +147,9 @@ def known_labels(document, tag_ids, *, revision=None):
     # A newer unsure decision restores unknown; old-content reviews never
     # manufacture labels for changed evidence. Assignments alone are not labels.
     result = dict.fromkeys(tag_ids)
-    rows = document.tag_reviews.filter(input_revision=revision or input_revision(document), vocabulary=vocabulary_digest()).order_by("pk")
+    rows = document.tag_reviews.filter(
+        input_revision=revision or input_revision(document), vocabulary=vocabulary_digest()
+    ).order_by("pk")
     for row in rows:
         if row.tag_id in result:
             result[row.tag_id] = 1 if row.decision in {"confirm", "add"} else 0 if row.decision == "reject" else None
@@ -157,6 +159,10 @@ def known_labels(document, tag_ids, *, revision=None):
 @transaction.atomic
 def replace_human_tags(document, tags, *, user):
     doc, actor = _authorize(document, user)
+    _replace_locked_tags(doc, tags, actor)
+
+
+def _replace_locked_tags(doc, tags, actor):
     _bootstrap(doc)
     desired = {t.pk for t in tags}
     previous = set(doc.tags.values_list("pk", flat=True))
@@ -167,6 +173,37 @@ def replace_human_tags(document, tags, *, user):
     for tag_id in sorted(previous | desired):
         _decision(doc, active[tag_id], "confirm" if tag_id in desired else "reject", actor, revision, vocabulary)
     _materialize(doc)
+
+
+@transaction.atomic
+def initialize_filing_tags(document, tag_names, *, user, record):
+    """Only the initial authorized filing may set tags across office boundaries.
+
+    A filing administrator does not gain later repository edit permission.
+    Rule suggestions are not accepted labels unless explicitly submitted.
+    """
+    from apps.tracking.models import Status, TrackingRecord
+
+    actor = active_writer(user)
+    current_record = TrackingRecord.objects.select_for_update().get(pk=record.pk)
+    doc = Document.objects.select_for_update().get(pk=document.pk)
+    if (
+        not doc.is_active
+        or doc.tracking_record_id != current_record.pk
+        or doc.uploaded_by_id != actor.pk
+        or current_record.status != Status.COMPLETED_PENDING_UPLOAD
+        or not current_record.can_user_approve_upload(actor)
+        or doc.tags.exists()
+        or doc.tag_reviews.exists()
+        or doc.tag_contributions.exists()
+    ):
+        raise PermissionDenied("Only initial filing can initialize these document tags.")
+    tags = []
+    for name in tag_names:
+        tag, _ = Tag.get_or_create_by_name(name)
+        if tag and tag not in tags:
+            tags.append(tag)
+    _replace_locked_tags(doc, tags, actor)
 
 
 @transaction.atomic
