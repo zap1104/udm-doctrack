@@ -1,4 +1,4 @@
-"""Exports reviewed metadata suggestions as JSONL for training a model later.
+"""Historical metadata export, insufficient for supervised negative labels.
 
     python manage.py export_training_data --out training/metadata-2026-08.jsonl
 
@@ -9,9 +9,8 @@ Each line is one reviewed document:
      "accepted": {...what the human kept...},
      "was_edited": true}
 
-This is the whole point of storing MetadataSuggestion: by the time the team is
-ready to train a model, the archive has already produced a labelled dataset for
-free, from real work rather than invented examples.
+Missing tags are unknown, not negatives. Use prepare_tag_dataset for explicit,
+scoped reviews and reproducible family-disjoint training snapshots.
 """
 
 from __future__ import annotations

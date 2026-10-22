@@ -149,6 +149,8 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     """One archived or imported document with rich, searchable metadata."""
 
     title = models.CharField(max_length=255)
+    training_eligible = models.BooleanField(default=False, help_text="Explicit permission to use this record for scoped local topic training.")
+    training_family = models.CharField(max_length=64, blank=True, help_text="Optional shared family ID for closely related records.")
     description = models.TextField(blank=True, help_text="Short abstract shown in search results.")
     source = models.CharField(max_length=8, choices=Source.choices, default=Source.UPLOAD)
     collection = models.CharField(max_length=8, choices=Collection.choices, default=Collection.OVPA, db_index=True)
@@ -624,5 +626,6 @@ class SearchResultClick(models.Model):
 
 
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
+from .ml.models import SnapshotSource, TrainingSnapshot  # noqa: E402,F401
 from .processing_models import ExtractionRun, ExtractionUnit, SearchChunk  # noqa: E402,F401
 from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview  # noqa: E402,F401

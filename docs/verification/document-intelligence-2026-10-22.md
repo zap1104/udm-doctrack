@@ -57,3 +57,10 @@ Implementation in progress. No push, merge, deployment, original database migrat
 - New append-only decisions distinguish positive, negative and unknown for an exact input revision and vocabulary. Complete review covers only its submitted canonical IDs. Assignment contributions preserve legacy human provenance without inventing an actor or timestamp.
 - Canonical merges are system-admin only, reconcile distinct-document usage and leave historical review IDs untouched. Existing metadata and Django-admin tag edits use the same fresh authorization boundary. Automated application is still pending Task10.
 - Additive core0013/documents0019–0020 preserve current IDs and backfill legacy contributions. No original database migration has run. Concurrency, full access matrix and live UI checks remain for final verification.
+
+## Task 7: private training datasets
+
+- Two expected RED failures preceded implementation. GREEN:8 passed in40.88seconds with review, background-review and storage rollback tests (`task7-final.xml`).
+- Snapshots store bounded text, exact review IDs, labels, source revisions, vocabulary and deterministic family splits privately in PostgreSQL. They have no media URL or ordinary-user download route. Identical hashes, declared families and common tracking origins are joined transitively before splitting.
+- Preparation is system-admin only, dry-run by default, office/collection scoped, excludes restricted records, and requires opt-in eligibility. Changed source content, eligibility, scope, vocabulary or reviews fail validation. Existing documents default to ineligible. No original records were exported or trained on.
+- The legacy metadata export now explicitly documents that absent tags are unknown. Additive0021 is applied only in disposable tests. Dataset quality and production per-tag support remain unestablished.
