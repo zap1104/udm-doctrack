@@ -13,7 +13,7 @@
 
     .routing-slip-letterhead-main {
       display: grid !important;
-      grid-template-columns: minmax(0, 1fr) 96px !important;
+      grid-template-columns: minmax(0, 1fr) 112px !important;
       align-items: start !important;
       gap: 8px !important;
       width: 100% !important;
@@ -97,6 +97,14 @@
       display: block !important;
     }
 
+    .routing-slip-privacy p {
+      margin: 4px 0 0;
+    }
+
+    .routing-slip-privacy p:first-of-type {
+      margin-top: 3px;
+    }
+
     .routing-slip-university-name {
       margin: 0 !important;
       color: #111820 !important;
@@ -126,7 +134,7 @@
       align-items: stretch !important;
       justify-content: flex-start !important;
       justify-self: end !important;
-      width: 96px !important;
+      width: 112px !important;
       max-width: 100% !important;
       gap: 4px !important;
       padding-top: 0 !important;
@@ -134,22 +142,25 @@
     }
 
     .routing-slip-qr {
-      width: 58px !important;
-      min-height: 58px !important;
+      width: 112px !important;
+      min-height: 112px !important;
       margin: 0 auto !important;
       padding: 4px !important;
       box-sizing: border-box !important;
     }
 
-    /* Fills the space already free inside the 58px box (50px inner), so the
-       on-screen code is as readable as the layout allows. */
-    .routing-slip-qr-pattern {
-      width: 46px !important;
-      height: 46px !important;
+    .routing-slip-qr small {
+      margin-top: 2px;
+      font-size: 8px;
+      line-height: 1.1;
     }
 
-    .routing-slip-header-tracking,
-    .routing-slip-header-status {
+    .routing-slip-qr-pattern {
+      width: 96px !important;
+      height: 96px !important;
+    }
+
+    .routing-slip-header-tracking {
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 !important;
@@ -231,7 +242,7 @@
       }
 
       .routing-slip-letterhead-main {
-        grid-template-columns: minmax(0, 1fr) 23mm !important;
+        grid-template-columns: minmax(0, 1fr) 28mm !important;
         gap: 3mm !important;
       }
 
@@ -275,25 +286,26 @@
       }
 
       .routing-slip-qr-control {
-        width: 23mm !important;
-        max-width: 23mm !important;
+        width: 28mm !important;
+        max-width: 28mm !important;
         gap: 1mm !important;
         padding-top: 0 !important;
       }
 
       .routing-slip-qr {
-        width: 18mm !important;
-        min-height: 18mm !important;
+        width: 26mm !important;
+        min-height: 26mm !important;
         padding: 1mm !important;
       }
 
-      /* 15mm, not 10mm. A tracking number needs a 29-module symbol, so 10mm
-         put each module at 0.35mm — under the ~0.5mm a phone camera needs, and
-         a QR that will not scan is worse than no QR. 15mm gives 0.52mm and
-         still fits the 23mm letterhead column. */
       .routing-slip-qr-pattern {
-        width: 15mm !important;
-        height: 15mm !important;
+        width: 22mm !important;
+        height: 22mm !important;
+      }
+
+      .routing-slip-qr small {
+        margin-top: 0.5mm;
+        font-size: 6pt;
       }
 
       .routing-slip-header-tracking {
@@ -346,7 +358,6 @@
           <span>Tracking Number</span>
           <strong class="mono">{{ record.display_tracking_number }}</strong>
         </div>
-        <div class="routing-slip-header-status"><span>{{ stage_scope_label }}</span> {% include "partials/_status_pill.html" with status=record.display_status %}{% include "partials/_overdue_tag.html" with overdue=record.is_overdue %}</div>
       </div>
     </div>
   </header>
@@ -378,8 +389,12 @@
 
   <section class="routing-slip-privacy" aria-label="Privacy notice">
     <strong>Privacy Notice:</strong>
-    The exact university-approved privacy statement must be inserted here before final deployment.
-    This placeholder is intentionally not presented as approved legal wording.
+    <p>
+      By affixing my signature on this form, I hereby acknowledge and certify that I have carefully read and understood the terms and conditions of the Data Privacy Policy of Universidad de Manila (UDM). By providing my personal information to UDM, I am confirming that the data are true and correct. I understand that UDM reserves the right to revise any decision made based on the information I provided should the information be found to be incorrect.
+    </p>
+    <p>
+      I likewise agree that any issue that may arise in connection with the processing of my personal information will be settled amicably with UDM before resorting to appropriate arbitration or court proceedings within Philippine jurisdiction. Finally, I am providing my voluntary consent and authorization to UDM and its duly authorized representatives to lawfully process my data.
+    </p>
   </section>
 
   <section class="routing-slip-history" aria-labelledby="movement-history-title">
