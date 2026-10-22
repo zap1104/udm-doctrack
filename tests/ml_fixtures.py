@@ -7,7 +7,7 @@ from apps.documents.models import Document, TagReview
 from apps.documents.tagging import input_revision, vocabulary_digest
 
 
-def make_candidate(users, n=70, approved=False):
+def make_candidate(users, n=70, approved=True):
     tag = Tag.objects.create(name="synthetic procurement topic", globally_approved=approved, automatic_enabled=approved)
     vocabulary = vocabulary_digest()
     for i in range(n):

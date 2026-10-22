@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "description": "Authored language and retrieval mechanics, not OCR or real-world accuracy evidence.",
+  "documents": [
+    {"key": "purchasing", "title": "Purchase request guide", "body": "Purchase request supporting supplier records and filing forms."},
+    {"key": "facilities", "title": "Equipment calibration", "body": "Pagpapanatili at pagsasaayos ng mga pasilidad. Equipment calibration and repair schedule."},
+    {"key": "reference", "title": "Office routing reference", "body": "Authored routing reference fixture.", "reference": "UDM-MED-2026-10-0001"},
+    {"key": "taglish", "title": "Repair request checklist", "body": "Pakisuri ang repair request bago isumite sa office."}
+  ],
+  "judgments": [
+    {"query": "pr", "relevant_keys": ["purchasing"], "min_relevance": 0},
+    {"query": "pagpapanatili", "relevant_keys": ["facilities"], "min_relevance": 0},
+    {"query": "repair request", "relevant_keys": ["taglish"], "min_relevance": 0},
+    {"query": "UDM-MED-2026-10-0001", "relevant_keys": ["reference"], "min_relevance": 75},
+    {"query": "calibrtion", "relevant_keys": ["facilities"], "min_relevance": 0}
+  ]
+}

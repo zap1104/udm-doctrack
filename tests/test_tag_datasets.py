@@ -19,7 +19,10 @@ def api():
 
 def test_dataset_scope_unknown_and_immutable_snapshot(users):
     dataset = api()
-    a, b = Tag.objects.create(name="purchasing"), Tag.objects.create(name="maintenance")
+    a, b = (
+        Tag.objects.create(name="purchasing", globally_approved=True),
+        Tag.objects.create(name="maintenance", globally_approved=True),
+    )
     docs = []
     for owner, collection in [("med", "OVPA"), ("hr", "OVPA"), ("med_admin", "EXTERNAL")]:
         doc = Document.objects.create(

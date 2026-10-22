@@ -64,3 +64,21 @@ class SavedViewForm(BootstrapFormMixin, forms.Form):
     name = forms.CharField(max_length=80, label="View name")
     collection = forms.ChoiceField(choices=Collection.choices)
     filters = forms.CharField(required=False, max_length=4000, widget=forms.HiddenInput)
+
+
+class AliasApprovalForm(BootstrapFormMixin, forms.Form):
+    tag = forms.ModelChoiceField(
+        queryset=Tag.objects.filter(is_active=True, canonical__isnull=True, globally_approved=True),
+        label="Approved shared topic",
+    )
+    phrase = forms.CharField(max_length=128, label="Acronym or synonym")
+
+
+class TagMergeForm(BootstrapFormMixin, forms.Form):
+    source = forms.ModelChoiceField(
+        queryset=Tag.objects.filter(is_active=True, canonical__isnull=True), label="Retire this duplicate topic"
+    )
+    target = forms.ModelChoiceField(
+        queryset=Tag.objects.filter(is_active=True, canonical__isnull=True), label="Keep this canonical topic"
+    )
+    reason = forms.CharField(max_length=1000, widget=forms.Textarea(attrs={"rows": 3}), label="Merge reason")

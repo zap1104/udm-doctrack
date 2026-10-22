@@ -34,7 +34,7 @@ from itertools import chain
 from django.conf import settings
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramSimilarity
 from django.db import DatabaseError, connection
-from django.db.models import Case, F, FloatField, IntegerField, Q, Value, When
+from django.db.models import BigIntegerField, BooleanField, Case, F, FloatField, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce, Greatest
 from django.utils.html import escape
 
@@ -104,6 +104,8 @@ class SearchResponse:
     explanation: str = ""
     log_id: int | None = None
     scoring_version: str = "lexical-1"
+    expanded_terms: list[str] = field(default_factory=list)
+    candidate_ids: list[int] = field(default_factory=list)
 
 
 def tokenize(raw_query: str) -> list[str]:
@@ -181,6 +183,11 @@ def search_documents(
 
     tokens = tokenize(raw_query)
     use_fuzzy = trigram_available()
+    expanded_terms = []
+    if settings.ENABLE_APPROVED_SEARCH_ALIASES:
+        from .aliases import expand_query
+
+        expanded_terms = expand_query(user, raw_query, collection=collection)
 
     search_query = SearchQuery(raw_query, config=settings.SEARCH_CONFIG, search_type="websearch")
     annotations = {
@@ -193,10 +200,14 @@ def search_documents(
 
         legacy_rank = annotations.pop("rank")
         annotations.update(chunk_annotations(base, raw_query))
-        annotations["_metadata_rank"] = SearchRank(F("metadata_search_vector"), search_query,
-            weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0))
-        annotations["rank"] = Case(When(_has_chunks=True, then=Coalesce(F("_metadata_rank"), Value(0.0))+F("_chunk_rank")),
-            default=legacy_rank, output_field=FloatField())
+        annotations["_metadata_rank"] = SearchRank(
+            F("metadata_search_vector"), search_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
+        )
+        annotations["rank"] = Case(
+            When(_has_chunks=True, then=Coalesce(F("_metadata_rank"), Value(0.0)) + F("_chunk_rank")),
+            default=legacy_rank,
+            output_field=FloatField(),
+        )
     if use_fuzzy:
         annotations["similarity"] = Greatest(
             TrigramSimilarity("index_title", raw_query), TrigramSimilarity("index_meta", raw_query)
@@ -204,28 +215,88 @@ def search_documents(
     else:
         annotations["similarity"] = Value(0.0, output_field=FloatField())
 
+    expanded_conditions = Q(pk__in=[])
+    if expanded_terms:
+        from .aliases import combined_query
+
+        expanded_query = combined_query(expanded_terms)
+        expanded_conditions = Q(search_vector=expanded_query)
+        for term in expanded_terms:
+            expanded_conditions |= (
+                Q(title__icontains=term)
+                | Q(index_title__icontains=term)
+                | Q(index_meta__icontains=term)
+                | Q(index_extra__icontains=term)
+                | Q(ocr_text__icontains=term)
+            )
+        expanded_rank = SearchRank(
+            F("search_vector"), expanded_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
+        )
+        if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+            annotations.update(chunk_annotations(base, raw_query, queries=expanded_terms, prefix="expanded_"))
+            metadata_rank = SearchRank(
+                F("metadata_search_vector"),
+                expanded_query,
+                weights=RANK_WEIGHTS,
+                cover_density=True,
+                normalization=Value(0),
+            )
+            expanded_rank = Case(
+                When(_expanded_has_chunks=True, then=Coalesce(metadata_rank, Value(0.0)) + F("_expanded_chunk_rank")),
+                default=expanded_rank,
+                output_field=FloatField(),
+            )
+            annotations["_source_is_expanded"] = Case(
+                When(_chunk_match=False, _expanded_chunk_match=True, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+            annotations["_source_chunk_id"] = Case(
+                When(_chunk_match=True, then=annotations["_source_chunk_id"]),
+                default=annotations["_expanded_source_chunk_id"],
+                output_field=BigIntegerField(),
+            )
+            expanded_conditions |= Q(_expanded_chunk_match=True)
+        annotations["_expanded_rank"] = expanded_rank
+        k = Value(max(settings.SEARCH_RANK_SATURATION_K, 1e-6))
+        original_rank = Coalesce(F("rank"), Value(0.0))
+        alias_rank = Coalesce(F("_expanded_rank"), Value(0.0))
+        annotations["_candidate_text_score"] = Greatest(
+            original_rank / (original_rank + k), Value(0.5) * alias_rank / (alias_rank + k)
+        )
+
     plain_conditions = (
-        Q(title__icontains=raw_query) | Q(index_title__icontains=raw_query)
-        | Q(index_meta__icontains=raw_query) | Q(index_extra__icontains=raw_query)
-        | Q(ocr_text__icontains=raw_query) | Q(reference_number__icontains=raw_query)
+        Q(title__icontains=raw_query)
+        | Q(index_title__icontains=raw_query)
+        | Q(index_meta__icontains=raw_query)
+        | Q(index_extra__icontains=raw_query)
+        | Q(ocr_text__icontains=raw_query)
+        | Q(reference_number__icontains=raw_query)
     )
     # Exact identifiers score 100% after candidates are read. Keep them ahead
     # of incidental mentions before the bounded candidate window is cut, and
     # admit a linked tracking number even while its index is being rebuilt.
     # This is still applied only to the permission- and filter-scoped base.
     identifier_conditions = (
-        Q(reference_number__iexact=raw_query)
-        | Q(tracking_record__tracking_number__iexact=raw_query)
-        | Q(external_tracking_record__tracking_number__iexact=raw_query)
-        | Q(external_tracking_record__original_reference__iexact=raw_query)
-    ) if len(raw_query) >= 6 else Q(pk__in=[])
+        (
+            Q(reference_number__iexact=raw_query)
+            | Q(tracking_record__tracking_number__iexact=raw_query)
+            | Q(external_tracking_record__tracking_number__iexact=raw_query)
+            | Q(external_tracking_record__original_reference__iexact=raw_query)
+        )
+        if len(raw_query) >= 6
+        else Q(pk__in=[])
+    )
     identifier_priority = Case(
         When(identifier_conditions, then=Value(1)),
-        default=Value(0), output_field=IntegerField(),
+        default=Value(0),
+        output_field=IntegerField(),
     )
     # Metadata/text remain findable while a legacy or newly filed record is
     # waiting for its stored full-text index to be rebuilt.
     conditions = Q(search_vector=search_query) | plain_conditions | identifier_conditions
+    if expanded_terms:
+        conditions |= expanded_conditions
     if settings.ENABLE_SOURCE_CHUNK_SEARCH:
         conditions |= Q(_chunk_match=True)
     if use_fuzzy:
@@ -235,9 +306,13 @@ def search_documents(
         queryset = (
             base.annotate(_identifier_priority=identifier_priority, **annotations)
             .filter(conditions)
-            .distinct().order_by(
-                "-_identifier_priority", F("rank").desc(nulls_last=True),
-                "-similarity", "-document_date", "-pk",
+            .distinct()
+            .order_by(
+                "-_identifier_priority",
+                F("_candidate_text_score" if expanded_terms else "rank").desc(nulls_last=True),
+                "-similarity",
+                "-document_date",
+                "-pk",
             )
         )
         total = queryset.count()
@@ -248,20 +323,39 @@ def search_documents(
             first = next(iterator, None)
             candidates = chain([first] if first is not None else [], iterator)
         else:
-            candidates = list(queryset[:limit * 2])
+            candidates = list(queryset[: limit * 2])
     except DatabaseError as exc:  # e.g. pg_trgm dropped after the process started
         logger.warning("Search fell back to plain matching: %s", exc)
         _TRIGRAM_STATE["value"] = False
         fallback = base
+        if expanded_terms:
+            for term in expanded_terms:
+                plain_conditions |= (
+                    Q(title__icontains=term)
+                    | Q(index_title__icontains=term)
+                    | Q(index_meta__icontains=term)
+                    | Q(index_extra__icontains=term)
+                    | Q(ocr_text__icontains=term)
+                )
         if settings.ENABLE_SOURCE_CHUNK_SEARCH:
             from .chunks import plain_chunk_match
 
             fallback = fallback.annotate(_chunk_match=plain_chunk_match(raw_query))
             plain_conditions |= Q(_chunk_match=True)
+            if expanded_terms:
+                fallback = fallback.annotate(_expanded_chunk_match=plain_chunk_match(raw_query, queries=expanded_terms))
+                fallback = fallback.annotate(
+                    _source_is_expanded=Case(
+                        When(_chunk_match=False, _expanded_chunk_match=True, then=Value(True)),
+                        default=Value(False),
+                    )
+                )
+                plain_conditions |= Q(_expanded_chunk_match=True)
         fallback = (
             fallback.filter(plain_conditions | identifier_conditions)
             .annotate(_identifier_priority=identifier_priority)
-            .distinct().order_by("-_identifier_priority", "-document_date", "-pk")
+            .distinct()
+            .order_by("-_identifier_priority", "-document_date", "-pk")
         )
         total = fallback.count()
         candidates = fallback.iterator(chunk_size=200) if exhaustive else list(fallback[:limit])
@@ -274,16 +368,23 @@ def search_documents(
     results: list[SearchResult] = []
     for document in candidates:
         text_score = _saturate(float(getattr(document, "rank", 0.0) or 0.0))
+        alias_text_score = 0.5 * _saturate(float(getattr(document, "_expanded_rank", 0.0) or 0.0))
+        alias_scored = alias_text_score > text_score
+        text_score = max(text_score, alias_text_score)
         fuzzy_score = float(getattr(document, "similarity", 0.0) or 0.0)
         field_score, matched_in = _field_score(document, raw_query, tokens)
         source_evidence = {}
+        alias_source = bool(getattr(document, "_source_is_expanded", False))
+        snippet_tokens = tokenize(" ".join(expanded_terms)) if alias_source or alias_scored else tokens
         if settings.ENABLE_SOURCE_CHUNK_SEARCH:
             from .chunks import source_snippet
 
-            source_evidence = source_snippet(document, tokens)
-            if source_evidence and "Document text" not in matched_in:
+            source_evidence = source_snippet(document, snippet_tokens)
+            if source_evidence and not alias_source and "Document text" not in matched_in:
                 matched_in.append("Document text")
-                field_score = min(1.0, field_score+0.05)
+                field_score = min(1.0, field_score + 0.05)
+        if alias_scored or alias_source:
+            matched_in.append("Approved alias")
 
         relevance = 100.0 * (
             settings.SEARCH_WEIGHT_TEXT * text_score
@@ -303,8 +404,9 @@ def search_documents(
                 fuzzy_score=round(fuzzy_score, 4),
                 field_score=round(field_score, 4),
                 matched_in=matched_in,
-                snippet_html=source_evidence.get("html") or _snippet(document, tokens),
-                source_filename=source_evidence.get("filename", ""), source_locator=source_evidence.get("locator", ""),
+                snippet_html=source_evidence.get("html") or _snippet(document, snippet_tokens),
+                source_filename=source_evidence.get("filename", ""),
+                source_locator=source_evidence.get("locator", ""),
                 source_unit_id=source_evidence.get("unit_id"),
             )
         )
@@ -312,11 +414,25 @@ def search_documents(
             # Keep compact scored records while evaluating an unlimited corpus.
             # Django loads these fields lazily if a later caller needs them;
             # the score, match explanation and short snippet are already saved.
-            for field_name in ("ocr_text", "search_vector", "metadata_search_vector", "index_title", "index_meta", "index_extra", "description"):
+            for field_name in (
+                "ocr_text",
+                "search_vector",
+                "metadata_search_vector",
+                "index_title",
+                "index_meta",
+                "index_extra",
+                "description",
+            ):
                 document.__dict__.pop(field_name, None)
 
         document.__dict__.pop("_source_chunk", None)
-    results.sort(key=lambda item: (-item.relevance, -(item.document.document_date.toordinal() if item.document.document_date else 0), -item.document.pk))
+    results.sort(
+        key=lambda item: (
+            -item.relevance,
+            -(item.document.document_date.toordinal() if item.document.document_date else 0),
+            -item.document.pk,
+        )
+    )
     visible = results if show_below_threshold else [item for item in results if item.relevance >= min_relevance]
     hidden = 0 if show_below_threshold else len(results) - len(visible)
 
@@ -331,12 +447,21 @@ def search_documents(
         limited_count=0 if exhaustive else max(0, len(visible) - limit),
         result_limit=total if exhaustive else limit,
         query=raw_query,
-        scoring_version="lexical-chunks-1" if settings.ENABLE_SOURCE_CHUNK_SEARCH else "lexical-1",
+        scoring_version=("lexical-chunks-aliases-1" if settings.ENABLE_SOURCE_CHUNK_SEARCH else "lexical-aliases-1")
+        if expanded_terms
+        else ("lexical-chunks-1" if settings.ENABLE_SOURCE_CHUNK_SEARCH else "lexical-1"),
+        expanded_terms=expanded_terms,
+        candidate_ids=[item.document.pk for item in results],
         used_fuzzy=use_fuzzy,
         duration_ms=int((time.perf_counter() - started) * 1000),
         explanation=(
             "Ranked by relevance: title and tracking number count most, then office, type and tags, "
             "then metadata, then the text inside the file."
+            + (
+                " Approved vocabulary variants use half weight for text matching; original identifiers, field and fuzzy signals remain unchanged. Expanded-only results may be below your relevance threshold."
+                if expanded_terms
+                else ""
+            )
         ),
     )
 
@@ -498,7 +623,8 @@ def autocomplete_terms(user, prefix: str, limit: int = 8) -> list[str]:
     remaining = limit - len(tags)
     if remaining > 0:
         titles = (
-            Document.objects.visible_to(user).in_collection()
+            Document.objects.visible_to(user)
+            .in_collection()
             .filter(is_active=True, title__icontains=prefix)
             .annotate(suggestion=Lower("title"))
             .exclude(suggestion__in=[term.casefold() for term in tags])

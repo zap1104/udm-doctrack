@@ -5,7 +5,7 @@
 <div class="workspace-page">
   <div class="page-head"><div><h1>Local topic models</h1><p class="sub">{{ collection }} collection. Candidates require explicit activation. Training never enables automatic tags.</p></div></div>
   {% if scope_error %}<p class="alert alert-danger" role="alert">{{ scope_error }}</p>{% endif %}
-  <div class="page-actions mb-3"><a class="btn btn-udm-outline" href="?collection=OVPA">OVPA models</a><a class="btn btn-udm-outline" href="?collection=EXTERNAL">External models</a></div>
+  <div class="page-actions mb-3"><a class="btn btn-udm-outline" href="?collection=OVPA">OVPA models</a><a class="btn btn-udm-outline" href="?collection=EXTERNAL">External models</a><a class="btn btn-udm-outline" href="{% url 'documents:tag_vocabulary' %}">Approved topic vocabulary</a></div>
   {% for model in models %}
   <section class="card-udm mb-4"><div class="card-udm-head"><h2>Model {{ model.pk }} · {{ model.office.name }}</h2><span class="pill pill-muted">{{ model.get_mode_display }}</span></div><div class="card-udm-body">
     <p>{% if model.snapshot.synthetic %}<strong>Authored test data. Not eligible for production automation.</strong>{% elif model.evaluation.production_eligible %}Some topics meet the recorded evaluation gates. Current source safety and per-tag permission are still required.{% else %}Suggestion or shadow use only. No topic qualifies for automatic application.{% endif %}</p>

@@ -150,7 +150,11 @@ def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synth
     )
     if documents.count() > MAX_EXAMPLES:
         raise ValidationError("The training snapshot exceeds its document budget.")
-    tag_ids = list(Tag.objects.filter(is_active=True, canonical__isnull=True).values_list("pk", flat=True))
+    tag_ids = list(
+        Tag.objects.filter(is_active=True, canonical__isnull=True, globally_approved=True)
+        .exclude(category=Tag.Category.OFFICE)
+        .values_list("pk", flat=True)
+    )
     examples = []
     total_chars = 0
     for document in documents:

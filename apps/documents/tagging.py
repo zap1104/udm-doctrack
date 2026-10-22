@@ -21,10 +21,13 @@ def digest(value):
 
 def vocabulary_snapshot():
     return list(
-        Tag.objects.order_by("pk").values(
-            "id", "name", "description", "category", "is_active", "canonical_id", "globally_approved"
-        )
-    ) + [{"alias": a.phrase, "tag": a.tag_id} for a in TagAlias.objects.filter(is_active=True).order_by("pk")]
+        Tag.objects.filter(globally_approved=True)
+        .order_by("pk")
+        .values("id", "name", "description", "category", "is_active", "canonical_id", "globally_approved")
+    ) + [
+        {"alias": a.phrase, "tag": a.tag_id}
+        for a in TagAlias.objects.filter(is_active=True, tag__globally_approved=True).order_by("pk")
+    ]
 
 
 def vocabulary_digest():
@@ -237,6 +240,10 @@ def merge_tags(source_id, target_id, *, user, reason):
     source.is_active = False
     source.automatic_enabled = False
     source.save(update_fields=["canonical", "is_active", "automatic_enabled"])
+    changes = {"tag": target}
+    if not source.globally_approved:
+        changes["is_active"] = False
+    TagAlias.objects.filter(tag=source).update(**changes)
     log_action(
         "UPDATE",
         "Merged topic tags",
@@ -251,9 +258,34 @@ def approve_alias(tag_id, phrase, *, user):
     actor = active_writer(user)
     if not actor.is_system_admin:
         raise PermissionDenied("Only system administrators approve shared aliases.")
-    tag = Tag.objects.select_for_update().get(pk=tag_id, is_active=True, canonical__isnull=True, globally_approved=True)
+    tag = (
+        Tag.objects.select_for_update()
+        .filter(pk=tag_id, is_active=True, canonical__isnull=True, globally_approved=True)
+        .first()
+    )
+    if tag is None:
+        raise ValidationError("Choose an active approved canonical topic.")
     phrase = " ".join(str(phrase).lower().split())
     if not phrase or len(phrase) > 128:
         raise ValidationError("Use an alias between 1 and 128 characters.")
-    alias, _ = TagAlias.objects.get_or_create(tag=tag, phrase=phrase, defaults={"approved_by": actor})
+    alias = TagAlias.objects.select_for_update().filter(phrase=phrase).first()
+    if alias and alias.tag_id != tag.pk:
+        raise ValidationError("This alias already belongs to another topic.")
+    if alias is None:
+        alias = TagAlias.objects.create(tag=tag, phrase=phrase, approved_by=actor)
+    elif not alias.is_active:
+        alias.is_active, alias.approved_by = True, actor
+        alias.save(update_fields=["is_active", "approved_by"])
+    log_action("UPDATE", "Approved shared topic alias", actor=actor, target=alias, extra={"tag_id": tag.pk})
     return alias
+
+
+@transaction.atomic
+def deactivate_alias(alias_id, *, user):
+    actor = active_writer(user)
+    if not actor.is_system_admin:
+        raise PermissionDenied("Only system administrators can change shared aliases.")
+    alias = TagAlias.objects.select_for_update().get(pk=alias_id)
+    alias.is_active = False
+    alias.save(update_fields=["is_active"])
+    log_action("UPDATE", "Deactivated shared topic alias", actor=actor, target=alias)

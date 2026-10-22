@@ -5,6 +5,7 @@ from . import external_views, intelligence_views, views
 app_name = "documents"
 
 urlpatterns = [
+    path("intelligence/vocabulary/", intelligence_views.VocabularyView.as_view(), name="tag_vocabulary"),
     path("views/", intelligence_views.SavedViewsView.as_view(), name="saved_views"),
     path("views/<int:view_id>/", intelligence_views.OpenSavedView.as_view(), name="open_saved_view"),
     path("views/<int:view_id>/delete/", intelligence_views.DeleteSavedView.as_view(), name="delete_saved_view"),

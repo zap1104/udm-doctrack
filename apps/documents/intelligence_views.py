@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,14 +17,29 @@ from apps.core.mixins import AppLoginRequiredMixin, SystemAdminRequiredMixin
 from apps.core.pagination import paginate
 
 from .file_versions import DocumentFileVersion
-from .intelligence_forms import CompleteTagReviewForm, SavedViewForm, TagReviewForm, TrainingEligibilityForm
+from .intelligence_forms import (
+    AliasApprovalForm,
+    CompleteTagReviewForm,
+    SavedViewForm,
+    TagMergeForm,
+    TagReviewForm,
+    TrainingEligibilityForm,
+)
 from .ml.eligibility import set_training_eligibility
 from .ml.lifecycle import activate_model, rollback_model
 from .ml.models import TagModel
-from .models import Collection, ExtractionUnit, SavedDocumentView
+from .models import Collection, ExtractionUnit, SavedDocumentView, TagAlias
 from .processing_contracts import coverage_summary
 from .saved_views import create_saved_view, delete_saved_view, open_saved_view
-from .tagging import complete_review, input_revision, review_tag, vocabulary_digest
+from .tagging import (
+    approve_alias,
+    complete_review,
+    deactivate_alias,
+    input_revision,
+    merge_tags,
+    review_tag,
+    vocabulary_digest,
+)
 from .views import _get_document
 
 
@@ -276,6 +292,48 @@ class TagModelsView(SystemAdminRequiredMixin, View):
         if target_office is not None:
             params["office"] = target_office
         return redirect(reverse("documents:tag_models") + "?" + urlencode(params))
+
+
+class VocabularyView(SystemAdminRequiredMixin, View):
+    def get(self, request):
+        return self.render(request)
+
+    def post(self, request):
+        action = request.POST.get("action")
+        alias_form = AliasApprovalForm(request.POST if action == "alias" else None, auto_id="alias_%s")
+        merge_form = TagMergeForm(request.POST if action == "merge" else None, auto_id="merge_%s")
+        if any(len(request.POST.getlist(key)) != 1 for key in request.POST):
+            return self.render(request, alias_form, merge_form, status=400)
+        try:
+            if action == "alias" and alias_form.is_valid():
+                approve_alias(alias_form.cleaned_data["tag"].pk, alias_form.cleaned_data["phrase"], user=request.user)
+            elif action == "merge" and merge_form.is_valid():
+                data = merge_form.cleaned_data
+                merge_tags(data["source"].pk, data["target"].pk, reason=data["reason"], user=request.user)
+            elif action == "deactivate":
+                deactivate_alias(int(request.POST["alias"]), user=request.user)
+            else:
+                return self.render(request, alias_form, merge_form, status=400)
+        except (ValidationError, IntegrityError, ValueError, KeyError, TagAlias.DoesNotExist) as exc:
+            messages.error(
+                request,
+                "; ".join(exc.messages)
+                if isinstance(exc, ValidationError)
+                else "The vocabulary changed. Reload and choose a valid topic or alias.",
+            )
+            return self.render(request, alias_form, merge_form, status=409)
+        messages.success(request, "Vocabulary change saved. Historical reviews and predictions are preserved.")
+        return redirect("documents:tag_vocabulary")
+
+    @staticmethod
+    def render(request, alias_form=None, merge_form=None, status=200):
+        context = paginate(request, TagAlias.objects.select_related("tag").order_by("tag__name", "phrase"))
+        context.update(
+            aliases=context["page_obj"].object_list,
+            alias_form=alias_form or AliasApprovalForm(auto_id="alias_%s"),
+            merge_form=merge_form or TagMergeForm(auto_id="merge_%s"),
+        )
+        return render(request, "documents/intelligence/vocabulary.html", context, status=status)
 
 
 class SavedViewsView(AppLoginRequiredMixin, View):

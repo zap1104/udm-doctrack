@@ -162,6 +162,10 @@ After changing any weight: `make reindex`.
 
 ## Deliberately not built
 
+Approved query aliases are optional (`ENABLE_APPROVED_SEARCH_ALIASES=False` by default). Only explicitly approved global vocabulary expands a query, with at most eight variants. Original references retain exact-match priority and a score of 100. Expanded text uses half the original text weight; fuzzy and field signals still use the original query. Results identify approved-alias evidence, including its source file when available. The Search default threshold remains 75; Repository defaults to 0, so an alias-only match can be hidden in Search until the user lowers the threshold.
+
+`evaluate_search --actor <system-admin-id> --collection OVPA --judgments <private-json-file>` measures supplied, authorized judgments. It reports candidate recall separately from visible precision, success and nDCG at five, the evaluated corpus/window, and two latency passes with uncontrolled caches. Authored fixtures verify mechanics, including Filipino and Taglish phrases; they do not establish real-world retrieval or OCR accuracy. Scoring versions with expansion are `lexical-aliases-1` and `lexical-chunks-aliases-1`.
+
 - **Semantic / vector search** — a real improvement, but it needs embeddings, a vector extension, and an explanation of why a document with none of your words is the top result. Rules and text ranking are explainable today.
 - **Recency boost** — sounds obvious, but a five-year-old policy is often exactly what you want. Needs real usage data first.
 - **Personalised ranking** — makes results unpredictable and unauditable. Wrong for a records system.

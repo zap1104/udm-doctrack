@@ -151,3 +151,14 @@ def test_forged_unit_parent_and_invalid_model_scopes_fail_closed(client, users, 
     for query in ("collection=invalid", "collection=OVPA&collection=EXTERNAL", "office=one", "office=1&office=2"):
         response = client.get(reverse("documents:tag_models") + "?" + query)
         assert response.status_code == 400
+
+
+def test_only_system_administrator_can_approve_aliases(client, users):
+    alias_url = reverse("documents:tag_vocabulary")
+    tag = Tag.objects.create(name="purchase request", globally_approved=True)
+    client.force_login(users["med_admin"])
+    assert client.get(alias_url).status_code == 403
+    assert client.post(alias_url, {"action": "alias", "tag": tag.pk, "phrase": "pr"}).status_code == 403
+    client.force_login(users["admin"])
+    assert client.post(alias_url, {"action": "alias", "tag": tag.pk, "phrase": "pr"}).status_code == 302
+    assert tag.approved_aliases.filter(phrase="pr", approved_by=users["admin"], is_active=True).exists()
