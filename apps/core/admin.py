@@ -19,6 +19,7 @@ class DocumentTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
+    readonly_fields = ("canonical",)
     list_display = ("name", "category", "usage_count", "is_active")
     list_filter = ("category", "is_active")
     search_fields = ("name",)

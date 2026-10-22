@@ -74,3 +74,23 @@ def test_complete_review_covers_only_explicit_ids(users):
         vocabulary=service.vocabulary_digest(),
     )
     assert service.known_labels(doc, [a.pk, b.pk]) == {a.pk: 0, b.pk: None}
+
+
+def test_review_labels_and_actor_names_survive_later_renames(users):
+    service = api()
+    doc = Document.objects.create(title="Review", office=users["med"].office, uploaded_by=users["med"], year=2026)
+    tag = Tag.objects.create(name="original topic", globally_approved=True)
+    service.review_tag(
+        doc,
+        tag_id=tag.pk,
+        decision="confirm",
+        user=users["med"],
+        expected_revision=service.input_revision(doc),
+        vocabulary=service.vocabulary_digest(),
+    )
+    review = doc.tag_reviews.get()
+    original_actor = users["med"].get_full_name() or users["med"].username
+    tag.name = "renamed topic"
+    tag.save()
+    assert review.tag_name_snapshot == "original topic"
+    assert review.actor_name_snapshot == original_actor

@@ -15,10 +15,12 @@
     <a class="nav-item nav-item--child{% if nav_active == 'tracking_reports' %} active{% endif %}" href="{% url 'core:reports' %}"{% if nav_active == 'tracking_reports' %} aria-current="page"{% endif %}>Reports<span class="visually-hidden"> — Document Tracking</span></a>
     <a class="nav-item {% if nav_active == 'documents' %}active{% endif %}" href="{% url 'documents:repository' %}" {% if nav_active == 'documents' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#9641;</span><span>Document Repository</span></a>
     <a class="nav-item nav-item--child{% if nav_active == 'repository_reports' %} active{% endif %}" href="{% url 'core:repository_reports' %}"{% if nav_active == 'repository_reports' %} aria-current="page"{% endif %}>Reports<span class="visually-hidden"> — Document Repository</span></a>
+    <a class="nav-item nav-item--child" href="{% url 'documents:saved_views' %}">My repository views</a>
     <a class="nav-item {% if nav_active == 'external_tracking' %}active{% endif %}" href="{% url 'tracking:external_list' %}" {% if nav_active == 'external_tracking' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#8644;</span><span>External Tracking</span></a>
     {% if user.is_office_admin %}
       <div class="nav-section">System</div>
       <a class="nav-item {% if nav_active == 'administration' %}active{% endif %}" href="{% url 'core:administration' %}" {% if nav_active == 'administration' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">&#9881;</span><span>Administration</span></a>
+      {% if user.is_system_admin %}<a class="nav-item nav-item--child" href="{% url 'documents:tag_models' %}">Local topic models</a>{% endif %}
     {% endif %}
   </nav>
   <div class="sidebar-office-wrap">

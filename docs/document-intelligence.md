@@ -51,6 +51,16 @@ Automatic application has a third durable stage. The same recovery command inven
 
 `manage.py rollback_auto_tags MODEL_ID --actor USER_ID` inventories affected document IDs. Add `--apply` to remove that release's automatic contributions. Human confirmations and unrelated contributions remain. These commands require system-administrator authority and are not run on original records during implementation. A human rejection or uncertainty blocks reapplication across later content processing until a later explicit decision changes it.
 
+## Review screens and private repository views
+
+Open **Source text and topic review** from a document. Coverage uses actual semantic units, with unknown expected counts preserved. Read normalized text beside the original-version preview/download. The original file remains authoritative for exact layout and signatures. A legacy DONE status is not evidence of complete source coverage.
+
+Authorized editors can confirm, reject, add or leave a topic unsure. The optional complete-review panel labels only its explicitly covered tags. The assignment list distinguishes human confirmations, automatic contributions and legacy assignments with unknown provenance. New reviews snapshot their topic label, actor name and office at recording time; existing unknown history is not reconstructed.
+
+Office administrators can grant or withdraw training eligibility for their own editable records in the collapsed training-permission panel. System administrators manage candidates under **Local topic models**. Document eligibility and model activation are protected service actions, not ordinary Django-admin field edits. Changing eligibility/family invalidates affected models and does not reactivate an old model on regrant.
+
+**Save these filters** keeps the currently applied repository filters in a private named view. Opening it revalidates the filters and current access, including office transfers, grants and collection. Invalid/stale views display an error rather than widening the search. A saved view stores filters only; it does not copy, move or reclassify files. Ordinary explicit forms and authorized downloads remain available without JavaScript.
+
 ## Opt-in processing and recovery
 
 After additive migrations on a disposable/approved database, `ENABLE_SOURCE_UNIT_EXTRACTION=True` selects the unit pipeline for uploads, filing and retries. It persists actor-bound intent in the upload transaction and enqueues after commit. Without a worker, local processing occurs after commit with a bounded number of invocations and at most one OCR unit per web submission; remaining work is visible/recoverable. Production scanning needs the existing q2 worker rather than long web requests. No original database was migrated during implementation.

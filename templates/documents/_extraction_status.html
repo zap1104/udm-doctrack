@@ -2,7 +2,7 @@
      {% if document.ocr_status == "PENDING" or document.ocr_status == "RUNNING" %}
        hx-get="{% url 'documents:extraction_status' document.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"
      {% endif %}
-     class="alert {% if document.ocr_status == "FAILED" %}alert-danger{% elif document.ocr_status == "DONE" or document.ocr_status == "EMPTY" %}alert-success{% else %}alert-info{% endif %} mb-4"
+     class="alert {% if document.ocr_status == "FAILED" %}alert-danger{% elif coverage.coverage == "complete" and document.ocr_status == "DONE" %}alert-success{% else %}alert-info{% endif %} mb-4"
      role="status" aria-live="polite">
   {% if document.ocr_status == "PENDING" or document.ocr_status == "RUNNING" %}
     <strong>Reading the document…</strong> You can review the suggested details as soon as text extraction finishes.
@@ -11,4 +11,5 @@
   {% else %}
     Text extraction is ready. Refresh this page to load the suggestions.
   {% endif %}
+  <p class="small mb-0 mt-2">{% if coverage.coverage == "complete" %}{{ coverage.readable }} readable of {{ coverage.expected }} expected source units.{% elif coverage.expected != None and coverage %}{{ coverage.readable }} readable of {{ coverage.expected }} expected source units; some content still needs attention.{% else %}Coverage has not been verified for all current files.{% endif %} <a href="{% url 'documents:source_units' document.pk %}">Inspect source coverage</a></p>
 </div>

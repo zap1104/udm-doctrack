@@ -8,6 +8,7 @@
     <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository · Step 2</div>
     <h1>Review Extracted Document Details</h1>
     <p class="sub">The file is already saved. Check the suggested metadata before saving your corrections.</p>
+    <p><a href="{% url 'documents:source_units' document.pk %}">Inspect source coverage and topic reviews</a></p>
     <div class="step-indicator mt-2">
       <span class="step"><span class="num">1</span> Choose File</span>
       <span aria-hidden="true">›</span>

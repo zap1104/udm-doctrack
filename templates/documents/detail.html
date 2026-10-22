@@ -15,6 +15,7 @@
     </p>
   </div>
   <div class="page-actions">
+    <a class="btn btn-udm-outline" href="{% url 'documents:source_units' document.pk %}">Source text and topic review</a>
     {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}">Edit Metadata</a>{% endif %}
     {% if can_review_deletion %}<a class="btn btn-udm-outline" href="{% url 'documents:deletion_review' document.pk %}">Deletion review</a>{% endif %}
     {% if document.primary_file %}

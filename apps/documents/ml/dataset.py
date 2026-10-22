@@ -178,6 +178,7 @@ def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synth
                 "input_revision": revision,
                 "office_id": office_id,
                 "collection": collection,
+                "declared_family": document.training_family,
                 **zones,
                 "labels": {str(k): v for k, v in labels.items()},
                 "family_tokens": tokens,
@@ -243,6 +244,8 @@ def validate_snapshot(snapshot):
         ):
             raise ValidationError("A training source changed or its eligibility was withdrawn.")
         example = next(row for row in snapshot.payload["examples"] if row["document_id"] == doc.pk)
+        if doc.training_family != example.get("declared_family", ""):
+            raise ValidationError("A training family changed after snapshot preparation.")
         if (
             list(
                 doc.tag_reviews.filter(input_revision=source.input_revision).order_by("pk").values_list("pk", flat=True)

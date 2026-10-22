@@ -1,10 +1,19 @@
 from django.urls import path
 
-from . import external_views, views
+from . import external_views, intelligence_views, views
 
 app_name = "documents"
 
 urlpatterns = [
+    path("views/", intelligence_views.SavedViewsView.as_view(), name="saved_views"),
+    path("views/<int:view_id>/", intelligence_views.OpenSavedView.as_view(), name="open_saved_view"),
+    path("views/<int:view_id>/delete/", intelligence_views.DeleteSavedView.as_view(), name="delete_saved_view"),
+    path("intelligence/models/", intelligence_views.TagModelsView.as_view(), name="tag_models"),
+    path("<int:pk>/extraction/units/", intelligence_views.SourceUnitsView.as_view(), name="source_units"),
+    path("<int:pk>/extraction/units/<int:unit_id>/", intelligence_views.SourceUnitView.as_view(), name="source_unit"),
+    path("<int:pk>/tags/review/", intelligence_views.TagReviewView.as_view(), name="tag_review"),
+    path("<int:pk>/tags/review-complete/", intelligence_views.TagReviewView.as_view(complete=True), name="tag_review_complete"),
+    path("<int:pk>/training-eligibility/", intelligence_views.TrainingEligibilityView.as_view(), name="training_eligibility"),
     path("external/", external_views.ExternalRepositoryView.as_view(), name="external_repository"),
     path("external/upload/", external_views.ExternalUploadView.as_view(), name="external_upload"),
     path("external/reports/", external_views.ExternalRepositoryReportView.as_view(), name="external_reports"),

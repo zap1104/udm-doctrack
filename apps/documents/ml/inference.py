@@ -194,6 +194,7 @@ def predict_tags(document, *, user=None):
                     vocabulary=decision.vocabulary,
                     engine="ml",
                     model_reference=str(model.pk),
+                    evidence__mode=model.mode,
                     defaults={
                         "score": decision.score,
                         "decision": decision.action,

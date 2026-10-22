@@ -628,6 +628,7 @@ class SearchResultClick(models.Model):
 
 from .auto_models import TagApplicationIntent  # noqa: E402,F401
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
+from .intelligence_models import SavedDocumentView  # noqa: E402,F401
 from .ml.models import SnapshotSource, TagModel, TrainingSnapshot  # noqa: E402,F401
 from .processing_models import ExtractionRun, ExtractionUnit, InferenceIntent, SearchChunk  # noqa: E402,F401
 from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview  # noqa: E402,F401

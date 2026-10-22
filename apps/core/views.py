@@ -2745,7 +2745,7 @@ MASTER_DATA = {
         "model": Tag,
         "label": "Tags",
         "singular": "tag",
-        "fields": ["name", "category", "description", "is_active"],
+        "fields": ["name", "category", "description", "is_active", "globally_approved", "automatic_enabled"],
         "columns": [("name", "Tag"), ("category", "Category"), ("visible_usage", "Visible documents"), ("is_active", "Active")],
         "help": "Shared vocabulary for filing. Keep tags short and lower-case.",
     },

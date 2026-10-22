@@ -1,0 +1,8 @@
+.source-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 65vh;
+  overflow: auto;
+  color: inherit;
+  background: transparent;
+}

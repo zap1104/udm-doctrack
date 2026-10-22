@@ -57,7 +57,7 @@ class DocumentAdmin(admin.ModelAdmin):
     search_fields = ("title", "description", "reference_number", "author_name", "recipient_name")
     date_hierarchy = "created_at"
     filter_horizontal = ("tags", "document_types")
-    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at", "is_active")
+    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at", "is_active", "training_eligible", "training_family")
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
 

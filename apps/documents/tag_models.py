@@ -34,6 +34,8 @@ class TagReview(AppendOnly):
     vocabulary = models.CharField(max_length=64)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
     office_snapshot = models.CharField(max_length=255, blank=True)
+    tag_name_snapshot = models.CharField(max_length=64, blank=True)
+    actor_name_snapshot = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     complete_review = models.BooleanField(default=False)
 

@@ -5,6 +5,7 @@
 <div class="repository-page workspace-page workspace-repository">
   <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Document Repository</h1><p class="sub">Filed external cases, historical uploads and scanned documents. {{ total }} matching document{{ total|pluralize }} of {{ all_count }} available.</p></div>{% if can_upload %}<a class="btn btn-udm" href="{% url 'documents:external_upload' %}">Upload external document</a>{% endif %}</div>
   {% include "documents/external/_nav.html" %}
+  <p><a class="btn btn-udm-outline" href="{{ save_filters_url }}">Save these filters</a></p>
   {% include "documents/external/_filters.html" %}
   <div id="external-repository-results" data-filter-region>
   <div class="repository-results"><span>{{ total }} document{{ total|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>{% pager section="size" %}</div>

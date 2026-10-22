@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Source text · {{ document.title }}{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/intelligence.css' %}">{% endblock %}
+{% block content %}
+<div class="workspace-page">
+  <div class="page-head"><div><a href="{% url 'documents:source_units' document.pk %}">Back to source coverage</a><h1>Source text</h1><p class="sub text-break">{{ unit.run.file_version.original_name }} · file version {{ unit.run.file_version.version_number }} · {{ unit.locator_key }}</p></div>
+    <div class="page-actions"><a class="btn btn-udm-outline" href="{{ file.preview_url }}">Preview original version</a><a class="btn btn-udm-outline" href="{{ file.download_url }}">Download original version</a></div>
+  </div>
+  <p>Reading status: <strong>{{ unit.get_state_display }}</strong> · Coverage: <strong>{{ unit.get_coverage_display }}</strong> · Method: {{ unit.method|default:"Not yet read" }}.</p>
+  {% if unit.warnings %}<details class="mb-3"><summary>Reading notes</summary><ul>{% for warning in unit.warnings %}<li>{{ warning }}</li>{% endfor %}</ul></details>{% endif %}
+  {% if unit.source_metadata.provider_attempts %}<details class="mb-3"><summary>Latest OCR request details</summary><p>{{ unit.source_metadata.provider_attempts }} transport attempt{{ unit.source_metadata.provider_attempts|pluralize }} in the latest invocation.{% if unit.source_metadata.submitted_bytes %} Latest multipart request: {{ unit.source_metadata.submitted_bytes }} bytes.{% endif %} These are processing diagnostics, not a provider billing total.</p>{% if unit.provider_confidence != None %}<p>Provider-supplied confidence: {{ unit.provider_confidence }}. This does not measure full document coverage.</p>{% else %}<p>The provider did not supply a usable confidence value.</p>{% endif %}</details>{% endif %}
+  {% if display_truncated %}<p class="alert alert-warning">This screen shows the first 50,000 characters. The saved source text has not been shortened. Use the original preview or download for the full file.</p>{% endif %}
+  <section class="card-udm"><div class="card-udm-head"><h2 id="source-text-title">Normalized searchable text</h2></div><div class="card-udm-body"><pre class="source-text" tabindex="0" role="region" aria-labelledby="source-text-title">{{ text|default:"No readable text is available for this unit." }}</pre></div></section>
+  <p class="text-muted small mt-3">Extracted text may differ from the original layout. Use the original file to inspect signatures and exact formatting.</p>
+</div>
+{% endblock %}

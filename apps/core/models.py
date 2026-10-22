@@ -47,8 +47,9 @@ class DocumentType(TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
     description = models.CharField(max_length=255, blank=True)
     retention_years = models.PositiveSmallIntegerField(
-        default=5, verbose_name="years before deletion review",
-        help_text="Years from the document date to its first deletion review. Zero leaves it unscheduled. No automatic deletion."
+        default=5,
+        verbose_name="years before deletion review",
+        help_text="Years from the document date to its first deletion review. Zero leaves it unscheduled. No automatic deletion.",
     )
     sort_order = models.PositiveSmallIntegerField(default=100)
     is_active = models.BooleanField(default=True)
@@ -84,9 +85,19 @@ class Tag(TimeStampedModel):
     description = models.CharField(max_length=255, blank=True)
     usage_count = models.PositiveIntegerField(default=0, editable=False)
     is_active = models.BooleanField(default=True)
-    canonical = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="retired_labels")
-    globally_approved = models.BooleanField(default=False)
-    automatic_enabled = models.BooleanField(default=False)
+    canonical = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="retired_labels"
+    )
+    globally_approved = models.BooleanField(
+        default=False,
+        verbose_name="Approved shared topic",
+        help_text="Approve only university topics suitable for the shared vocabulary. This does not grant access to documents.",
+    )
+    automatic_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Allow qualified automatic tagging",
+        help_text="Still requires a qualified active model, safe current evidence and the global automatic-tag setting.",
+    )
 
     objects = models.Manager()
     active = ActiveManager()
@@ -141,18 +152,14 @@ class TagRule(TimeStampedModel):
     match_type = models.CharField(max_length=16, choices=MatchType.choices, default=MatchType.CONTAINS)
     search_field = models.CharField(max_length=16, choices=Field.choices, default=Field.FULL_TEXT)
 
-    suggest_tag = models.ForeignKey(
-        Tag, null=True, blank=True, on_delete=models.CASCADE, related_name="rules"
-    )
+    suggest_tag = models.ForeignKey(Tag, null=True, blank=True, on_delete=models.CASCADE, related_name="rules")
     suggest_document_type = models.ForeignKey(
         DocumentType, null=True, blank=True, on_delete=models.CASCADE, related_name="rules"
     )
     suggest_office = models.ForeignKey(
         "accounts.Office", null=True, blank=True, on_delete=models.CASCADE, related_name="tag_rules"
     )
-    suggest_metadata_key = models.CharField(
-        max_length=64, blank=True, help_text="Optional metadata field key to fill."
-    )
+    suggest_metadata_key = models.CharField(max_length=64, blank=True, help_text="Optional metadata field key to fill.")
     suggest_metadata_value = models.CharField(max_length=255, blank=True)
 
     confidence = models.FloatField(default=0.8, help_text="0.0 – 1.0 confidence when this rule fires.")
@@ -224,12 +231,24 @@ class OfficeSchedule(TimeStampedModel):
     class Meta:
         constraints = [
             models.CheckConstraint(condition=models.Q(id=1), name="one_office_schedule"),
-            models.CheckConstraint(condition=models.Q(working_days__gte=1, working_days__lte=7), name="schedule_valid_week"),
-            models.CheckConstraint(condition=models.Q(closes_at__gt=models.F("opens_at")), name="schedule_positive_day"),
-            models.CheckConstraint(condition=(models.Q(break_start__gte=models.F("opens_at")) &
-                                             models.Q(break_end__lte=models.F("closes_at")) &
-                                             models.Q(break_end__gte=models.F("break_start"))), name="schedule_break_inside_day"),
-            models.CheckConstraint(condition=~models.Q(break_start=models.F("opens_at"), break_end=models.F("closes_at")), name="schedule_has_office_time"),
+            models.CheckConstraint(
+                condition=models.Q(working_days__gte=1, working_days__lte=7), name="schedule_valid_week"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(closes_at__gt=models.F("opens_at")), name="schedule_positive_day"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(break_start__gte=models.F("opens_at"))
+                    & models.Q(break_end__lte=models.F("closes_at"))
+                    & models.Q(break_end__gte=models.F("break_start"))
+                ),
+                name="schedule_break_inside_day",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(break_start=models.F("opens_at"), break_end=models.F("closes_at")),
+                name="schedule_has_office_time",
+            ),
         ]
 
     def __str__(self):
@@ -320,8 +339,7 @@ class NotificationQuerySet(models.QuerySet):
         from apps.tracking.models import ExternalTrackingRecord, TrackingRecord
 
         notifications = notifications.filter(
-            Q(external_record__isnull=True)
-            | Q(external_record__in=ExternalTrackingRecord.objects.visible_to(user))
+            Q(external_record__isnull=True) | Q(external_record__in=ExternalTrackingRecord.objects.visible_to(user))
         )
         return notifications.filter(
             Q(tracking_record__isnull=True) | Q(tracking_record__in=TrackingRecord.objects.visible_to(user))
@@ -356,8 +374,11 @@ class Notification(models.Model):
         "tracking.TrackingRecord", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
     )
     external_record = models.ForeignKey(
-        "tracking.ExternalTrackingRecord", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="notifications",
+        "tracking.ExternalTrackingRecord",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notifications",
     )
     document = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="notifications"
@@ -404,7 +425,9 @@ class NotificationRead(models.Model):
 
 
 class NotificationPreference(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notification_preferences")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notification_preferences"
+    )
     in_app_enabled = models.BooleanField(default=True)
 
     def __str__(self):

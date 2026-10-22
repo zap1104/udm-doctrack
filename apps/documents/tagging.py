@@ -94,6 +94,8 @@ def _decision(doc, tag, decision, actor, revision, vocabulary, complete=False):
         input_revision=revision,
         vocabulary=vocabulary,
         office_snapshot=str(actor.office or ""),
+        tag_name_snapshot=tag.name,
+        actor_name_snapshot=actor.get_full_name() or actor.username,
         complete_review=complete,
     )
     if decision in {"confirm", "add"}:
