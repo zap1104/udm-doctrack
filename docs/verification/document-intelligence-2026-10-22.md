@@ -15,6 +15,15 @@ Implementation in progress. No push, merge, deployment, original database migrat
 - Focused ruff and Django checks passed; migration drift reported no changes. Migration `0015_extraction_units` applied only by the disposable test database. Migration-history probing warned that the deliberately nonexistent non-test audit database does not exist; no working database fallback was used.
 - Source-unit extraction, chunk search, ML and automatic tags all remain disabled by default.
 
-## Task 2: source readers (in progress)
+## Task 2: source readers
 
-Reader coverage and rendering dependencies are being implemented. No live OCR or original record processing has occurred.
+- RED: 12 reader/placement tests failed before implementation; a later TIFF full-frame-count regression also failed before its fix.
+- GREEN: 27 passed in14.33seconds, two existing deprecation warnings; focused lint and diff whitespace checks passed. Logs `.vercel/ai-ml-audit/task2-final.log` and `task2-frame-red.log`.
+- Windows binary wheels installed: Pillow13.0.0, pypdfium2 5.14.0. Installed metadata/licenses inspected. Actual PDF rendering and nested/reused placement-union fixtures passed. Hosting/Linux smoke remains pending.
+- Root-cause repair: PdfPage lacks a context-manager API in the installed PDFium wrapper. Explicit close/finally preserves native text on renderer failure; missing-renderer regression passed. TIFF frame traversal no longer requests an unbounded whole-file frame count.
+- Ruling: placed polygon union is a bounded512-square estimate with clipping uncertainty disclosed, not an exact readable-content guarantee. Complex clipping and near-blank appearance cannot qualify full coverage.
+- No live OCR or original record processing occurred. New paths remain disabled by default.
+
+## Task 3: guarded OCR units (in progress)
+
+- RED: ten provider fixture tests failed for missing guarded adapter; `.vercel/ai-ml-audit/task3-red.log`. All HTTP responses simulated.
