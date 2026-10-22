@@ -210,6 +210,8 @@ class Document(DocumentTypesMixin, TimeStampedModel):
     index_meta = models.TextField(blank=True, editable=False)
     index_extra = models.TextField(blank=True, editable=False)
     search_vector = SearchVectorField(null=True, editable=False)
+    metadata_search_vector = SearchVectorField(null=True, editable=False)
+    search_index_revision = models.CharField(max_length=64, blank=True, editable=False)
 
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="uploaded_documents"
@@ -229,6 +231,7 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         ]
         indexes = [
             GinIndex(fields=["search_vector"], name="doc_search_vector_gin"),
+            GinIndex(fields=["metadata_search_vector"], name="doc_metadata_vector_gin"),
             models.Index(fields=["office", "year"]),
             models.Index(fields=["document_type", "year"]),
             models.Index(fields=["-created_at"]),
@@ -346,7 +349,10 @@ class Document(DocumentTypesMixin, TimeStampedModel):
             + SearchVector("index_extra", weight="C", config=config)
             + SearchVector("ocr_text", weight="D", config=config)
         )
-        Document.objects.filter(pk=self.pk).update(search_vector=vector)
+        metadata_vector = (SearchVector("index_title", weight="A", config=config)
+            + SearchVector("index_meta", weight="B", config=config)
+            + SearchVector("index_extra", weight="C", config=config))
+        Document.objects.filter(pk=self.pk).update(search_vector=vector, metadata_search_vector=metadata_vector)
 
     # -- helpers ----------------------------------------------------------
     @property
@@ -618,4 +624,4 @@ class SearchResultClick(models.Model):
 
 
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
-from .processing_models import ExtractionRun, ExtractionUnit  # noqa: E402,F401
+from .processing_models import ExtractionRun, ExtractionUnit, SearchChunk  # noqa: E402,F401

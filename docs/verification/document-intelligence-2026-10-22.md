@@ -47,3 +47,6 @@ Implementation in progress. No push, merge, deployment, original database migrat
 ## Task 5: source chunk search (in progress)
 
 - Four expected RED failures for missing chunk retrieval. `.vercel/ai-ml-audit/task5-red.xml`.
+- Additional RED reproduced a null metadata vector suppressing a valid body rank. Corrected with independent null-safe metadata/body scoring.
+- GREEN:65 passed in35.82seconds across new chunk tests and existing search, unified repository, identifier and master-data refresh regressions (`task5-related.xml`). Focused Ruff and migration-drift checks passed.
+- Retrieval groups current authorized source chunks by document before the candidate cap. Late appendix evidence remains searchable beyond the legacy aggregate prefix, with escaped snippets and real source locators. Tiny-fixture PostgreSQL EXPLAIN was exercised; production query performance is not established by that fixture.

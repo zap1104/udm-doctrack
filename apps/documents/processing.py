@@ -277,6 +277,10 @@ def _publish(run, document, actor, *, next_state=None):
     elif not pending and current_runs.count() == document.files.count():
         document.extraction_failed_generation = None
     document.save(update_fields=["ocr_text", "ocr_status", "ocr_notes", "ocr_engine", "ocr_confidence", "extraction_failed_generation", "page_count", "updated_at"])
+    if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+        from apps.search.chunks import publish_chunks
+
+        publish_chunks(run, document=document, expected_revision=str(document.extraction_generation))
     document.rebuild_index()
     if next_state == WorkState.PENDING:
         transaction.on_commit(lambda: _enqueue([(run.pk, run.generation)]), robust=True)

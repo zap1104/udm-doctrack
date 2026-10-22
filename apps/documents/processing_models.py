@@ -1,5 +1,7 @@
 """Derived processing provenance; original file/version records remain immutable."""
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -75,3 +77,20 @@ class ExtractionUnit(models.Model):
 
     def __str__(self):
         return f"{self.locator_key} (run {self.run_id})"
+
+
+class SearchChunk(models.Model):
+    unit = models.ForeignKey(ExtractionUnit, on_delete=models.CASCADE, related_name="search_chunks")
+    ordinal = models.PositiveIntegerField()
+    start_offset = models.PositiveIntegerField()
+    end_offset = models.PositiveIntegerField()
+    text = models.TextField()
+    index_revision = models.CharField(max_length=64)
+    search_vector = SearchVectorField(null=True, editable=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["unit", "ordinal", "index_revision"], name="source_chunk_identity")]
+        indexes = [GinIndex(fields=["search_vector"], name="source_chunk_vector_gin")]
+
+    def __str__(self):
+        return f"Unit {self.unit_id}, characters {self.start_offset}-{self.end_offset}"
