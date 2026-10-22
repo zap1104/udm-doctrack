@@ -1,0 +1,20 @@
+# Document intelligence verification ledger
+
+Plan: `docs/superpowers/plans/2026-10-22-document-intelligence.md`, user-approved Native execution on 22 October 2026.
+Product baseline: e974d30. Design/plan commits: de0ab72, 1b5fc00. Local branch: feature/documents-intelligence.
+
+Implementation in progress. No push, merge, deployment, original database migration or live provider work.
+
+## Task 1: processing contracts
+
+- RED: six new contract tests failed for missing version-bound processing capability, before production changes. Log `.vercel/ai-ml-audit/task1-red.log` (private/ignored).
+- Existing baseline: 50 passed before implementation; not final verification.
+- New run/unit data is additive. Legacy text remains coverage unknown, not retrospectively verified.
+- Ruling: Native PowerShell replaces bash-only skill bookkeeping scripts; in-place feature branch is explicitly approved by the execution plan. Unrelated untracked work remains intact.
+- GREEN: 39 passed (six contract tests plus existing file-version services), two existing deprecation warnings, 18.75 seconds. `.vercel/ai-ml-audit/task1-green.log`.
+- Focused ruff and Django checks passed; migration drift reported no changes. Migration `0015_extraction_units` applied only by the disposable test database. Migration-history probing warned that the deliberately nonexistent non-test audit database does not exist; no working database fallback was used.
+- Source-unit extraction, chunk search, ML and automatic tags all remain disabled by default.
+
+## Task 2: source readers (in progress)
+
+Reader coverage and rendering dependencies are being implemented. No live OCR or original record processing has occurred.

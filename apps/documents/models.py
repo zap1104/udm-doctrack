@@ -616,3 +616,4 @@ class SearchResultClick(models.Model):
 
 
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
+from .processing_models import ExtractionRun, ExtractionUnit  # noqa: E402,F401

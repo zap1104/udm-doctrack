@@ -4,6 +4,19 @@ from django.conf import settings
 from django.core.checks import Error, Tags, register
 
 
+@register()
+def processing_configuration(app_configs, **kwargs):
+    from django.core.exceptions import ValidationError
+
+    from apps.documents.processing_contracts import ExtractionPolicy
+
+    try:
+        ExtractionPolicy.from_settings()
+    except ValidationError as exc:
+        return [Error(" ".join(exc.messages), id="doctrack.E019")]
+    return []
+
+
 @register(Tags.security, deploy=True)
 def deployment_configuration(app_configs, **kwargs):
     """Fail closed on settings that would lose data or weaken production security."""
