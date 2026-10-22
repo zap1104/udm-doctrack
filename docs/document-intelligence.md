@@ -23,4 +23,10 @@ Windows CPython3.13 binary-wheel smoke tested: Pillow13.0.0 and pypdfium2 5.14.0
 
 PDFium calls are serialized per process because the native library is not thread-safe. Pages, bitmaps and documents are explicitly closed. pypdf6.19+ supplies context-local decompression limits; external JBIG2 helper execution is disabled for this reader. Missing renderer preserves native text with incomplete coverage rather than claiming success.
 
-OCR.space Free will use conservative1,000,000-byte file/body budgets and one page per dispatch. This native-reader milestone does not yet send unit requests. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
+## Guarded OCR units
+
+The new OCR.space unit adapter uses conservative1,000,000-byte file and whole-request budgets, checked against actual multipart bytes, and exactly one PDF source page per dispatch. It slices pages losslessly where possible; oversized pages may be rasterized at the configured DPI with explicit lossy-processing notes. Oversized images at that safe resolution require action instead of silent downsizing. Source image/frame orientation/color conversion and white alpha compositing are recorded; original bytes are unchanged.
+
+Every transport attempt invokes a fresh authorization callback. Overall and per-page result codes and missing/mismatched results determine coverage; HTTP200 is insufficient. Optional confidence stays null when absent/unusable. Bounded transient retries use jitter. Rate/quota errors create finite resumable waits, not an automatic request loop. Returned errors are generic and do not expose keys or provider bodies.
+
+OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is not yet wired into the default runtime. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
