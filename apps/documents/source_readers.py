@@ -110,7 +110,7 @@ def _word_limit(units, policy):
 
 
 def _word(payload, policy):
-    units = []
+    units, omitted = [], []
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
           "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
     with _archive(payload, policy) as archive:
@@ -137,6 +137,13 @@ def _word(payload, policy):
                 parts.append((note_part, _xml(archive, note_part, policy)))
         for ref in main.xpath("//w:headerReference | //w:footerReference", namespaces=ns):
             path = target("word/document.xml", main_rels.get(ref.get(f"{{{ns['r']}}}id")))
+            if not path:
+                if len(units) >= policy.max_word_units:
+                    return _word_limit(units, policy)
+                note = "A referenced Word header/footer is unavailable; external resources were not loaded."
+                omitted.append(note)
+                units.append(_unit(f"docx:unread-header-footer:{len(units)+1}", len(units)+1,
+                    "unread_header_footer", policy=policy, state=WorkState.ACTION_REQUIRED, warnings=(note,)))
             if path and path not in {entry[0] for entry in parts}:
                 parts.append((path, _xml(archive, path, policy)))
         for part, tree in parts:
@@ -178,7 +185,7 @@ def _word(payload, policy):
             units.append(_unit(f"docx:unsupported:{len(units)+1}", len(units)+1, "embedded_object",
                 policy=policy, state=WorkState.UNSUPPORTED, warnings=("Embedded Word object, chart or diagram remains unread.",),
                 metadata={"archive_member": member}))
-    return UnitBatch(tuple(units), len(units), (), policy.digest)
+    return UnitBatch(tuple(units), None if omitted else len(units), tuple(dict.fromkeys(omitted)), policy.digest)
 
 
 def _xlsx(payload, policy):

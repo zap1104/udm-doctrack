@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Topic review queue · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page">
+  <div class="page-head"><div><h1>Topic review queue</h1><p class="sub">Review existing documents. Opening this page never runs OCR or assigns topics.</p></div></div>
+  <form method="get" class="card-udm p-3 mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4"><label for="review-collection" class="form-label">Collection</label><select id="review-collection" class="form-select" name="collection"><option value="OVPA"{% if collection == 'OVPA' %} selected{% endif %}>OVPA</option><option value="EXTERNAL"{% if collection == 'EXTERNAL' %} selected{% endif %}>External</option></select></div>
+      <div class="col-md-5"><label for="review-seed" class="form-label">Repeatable sample label</label><input id="review-seed" class="form-control" name="seed" value="{{ seed }}" maxlength="64" pattern="[A-Za-z0-9_-]+" required aria-describedby="seed-help"><div id="seed-help" class="form-text">Letters, numbers, underscores or hyphens. Reuse the label to repeat a sample while the eligible population stays unchanged.</div></div>
+      {% if office %}<input type="hidden" name="office" value="{{ office }}">{% endif %}
+      <div class="col-md-3"><button type="submit" class="btn btn-udm">Show review sample</button></div>
+    </div>
+  </form>
+  {% if scope_error %}<p class="alert alert-danger" role="alert">{{ scope_error }}</p>{% endif %}
+  <section class="card-udm"><div class="card-udm-head"><h2>Documents to review</h2></div><div class="card-udm-body">
+    <p>Up to 10 random audit documents are selected from your authorized collection first. Up to 10 additional documents come from uncertain current proposals. Uncertainty is measured near each topic’s decision threshold within a repeatable sample of at most 200 prediction rows. Remaining spaces use random audit documents.</p>
+    <p class="small text-muted">This is a review workload sample, not an estimate of model accuracy. Model scores may be uncalibrated. Previously saved predictions without recorded thresholds are excluded from uncertainty selection. Signed review links expire after 7 days or when the document or vocabulary changes.</p>
+    <ol class="list-group list-group-numbered">{% for sample in samples %}<li class="list-group-item"><a href="{{ sample.url }}">{{ sample.document.title }}</a><span class="d-block small">{{ sample.document.office }} · {% if sample.method == 'uncertainty' %}Uncertainty review · model {{ sample.model_id }} · score {{ sample.score|floatformat:3 }} · decision threshold {{ sample.threshold|floatformat:3 }}{% else %}Random audit{% endif %}</span></li>{% empty %}<li class="list-group-item">No documents are available for your review in this collection.</li>{% endfor %}</ol>
+  </div></section>
+</div>
+{% endblock %}

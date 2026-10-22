@@ -1,6 +1,6 @@
 # Document processing and topic tagging
 
-Implementation is in progress on the local `feature/documents-intelligence` branch. Source-unit extraction, chunk search, ML and automatic tags default off. This document will be extended with the actual verified commands as the approved plan is implemented. It does not claim a production model or live OCR validation.
+Implemented locally on `feature/documents-intelligence`. Source-unit extraction, chunk search, ML and automatic tags default off. See [verification evidence and limits](verification/document-intelligence-2026-10-22.md) before enabling them. No production model or live OCR quality is claimed.
 
 ## Native source readers
 
@@ -13,7 +13,7 @@ Implementation is in progress on the local `feature/documents-intelligence` bran
 | JPEG / PNG / TIFF and configured validated BMP/GIF/WebP | Bounded frame enumeration and pixel checks; OCR-needed frames are explicit. A frame limit makes remaining coverage unknown. Actual upload validation still determines what may be uploaded. |
 | DOC / XLS / PPT / PPTX | Upload acceptance does not imply a native reader. Explicit unsupported extraction; original preview/download and manual metadata remain available. |
 
-Limits distinguish uploaded bytes, expanded Office archives, per-unit stored text, number of source units, decoded pixels and rendering DPI. Gaps remain visible. Raw and normalized unit text are separate; chunk offsets will reference the normalized representation. This feature does not convert, replace or modify original files.
+Limits distinguish uploaded bytes, expanded Office archives, per-unit stored text, number of source units, decoded pixels and rendering DPI. Gaps remain visible. Word processing stops at 2,000 semantic units and reports the unknown remainder; missing referenced headers/footers also prevent complete coverage. Raw and normalized unit text are separate; chunk offsets reference the normalized representation. This feature does not convert, replace or modify original files.
 
 Placed-image coverage uses the union of transformed placement polygons on a bounded512-square mask, including nested forms and form bounding boxes. It estimates visible image regions, not readable characters. Unsupported complex clipping marks its upper-bound estimate uncertain. The cutoff is configurable; small unread image regions also retain warnings. No OCR accuracy claim follows from native text length or image coverage.
 
@@ -29,7 +29,7 @@ The new OCR.space unit adapter uses conservative1,000,000-byte file and whole-re
 
 Every transport attempt invokes a fresh authorization callback. Overall and per-page result codes and missing/mismatched results determine coverage; HTTP200 is insufficient. Optional confidence stays null when absent/unusable. Bounded transient retries use jitter. Rate/quota errors create finite resumable waits, not an automatic request loop. Returned errors are generic and do not expose keys or provider bodies.
 
-OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is wired into the opt-in unit pipeline and remains off by default. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
+OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is wired into the opt-in unit pipeline and remains off by default. Live provider, real-data tagging/search quality and deployment checks remain unverified. Disposable-data browser checks are recorded separately in the verification report.
 
 ## Scoped local topic models
 
@@ -42,6 +42,10 @@ System administrators can inventory with `manage.py prepare_tag_dataset --actor 
 Snapshots contain bounded text and review provenance in private PostgreSQL tables. Numeric artifacts remain in the private model registry with digests and origin/runtime checks, not media/static storage. Never copy private snapshots, coefficients or vocabularies into review packets or public downloads. The artifact reader accepts bounded uncompressed members, validates NPY headers before allocation and loads numeric arrays with `allow_pickle=False`.
 
 The shared vectorizers fit only training families; per-topic classifiers use only known labels. Calibration, threshold selection and final evaluation use separate family partitions. Automatic qualification requires calibrated real-data evaluation, independent support, both precision gates and explicit enablement. Authored fixtures test mechanics and cannot qualify production automation. Uncalibrated scores are labelled suggestions, not confidence percentages.
+
+New candidates record final-test document/family identities and overlap with earlier candidates in the same office/collection. Evaluation, model activation screens and the activation command disclose reuse or untracked older history. Overlapping evaluations are not fresh final tests. Candidate publication serializes this history within the office scope. Retuning against reused results does not establish independently validated generalization.
+
+Evaluation reports ordinary document-level metrics separately from the one-representative-per-family qualification metrics. Both include office/length slices. Document-language annotations are currently unavailable: new dataset rows say `language=unknown` and retain the OCR language setting only as a hint. Language evaluation explicitly remains unavailable; a provider setting is not language ground truth. Reviewed language annotation requires a future workflow before multilingual accuracy can be claimed.
 
 Extraction and suggestion stages have separate durable intents. `manage.py recover_extraction --limit 100` inventories both; `--apply` recovers under the original actor and current permissions. Each stage has finite attempts and leases. A missing/invalid model preserves rule/manual operation. Source flags and automatic tagging remain disabled by default until migration, setup and deployment-specific verification are complete.
 
@@ -56,6 +60,10 @@ Automatic application has a third durable stage. The same recovery command inven
 Open **Source text and topic review** from a document. Coverage uses actual semantic units, with unknown expected counts preserved. Read normalized text beside the original-version preview/download. The original file remains authoritative for exact layout and signatures. A legacy DONE status is not evidence of complete source coverage.
 
 Authorized editors can confirm, reject, add or leave a topic unsure. The optional complete-review panel labels only its explicitly covered tags. The assignment list distinguishes human confirmations, automatic contributions and legacy assignments with unknown provenance. New reviews snapshot their topic label, actor name and office at recording time; existing unknown history is not reconstructed.
+
+**Topic review queue** is available from source review and Local topic models at `/documents/intelligence/review-queue/`. It uses up to 10 reproducible random documents from the complete authorized collection, then up to 10 additional uncertain proposals. Uncertainty is distance from the recorded topic threshold within a repeatable, bounded sample of at most 200 existing prediction rows, not an exhaustive ranking. Unused spaces use random audit documents. The sample label, population, model and current content determine repeatability; the queue is not a model-accuracy estimate and runs no OCR or inference.
+
+Review links carry signed actor/document/content/vocabulary-bound sampling receipts, expiring after seven days. Submitted reviews retain random/uncertainty provenance; direct reviews record manual provenance. Older reviews retain unknown sampling history. Stale, forged and cross-user receipts are rejected. External review remains office-admin scoped. Topic merging rejects a concurrent new assignment before retiring a topic; retrying reconciles the newly affected document without changing historical decisions.
 
 Office administrators can grant or withdraw training eligibility for their own editable records in the collapsed training-permission panel. System administrators manage candidates under **Local topic models**. Document eligibility and model activation are protected service actions, not ordinary Django-admin field edits. Changing eligibility/family invalidates affected models and does not reactivate an old model on regrant.
 

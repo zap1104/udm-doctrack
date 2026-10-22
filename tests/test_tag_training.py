@@ -67,6 +67,30 @@ def test_real_known_label_training_and_safe_reload():
     assert bundle.feature_settings["zone_weights"] == {"title": 2.0, "header": 1.5, "body": 1.0}
 
 
+def test_all_document_metrics_are_separate_from_independent_family_metrics():
+    payload = authored_dataset()
+    payload["examples"].append({**payload["examples"][-1], "document_id": 1000})
+    bundle = training_api().fit_bundle(payload, scope={"office_id": 1, "collection": "OVPA"})
+    assert bundle.evaluation["partitions"]["test"]["1"]["known"] == 10
+    assert bundle.evaluation["document_partitions"]["test"]["1"]["known"] == 11
+    assert bundle.evaluation["language_evaluation"]["available"] is False
+
+
+@pytest.mark.django_db
+def test_repeated_final_holdout_use_is_recorded_in_model_and_artifact(users):
+    from apps.documents.ml.artifacts import load_bundle
+    from tests.ml_fixtures import make_candidate
+
+    first = make_candidate(users)
+    second = training_api().train_candidate(first.snapshot_id, user=users["admin"])
+    assert first.evaluation["holdout"]["previous_use_count"] == 0
+    assert second.evaluation["holdout"]["previous_use_count"] == 1
+    assert second.evaluation["holdout"]["previous_model_ids"] == [first.pk]
+    assert second.evaluation["holdout"]["reuse"] is True
+    restored = load_bundle(second, scope={"office_id": second.office_id, "collection": second.collection})
+    assert restored.evaluation["holdout"]["reuse"] is True
+
+
 def test_single_class_and_partition_leakage_are_not_repaired_with_fake_labels():
     training = training_api()
     from django.core.exceptions import ValidationError

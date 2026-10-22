@@ -1,4 +1,5 @@
 """Native readers preserve source order, late content and coverage uncertainty."""
+
 import io
 from dataclasses import replace
 from unittest.mock import patch
@@ -43,6 +44,37 @@ def test_many_small_word_blocks_stop_at_an_explicit_unit_budget():
     assert batch.expected_units is None
     assert batch.coverage != "complete" and batch.omitted_reasons
     assert "Authored paragraph 0" in batch.units[0].normalized_text
+
+
+@pytest.mark.parametrize("missing", ["relationship", "member", "external"])
+def test_unresolved_referenced_word_header_is_not_complete(missing):
+    import zipfile
+
+    from lxml import etree
+
+    word = WordDocument()
+    word.add_paragraph("Readable body survives")
+    word.sections[0].header.paragraphs[0].text = "Referenced header"
+    output = io.BytesIO()
+    word.save(output)
+    changed = io.BytesIO()
+    with zipfile.ZipFile(output) as source, zipfile.ZipFile(changed, "w") as target:
+        rels = etree.fromstring(source.read("word/_rels/document.xml.rels"))
+        header = next(row for row in rels if row.get("Type", "").endswith("/header"))
+        member = "word/" + header.get("Target")
+        if missing == "relationship":
+            rels.remove(header)
+        elif missing == "external":
+            header.set("TargetMode", "External")
+            header.set("Target", "https://not-loaded.invalid/header.xml")
+        for name in source.namelist():
+            if missing == "member" and name == member:
+                continue
+            target.writestr(name, etree.tostring(rels) if name == "word/_rels/document.xml.rels" else source.read(name))
+    batch = reader()(changed, "missing-header.docx", policy=ExtractionPolicy())
+    assert "Readable body survives" in "\n".join(unit.normalized_text for unit in batch.units)
+    assert batch.coverage != "complete"
+    assert batch.omitted_reasons or any(unit.state == "action_required" for unit in batch.units)
 
 
 def test_spreadsheet_cached_formula_gap_and_coordinates():

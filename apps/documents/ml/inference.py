@@ -212,7 +212,12 @@ def predict_tags(document, *, user=None):
                     defaults={
                         "score": decision.score,
                         "decision": decision.action,
-                        "evidence": {**decision.evidence, "model_digest": model.artifact_digest, "mode": model.mode},
+                        "evidence": {
+                            **decision.evidence,
+                            "model_digest": model.artifact_digest,
+                            "mode": model.mode,
+                            "threshold": decision.threshold,
+                        },
                     },
                 )
         return PredictionResult(decisions, mode=model.mode, reason="")

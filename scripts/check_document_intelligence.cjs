@@ -29,7 +29,7 @@ async function visit(page, path) {
   try {
     const admin = await browser.newContext();
     const state = await login(admin, 'admin');
-    const paths = [`/documents/${fixture.documents.OVPA}/extraction/units/`, `/documents/${fixture.documents.EXTERNAL}/extraction/units/`, '/documents/intelligence/models/', '/documents/intelligence/vocabulary/', '/documents/views/', '/documents/', '/documents/external/'];
+    const paths = [`/documents/${fixture.documents.OVPA}/extraction/units/`, `/documents/${fixture.documents.EXTERNAL}/extraction/units/`, '/documents/intelligence/models/', '/documents/intelligence/vocabulary/', '/documents/views/', '/documents/', '/documents/external/', '/documents/intelligence/review-queue/'];
     for (const width of [320,390,768,900,901,1366]) for (const theme of ['light','dark']) {
       const context = await browser.newContext({storageState:state,viewport:{width,height:900}});
       await context.addInitScript(theme => localStorage.setItem('doctrack-theme',theme),theme);
@@ -45,7 +45,7 @@ async function visit(page, path) {
       }
       await context.close();
     }
-    report.checks.push('Both themes, six required widths, seven real pages: no document-level horizontal overflow.');
+    report.checks.push('Both themes, six required widths, eight real pages: no document-level horizontal overflow.');
     const page = await admin.newPage();
     await visit(page,paths[0]);
     await page.getByRole('button',{name:'Generate current topic proposals',exact:true}).click();
@@ -98,6 +98,16 @@ async function visit(page, path) {
     await page.keyboard.press('Tab');
     assert(await page.evaluate(()=>document.activeElement!==document.body));
     report.checks.push('Keyboard focus operates at CSS200% zoom.');
+    await visit(page,'/documents/intelligence/review-queue/?seed=browser-audit');
+    const sample = page.locator('a[href*="review_sample="]').first();
+    assert(await sample.isVisible());
+    await sample.click();
+    assert(await page.locator('#review_review_sample').inputValue());
+    await page.locator('#review_tag').selectOption(String(fixture.topic_id));
+    await page.locator('#review_decision').selectOption('unsure');
+    await page.getByRole('button',{name:'Save tag decision',exact:true}).click();
+    await page.getByText('Topic review saved.',{exact:false}).waitFor();
+    report.checks.push('Repeatable review queue and signed sampling receipt submitted through real CSRF forms.');
     for (const role of ['viewer','hr']) {
       const context=await browser.newContext();
       await login(context,role);

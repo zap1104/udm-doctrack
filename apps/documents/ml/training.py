@@ -15,6 +15,71 @@ def _representatives(rows):
     return list(result.values())
 
 
+def _report_rows(bundle, rows, predictions):
+    from .metrics import score_metrics
+
+    report = {}
+    for tag, classifier in bundle.classifiers.items():
+        tag_id = int(tag)
+        labels = [known_labels(row, [tag_id])[tag_id] for row in rows]
+        probabilities = [row[tag_id] for row in predictions]
+        metrics = score_metrics(labels, probabilities, classifier["threshold"])
+        slices = {}
+        for dimension, getter in {
+            "office": lambda row: str(row["office_id"]),
+            "language": lambda row: row.get("language") or "unknown",
+            "length": lambda row: (
+                "short" if len(row["body"]) < 2000 else "medium" if len(row["body"]) < 20000 else "long"
+            ),
+        }.items():
+            slices[dimension] = {}
+            for key in sorted({getter(row) for row in rows}):
+                mask = [i for i, row in enumerate(rows) if getter(row) == key]
+                slices[dimension][key] = score_metrics(
+                    [labels[i] for i in mask], [probabilities[i] for i in mask], classifier["threshold"]
+                )
+        metrics["slices"] = slices
+        report[tag] = metrics
+    return report
+
+
+def _holdout_description(payload, scope):
+    from ..tagging import digest
+
+    families = sorted(payload["splits"]["test"])
+    documents = sorted(row["document_id"] for row in payload["examples"] if row["family"] in families)
+    return {"identity": digest([scope, families, documents]), "families": families, "document_ids": documents}
+
+
+def _holdout_history(scope, holdout):
+    from .models import TagModel
+
+    previous, count, untracked = [], 0, 0
+    candidates = TagModel.objects.filter(office_id=scope["office_id"], collection=scope["collection"])
+    for pk, recorded in candidates.order_by("pk").values_list("pk", "evaluation__holdout").iterator(chunk_size=20):
+        if not recorded:
+            untracked += 1
+        elif set(recorded.get("document_ids", [])) & set(holdout["document_ids"]) or set(
+            recorded.get("families", [])
+        ) & set(holdout["families"]):
+            count += 1
+            if len(previous) < 100:
+                previous.append(pk)
+    return {
+        "previous_use_count": count,
+        "previous_model_ids": previous,
+        "untracked_prior_models": untracked,
+        "reuse": bool(count),
+        "declaration": f"Final-test families overlap {count} prior candidate(s); this is reused evaluation, not a fresh final set."
+        if count
+        else (
+            f"No recorded overlap; {untracked} older model(s) have untracked holdout history."
+            if untracked
+            else "First recorded evaluation of these final-test families in this model scope."
+        ),
+    }
+
+
 def _partition_rows(payload):
     splits = payload["splits"]
     if set(splits) != {"train", "calibration", "development", "test"}:
@@ -127,33 +192,14 @@ def fit_bundle(payload, *, scope, feature_settings=None):
             )
         classifier["threshold"] = max(options)[-1] if options else 0.5
         classifier["development_ids"] = [r["document_id"] for r in development]
-    reports = {}
+    reports, document_reports = {}, {}
     for name in ("calibration", "development", "test"):
-        rows = _representatives(partitions[name])
+        rows = partitions[name]
         predictions = bundle.predict(rows) if rows else []
-        report = {}
-        for tag, classifier in bundle.classifiers.items():
-            tag_id = int(tag)
-            labels = [known_labels(row, [tag_id])[tag_id] for row in rows]
-            probabilities = [row[tag_id] for row in predictions]
-            metrics = score_metrics(labels, probabilities, classifier["threshold"])
-            slices = {}
-            for dimension, getter in {
-                "office": lambda r: str(r["office_id"]),
-                "language": lambda r: r.get("language", "unknown"),
-                "length": lambda r: (
-                    "short" if len(r["body"]) < 2000 else "medium" if len(r["body"]) < 20000 else "long"
-                ),
-            }.items():
-                slices[dimension] = {}
-                for key in sorted({getter(row) for row in rows}):
-                    mask = [i for i, row in enumerate(rows) if getter(row) == key]
-                    slices[dimension][key] = score_metrics(
-                        [labels[i] for i in mask], [probabilities[i] for i in mask], classifier["threshold"]
-                    )
-            metrics["slices"] = slices
-            report[tag] = metrics
-        reports[name] = report
+        document_reports[name] = _report_rows(bundle, rows, predictions)
+        by_id = {row["document_id"]: prediction for row, prediction in zip(rows, predictions, strict=True)}
+        representatives = _representatives(rows)
+        reports[name] = _report_rows(bundle, representatives, [by_id[row["document_id"]] for row in representatives])
     qualifying = {}
     safe_corpus = all(row.get("automatic_safe") is True for row in payload["examples"])
     real_data = payload.get("synthetic") is False and safe_corpus
@@ -183,6 +229,12 @@ def fit_bundle(payload, *, scope, feature_settings=None):
         "production_eligible": any(row["automatic_qualified"] for row in qualifying.values()),
         "tags": qualifying,
         "partitions": reports,
+        "document_partitions": document_reports,
+        "language_evaluation": {
+            "available": False,
+            "reason": "Reviewed document-language annotations are unavailable. OCR language hints are not ground truth.",
+        },
+        "holdout": _holdout_description(payload, scope),
         "unavailable": unavailable,
         "fit_document_ids": [r["document_id"] for r in train],
         "feature_count": matrix.shape[1],
@@ -204,6 +256,7 @@ def fit_bundle(payload, *, scope, feature_settings=None):
 def train_candidate(snapshot_id, *, user, feature_settings=None):
     from ..models import Document
     from .artifacts import load_bundle, save_bundle
+    from .lifecycle import _scope_lock
     from .models import TagModel, TrainingSnapshot
 
     with transaction.atomic():
@@ -216,6 +269,8 @@ def train_candidate(snapshot_id, *, user, feature_settings=None):
         scope={"office_id": snapshot.office_id, "collection": snapshot.collection},
         feature_settings=feature_settings,
     )
+    history = _holdout_history(bundle.scope, bundle.evaluation["holdout"])
+    bundle.evaluation["holdout"].update(history)
     artifact = save_bundle(bundle)
     restored = load_bundle(artifact, scope=bundle.scope)
     parity_inputs = payload["examples"][:10]
@@ -224,9 +279,16 @@ def train_candidate(snapshot_id, *, user, feature_settings=None):
             raise ValidationError("Artifact inference parity check failed.")
     with transaction.atomic():
         actor = _sysadmin(user)
+        # Same ordering as activation. Serialize final-test history even for
+        # snapshots whose duplicate families use different source documents.
+        _scope_lock(snapshot.office_id, snapshot.collection)
         list(Document.objects.select_for_update().filter(pk__in=snapshot.sources.values("document_id")).order_by("pk"))
         snapshot = TrainingSnapshot.objects.select_for_update().get(pk=snapshot_id)
         validate_snapshot(snapshot)
+        if _holdout_history(bundle.scope, bundle.evaluation["holdout"]) != history:
+            raise ValidationError(
+                "Another candidate published holdout evidence while training. Retry to record its reuse."
+            )
         return TagModel.objects.create(
             snapshot=snapshot,
             office=snapshot.office,
@@ -250,4 +312,11 @@ def evaluate_candidate(model_id, *, user, partition="test"):
         validate_snapshot(model.snapshot)
         if partition not in {"calibration", "development", "test"}:
             raise ValidationError("Choose a frozen evaluation partition.")
-        return model.evaluation["partitions"][partition]
+        return {
+            **model.evaluation["partitions"][partition],
+            "_document_metrics": model.evaluation.get("document_partitions", {}).get(partition, {}),
+            "_context": {
+                "holdout": model.evaluation.get("holdout", {"declaration": "Holdout history was not tracked."}),
+                "language_evaluation": model.evaluation.get("language_evaluation", {"available": False}),
+            },
+        }

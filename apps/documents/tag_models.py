@@ -47,6 +47,7 @@ class TagReview(AppendOnly):
     actor_name_snapshot = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     complete_review = models.BooleanField(default=False)
+    sampling = models.JSONField(default=dict, editable=False)
 
     def __str__(self):
         return f"Document {self.document_id}: {self.decision} tag {self.tag_id}"

@@ -244,6 +244,8 @@ def _prepare_dataset(*, user, office_id, collection, seed, dry_run, synthetic, f
                 "office_id": office_id,
                 "collection": collection,
                 "declared_family": document.training_family,
+                "language": "unknown",
+                "ocr_language_hint": document.ocr_language,
                 **zones,
                 "labels": {str(k): v for k, v in labels.items()},
                 "family_tokens": tokens,

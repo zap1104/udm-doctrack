@@ -111,7 +111,7 @@ def _materialize(document):
     document.rebuild_index()
 
 
-def _decision(doc, tag, decision, actor, revision, vocabulary, complete=False):
+def _decision(doc, tag, decision, actor, revision, vocabulary, complete=False, sampling=None):
     VocabularyRevision.objects.get_or_create(digest=vocabulary, defaults={"payload": vocabulary_snapshot()})
     TagReview.objects.create(
         document=doc,
@@ -124,6 +124,7 @@ def _decision(doc, tag, decision, actor, revision, vocabulary, complete=False):
         tag_name_snapshot=tag.name,
         actor_name_snapshot=actor.get_full_name() or actor.username,
         complete_review=complete,
+        sampling=sampling if sampling is not None else {"source": "manual"},
     )
     if decision in {"confirm", "add"}:
         TagContribution.objects.get_or_create(
@@ -143,34 +144,54 @@ def _validate_revision(doc, revision, vocabulary):
 
 
 @transaction.atomic
-def review_tag(document, *, tag_id, decision, user, expected_revision, vocabulary):
+def review_tag(document, *, tag_id, decision, user, expected_revision, vocabulary, sampling_token=""):
     doc, actor = _authorize(document, user)
     _validate_revision(doc, expected_revision, vocabulary)
+    from .review_sampling import validate_sample
+
+    sampling = validate_sample(sampling_token, doc, actor)
     if decision not in {"confirm", "reject", "add", "unsure"}:
         raise ValidationError("Choose a valid review decision.")
-    tag = Tag.objects.select_for_update().filter(pk=tag_id,
-        pk__in=reviewable_tags(doc, actor).order_by().values("pk")).first()
+    tag = (
+        Tag.objects.select_for_update()
+        .filter(pk=tag_id, pk__in=reviewable_tags(doc, actor).order_by().values("pk"))
+        .first()
+    )
     if tag is None:
         raise ValidationError("This tag is no longer available.")
     _bootstrap(doc)
-    _decision(doc, tag, decision, actor, expected_revision, vocabulary)
+    _decision(doc, tag, decision, actor, expected_revision, vocabulary, sampling=sampling)
     _materialize(doc)
 
 
 @transaction.atomic
-def complete_review(document, *, covered_ids, positive_ids, user, expected_revision, vocabulary):
+def complete_review(document, *, covered_ids, positive_ids, user, expected_revision, vocabulary, sampling_token=""):
     doc, actor = _authorize(document, user)
     _validate_revision(doc, expected_revision, vocabulary)
+    from .review_sampling import validate_sample
+
+    sampling = validate_sample(sampling_token, doc, actor)
     covered, positives = set(covered_ids), set(positive_ids)
     tags = list(
-        Tag.objects.select_for_update().filter(pk__in=covered).filter(
-            pk__in=reviewable_tags(doc, actor).order_by().values("pk")).order_by("pk")
+        Tag.objects.select_for_update()
+        .filter(pk__in=covered)
+        .filter(pk__in=reviewable_tags(doc, actor).order_by().values("pk"))
+        .order_by("pk")
     )
     if not covered or positives - covered or len(tags) != len(covered):
         raise ValidationError("Select the exact active tags covered by this review.")
     _bootstrap(doc)
     for tag in tags:
-        _decision(doc, tag, "confirm" if tag.pk in positives else "reject", actor, expected_revision, vocabulary, True)
+        _decision(
+            doc,
+            tag,
+            "confirm" if tag.pk in positives else "reject",
+            actor,
+            expected_revision,
+            vocabulary,
+            True,
+            sampling=sampling,
+        )
     _materialize(doc)
 
 
@@ -262,6 +283,11 @@ def merge_tags(source_id, target_id, *, user, reason):
     source, target = tags.get(source_id), tags.get(target_id)
     if not source or not target or not source.is_active or not target.is_active or target.canonical_id:
         raise ValidationError("Both tags must be active canonical entries.")
+    if Document.objects.filter(tags=source).exclude(pk__in=[doc.pk for doc in documents]).exists():
+        # Assignment writers take document then tag locks. Do not reverse that
+        # order by acquiring newly discovered document locks while holding a
+        # tag. A retry discovers the complete, stable population instead.
+        raise ValidationError("Topic assignments changed while this merge was starting. Retry the merge.")
     for doc in documents:
         _bootstrap(doc)
         for row in list(doc.tag_contributions.filter(tag=source)):

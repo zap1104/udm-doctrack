@@ -67,6 +67,14 @@ def review_context(request, document):
 
     revision, vocabulary = input_revision(document), vocabulary_digest()
     initial = {"input_revision": revision, "vocabulary": vocabulary}
+    sample = request.GET.get("review_sample", "")
+    if sample:
+        from .review_sampling import validate_sample
+
+        if len(request.GET.getlist("review_sample")) != 1 or len(sample) > 4096:
+            raise ValidationError("Open one valid review sample from the queue.")
+        validate_sample(sample, document, request.user)
+        initial["review_sample"] = sample
     context = paginate(
         request, current_units(document).defer("raw_text", "native_raw_text", "ocr_raw_text", "normalized_text")
     )
@@ -138,7 +146,37 @@ def review_context(request, document):
 class SourceUnitsView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
         document = _get_document(request, pk)
-        return render(request, "documents/intelligence/units.html", review_context(request, document))
+        try:
+            context = review_context(request, document)
+        except ValidationError as exc:
+            from django.http import HttpResponseBadRequest
+
+            return HttpResponseBadRequest(" ".join(exc.messages))
+        return render(request, "documents/intelligence/units.html", context)
+
+
+@method_decorator(never_cache, name="dispatch")
+class TagReviewQueueView(AppLoginRequiredMixin, View):
+    def get(self, request):
+        from .review_sampling import review_samples
+
+        collection = request.GET.get("collection", Collection.OVPA)
+        seed = request.GET.get("seed", "review-1")
+        context = {"collection": collection, "seed": seed, "office": request.GET.get("office", "")}
+        try:
+            if any(len(request.GET.getlist(key)) > 1 for key in ("collection", "seed", "office")):
+                raise ValidationError("Choose one value for each review filter.")
+            try:
+                office_id = int(request.GET["office"]) if request.GET.get("office") else None
+            except ValueError as exc:
+                raise ValidationError("Choose a valid internal office.") from exc
+            context["samples"] = review_samples(
+                user=request.user, collection=collection, seed=seed, office_id=office_id
+            )
+        except ValidationError as exc:
+            context.update(samples=[], scope_error=" ".join(exc.messages))
+            return render(request, "documents/intelligence/review_queue.html", context, status=400)
+        return render(request, "documents/intelligence/review_queue.html", context)
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -205,6 +243,7 @@ class TagReviewView(AppLoginRequiredMixin, View):
                     "user": request.user,
                     "expected_revision": data["input_revision"],
                     "vocabulary": data["vocabulary"],
+                    "sampling_token": data["review_sample"],
                 }
                 if self.complete:
                     complete_review(

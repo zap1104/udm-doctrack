@@ -14,6 +14,7 @@ class TagReviewForm(BootstrapFormMixin, forms.Form):
     )
     input_revision = forms.CharField(widget=forms.HiddenInput)
     vocabulary = forms.CharField(widget=forms.HiddenInput)
+    review_sample = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
 
     def __init__(self, *args, document, user, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,6 +32,7 @@ class CompleteTagReviewForm(BootstrapFormMixin, forms.Form):
     )
     input_revision = forms.CharField(widget=forms.HiddenInput)
     vocabulary = forms.CharField(widget=forms.HiddenInput)
+    review_sample = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
 
     def __init__(self, *args, document, user, **kwargs):
         super().__init__(*args, **kwargs)

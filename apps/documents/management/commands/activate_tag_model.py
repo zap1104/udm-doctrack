@@ -18,3 +18,8 @@ class Command(BaseCommand):
         except Exception as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(f"Model {model.pk} active in {model.mode} mode.")
+        self.stdout.write(
+            model.evaluation.get("holdout", {}).get(
+                "declaration", "Holdout reuse was not tracked for this older candidate."
+            )
+        )
