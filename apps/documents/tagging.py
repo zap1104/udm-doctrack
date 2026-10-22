@@ -147,7 +147,7 @@ def known_labels(document, tag_ids, *, revision=None):
     # A newer unsure decision restores unknown; old-content reviews never
     # manufacture labels for changed evidence. Assignments alone are not labels.
     result = dict.fromkeys(tag_ids)
-    rows = document.tag_reviews.filter(input_revision=revision or input_revision(document)).order_by("pk")
+    rows = document.tag_reviews.filter(input_revision=revision or input_revision(document), vocabulary=vocabulary_digest()).order_by("pk")
     for row in rows:
         if row.tag_id in result:
             result[row.tag_id] = 1 if row.decision in {"confirm", "add"} else 0 if row.decision == "reject" else None
