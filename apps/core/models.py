@@ -84,6 +84,9 @@ class Tag(TimeStampedModel):
     description = models.CharField(max_length=255, blank=True)
     usage_count = models.PositiveIntegerField(default=0, editable=False)
     is_active = models.BooleanField(default=True)
+    canonical = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="retired_labels")
+    globally_approved = models.BooleanField(default=False)
+    automatic_enabled = models.BooleanField(default=False)
 
     objects = models.Manager()
     active = ActiveManager()

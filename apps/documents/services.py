@@ -360,32 +360,18 @@ def review_document_deletion(document, *, user, decision, reason, expected_state
     return document
 
 
+@transaction.atomic
 def set_tags(document: Document, tag_names, *, user=None) -> None:
-    """Replace the document's tags and keep `Tag.usage_count` accurate."""
-    from django.db.models import F
+    """Explicit metadata edits are human contributions, never training defaults."""
+    from .tagging import _authorize, replace_human_tags
 
-    cleaned: list[str] = []
-    for raw in tag_names or []:
-        name = " ".join(str(raw).split()).lower()[:64]
-        if name and name not in cleaned:
-            cleaned.append(name)
-
+    document, user = _authorize(document, user)
     tags = []
-    for name in cleaned:
-        tag, _ = Tag.get_or_create_by_name(name)
-        if tag:
+    for raw in tag_names or []:
+        tag, _ = Tag.get_or_create_by_name(raw)
+        if tag and tag not in tags:
             tags.append(tag)
-
-    previous = set(document.tags.values_list("pk", flat=True))
-    current = {tag.pk for tag in tags}
-    document.tags.set(tags)
-
-    added = current - previous
-    removed = previous - current
-    if added:
-        Tag.objects.filter(pk__in=added).update(usage_count=F("usage_count") + 1)
-    if removed:
-        Tag.objects.filter(pk__in=removed, usage_count__gt=0).update(usage_count=F("usage_count") - 1)
+    replace_human_tags(document, tags, user=user)
 
 
 def set_metadata_values(document: Document, metadata_values: dict) -> None:

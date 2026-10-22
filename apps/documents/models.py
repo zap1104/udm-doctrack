@@ -625,3 +625,4 @@ class SearchResultClick(models.Model):
 
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
 from .processing_models import ExtractionRun, ExtractionUnit, SearchChunk  # noqa: E402,F401
+from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview  # noqa: E402,F401

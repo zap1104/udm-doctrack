@@ -50,3 +50,10 @@ Implementation in progress. No push, merge, deployment, original database migrat
 - Additional RED reproduced a null metadata vector suppressing a valid body rank. Corrected with independent null-safe metadata/body scoring.
 - GREEN:65 passed in35.82seconds across new chunk tests and existing search, unified repository, identifier and master-data refresh regressions (`task5-related.xml`). Focused Ruff and migration-drift checks passed.
 - Retrieval groups current authorized source chunks by document before the candidate cap. Late appendix evidence remains searchable beyond the legacy aggregate prefix, with escaped snippets and real source locators. Tiny-fixture PostgreSQL EXPLAIN was exercised; production query performance is not established by that fixture.
+
+## Task 6: explicit tag provenance
+
+- Four RED tests demonstrated missing review/provenance services. GREEN:45 passed in26.01seconds with existing file-version and master-data index tests (`task6-related.xml`).
+- New append-only decisions distinguish positive, negative and unknown for an exact input revision and vocabulary. Complete review covers only its submitted canonical IDs. Assignment contributions preserve legacy human provenance without inventing an actor or timestamp.
+- Canonical merges are system-admin only, reconcile distinct-document usage and leave historical review IDs untouched. Existing metadata and Django-admin tag edits use the same fresh authorization boundary. Automated application is still pending Task10.
+- Additive core0013/documents0019–0020 preserve current IDs and backfill legacy contributions. No original database migration has run. Concurrency, full access matrix and live UI checks remain for final verification.

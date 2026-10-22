@@ -71,7 +71,12 @@ class DocumentAdmin(admin.ModelAdmin):
         return super().has_change_permission(request, obj)
 
     def save_related(self, request, form, formsets, change):
+        from .tagging import replace_human_tags
+
+        tags = form.cleaned_data.pop("tags", None)
         super().save_related(request, form, formsets, change)
+        if tags is not None:
+            replace_human_tags(form.instance, list(tags), user=request.user)
         form.instance.rebuild_index()
 
     @admin.action(description="Rebuild the search index for the selected documents")
