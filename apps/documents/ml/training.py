@@ -155,7 +155,8 @@ def fit_bundle(payload, *, scope, feature_settings=None):
             report[tag] = metrics
         reports[name] = report
     qualifying = {}
-    real_data = payload.get("synthetic") is False
+    safe_corpus = all(row.get("automatic_safe") is True for row in payload["examples"])
+    real_data = payload.get("synthetic") is False and safe_corpus
     for tag, classifier in bundle.classifiers.items():
         heldout = reports["test"][tag]
         dev = reports["development"][tag]
@@ -190,6 +191,7 @@ def fit_bundle(payload, *, scope, feature_settings=None):
         "cpu_seconds": time.process_time() - cpu_started,
         "runtime": bundle.runtime,
         "holdout_frozen": True,
+        "source_coverage_complete": safe_corpus,
         "independence": "one preselected lowest-ID representative per family",
         "notes": [
             "Synthetic fixtures cannot qualify production automation.",

@@ -25,6 +25,7 @@ class ContentInput:
     input_revision: str
     coverage_complete: bool
     evidence: list
+    automatic_safe: bool = False
 
 
 @dataclass(frozen=True)

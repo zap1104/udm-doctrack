@@ -100,7 +100,7 @@ def process_intent(intent_id):
                 ):
                     intent.state, intent.last_reason = WorkState.RETRY_WAIT, "model_changed"
                 else:
-                    MetadataSuggestion.objects.get_or_create(
+                    saved_suggestion, _ = MetadataSuggestion.objects.get_or_create(
                         extraction_run=fresh_run,
                         defaults={
                             "document": fresh_document,
@@ -111,6 +111,9 @@ def process_intent(intent_id):
                             "text_sample": fresh_document.ocr_text[:4000],
                         },
                     )
+                    from .tag_application_jobs import request_application
+
+                    request_application(saved_suggestion)
                     intent.state, intent.last_reason = WorkState.COMPLETE, ""
             intent.lease_token, intent.lease_expires_at = "", None
             intent.next_attempt_at = (

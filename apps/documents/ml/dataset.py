@@ -74,6 +74,7 @@ def content_zones(document):
             "truncated",
             "run__generation",
             "run__file_version__original_name",
+            "warnings",
         )
     )
     body = "\n".join(row["normalized_text"] for row in units) if units else document.ocr_text
@@ -88,6 +89,13 @@ def content_zones(document):
         units
         and coverage_summary(document)["coverage"] == "complete"
         and all(row["run__generation"] == document.extraction_generation and not row["truncated"] for row in units)
+    )
+    result["automatic_safe"] = bool(
+        result["coverage_complete"]
+        and document.ocr_status == "DONE"
+        and document.extraction_failed_generation is None
+        and all(not row["warnings"] for row in units)
+        and not document.extraction_runs.filter(is_current=True).exclude(warnings=[]).exists()
     )
     result["evidence"] = []
     offset = 0

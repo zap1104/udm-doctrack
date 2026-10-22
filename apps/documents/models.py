@@ -626,6 +626,7 @@ class SearchResultClick(models.Model):
         return f"Query {self.query_log_id} clicked document {self.document_id} at rank {self.rank}"
 
 
+from .auto_models import TagApplicationIntent  # noqa: E402,F401
 from .file_versions import DocumentFileVersion  # noqa: E402,F401
 from .ml.models import SnapshotSource, TagModel, TrainingSnapshot  # noqa: E402,F401
 from .processing_models import ExtractionRun, ExtractionUnit, InferenceIntent, SearchChunk  # noqa: E402,F401

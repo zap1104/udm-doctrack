@@ -45,6 +45,12 @@ The shared vectorizers fit only training families; per-topic classifiers use onl
 
 Extraction and suggestion stages have separate durable intents. `manage.py recover_extraction --limit 100` inventories both; `--apply` recovers under the original actor and current permissions. Each stage has finite attempts and leases. A missing/invalid model preserves rule/manual operation. Source flags and automatic tagging remain disabled by default until migration, setup and deployment-specific verification are complete.
 
+## Automatic contributions and rollback
+
+Automatic application has a third durable stage. The same recovery command inventories it. It never borrows system authority when the original user is unavailable. A model in automatic mode still needs `ENABLE_AUTOMATIC_TAGS=True`, explicit per-tag administrator enablement, safe current evidence and qualified frozen real-data evaluation. Suggestions, human decisions and automatic contributions are separate records. Rules without their own qualified evidence do not auto-apply.
+
+`manage.py rollback_auto_tags MODEL_ID --actor USER_ID` inventories affected document IDs. Add `--apply` to remove that release's automatic contributions. Human confirmations and unrelated contributions remain. These commands require system-administrator authority and are not run on original records during implementation. A human rejection or uncertainty blocks reapplication across later content processing until a later explicit decision changes it.
+
 ## Opt-in processing and recovery
 
 After additive migrations on a disposable/approved database, `ENABLE_SOURCE_UNIT_EXTRACTION=True` selects the unit pipeline for uploads, filing and retries. It persists actor-bound intent in the upload transaction and enqueues after commit. Without a worker, local processing occurs after commit with a bounded number of invocations and at most one OCR unit per web submission; remaining work is visible/recoverable. Production scanning needs the existing q2 worker rather than long web requests. No original database was migrated during implementation.
