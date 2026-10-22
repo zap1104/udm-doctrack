@@ -1,21 +1,10 @@
 from django import forms
-from django.db.models import Q
 
 from apps.core.forms import BootstrapFormMixin
 from apps.core.models import Tag
 
-from .models import Collection, Document
-
-
-def reviewable_tags(document, user):
-    visible = Document.objects.visible_to(user).in_collection(document.collection).filter(is_active=True)
-    tags = Tag.objects.filter(is_active=True, canonical__isnull=True)
-    if user.is_system_admin:
-        return tags.order_by("name")
-    allowed = Q(globally_approved=True) | Q(documents__in=visible)
-    if user.office_id == document.office_id:
-        allowed |= Q(tagprediction__document=document)
-    return tags.filter(allowed).distinct().order_by("name")
+from .models import Collection
+from .tagging import reviewable_tags
 
 
 class TagReviewForm(BootstrapFormMixin, forms.Form):

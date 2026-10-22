@@ -40,11 +40,13 @@ When a document is saved, its text is split across four buckets. PostgreSQL assi
 | `index_title` | **A** | 1.00 | Title, reference number, tracking number |
 | `index_meta` | **B** | 0.60 | Office name and code, document type, tags, author, recipient |
 | `index_extra` | **C** | 0.25 | Description, searchable custom metadata fields |
-| `ocr_text` | **D** | 0.10 | The full extracted body text |
+| `ocr_text` | **D** | 0.10 | The bounded legacy aggregate of extracted text |
 
 A hit in the title counts ten times more than a hit buried in body text. That single decision does most of the work of making results feel sensible.
 
 The four fields are combined into a `SearchVectorField` with a GIN index, so matching stays fast as the archive grows.
+
+With `ENABLE_SOURCE_CHUNK_SEARCH=True`, current source units also have overlapping 4,000-character chunks (512-character overlap). A document's best matching chunk competes with its metadata rank before the document candidate limit. Chunks do not count as extra documents. Old file versions, unpublished runs, inactive records and chunks whose text no longer matches the unit are excluded. Full current supported source text can therefore match beyond the legacy aggregate limit. Snippets name the matching source file and location.
 
 ---
 
@@ -73,13 +75,16 @@ Deterministic bonuses for matching in places that matter, checked in Python:
 | Matched where | Bonus |
 |---|---|
 | Exact reference or tracking number | 1.00 (short-circuits to 100%) |
-| Title contains the whole phrase | 0.85 |
-| Title contains some words | 0.60 |
-| Tag matches exactly | 0.70 |
-| Office name or code | 0.50 |
-| Document type | 0.40 |
-| Custom metadata value | 0.45 |
-| Body text only | 0.20 |
+| Title contains every query token | 0.55 |
+| Title contains at least one token (instead of the preceding bonus) | 0.30 |
+| Reference number contains a token | 0.25 |
+| Tags contain tokens | 0.12 per token, at most 0.25 |
+| Office code equals a token, or the query contains its full name | 0.15 |
+| Document type contains a token | 0.10 |
+| Searchable metadata contains a token | 0.08 |
+| Document text contains a token | 0.05 |
+
+Bonuses add up, capped at 1.0. Source-chunk evidence gives the text bonus once. An expanded-only chunk does not receive the original-query field bonus.
 
 This score does double duty: it feeds the ranking **and** produces the "Matched in: Title, Tags" line under each result. Users trust a search engine that shows its reasoning.
 
@@ -107,11 +112,11 @@ They must sum to 1.0.
 ```
 text  = 0.34 / (0.34 + 0.06) = 0.85    →  0.55 × 0.85 = 0.4675
 fuzzy = 0.62                            →  0.20 × 0.62 = 0.1240
-field = 0.85 (whole phrase in title)    →  0.25 × 0.85 = 0.2125
+field = 0.72 (all title tokens, one tag token, body token) → 0.25 × 0.72 = 0.1800
                                                         --------
-                                                          0.8040
+                                                          0.7715
 
-relevance = 80%
+relevance = 77
 ```
 
 ---
@@ -164,7 +169,7 @@ After changing any weight: `make reindex`.
 
 Approved query aliases are optional (`ENABLE_APPROVED_SEARCH_ALIASES=False` by default). Only explicitly approved global vocabulary expands a query, with at most eight variants. Original references retain exact-match priority and a score of 100. Expanded text uses half the original text weight; fuzzy and field signals still use the original query. Results identify approved-alias evidence, including its source file when available. The Search default threshold remains 75; Repository defaults to 0, so an alias-only match can be hidden in Search until the user lowers the threshold.
 
-`evaluate_search --actor <system-admin-id> --collection OVPA --judgments <private-json-file>` measures supplied, authorized judgments. It reports candidate recall separately from visible precision, success and nDCG at five, the evaluated corpus/window, and two latency passes with uncontrolled caches. Authored fixtures verify mechanics, including Filipino and Taglish phrases; they do not establish real-world retrieval or OCR accuracy. Scoring versions with expansion are `lexical-aliases-1` and `lexical-chunks-aliases-1`.
+`evaluate_search <private-json-file> --actor <system-admin-id> --collection OVPA` measures supplied, authorized judgments. It reports candidate recall separately from visible precision, success and nDCG at five, the evaluated corpus/window, and two latency passes with uncontrolled caches. Authored fixtures verify mechanics, including Filipino and Taglish phrases; they do not establish real-world retrieval or OCR accuracy. Scoring versions with expansion are `lexical-aliases-1` and `lexical-chunks-aliases-1`.
 
 - **Semantic / vector search** — a real improvement, but it needs embeddings, a vector extension, and an explanation of why a document with none of your words is the top result. Rules and text ranking are explainable today.
 - **Recency boost** — sounds obvious, but a five-year-old policy is often exactly what you want. Needs real usage data first.

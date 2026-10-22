@@ -69,3 +69,17 @@ def test_family_partitions_are_deterministic_and_disjoint():
     assert len(set.union(*sets)) == 50
     assert sum(map(len, sets)) == 50
     assert len(splits["train"]) == 30
+
+
+def test_missing_source_files_cannot_enter_a_training_snapshot(users, tmp_path, settings):
+    from apps.documents.models import DocumentFile
+
+    settings.MEDIA_ROOT = tmp_path
+    topic = Tag.objects.create(name="approved missing source fixture", globally_approved=True)
+    doc = Document.objects.create(title="Missing original", office=users["med"].office, year=2026,
+        ocr_text="stale saved text", training_eligible=True)
+    DocumentFile.objects.create(document=doc, file="missing-original.txt", original_name="missing-original.txt")
+    review_tag(doc, tag_id=topic.pk, decision="confirm", user=users["med"],
+        expected_revision=input_revision(doc), vocabulary=vocabulary_digest())
+    with pytest.raises(ValidationError, match="source file"):
+        api().prepare_dataset(user=users["admin"], office_id=doc.office_id, collection="OVPA", dry_run=False)

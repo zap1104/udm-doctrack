@@ -110,3 +110,47 @@ def test_document_correlated_query_plan_runs_on_postgresql(make_source, users, t
     plan = json.loads(query.explain(format="json"))
     (tmp_path / "source-query-plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
     assert set(query.values_list("pk", flat=True)) == {document.pk}
+
+
+def test_changed_unit_text_cannot_leave_searchable_obsolete_chunks(make_source, users):
+    from apps.documents.models import ExtractionUnit
+
+    api = chunk_api()
+    document, run = make_source("prefix " * 30000 + " obsoletecanary ")
+    api.publish_chunks(run, document=document, expected_revision=str(document.extraction_generation))
+    ExtractionUnit.objects.filter(run=run).update(normalized_text="replacement current text")
+    response = search_documents(user=users["med"], query="obsoletecanary", min_relevance=0,
+        show_below_threshold=True, log=False)
+    assert not response.results
+    assert not api.current_chunks(document.pk).exists()
+
+
+def test_reconcile_is_finite_idempotent_and_never_dispatches_ocr(make_source):
+    from unittest.mock import patch
+
+    from apps.documents.models import SearchChunk
+    from apps.documents.reconciliation import index_status, reconcile_processing
+
+    document, run = make_source("fully readable source content")
+    SearchChunk.objects.filter(unit__run=run).delete()
+    assert index_status(document) == "stale"
+    with patch("urllib.request.urlopen", side_effect=AssertionError("No provider call permitted")):
+        dry = reconcile_processing(limit=1, after_id=document.pk - 1)
+        assert dry["stale_indexes"] == 1 and dry["rebuilt_indexes"] == 0
+        fixed = reconcile_processing(limit=1, after_id=document.pk - 1, dry_run=False)
+        assert fixed["document_ids"] == [document.pk] and fixed["rebuilt_indexes"] == 1
+        assert index_status(document) == "current"
+        assert reconcile_processing(limit=1, after_id=document.pk - 1, dry_run=False)["rebuilt_indexes"] == 0
+
+
+def test_requested_file_ids_are_validated_as_a_whole_before_generation_change(make_source, users):
+    from django.core.exceptions import ValidationError
+
+    doc, _ = make_source("Current source")
+    other, _ = make_source("Foreign source", owner="hr")
+    previous = doc.extraction_generation
+    with pytest.raises(ValidationError):
+        request_processing(doc, user=users["med"], replace=True,
+            file_ids=[doc.files.get().pk, other.files.get().pk])
+    doc.refresh_from_db()
+    assert doc.extraction_generation == previous

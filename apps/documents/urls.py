@@ -13,6 +13,7 @@ urlpatterns = [
     path("<int:pk>/extraction/units/", intelligence_views.SourceUnitsView.as_view(), name="source_units"),
     path("<int:pk>/extraction/units/<int:unit_id>/", intelligence_views.SourceUnitView.as_view(), name="source_unit"),
     path("<int:pk>/tags/review/", intelligence_views.TagReviewView.as_view(), name="tag_review"),
+    path("<int:pk>/tags/predict/", intelligence_views.TagPredictView.as_view(), name="tag_predict"),
     path("<int:pk>/tags/review-complete/", intelligence_views.TagReviewView.as_view(complete=True), name="tag_review_complete"),
     path("<int:pk>/training-eligibility/", intelligence_views.TrainingEligibilityView.as_view(), name="training_eligibility"),
     path("external/", external_views.ExternalRepositoryView.as_view(), name="external_repository"),

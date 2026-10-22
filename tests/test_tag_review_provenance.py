@@ -19,7 +19,7 @@ def api():
 def test_review_unknown_rejection_and_human_priority(users):
     service = api()
     doc = Document.objects.create(title="Review", office=users["med"].office, uploaded_by=users["med"], year=2026)
-    tag = Tag.objects.create(name="procurement")
+    tag = Tag.objects.create(name="procurement", globally_approved=True)
     revision = service.input_revision(doc)
     vocab = service.vocabulary_digest()
     service.review_tag(
@@ -64,7 +64,7 @@ def test_legacy_tags_preserved_and_cross_office_write_rejected(users):
 def test_complete_review_covers_only_explicit_ids(users):
     service = api()
     doc = Document.objects.create(title="Review", office=users["med"].office, uploaded_by=users["med"], year=2026)
-    a, b = Tag.objects.create(name="one"), Tag.objects.create(name="two")
+    a, b = Tag.objects.create(name="one", globally_approved=True), Tag.objects.create(name="two", globally_approved=True)
     service.complete_review(
         doc,
         covered_ids=[a.pk],

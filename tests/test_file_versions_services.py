@@ -435,8 +435,8 @@ def test_legacy_migration_preserves_independent_ids_paths_and_unknown_offices(us
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
     old_targets = [("documents", "0013_document_extraction_failed_generation"), ("tracking", "0017_external_activity_custody_anchor")]
-    latest_targets = [("documents", "0014_documentfileversion"), ("tracking", "0018_externalattachmentgroup_and_more")]
     executor = MigrationExecutor(connection)
+    latest_targets = executor.loader.graph.leaf_nodes()
     executor.migrate(old_targets)
     try:
         old = executor.loader.project_state(old_targets).apps

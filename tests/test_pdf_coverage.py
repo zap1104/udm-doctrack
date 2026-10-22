@@ -76,3 +76,27 @@ def test_encrypted_pdf_is_action_required():
     batch = reader()(output, "locked.pdf", policy=ExtractionPolicy())
     assert batch.units[0].state == "action_required"
     assert "Encrypted" in batch.units[0].warnings[0]
+
+
+@pytest.mark.parametrize("content", ["vector", "annotation"])
+def test_native_text_does_not_hide_vector_or_annotation_content(content):
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, DictionaryObject, NameObject
+
+    from apps.documents.processing_contracts import ExtractionPolicy
+
+    writer = PdfWriter(clone_from=PdfReader(io.BytesIO(pdf_bytes(scanned=False))))
+    page = writer.pages[0]
+    if content == "vector":
+        stream = DecodedStreamObject()
+        stream.set_data(page.get_contents().get_data() + b"\n10 10 400 400 re f\n")
+        page[NameObject("/Contents")] = writer._add_object(stream)
+    else:
+        page[NameObject("/Annots")] = ArrayObject([writer._add_object(DictionaryObject({
+            NameObject("/Subtype"): NameObject("/Ink")}))])
+    output = io.BytesIO()
+    writer.write(output)
+    batch = reader()(output, "unmeasured.pdf", policy=ExtractionPolicy())
+    assert batch.coverage != "complete"
+    assert batch.units[0].metadata["ocr_needed"]
+    assert batch.units[0].warnings

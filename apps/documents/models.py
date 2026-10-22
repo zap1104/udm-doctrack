@@ -536,7 +536,7 @@ class MetadataSuggestion(models.Model):
     extraction_run = models.OneToOneField("documents.ExtractionRun", null=True, blank=True,
         on_delete=models.CASCADE, related_name="suggestion_record")
     engine = models.CharField(max_length=32, default="rules")
-    engine_version = models.CharField(max_length=16, default="1.0")
+    engine_version = models.CharField(max_length=64, default="1.0")
     suggested = models.JSONField(default=dict)
     input_revision = models.CharField(max_length=64, blank=True)
     accepted = models.JSONField(default=dict, blank=True)
@@ -631,4 +631,4 @@ from .file_versions import DocumentFileVersion  # noqa: E402,F401
 from .intelligence_models import SavedDocumentView  # noqa: E402,F401
 from .ml.models import SnapshotSource, TagModel, TrainingSnapshot  # noqa: E402,F401
 from .processing_models import ExtractionRun, ExtractionUnit, InferenceIntent, SearchChunk  # noqa: E402,F401
-from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview  # noqa: E402,F401
+from .tag_models import TagAlias, TagContribution, TagPrediction, TagReview, VocabularyRevision  # noqa: E402,F401

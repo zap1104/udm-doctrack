@@ -26,6 +26,15 @@ class TagAlias(models.Model):
         return self.phrase
 
 
+class VocabularyRevision(AppendOnly):
+    digest = models.CharField(max_length=64, unique=True)
+    payload = models.JSONField(default=list, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Vocabulary {self.digest[:12]}"
+
+
 class TagReview(AppendOnly):
     document = models.ForeignKey("documents.Document", on_delete=models.CASCADE, related_name="tag_reviews")
     tag = models.ForeignKey("core.Tag", on_delete=models.PROTECT)

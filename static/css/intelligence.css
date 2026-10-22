@@ -6,3 +6,12 @@
   color: inherit;
   background: transparent;
 }
+
+.source-unit-table {
+  min-width: 44rem;
+}
+
+.source-unit-table th:first-child,
+.source-unit-table td:first-child {
+  min-width: 11rem;
+}

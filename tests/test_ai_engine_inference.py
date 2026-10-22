@@ -28,7 +28,10 @@ def test_actual_model_changes_ai_output_and_fallback_is_truthful(users, settings
     activate_model(model.pk, user=users["admin"], mode="suggestion")
     after = suggest_metadata(text=doc.ocr_text, filename=doc.title, office=doc.office, user=users["med"], document=doc)
     assert after.engine == "ml"
-    assert "synthetic procurement topic" in after.tags
+    assert "tags" not in after.confidence
+    assert ("synthetic procurement topic" in after.tags) == (after.topic_decisions[0]["action"] == "suggest")
+    assert 0 <= after.topic_decisions[0]["score"] <= 1
+    assert after.topic_decisions[0]["model_id"] == model.pk
     assert after.topic_decisions[0]["tag_id"] == model.topic_fixture_id
     doc.collection = "EXTERNAL"
     doc.save(update_fields=["collection"])
@@ -110,3 +113,29 @@ def test_transfer_during_inference_cannot_publish_other_office_model_output(user
         suggestion = suggest_metadata(text=doc.ocr_text, user=users["med"], document=doc)
     assert suggestion.engine == "rules"
     assert not doc.tag_predictions.exists()
+
+
+def test_out_of_vocabulary_text_abstains_without_scanning_all_terms(users, settings):
+    import re
+    from unittest.mock import patch
+
+    from apps.documents.ml.inference import predict_tags
+    from apps.documents.ml.lifecycle import activate_model
+
+    settings.ENABLE_TAG_ML = True
+    model = make_candidate(users)
+    activate_model(model.pk, user=users["admin"], mode="suggestion")
+    doc = Document.objects.create(title="🙂", ocr_text="🙂 " * 1000, office=users["med"].office, year=2026)
+    with patch("apps.documents.ml.inference.re.search", wraps=re.search) as search:
+        result = predict_tags(doc, user=users["med"])
+    assert result and all(decision.action == "abstain" for decision in result)
+    assert search.call_count <= 10
+
+
+def test_large_model_reference_can_be_persisted(users):
+    from apps.documents.models import MetadataSuggestion
+
+    doc = Document.objects.create(title="Large registry", office=users["med"].office, year=2026)
+    row = MetadataSuggestion.objects.create(document=doc, engine="ml", engine_version="local-topic-10000")
+    row.refresh_from_db()
+    assert row.engine_version == "local-topic-10000"

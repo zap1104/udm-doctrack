@@ -5,14 +5,14 @@ import json
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from apps.core.models import Tag
 from apps.core.permissions import active_writer
 from apps.core.utils import log_action
 
-from .models import Document, TagAlias, TagContribution, TagReview
+from .models import Document, TagAlias, TagContribution, TagReview, VocabularyRevision
 
 
 def digest(value):
@@ -34,20 +34,29 @@ def vocabulary_digest():
     return digest(vocabulary_snapshot())
 
 
+def reviewable_tags(document, user):
+    visible = Document.objects.visible_to(user).in_collection(document.collection).filter(is_active=True)
+    tags = Tag.objects.filter(is_active=True, canonical__isnull=True)
+    if user.is_system_admin:
+        return tags.order_by("name")
+    allowed = Q(globally_approved=True) | Q(documents__in=visible)
+    if user.office_id == document.office_id:
+        allowed |= Q(tagprediction__document=document)
+    return tags.filter(allowed).distinct().order_by("name")
+
+
 def input_revision(document):
     doc = Document.objects.get(pk=document.pk)
-    units = list(
-        doc.extraction_runs.filter(is_current=True)
-        .order_by("pk")
-        .values_list("pk", "generation", "content_hash", "settings_digest")
-    )
-    unit_texts = list(
-        doc.extraction_runs.filter(is_current=True)
-        .order_by("pk")
-        .values_list("units__locator_key", "units__normalized_text")
-    )
-    versions = list(doc.files.order_by("pk").values_list("pk", "checksum", "file"))
-    return digest(
+    hasher = hashlib.sha256(b"document-input-2")
+
+    def append(value):
+        # Length framing prevents ambiguity while keeping one source unit in
+        # memory. All text participates, including the last unit.
+        encoded = json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":")).encode()
+        hasher.update(len(encoded).to_bytes(8, "big"))
+        hasher.update(encoded)
+
+    append(
         [
             doc.title,
             doc.description,
@@ -56,12 +65,26 @@ def input_revision(document):
             doc.collection,
             doc.extraction_generation,
             doc.ocr_text,
-            units,
-            unit_texts,
-            versions,
             doc.is_active,
         ]
     )
+    for row in (
+        doc.extraction_runs.filter(is_current=True)
+        .order_by("pk")
+        .values_list("pk", "generation", "content_hash", "settings_digest")
+        .iterator(chunk_size=8)
+    ):
+        append(["run", row])
+    for row in (
+        doc.extraction_runs.filter(is_current=True)
+        .order_by("pk", "units__ordinal", "units__pk")
+        .values_list("units__locator_key", "units__normalized_text")
+        .iterator(chunk_size=2)
+    ):
+        append(["unit", row])
+    for row in doc.files.order_by("pk").values_list("pk", "checksum", "file").iterator(chunk_size=20):
+        append(["file", row])
+    return hasher.hexdigest()
 
 
 def _authorize(document, user):
@@ -89,6 +112,7 @@ def _materialize(document):
 
 
 def _decision(doc, tag, decision, actor, revision, vocabulary, complete=False):
+    VocabularyRevision.objects.get_or_create(digest=vocabulary, defaults={"payload": vocabulary_snapshot()})
     TagReview.objects.create(
         document=doc,
         tag=tag,
@@ -124,7 +148,8 @@ def review_tag(document, *, tag_id, decision, user, expected_revision, vocabular
     _validate_revision(doc, expected_revision, vocabulary)
     if decision not in {"confirm", "reject", "add", "unsure"}:
         raise ValidationError("Choose a valid review decision.")
-    tag = Tag.objects.select_for_update().filter(pk=tag_id, is_active=True, canonical__isnull=True).first()
+    tag = Tag.objects.select_for_update().filter(pk=tag_id,
+        pk__in=reviewable_tags(doc, actor).order_by().values("pk")).first()
     if tag is None:
         raise ValidationError("This tag is no longer available.")
     _bootstrap(doc)
@@ -138,7 +163,8 @@ def complete_review(document, *, covered_ids, positive_ids, user, expected_revis
     _validate_revision(doc, expected_revision, vocabulary)
     covered, positives = set(covered_ids), set(positive_ids)
     tags = list(
-        Tag.objects.select_for_update().filter(pk__in=covered, is_active=True, canonical__isnull=True).order_by("pk")
+        Tag.objects.select_for_update().filter(pk__in=covered).filter(
+            pk__in=reviewable_tags(doc, actor).order_by().values("pk")).order_by("pk")
     )
     if not covered or positives - covered or len(tags) != len(covered):
         raise ValidationError("Select the exact active tags covered by this review.")
@@ -152,11 +178,23 @@ def known_labels(document, tag_ids, *, revision=None):
     # A newer unsure decision restores unknown; old-content reviews never
     # manufacture labels for changed evidence. Assignments alone are not labels.
     result = dict.fromkeys(tag_ids)
-    rows = document.tag_reviews.filter(
-        input_revision=revision or input_revision(document), vocabulary=vocabulary_digest()
-    ).order_by("pk")
+    rows = document.tag_reviews.filter(input_revision=revision or input_revision(document)).order_by("pk")
+    current_digest, current_payload = vocabulary_digest(), vocabulary_snapshot()
+    recorded = dict(
+        VocabularyRevision.objects.filter(digest__in=rows.values("vocabulary")).values_list("digest", "payload")
+    )
+
+    def definition(payload, tag_id):
+        return [row for row in payload if row.get("id") == tag_id or row.get("tag") == tag_id]
+
     for row in rows:
         if row.tag_id in result:
+            if row.vocabulary != current_digest:
+                previous = recorded.get(row.vocabulary, [])
+                if not definition(previous, row.tag_id) or definition(previous, row.tag_id) != definition(
+                    current_payload, row.tag_id
+                ):
+                    continue
             result[row.tag_id] = 1 if row.decision in {"confirm", "add"} else 0 if row.decision == "reject" else None
     return result
 

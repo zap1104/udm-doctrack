@@ -299,6 +299,7 @@ class AIEngine(BaseEngine):
         names = dict(Tag.objects.filter(pk__in=[d.tag_id for d in selected], is_active=True).values_list("pk", "name"))
         suggestion.tags = list(dict.fromkeys([*suggestion.tags, *(names[d.tag_id] for d in selected if d.tag_id in names)]))
         suggestion.topic_decisions = [asdict(decision) for decision in result]
+        suggestion.confidence.pop("tags", None)
         suggestion.engine = "ml"
         suggestion.engine_version = f"local-topic-{result[0].model_id}" if result else "local-topic"
         suggestion.notes.append("Topic suggestions use the scoped local model. Other metadata suggestions use rules. Uncalibrated topic scores are not confidence percentages.")

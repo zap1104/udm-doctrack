@@ -117,14 +117,21 @@ def request_processing(document, *, user, file_ids=None, replace=False):
                 raise PermissionDenied("Your current account cannot request extraction for this document.")
         elif not current.is_active:
             raise PermissionDenied("Removed documents cannot be processed.")
+        selected_ids = None
+        if file_ids is not None:
+            if not isinstance(file_ids, (list, tuple, set)) or len(file_ids) > 1000 or any(type(pk) is not int or pk < 1 for pk in file_ids):
+                raise ValidationError("Select valid files from this document.")
+            selected_ids = set(file_ids)
+            if selected_ids != set(current.files.filter(pk__in=selected_ids).values_list("pk", flat=True)):
+                raise ValidationError("One or more selected files are unavailable for this document.")
         if replace:
             current.extraction_generation += 1
         policy = ExtractionPolicy.from_settings()
         snapshot = {"policy": asdict(policy), "context": _processing_context(current)}
         settings_digest = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
         roots = current.files.order_by("created_at", "pk")
-        if file_ids is not None:
-            roots = roots.filter(pk__in=file_ids)
+        if selected_ids is not None:
+            roots = roots.filter(pk__in=selected_ids)
         runs = []
         for root in roots:
             version = resolve_file_version(root)

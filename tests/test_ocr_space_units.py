@@ -41,6 +41,13 @@ def test_success_checks_result_codes_and_keeps_absent_confidence_null():
     assert "authored fixture" in result.normalized_text
 
 
+@pytest.mark.parametrize("endpoint", ["https://[broken", "https://api.ocr.space:bad/parse/image"])
+def test_malformed_endpoint_is_a_blocked_outcome_without_network(endpoint, settings):
+    settings.OCR_SPACE_ENDPOINT = endpoint
+    with patch("urllib.request.urlopen", side_effect=AssertionError("No network permitted")):
+        assert call().state == "blocked"
+
+
 @pytest.mark.parametrize("overall,result_code", [(2, 1), (3, -10), (1, -30)])
 def test_partial_or_failed_provider_status_preserves_text_but_not_complete(overall, result_code):
     with patch("urllib.request.urlopen", return_value=response(overall=overall, result=result_code)):

@@ -186,7 +186,8 @@ calculation, interaction, permission, and responsive checks and their limits.
 - **[docs/TEAM_CHECKLIST.md](docs/TEAM_CHECKLIST.md)** — who does what, in order
 - **[docs/METADATA_GUIDE.md](docs/METADATA_GUIDE.md)** — why metadata decides whether search works
 - **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)** — the relevance formula, written out
-- **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — how the AI phase plugs in later
+- **[docs/document-intelligence.md](docs/document-intelligence.md)** — source coverage, local topic models, review, recovery and rollout
+- **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — implemented AI capabilities and remaining evidence requirements
 - **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — a ten-minute walkthrough for the defence
 - **[docs/APPLYING_UPDATES.md](docs/APPLYING_UPDATES.md)** — updating an existing checkout
 - **[docs/BUGFIX_LOG.md](docs/BUGFIX_LOG.md)** — every bug found and fixed, with the lesson
@@ -195,6 +196,6 @@ calculation, interaction, permission, and responsive checks and their limits.
 
 ## Status
 
-Working prototype. Tracking, archiving, metadata review, search, reporting and administration all function end to end. The AI metadata model is deliberately not built yet — the interface for it exists (`apps/documents/suggestions.py`) and the system is already collecting labelled training data from every review.
+Working prototype. Optional version-bound extraction, source-chunk retrieval, approved aliases and executable local CPU topic models are implemented behind flags that default to off. Training requires explicit reviewed labels and eligibility for an office and collection. Other metadata suggestions remain rule-based. Authored tests verify execution, not production accuracy. Automatic tags stay disabled without qualified real-data evaluation. Follow the [rollout runbook](docs/document-intelligence.md) and [verification report](docs/verification/document-intelligence-2026-10-22.md) before enabling these features on original records.
 
 Never commit `.env`, real documents, or personal data. The `.gitignore` blocks all three, but check before you push.

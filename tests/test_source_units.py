@@ -32,6 +32,19 @@ def test_word_body_order_header_footer_and_embedded_image():
     assert not any("page:" in unit.locator_key for unit in batch.units)
 
 
+def test_many_small_word_blocks_stop_at_an_explicit_unit_budget():
+    word = WordDocument()
+    for i in range(2100):
+        word.add_paragraph(f"Authored paragraph {i}")
+    output = io.BytesIO()
+    word.save(output)
+    batch = reader()(output, "many-blocks.docx", policy=ExtractionPolicy())
+    assert len(batch.units) <= 2000
+    assert batch.expected_units is None
+    assert batch.coverage != "complete" and batch.omitted_reasons
+    assert "Authored paragraph 0" in batch.units[0].normalized_text
+
+
 def test_spreadsheet_cached_formula_gap_and_coordinates():
     workbook = Workbook()
     workbook.active["A1"] = "Context"
@@ -43,6 +56,20 @@ def test_spreadsheet_cached_formula_gap_and_coordinates():
     assert "Context" in batch.units[0].normalized_text
     assert batch.coverage != "complete"
     assert any("cache" in note.lower() for unit in batch.units for note in unit.warnings)
+
+
+def test_workbook_embedded_code_is_never_claimed_as_read():
+    import zipfile
+
+    workbook = Workbook()
+    workbook.active["A1"] = "Readable cell"
+    output = io.BytesIO()
+    workbook.save(output)
+    with zipfile.ZipFile(output, "a") as archive:
+        archive.writestr("xl/vbaProject.bin", b"unexecuted fixture macro bytes")
+    batch = reader()(output, "macro.xlsm", policy=ExtractionPolicy())
+    assert batch.coverage != "complete"
+    assert any("macro" in note.lower() for unit in batch.units for note in unit.warnings)
 
 
 def test_text_splits_units_without_discarding_late_content():

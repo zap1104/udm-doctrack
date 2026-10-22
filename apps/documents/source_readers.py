@@ -105,6 +105,10 @@ def _xml(archive, name, policy):
     return etree.fromstring(archive.read(name), parser=parser)
 
 
+def _word_limit(units, policy):
+    return UnitBatch(tuple(units), None, ("Word source-unit safety limit reached; remaining content is unmeasured.",), policy.digest)
+
+
 def _word(payload, policy):
     units = []
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -128,6 +132,9 @@ def _word(payload, policy):
         main = _xml(archive, "word/document.xml", policy)
         main_rels = relationships("word/document.xml")
         parts = [("word/document.xml", main)]
+        for note_part in ("word/footnotes.xml", "word/endnotes.xml", "word/comments.xml"):
+            if note_part in names:
+                parts.append((note_part, _xml(archive, note_part, policy)))
         for ref in main.xpath("//w:headerReference | //w:footerReference", namespaces=ns):
             path = target("word/document.xml", main_rels.get(ref.get(f"{{{ns['r']}}}id")))
             if path and path not in {entry[0] for entry in parts}:
@@ -141,16 +148,22 @@ def _word(payload, policy):
                 kind = block.tag.rsplit("}", 1)[-1]
                 if kind == "sectPr":
                     continue
+                if len(units) >= policy.max_word_units:
+                    return _word_limit(units, policy)
                 text = "\n".join(" ".join(p.itertext(f"{{{ns['w']}}}t")) for p in block.iter(f"{{{ns['w']}}}p"))
                 warnings = []
                 if any(node.tag.rsplit("}", 1)[-1] in {"altChunk", "object", "pict", "txbxContent"} for node in block.iter()):
                     warnings.append("Unsupported Word object or alternate content may remain unread.")
+                if any(node.tag.rsplit("}", 1)[-1] in {"chart", "relIds", "contentPart"} for node in block.iter()):
+                    warnings.append("Word chart, diagram or linked content remains incompletely read.")
                 if kind not in {"p", "tbl"}:
                     warnings.append("Unsupported Word block may remain unread.")
                 key = f"docx:{part}:block:{block_index}"
                 units.append(_unit(key, len(units)+1, "table" if kind == "tbl" else "paragraph", text,
                     policy=policy, warnings=warnings, metadata={"archive_part": part, "block": block_index}))
                 for image_index, drawing in enumerate(block.xpath(".//*[local-name()='blip']"), 1):
+                    if len(units) >= policy.max_word_units:
+                        return _word_limit(units, policy)
                     rel = rels.get(drawing.get(f"{{{ns['r']}}}embed"))
                     path = target(part, rel)
                     note = "Embedded image needs OCR; it has not been read as text."
@@ -159,6 +172,12 @@ def _word(payload, policy):
                     units.append(_unit(f"{key}:image:{image_index}", len(units)+1, "embedded_image", policy=policy,
                         state=WorkState.PENDING if path else WorkState.ACTION_REQUIRED,
                         warnings=(note,), metadata={"archive_member": path, "ocr_needed": bool(path)}))
+        for member in sorted(name for name in names if name.startswith(("word/embeddings/", "word/diagrams/", "word/charts/"))):
+            if len(units) >= policy.max_word_units:
+                return _word_limit(units, policy)
+            units.append(_unit(f"docx:unsupported:{len(units)+1}", len(units)+1, "embedded_object",
+                policy=policy, state=WorkState.UNSUPPORTED, warnings=("Embedded Word object, chart or diagram remains unread.",),
+                metadata={"archive_member": member}))
     return UnitBatch(tuple(units), len(units), (), policy.digest)
 
 
@@ -167,7 +186,7 @@ def _xlsx(payload, policy):
     from openpyxl.utils import get_column_letter
 
     with _archive(payload, policy) as archive:
-        embedded = [member for member in archive.namelist() if member.startswith(("xl/media/", "xl/embeddings/", "xl/charts/"))]
+        embedded = [member for member in archive.namelist() if member.startswith(("xl/media/", "xl/embeddings/", "xl/charts/", "xl/externalLinks/")) or member.lower().endswith("vbaproject.bin")]
     formulas = load_workbook(io.BytesIO(payload), read_only=True, data_only=False, keep_links=False)
     cached = load_workbook(io.BytesIO(payload), read_only=True, data_only=True, keep_links=False)
     units, omitted = [], []
@@ -212,7 +231,7 @@ def _xlsx(payload, policy):
             is_image = member.startswith("xl/media/")
             units.append(_unit(f"xlsx:embedded:{index}", len(units)+1, "embedded_image" if is_image else "embedded_object",
                 policy=policy, state=WorkState.PENDING if is_image else WorkState.UNSUPPORTED,
-                warnings=("Embedded spreadsheet image or object remains unread.",), metadata={"archive_member": member, "ocr_needed": is_image}))
+                warnings=("Spreadsheet macros are never executed or read." if member.lower().endswith("vbaproject.bin") else "Embedded spreadsheet image, object or linked content remains unread.",), metadata={"archive_member": member, "ocr_needed": is_image}))
     finally:
         formulas.close()
         cached.close()

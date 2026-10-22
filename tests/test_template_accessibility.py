@@ -225,7 +225,7 @@ def test_metadata_review_exposes_errors_on_each_manually_rendered_field():
     fields["tags"] = forms.CharField(label="Tags", help_text="Separate tags with commas.", max_length=2)
     form = template_form(fields, data={"title": "", "office": "999", "document_type": "999", "tags": "long"})
     html = RenderedHTML(render_page("documents/review.html", {
-        "form": form, "document": SimpleNamespace(ocr_status="EMPTY"), "confidence": {}, "suggestion": {},
+        "form": form, "document": SimpleNamespace(pk=1, ocr_status="EMPTY"), "confidence": {}, "suggestion": {},
     }))
     for name in ("title", "office", "document_type", "tags"):
         control = html.field(name)

@@ -11,7 +11,7 @@ from apps.core.utils import log_action
 
 from ..models import Collection, Document
 from .dataset import _sysadmin, validate_snapshot
-from .models import TagModel
+from .models import TagModel, TrainingSnapshot
 
 
 @lru_cache(maxsize=1)
@@ -92,8 +92,8 @@ def rollback_model(*, user, office_id, collection, target_model_id=None):
 
 
 def invalidate_models(snapshot_ids, *, reason):
-    from .models import TrainingSnapshot
-
+    if not snapshot_ids:
+        return
     now = timezone.now()
     TrainingSnapshot.objects.filter(pk__in=snapshot_ids, invalidated_at__isnull=True).update(
         invalidated_at=now, invalidation_reason=reason[:255]
@@ -102,3 +102,25 @@ def invalidate_models(snapshot_ids, *, reason):
         is_active=False, mode="invalid", invalidated_at=now, invalidation_reason=reason[:255]
     )
     clear_model_cache()
+
+
+def invalidate_training_sources(document_ids, *, reason):
+    ids = list(
+        TrainingSnapshot.objects.filter(sources__document_id__in=document_ids, invalidated_at__isnull=True)
+        .values_list("pk", flat=True)
+        .distinct()
+    )
+    invalidate_models(ids, reason=reason)
+    return {"snapshots": len(ids)}
+
+
+def purge_training_content(document_ids):
+    # Snapshot/model rows retain noncontent identifiers and digests as receipts.
+    # Their source payload and fitted coefficients cannot survive source purge.
+    ids = list(
+        TrainingSnapshot.objects.filter(sources__document_id__in=document_ids).values_list("pk", flat=True).distinct()
+    )
+    invalidate_models(ids, reason="A training source was permanently removed")
+    TrainingSnapshot.objects.filter(pk__in=ids).update(payload={})
+    TagModel.objects.filter(snapshot_id__in=ids).update(artifact=b"", evaluation={})
+    return {"snapshots": len(ids)}

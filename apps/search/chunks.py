@@ -10,7 +10,7 @@ from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Exists, F, FloatField, OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Length, Substr
 
 from apps.documents.models import Document, DocumentFileVersion, ExtractionRun, SearchChunk
 from apps.documents.processing_contracts import resolve_file_version
@@ -31,6 +31,8 @@ def current_chunks(document_id=None):
         unit__run__document__is_active=True,
         unit__run__file_version_id=F("_latest_version"),
         unit__run__file_version__document_file__document_id=F("unit__run__document_id"),
+        end_offset__lte=Length("unit__normalized_text"),
+        text=Substr("unit__normalized_text", F("start_offset") + 1, F("end_offset") - F("start_offset")),
     )
     return query.filter(unit__run__document_id=document_id) if document_id is not None else query
 

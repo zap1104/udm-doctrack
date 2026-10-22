@@ -79,17 +79,32 @@ def _validate(bundle):
 
     from .features import DEFAULT_SETTINGS, build_features
 
+    if any(
+        not isinstance(value, dict)
+        for value in (
+            bundle.branches,
+            bundle.classifiers,
+            bundle.feature_settings,
+            bundle.evaluation,
+            bundle.runtime,
+            bundle.scope,
+        )
+    ):
+        raise ValidationError("Invalid model metadata containers.")
     build_features(bundle.feature_settings)  # validate recipe without fitting
     expected_names = {f"{zone}_{kind}" for zone in DEFAULT_SETTINGS["zone_weights"] for kind in ("word", "char")}
     if set(bundle.branches) != expected_names or len(bundle.classifiers) > 32:
         raise ValidationError("Unsupported model dimensions.")
     width = 0
     for name, branch in bundle.branches.items():
+        if not isinstance(branch, dict) or not {"vocabulary", "idf"} <= branch.keys():
+            raise ValidationError("Invalid model branch.")
         vocabulary = branch["vocabulary"]
         cap = bundle.feature_settings["word_features" if name.endswith("word") else "char_features"]
         if (
             not isinstance(vocabulary, dict)
             or len(vocabulary) > cap
+            or any(type(index) is not int for index in vocabulary.values())
             or sorted(vocabulary.values()) != list(range(len(vocabulary)))
         ):
             raise ValidationError("Invalid model vocabulary.")
@@ -100,11 +115,19 @@ def _validate(bundle):
             raise ValidationError("Invalid inverse document frequency.")
         width += len(vocabulary)
     for tag, classifier in bundle.classifiers.items():
+        if (
+            not isinstance(classifier, dict)
+            or not {"coef", "intercept", "threshold", "calibrated", "calibration_coef", "calibration_intercept"}
+            <= classifier.keys()
+        ):
+            raise ValidationError("Invalid classifier metadata.")
+        if type(classifier["calibrated"]) is not bool:
+            raise ValidationError("Invalid calibration flag.")
         if not str(tag).isdigit() or int(tag) <= 0:
             raise ValidationError("Invalid canonical tag ID.")
         _checked_array(classifier["coef"], expected=width)
         for key in ("intercept", "threshold", "calibration_coef", "calibration_intercept"):
-            if not math.isfinite(classifier[key]):
+            if type(classifier[key]) not in (int, float) or not math.isfinite(classifier[key]):
                 raise ValidationError("Nonfinite classifier parameter.")
         if not 0 <= classifier["threshold"] <= 1:
             raise ValidationError("Invalid threshold.")
@@ -173,6 +196,8 @@ def load_bundle(model, *, scope, runtime=None):
             if archive.getinfo("manifest.json").file_size > MAX_MANIFEST_BYTES:
                 raise ValidationError("Model manifest is too large.")
             manifest = json.loads(archive.read("manifest.json"))
+            if not isinstance(manifest, dict):
+                raise ValidationError("Invalid model manifest.")
             if (
                 manifest["schema"] != SCHEMA
                 or manifest["runtime"] != (runtime or runtime_versions())
@@ -181,7 +206,11 @@ def load_bundle(model, *, scope, runtime=None):
                 raise ValidationError("Model runtime, schema or scope does not match.")
             expected_names = {"manifest.json"}
             for container in (manifest["branches"], manifest["classifiers"]):
+                if not isinstance(container, dict):
+                    raise ValidationError("Invalid model member container.")
                 for entry in container.values():
+                    if not isinstance(entry, dict):
+                        raise ValidationError("Invalid model member metadata.")
                     key = entry.pop("array")
                     if not isinstance(key, str) or not key[1:].isdigit() or key[0] not in "bc":
                         raise ValidationError("Invalid model member reference.")
@@ -208,7 +237,7 @@ def load_bundle(model, *, scope, runtime=None):
                 raise ValidationError("Unexpected model archive member.")
     except ValidationError:
         raise
-    except (ValueError, TypeError, KeyError, IndexError, zipfile.BadZipFile, EOFError) as exc:
+    except (ValueError, TypeError, KeyError, IndexError, RecursionError, zipfile.BadZipFile, EOFError) as exc:
         raise ValidationError("The model artifact cannot be loaded safely.") from exc
     bundle = ModelBundle(
         scope=manifest["scope"],

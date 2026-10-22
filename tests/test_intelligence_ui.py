@@ -54,6 +54,32 @@ def test_source_ui_is_safe_scoped_and_current(client, users, readable_source):
     assert client.get(detail).status_code == 404
 
 
+def test_existing_document_predictions_require_explicit_authorized_post(client, users, readable_source, settings):
+    from apps.documents.ml.lifecycle import activate_model
+    from tests.ml_fixtures import make_candidate
+
+    settings.ENABLE_TAG_ML = True
+    model = make_candidate(users)
+    activate_model(model.pk, user=users["admin"], mode="suggestion")
+    doc, _ = readable_source
+    endpoint = reverse("documents:tag_predict", args=[doc.pk])
+    data = {"input_revision": input_revision(doc), "vocabulary": vocabulary_digest()}
+    client.force_login(users["med"])
+    assert client.get(endpoint).status_code == 405
+    assert not doc.tag_predictions.exists()
+    assert client.post(endpoint, {**data, "input_revision": "stale"}).status_code == 409
+    assert not doc.tag_predictions.exists()
+    assert client.post(endpoint, data).status_code == 302
+    assert doc.tag_predictions.exists()
+    assert not doc.tags.exists()
+    doc.refresh_from_db()
+    assert doc.extraction_generation == 0
+    client.force_login(users["viewer"])
+    assert client.post(endpoint, data).status_code == 403
+    client.force_login(users["hr"])
+    assert client.post(endpoint, data).status_code in {403, 404}
+
+
 def test_tag_review_post_is_explicit_and_stale_revision_conflicts(client, users, readable_source):
     doc, _ = readable_source
     tag = Tag.objects.create(name="approved topic", globally_approved=True)

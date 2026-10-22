@@ -137,8 +137,51 @@ def _assign_families(examples):
         row["family"] = f"family-{root(row['document_id'])}"
 
 
-@transaction.atomic
 def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synthetic=False):
+    # Storage IO stays outside document locks. Compare the exact file manifest
+    # again under locks before publishing a snapshot.
+    with transaction.atomic():
+        _sysadmin(user)
+    from ..models import DocumentFile
+
+    if collection not in Collection.values or not Office.objects.filter(pk=office_id, is_active=True).exists():
+        raise ValidationError("Select an active internal office and a valid collection.")
+
+    population = Document.objects.filter(
+        office_id=office_id, collection=collection, is_active=True, training_eligible=True
+    ).exclude(access_level=AccessLevel.RESTRICTED)
+    if population.count() > MAX_EXAMPLES:
+        raise ValidationError("The training snapshot exceeds its document budget.")
+
+    source_files = DocumentFile.objects.filter(
+        document__office_id=office_id,
+        document__collection=collection,
+        document__is_active=True,
+        document__training_eligible=True,
+    )
+    source_files = source_files.exclude(document__access_level=AccessLevel.RESTRICTED).order_by("pk")
+    if source_files.count() > 10_000:
+        raise ValidationError("The training source file count exceeds its safety budget.")
+    manifest = list(source_files.values_list("pk", "document_id", "file", "checksum"))
+    storage = DocumentFile._meta.get_field("file").storage
+    try:
+        if any(not name or not storage.exists(name) for _, _, name, _ in manifest):
+            raise OSError("Missing source")
+    except Exception as exc:
+        raise ValidationError("A training source file is missing or its private storage is unavailable.") from exc
+    return _prepare_dataset(
+        user=user,
+        office_id=office_id,
+        collection=collection,
+        seed=seed,
+        dry_run=dry_run,
+        synthetic=synthetic,
+        file_manifest=manifest,
+    )
+
+
+@transaction.atomic
+def _prepare_dataset(*, user, office_id, collection, seed, dry_run, synthetic, file_manifest):
     actor = _sysadmin(user)
     if collection not in Collection.values or not Office.objects.filter(pk=office_id, is_active=True).exists():
         raise ValidationError("Select an active internal office and a valid collection.")
@@ -150,6 +193,16 @@ def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synth
     )
     if documents.count() > MAX_EXAMPLES:
         raise ValidationError("The training snapshot exceeds its document budget.")
+    documents = list(documents)
+    from ..models import DocumentFile
+
+    current_manifest = list(
+        DocumentFile.objects.filter(document_id__in=[doc.pk for doc in documents])
+        .order_by("pk")
+        .values_list("pk", "document_id", "file", "checksum")
+    )
+    if current_manifest != file_manifest:
+        raise ValidationError("A training source file changed during validation. Retry preparation.")
     tag_ids = list(
         Tag.objects.filter(is_active=True, canonical__isnull=True, globally_approved=True)
         .exclude(category=Tag.Category.OFFICE)
@@ -167,8 +220,16 @@ def prepare_dataset(*, user, office_id, collection, seed=42, dry_run=True, synth
         if total_chars > MAX_SNAPSHOT_CHARS:
             raise ValidationError("The training snapshot exceeds its text budget.")
         tokens = ["text:" + digest([zones[key] for key in ("title", "header", "body")])]
+        if zones["body"].strip():
+            tokens.append("body:" + digest(zones["body"]))
         tokens += [
             "hash:" + checksum for checksum in document.files.exclude(checksum="").values_list("checksum", flat=True)
+        ]
+        tokens += [
+            "hash:" + value
+            for value in document.extraction_runs.filter(is_current=True)
+            .exclude(content_hash="")
+            .values_list("content_hash", flat=True)
         ]
         if document.training_family:
             tokens.append("declared:" + document.training_family)

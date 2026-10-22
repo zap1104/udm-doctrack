@@ -12,14 +12,16 @@
     <div class="card-udm-body">
       <p>{% if coverage.expected != None %}<strong>{{ coverage.readable }} readable of {{ coverage.expected }} expected</strong> source units.{% else %}<strong>{{ coverage.readable }} readable source units.</strong> The complete expected count is unknown.{% endif %}</p>
       <p class="text-muted small">A unit is a PDF page, image frame, text block or worksheet range. Word and spreadsheet units are not physical page counts.</p>
+      <p class="small">Source search index: <strong>{{ index_status }}</strong>. Index freshness is separate from reading coverage and processing status.</p>
       {% if coverage.reasons %}<details><summary>Coverage notes</summary><ul>{% for reason in coverage.reasons %}<li>{{ reason }}</li>{% endfor %}</ul></details>{% endif %}
       <details><summary>Processing and suggestion status</summary>
         <ul>{% for run in runs %}<li>{{ run.file_version.original_name }}: {{ run.get_state_display }}{% if run.next_attempt_at %}; next retry no earlier than {{ run.next_attempt_at|date:"d M Y, P" }}{% endif %}{% if run.suggestion_intent %}; suggestions: {{ run.suggestion_intent.state }}{% endif %}</li>{% empty %}<li>No version-bound extraction has been requested.</li>{% endfor %}</ul>
         {% if suggestion %}<p class="small">Last saved suggestion engine: {{ suggestion.engine }} ({{ suggestion.engine_version }}). Tag reviews and file contents are kept separately.</p>{% endif %}
       </details>
     </div>
-    <div class="table-responsive">
-      <table class="table mb-0"><caption class="visually-hidden">Current file source units and their reading coverage</caption>
+    <p class="small d-md-none px-3">Scroll horizontally to see reading status and actions.</p>
+    <div class="table-responsive" tabindex="0" role="region" aria-label="Source units, scroll horizontally on smaller screens">
+      <table class="table mb-0 source-unit-table"><caption class="visually-hidden">Current file source units and their reading coverage</caption>
         <thead><tr><th scope="col">File</th><th scope="col">Location</th><th scope="col">Reading status</th><th scope="col">Coverage</th><th scope="col">Action</th></tr></thead>
         <tbody>{% for unit in units %}<tr><td class="text-break">{{ unit.run.file_version.original_name }}<span class="d-block text-muted small">File version {{ unit.run.file_version.version_number }}</span></td><td>{{ unit.locator_key }}</td><td>{{ unit.get_state_display }}</td><td>{{ unit.get_coverage_display }}{% if unit.truncated %} · truncated{% endif %}</td><td><a href="{% url 'documents:source_unit' document.pk unit.pk %}">Read text<span class="visually-hidden"> from {{ unit.locator_key }}</span></a></td></tr>{% empty %}<tr><td colspan="5">No version-bound source text has been published. Original previews and downloads remain available on the document page.</td></tr>{% endfor %}</tbody>
       </table>
@@ -32,6 +34,7 @@
     <div class="card-udm-head"><h2 id="tag-review-title" tabindex="-1">Review topic tags</h2></div>
     <div class="card-udm-body">
       <p>Confirm a relevant topic, reject an incorrect one, or choose <strong>Not sure</strong>. An unreviewed tag stays unknown.</p>
+      {% if can_generate %}<form method="post" action="{% url 'documents:tag_predict' document.pk %}" class="mb-3">{% csrf_token %}<input type="hidden" name="input_revision" value="{{ input_revision }}"><input type="hidden" name="vocabulary" value="{{ review_form.initial.vocabulary }}"><button type="submit" class="btn btn-udm-outline">Generate current topic proposals</button><p class="small text-muted mt-2">Uses existing published text. Does not rerun OCR or assign tags.</p></form>{% endif %}
       {% if predictions %}<details><summary>Current local model proposals</summary><ul>{% for prediction in predictions %}<li><strong>{{ prediction.tag.name }}</strong> · model score {{ prediction.score|floatformat:3 }}<ul>{% for evidence in prediction.evidence.features %}<li>{{ evidence.zone|capfirst }}: “{{ evidence.term }}”{% if evidence.source %} · <a href="{% url 'documents:source_unit' document.pk evidence.source.unit_id %}">{{ evidence.source.filename }} · {{ evidence.source.locator }}</a>{% endif %}</li>{% endfor %}</ul></li>{% endfor %}</ul><p class="small text-muted">A model score is not a guarantee of correctness. Automatic qualification and human decisions are checked separately.</p></details>{% endif %}
       <form method="post" action="{% url 'documents:tag_review' document.pk %}" data-tag-review>{% csrf_token %}{{ review_form.as_p }}<button class="btn btn-udm" type="submit">Save tag decision</button></form>
       <details class="mt-4"><summary>Review a defined set of tags</summary><p>Choose the exact tags covered. Tags in that set that you do not confirm will be recorded as rejected.</p><form method="post" action="{% url 'documents:tag_review_complete' document.pk %}" data-tag-review>{% csrf_token %}{{ complete_form.as_p }}<button class="btn btn-udm-outline" type="submit">Save this complete review</button></form></details>

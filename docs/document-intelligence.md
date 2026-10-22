@@ -75,4 +75,31 @@ Runs pin numeric processing policy, language, backend and a nonsecret provider e
 
 Dry run is the default. Apply requeues existing eligible intent with its original actor, never a replacement system identity. Three expired-lease recoveries or three unit retry rounds require explicit attention. q2 delivery retry900seconds exceeds timeout600seconds; delivery attempts are finite. A quota wait remains pending until a due recovery pass. No exactly-once provider billing guarantee is made.
 
+Recovery queues intent; it does not run a worker. With background jobs disabled, an operator must explicitly resume eligible processing or use the existing local driver. Run `manage.py qcluster` for the existing django-q2 worker in a deployment that supports persistent workers. A serverless web request is not a replacement worker.
+
 Turning off the source-unit flag preserves pending intent, stops its processing/recovery and retains coverage history. It does not undo bytes already dispatched, remove human metadata or claim unprocessed content was read. The current legacy path remains separately available while rollout verification continues.
+
+## Lifecycle, reconciliation and resource bounds
+
+Metadata/source/eligibility changes and explicit review changes disable affected model releases and clear the local bundle cache. Approved vocabulary changes invalidate releases; private unapproved ad-hoc tags do not. Immutable vocabulary snapshots preserve what was reviewed. A label can survive an unrelated vocabulary addition only when its recorded topic definition is unchanged; a newly introduced topic remains unknown. Restoring a document or its training permission does not reactivate an old release.
+
+Deleting a repository record hides its evidence and chunks immediately. The existing 30-day recovery flow remains. Permanent deletion also clears any private snapshot payload and fitted artifacts containing that source, preserving noncontent identifiers/digests for audit. Repository cleanup deduplicates storage names and preserves shared objects and original Tracking attachments.
+
+`manage.py reconcile_processing --limit 100 --after-id 0 --collection OVPA` inventories a finite batch without OCR or new inference. Add `--apply` to rebuild stale current-source indexes and invalidate inconsistent training snapshots. Continue from the reported `after_id`; choose EXTERNAL explicitly when needed. This command never substitutes an administrator for the original processing actor. Source coverage, processing state and search-index freshness are displayed separately.
+
+Revision hashing streams every current unit rather than creating one combined text blob. A model input is bounded at one million characters with no prefix substitution. Snapshots allow at most 2,000 examples, 10,000 source files and 50 million text characters. File existence checks happen outside document locks; the file manifest is rechecked before snapshot publication. Missing storage/files reject preparation.
+
+The feature recipe streams word/bigram and character n-grams. Each branch permits at most 100,000 raw distinct terms and two million sparse entries before allocation grows further; final vocabularies retain at most 20,000 word and 30,000 character features per zone. Over-budget inputs abstain or require action, rather than silently training on a prefix. Prediction evidence inspects a bounded set of actual nonzero contributions in the current input. It does not scan every model term or retain another user's feature vector in a shared cache.
+
+PDF vector artwork/annotations trigger visual/OCR review instead of allowing a native header to imply complete reading. Word objects/charts/diagrams and spreadsheet macros/linked content remain explicitly incomplete when unsupported. Macros and external embedded resources are never executed or fetched. OCR completion is not signature verification or a claim of linguistic accuracy.
+
+## Enabling and operating locally
+
+1. Back up the database and private file storage. Review and apply the additive migrations to a disposable database first, then to the intended database only when authorized. Existing file paths and original bytes stay unchanged.
+2. Install base dependencies and the optional `requirements-ml.txt` profile using a compatible Python. The verified local runtime is Windows Python 3.13; Python 3.12 Linux wheels are available. Downloaded wheels do not establish a Linux runtime test. Artifacts must be retrained after runtime changes.
+3. Configure existing durable private storage, SMTP and a persistent q2 worker for production. For OCR.space Free, configure the existing API key privately, select the OCR backend, and honor each document's external-provider consent. No new service/key is required for local topic inference or previews.
+4. Enable source units and source-chunk search separately after checking fixtures. Review source coverage before interpreting proposals. Optional `ENABLE_APPROVED_SEARCH_ALIASES=True` uses only explicitly approved global phrases; system administrators manage these under Approved topic vocabulary. It does not expose private ad-hoc terms.
+5. Obtain explicit training eligibility and reviewed topic decisions, then run prepare, train and evaluate commands above. Activate shadow first. Enable `ENABLE_TAG_ML=True` and `SUGGESTION_ENGINE=ai` for scoped inference. Existing records have an explicit Generate current topic proposals action that reuses published text and does not assign tags.
+6. Keep `ENABLE_AUTOMATIC_TAGS=False` until qualified real-data evaluation and per-topic approval exist. A fixture-trained model is always ineligible. Use release rollback and contribution rollback separately when appropriate; human decisions remain.
+
+For live QA, `scripts/check_document_intelligence.cjs` accepts `--base-url`, `--fixture` and `--out`. It requires a loopback-only disposable server and a private fixture JSON containing fresh role credentials, collection-specific document IDs and a synthetic topic/model ID. Do not pass production credentials or commit the fixture. It drives real login and CSRF forms; it does not mock HTML or backend responses. Its report explicitly distinguishes CSS 200% zoom from native browser zoom.

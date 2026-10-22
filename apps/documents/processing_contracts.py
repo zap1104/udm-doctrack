@@ -78,6 +78,7 @@ class UnitBatch:
 @dataclass(frozen=True)
 class ExtractionPolicy:
     max_unit_chars: int = 500_000
+    max_word_units: int = 2000
     max_pages: int = 200
     max_frames: int = 100
     max_rows: int = 10_000
@@ -105,6 +106,8 @@ class ExtractionPolicy:
                 raise ValidationError(f"Processing limit {key} is outside its safe range.")
         if self.max_request_bytes > 1_000_000 or self.max_body_bytes > 1_000_000 or self.provider_pages != 1:
             raise ValidationError("OCR.space Free requires a request budget at most 1 MB and one page per dispatch.")
+        if type(self.max_word_units) is not int or self.max_word_units > 2000:
+            raise ValidationError("Word source-unit limits must be at most 2000.")
         if not 0 < self.image_coverage_threshold <= 1 or not 72 <= self.render_dpi <= 300:
             raise ValidationError("Invalid image assessment or rendering policy.")
         if self.provider_timeout > 120 or self.provider_timeout * (self.provider_retries + 1) + 60 >= self.worker_timeout:

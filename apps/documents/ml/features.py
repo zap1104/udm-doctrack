@@ -1,5 +1,7 @@
 """Train-only word and character features with numerical zone weights."""
 
+import re
+
 from django.core.exceptions import ValidationError
 from scipy.sparse import csr_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -25,6 +27,54 @@ class ZoneSelector(TransformerMixin, BaseEstimator):
 
 
 class SafeTfidf(TfidfVectorizer):
+    def build_analyzer(self):
+        # sklearn's default n-gram helpers materialize every gram before
+        # max_features is applied. Stream the supported recipe and bound the
+        # vocabulary and sparse entries before their allocation can grow.
+        preprocess = self.build_preprocessor()
+        pattern = re.compile(self.token_pattern) if self.analyzer == "word" else re.compile(r"\S+")
+        fixed = getattr(self, "fixed_vocabulary_", False)
+        vocabulary = set()
+        entries = 0
+
+        def grams(text):
+            previous = None
+            for match in pattern.finditer(text):
+                word = match.group()
+                if len(word) > 512:
+                    raise ValidationError("The feature token budget was exceeded; no prefix was substituted.")
+                if self.analyzer == "word":
+                    yield word
+                    if self.ngram_range[1] >= 2 and previous is not None:
+                        yield previous + " " + word
+                    previous = word
+                else:
+                    word = " " + word + " "
+                    for n in range(self.ngram_range[0], self.ngram_range[1] + 1):
+                        yield word[:n]
+                        if len(word) <= n:
+                            break
+                        for offset in range(1, len(word) - n + 1):
+                            yield word[offset : offset + n]
+
+        def analyze(document):
+            nonlocal entries
+            seen = set()
+            for gram in grams(preprocess(self.decode(document))):
+                if fixed and gram not in self.vocabulary_:
+                    continue
+                seen.add(gram)
+                if not fixed:
+                    vocabulary.add(gram)
+                    if len(vocabulary) > 100_000:
+                        raise ValidationError("The feature vocabulary budget was exceeded; no prefix was substituted.")
+                if entries + len(seen) > 2_000_000:
+                    raise ValidationError("The sparse feature entry budget was exceeded; no prefix was substituted.")
+                yield gram
+            entries += len(seen)
+
+        return analyze
+
     def fit_transform(self, raw_documents, y=None):
         try:
             self.is_empty_ = False

@@ -125,7 +125,11 @@ def ocr_unit(payload: bytes, filename: str, *, source_locator: str, policy: Extr
     """One source page/frame; every retry gets fresh dispatch authorization."""
     locator = source_locator
     key = settings.OCR_SPACE_API_KEY
-    endpoint = urlsplit(settings.OCR_SPACE_ENDPOINT)
+    try:
+        endpoint = urlsplit(settings.OCR_SPACE_ENDPOINT)
+        _port = endpoint.port  # validate malformed or out-of-range ports before dispatch
+    except (ValueError, TypeError, AttributeError):
+        return _outcome(locator, state=WorkState.BLOCKED, note="The OCR endpoint configuration is invalid.")
     if not key:
         return _outcome(locator, state=WorkState.BLOCKED, note="OCR.space is not configured; enter metadata manually or retry after setup.")
     if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:

@@ -2,6 +2,7 @@
 
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
@@ -62,6 +63,8 @@ def current_units(document):
 
 
 def review_context(request, document):
+    from .reconciliation import index_status
+
     revision, vocabulary = input_revision(document), vocabulary_digest()
     initial = {"input_revision": revision, "vocabulary": vocabulary}
     context = paginate(
@@ -73,7 +76,11 @@ def review_context(request, document):
         units=context["page_obj"].object_list,
         coverage=coverage_summary(document),
         can_edit=may_edit,
+        can_generate=may_edit
+        and settings.ENABLE_TAG_ML
+        and (request.user.is_system_admin or request.user.office_id == document.office_id),
         input_revision=revision,
+        index_status=index_status(document),
         review_form=TagReviewForm(document=document, user=request.user, initial=initial, auto_id="review_%s"),
         complete_form=CompleteTagReviewForm(
             document=document, user=request.user, initial=initial, auto_id="complete_%s"
@@ -153,6 +160,30 @@ class SourceUnitView(AppLoginRequiredMixin, View):
                 "file": version_rows([unit.run.file_version], "repository", request.user)[0],
             },
         )
+
+
+class TagPredictView(AppLoginRequiredMixin, View):
+    def post(self, request, pk):
+        from .ml.inference import predict_tags
+
+        document = _get_document(request, pk)
+        if not document.can_user_edit(request.user):
+            raise PermissionDenied("Only an authorized editor can request topic proposals.")
+        if (
+            any(len(request.POST.getlist(key)) != 1 for key in ("input_revision", "vocabulary"))
+            or request.POST.get("input_revision") != input_revision(document)
+            or request.POST.get("vocabulary") != vocabulary_digest()
+        ):
+            messages.error(request, "The content or vocabulary changed. Reload before requesting proposals.")
+            return render(request, "documents/intelligence/units.html", review_context(request, document), status=409)
+        result = predict_tags(document, user=request.user)
+        if result.mode == "fallback":
+            messages.warning(request, "No eligible local model is available. Manual topic review remains available.")
+        elif result.mode == "shadow":
+            messages.info(request, "Shadow predictions recorded. They do not change visible suggestions or tags.")
+        else:
+            messages.success(request, "Current topic proposals generated. Review them before assigning tags.")
+        return redirect(reverse("documents:source_units", args=[pk]) + "#tag-review")
 
 
 class TagReviewView(AppLoginRequiredMixin, View):

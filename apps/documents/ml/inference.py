@@ -66,18 +66,29 @@ def _fresh_reader(document, user):
     return actor
 
 
-def _evidence(bundle, classifier, content):
+def _evidence(bundle, classifier, content, matrix):
     # Feature evidence comes only from this document, never example text or
     # a downloadable model vocabulary. Offsets refer to normalized zones.
     evidence = []
     cursor = 0
+    scale = classifier["calibration_coef"] if classifier["calibrated"] else 1.0
+    contributions = [
+        (float(value * classifier["coef"][index] * scale), int(index))
+        for index, value in zip(matrix.indices, matrix.data, strict=True)
+        if value * classifier["coef"][index] * scale > 0
+    ]
+    selected = {index: weight for weight, index in sorted(contributions, reverse=True)[:25]}
     for branch_name, branch in bundle.branches.items():
         zone, kind = branch_name.rsplit("_", 1)
         width = len(branch["vocabulary"])
         if kind == "word":
             text = getattr(content, zone)
             weighted = sorted(
-                ((classifier["coef"][cursor + index], term) for term, index in branch["vocabulary"].items()),
+                (
+                    (selected[cursor + index], term)
+                    for term, index in branch["vocabulary"].items()
+                    if cursor + index in selected
+                ),
                 reverse=True,
             )
             for weight, term in weighted:
@@ -141,6 +152,9 @@ def predict_tags(document, *, user=None):
         content = content_input(current)
         bundle = cached_bundle(model.pk, model.artifact_digest)
         probabilities = bundle.predict([asdict(content)])[0]
+        # Local sparse evidence only. Never cache another document's feature
+        # vector on the shared model bundle.
+        matrix = bundle._features.transform([asdict(content)]).tocsr()
         active_tags = set(
             Tag.objects.filter(pk__in=probabilities, is_active=True, canonical__isnull=True).values_list(
                 "pk", flat=True
@@ -155,14 +169,14 @@ def predict_tags(document, *, user=None):
                 TagDecision(
                     tag_id=tag_id,
                     score=probability,
-                    action="suggest" if probability >= classifier["threshold"] else "abstain",
+                    action="suggest" if matrix.nnz and probability >= classifier["threshold"] else "abstain",
                     model_id=model.pk,
                     artifact_digest=model.artifact_digest,
                     input_revision=content.input_revision,
                     vocabulary=bundle.vocabulary,
                     threshold=classifier["threshold"],
                     calibrated=classifier["calibrated"],
-                    evidence=_evidence(bundle, classifier, content),
+                    evidence=_evidence(bundle, classifier, content, matrix),
                 )
             )
         # Shadow and normal predictions share the same stale-result checks.

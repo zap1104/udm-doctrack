@@ -6,3 +6,6 @@ class DocumentsConfig(AppConfig):
     name = "apps.documents"
     label = "documents"
     verbose_name = "Document management (DMS)"
+
+    def ready(self):
+        from . import lifecycle_hooks  # noqa: F401

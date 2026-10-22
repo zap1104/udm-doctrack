@@ -72,6 +72,8 @@ def placed_image_coverage(page):
                 matrix = _compose(matrix, operands)
             elif operator in {b"W", b"W*"}:
                 warnings.append("Complex clipping makes placed-image coverage an upper-bound estimate.")
+            elif operator in {b"S", b"s", b"f", b"F", b"f*", b"B", b"B*", b"b", b"b*", b"sh"}:
+                warnings.append("Vector artwork may contain outlined text or signatures that native text extraction cannot verify.")
             elif operator == b"INLINE IMAGE":
                 add(matrix, clips)
             elif operator == b"Do":
@@ -98,6 +100,8 @@ def placed_image_coverage(page):
 def assess_pdf_page(page, rendered_page, *, policy):
     text = page.extract_text() or ""
     warnings = []
+    if page.get("/Annots"):
+        warnings.append("PDF annotation appearance and handwritten content require visual/OCR review.")
     try:
         coverage, geometry_warnings = placed_image_coverage(page)
         warnings.extend(geometry_warnings)
