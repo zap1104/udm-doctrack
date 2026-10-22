@@ -58,7 +58,12 @@ def test_uncertainty_samples_use_current_scoped_predictions(users, population):
     model = make_candidate(users)
     tag = Tag.objects.get(pk=model.topic_fixture_id)
     activate_model(model.pk, user=users["admin"], mode="suggestion")
-    for i, doc in enumerate(own[:3]):
+    # Choose documents outside the independent random portion. IDs vary with
+    # suite order; already-audited uncertain documents must not be duplicated.
+    audit_ids = {row["document"].pk for row in review_samples(user=users["med"], collection="OVPA", seed="mixed")[:10]}
+    candidates = [doc for doc in own if doc.pk not in audit_ids][:3]
+    assert len(candidates) == 3
+    for i, doc in enumerate(candidates):
         TagPrediction.objects.create(
             document=doc,
             tag=tag,
@@ -72,11 +77,38 @@ def test_uncertainty_samples_use_current_scoped_predictions(users, population):
         )
     rows = review_samples(user=users["med"], collection="OVPA", seed="mixed")
     uncertain = [r for r in rows if r["method"] == "uncertainty"]
-    assert uncertain
+    assert {row["document"].pk for row in uncertain} == {doc.pk for doc in candidates[:2]}
     distances = [abs(r["score"] - r["threshold"]) for r in uncertain]
     assert distances == sorted(distances)
-    assert all(r["document"].pk != own[2].pk for r in uncertain)
+    assert all(r["document"].pk != candidates[2].pk for r in uncertain)
     assert any(r["method"] == "random_audit" for r in rows)
+
+
+def test_random_audits_already_covering_uncertainty_are_not_duplicated(users, population):
+    from apps.documents.ml.lifecycle import activate_model
+    from apps.documents.review_sampling import review_samples
+    from tests.ml_fixtures import make_candidate
+
+    model = make_candidate(users)
+    activate_model(model.pk, user=users["admin"], mode="suggestion")
+    audit = review_samples(user=users["med"], collection="OVPA", seed="covered")
+    for row in audit[:2]:
+        doc = row["document"]
+        TagPrediction.objects.create(
+            document=doc,
+            tag_id=model.topic_fixture_id,
+            engine="ml",
+            decision="suggest",
+            model_reference=str(model.pk),
+            score=0.51,
+            input_revision=input_revision(doc),
+            vocabulary=vocabulary_digest(),
+            evidence={"mode": "suggestion", "threshold": 0.5},
+        )
+    samples = review_samples(user=users["med"], collection="OVPA", seed="covered")
+    assert len(samples) == len({row["document"].pk for row in samples})
+    assert all(row["method"] == "random_audit" for row in samples)
+    assert {row["document"].pk for row in audit} == {row["document"].pk for row in samples}
 
 
 def test_signed_sampling_provenance_is_saved_not_trusted_from_post(client, users, population):

@@ -1,5 +1,7 @@
 # DocTrack Document Intelligence Implementation Plan
 
+Execution status: implemented locally on `feature/documents-intelligence`, with final review repairs and disposable-data verification recorded in [the verification ledger](../../verification/document-intelligence-2026-10-22.md). The historical checklists below are the approved instructions. Feature checks pass; unrelated pending External custody tests keep the whole-workspace release gate red. No production activation, original database migration, push or deployment is included.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver version-bound extraction, truthful OCR coverage, source-aware search, controlled topic tags, and an executable local ML training/inference lifecycle without disrupting DocTrack.

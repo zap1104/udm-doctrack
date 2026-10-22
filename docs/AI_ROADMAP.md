@@ -11,6 +11,7 @@ The optional local topic model is executable. `AIEngine` runs a private, scoped 
 - Shared train-only word and character TF-IDF features feed per-topic logistic regressions. Known-label masks, separate sigmoid calibration when supported, development thresholds and frozen independent holdout metrics are implemented. Small or uncalibrated candidates remain suggestion-only.
 - Private bounded JSON/numeric artifacts run without pickle. Explicit shadow, suggestion, activation and rollback actions retain source/vocabulary/runtime checks.
 - Source evidence, human review, eligibility, model administration and private saved-filter views have UI support. Existing records can request fresh proposals without rerunning OCR or assigning tags.
+- A scoped review queue mixes repeatable random audits with bounded uncertainty review and saves signed sampling provenance. Evaluation records final-test reuse and reports all-document metrics separately from independent-family qualification. Language-quality evaluation remains unavailable until reviewed language annotations exist.
 
 ## Boundaries
 

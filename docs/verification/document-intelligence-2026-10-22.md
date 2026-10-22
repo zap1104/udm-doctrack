@@ -3,7 +3,7 @@
 Plan: `docs/superpowers/plans/2026-10-22-document-intelligence.md`, user-approved Native execution on 22 October 2026.
 Product baseline: e974d30. Design/plan commits: de0ab72, 1b5fc00. Local branch: feature/documents-intelligence.
 
-Implementation in progress. No push, merge, deployment, original database migration or live provider work.
+Implementation and final review repairs are complete locally, with the verification limits below. No push, merge, deployment, original database migration or live provider work. The whole-workspace release gate is not green because separately pending External custody tests fail.
 
 ## Task 1: processing contracts
 
@@ -120,3 +120,46 @@ Ruling: preserve Native implementation with one final independent review, rather
 Ruling: implement the specification's omitted review queue and document-level metrics in the final fix pass. The detailed plan omitted the queue but the approved design requires it. Cost: one additive sampling-provenance migration and a small scoped review page.
 Ruling: disclose unavailable language annotations instead of inferring language from OCR settings. Cost: multilingual model-quality slices remain unmeasured until trustworthy annotation exists.
 Ruling: declare holdout overlap rather than claiming repeated evaluations are fresh; old untracked registry entries remain explicitly unknown. Cost: prior evaluations cannot establish first-use evidence retrospectively.
+
+## Frozen implementation verification
+
+Verified implementation revision: `beaba9675b9277e58a0308253559c52e87dcac3e`. Later commits change tests and documentation only. All Python request tests use disposable PostgreSQL databases and temporary storage with provider keys blank; actual browser journeys use `doctrack_intelligence_browser_20261023`. No original database migration, original-data training/export, live OCR, push, merge or deployment occurred. A separate local `.env.example` configuration edit is excluded from these commits and has not been used for provider testing.
+
+| Check | Fresh result on the frozen code | Evidence under ignored `.vercel/ai-ml-audit/` |
+| --- | --- | --- |
+| Entire project pytest | 7,876 passed, 49 failed, 4 skipped, 1,506.20s; one test-fixture failure corrected below; 48 unrelated failures retained | `final-full.xml`, `final-full.log` |
+| Corrected queue + failing-module recheck | 19 passed, 48 failed, 51.63s; every remaining failure is in the three pending External modules | `final-failure-recheck.xml` |
+| Corrected queue + background-only purge/security | 30 passed, 0 failed, 40.99s | `final-sampling-and-purge.xml` |
+| q2-enabled feature modules | 154 passed, 0 failed, 259.88s | `final-background.xml` |
+| q2-enabled lifecycle/hardening/application recovery | 21 passed, 0 failed, 31.20s | `final-background-related.xml` |
+| Legacy/file-version background compatibility | 79 passed, 0 failed, 89.35s | `final-background-compatibility.xml` |
+| JavaScript | 178 passed, 0 failed, 2.339s | `final-js.log` |
+| Live Chrome | Passed 96 layouts: 8 pages × 6 widths × 2 themes; no page errors | `browser-review/results.json`, screenshots |
+| Ruff | Passed across apps/tests/scripts | `final-ruff.log` |
+| Templates | 118 checked, no problems | `final-templates.log` |
+| Django check | No issues | recorded command output |
+| Deployment check | 0 errors, 1 HSTS warning in placeholder audit settings | `final-deploy-check.log` |
+| Migrations | 0028 applied on disposable browser DB; second run no operations; drift none | `final-migrate.log`, `final-drift.log` |
+| Internal workflow self-check | All 20 checks passed | `final-selfcheck.log` |
+| Page smoke | 229 requests across 4 roles, no unexpected errors; expected viewer403s are logged | `final-smoke.log` |
+| Actual worker interruption | Killed child after committed claim; original actor recovered; complete; interruptions1, attempts2, provider calls0 | `final-worker-kill.log`, `worker-kill-result.json` |
+
+The Chrome script used real authentication, CSRF-protected model proposals, human review and signed queue review, stale409 responses, signed version preview/download, saved-view reopen, explicit Search HTMX, automatic Dashboard filtering and a retained lower-page position, viewer/foreign-office refusal, keyboard focus and no-JavaScript External navigation. Required widths were320,390,768,900,901,1366 in both themes. The 390px light source view was visually inspected after widening source columns within a keyboard-scrollable table. CSS200% zoom was checked, not native browser zoom. Physical devices and screen readers were not tested.
+
+The additional full-run failure was `test_uncertainty_samples_use_current_scoped_predictions`: under its suite-dependent IDs, both valid uncertain documents were already selected for the random audit, correctly leaving no additional uncertainty rows. This was a fixture assumption, not a production selection failure. The fixture now deliberately chooses documents outside the first ten random audit slots, and asserts the exact two current IDs. A new regression separately verifies that uncertain documents already covered by random audit are not duplicated. All seven queue cases pass in both audit profiles. No implementation code changed after the full run. Rather than describing another full run as performed, the table records the actual full result and the narrower repair verification separately.
+
+Across the four background-enabled runs, all 284 test executions passed, representing 278 distinct cases after removing six repeated queue cases. This is not a second full-project suite. The full-run skips were: background-only purge, background-only security maintenance, a direction fixture with no matching rows, and the older opt-in systemwide browser audit. The first two ran in the final background follow-up; the new feature-specific browser script ran separately. The old whole-system browser audit and empty-direction scenario remain unverified by those skips.
+
+Actual final-code benchmark:20 authored documents,4,320,430 body characters; fit/save/reload/prediction parity;23.302 seconds wall,18.594 seconds process CPU;167,583,744 bytes peak process RSS including imports;17,928-byte artifact. Dataset creation preceded the timer. Windows11 Intel64 Family6 Model140,8 logical CPUs; one benchmark process, training thread limit1; fresh process with uncontrolled OS cache and concurrent full/background tests. This is fixture performance under contention, not a production capacity or real-quality measurement. The fixture model remains production-ineligible.
+
+Dependency verification before final review repairs: base plus optional ML requirements had no known vulnerabilities in the recorded pip-audit result (`dependency-audit.json`). Requirements did not change afterward. Python3.12 Linux wheels downloaded successfully using manylinux2_27/2_28/manylinux2014 tags; actual Linux execution and hosted resource behavior remain unverified. Windows actual parser/render/model execution is covered above.
+
+## Explicit limits and release gate
+
+- The three pre-existing, untracked External custody-refactor test modules remain separate work: creation-context10, custody-control23, repository15 failing expectations, confirmed again by the final recheck. This feature deliberately does not implement that refactor or claim a green whole-workspace release gate. No clean whole-project suite after the test-only fixture correction is claimed.
+- Real provider connectivity, quota/billing behavior, real English/Filipino/Taglish OCR quality, representative retrieval improvements, calibrated real-data topic precision and production eligibility are unverified. Zero production automatic topics are enabled. No semantic search or LLM reranker is implemented.
+- Reviewed language annotations are absent. Older model holdout history and older review sampling remain unknown, not reconstructed.
+- Native browser zoom, screen readers, physical devices, Linux runtime and actual deployment/worker/storage/email services remain unverified. Placeholder deployment checks do not validate a real production account; its HSTS warning is retained explicitly.
+- All thirteen implementation areas are present. Rulings preserved from earlier entries: native PowerShell/in-place approved branch; explicit PDFium cleanup and approximate bounded image geometry; recorded transparency/orientation changes instead of hidden downsizing; frozen nonsecret settings requiring explicit retries on changes; bounded synchronous work with q2 for unattended scanning; last-good text separate from failed work; required queue/reporting additions; honest unknown language and declared holdout reuse. These trade exact geometry, uninterrupted synchronous completion and retrospective quality claims for bounded, auditable behavior.
+
+No independent-review finding was deferred. The final pass repaired four Important findings and the required reporting omission with regressions; no second review seat was used under Native execution. Remaining business/data/platform limits above are not reported as passing checks. Audit bookkeeping is retained locally because unrelated tests keep the whole-workspace release gate red. The isolated preview server was stopped; other user servers and unrelated untracked files are preserved.
