@@ -30,3 +30,19 @@ The new OCR.space unit adapter uses conservative1,000,000-byte file and whole-re
 Every transport attempt invokes a fresh authorization callback. Overall and per-page result codes and missing/mismatched results determine coverage; HTTP200 is insufficient. Optional confidence stays null when absent/unusable. Bounded transient retries use jitter. Rate/quota errors create finite resumable waits, not an automatic request loop. Returned errors are generic and do not expose keys or provider bodies.
 
 OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is not yet wired into the default runtime. Live provider, real-data tagging/search quality, browser and deployment checks remain unverified.
+
+## Opt-in processing and recovery
+
+After additive migrations on a disposable/approved database, `ENABLE_SOURCE_UNIT_EXTRACTION=True` selects the unit pipeline for uploads, filing and retries. It persists actor-bound intent in the upload transaction and enqueues after commit. Without a worker, local processing occurs after commit with a bounded number of invocations and at most one OCR unit per web submission; remaining work is visible/recoverable. Production scanning needs the existing q2 worker rather than long web requests. No original database was migrated during implementation.
+
+Runs pin numeric processing policy, language, backend and a nonsecret provider endpoint identifier. Changed settings/permissions/generations and stale worker leases cannot publish old results. File bytes are hashed when read; an unknown immutable legacy checksum remains unknown on the file version while the measured run hash records actual evidence. Previously usable same-version text survives failed attempts. Physical PDF/image-page metrics remain separate from semantic Word/sheet units.
+
+```powershell
+# Select the intended isolated/approved Django settings first.
+.\.venv\Scripts\python.exe manage.py recover_extraction --limit 100
+.\.venv\Scripts\python.exe manage.py recover_extraction --limit 100 --apply
+```
+
+Dry run is the default. Apply requeues existing eligible intent with its original actor, never a replacement system identity. Three expired-lease recoveries or three unit retry rounds require explicit attention. q2 delivery retry900seconds exceeds timeout600seconds; delivery attempts are finite. A quota wait remains pending until a due recovery pass. No exactly-once provider billing guarantee is made.
+
+Turning off the source-unit flag preserves pending intent, stops its processing/recovery and retains coverage history. It does not undo bytes already dispatched, remove human metadata or claim unprocessed content was read. The current legacy path remains separately available while rollout verification continues.

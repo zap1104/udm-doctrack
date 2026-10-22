@@ -554,6 +554,7 @@ Q_CLUSTER = {
     "orm": "default",
     "save_limit": 250,
     "catch_up": False,
+    "max_attempts": 2,
 }
 
 

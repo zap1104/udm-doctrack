@@ -88,3 +88,11 @@ def test_policy_rejects_unbounded_or_over_free_tier_configuration(settings):
     settings.OCR_SPACE_MAX_REQUEST_BYTES = 1_500_000
     with pytest.raises(ValidationError):
         api.ExtractionPolicy.from_settings()
+
+
+def test_disabled_rollout_does_not_restrict_legacy_provider_configuration(settings):
+    from apps.core.checks import processing_configuration
+
+    settings.ENABLE_SOURCE_UNIT_EXTRACTION = False
+    settings.OCR_PROVIDER_TIMEOUT_SECONDS = 180
+    assert processing_configuration(None) == []

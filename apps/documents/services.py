@@ -50,9 +50,28 @@ def suggested_tags_for(user, *, collection=Collection.OVPA):
 # ---------------------------------------------------------------------------
 # Upload → text → suggestion (step 1 of the upload wizard)
 # ---------------------------------------------------------------------------
+def ingest_upload(
+    *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
+    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
+) -> tuple[Document, object]:
+    document, suggestion = _persist_upload(user=user, uploaded_file=uploaded_file, uploaded_files=uploaded_files,
+        office=office, source=source, ocr_language=ocr_language, allow_external_ocr=allow_external_ocr,
+        collection=collection, external_offices=external_offices)
+    if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+        from apps.accounts.models import User
+
+        document.refresh_from_db()
+        # Commit hooks may have finished native work. In an outer transaction
+        # the pending review stays usable and loads suggestions on next GET.
+        actor = User.objects.filter(pk=user.pk, is_active=True).first()
+        if actor and actor.can_start_work and document.suggestions.exists() and document.can_user_view(actor):
+            suggestion = suggest_metadata(text=document.ocr_text, filename=document.title, office=document.office, user=actor)
+    return document, suggestion
+
+
 @compensate_storage
 @transaction.atomic
-def ingest_upload(
+def _persist_upload(
     *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
     ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
 ) -> tuple[Document, object]:
@@ -98,7 +117,7 @@ def ingest_upload(
             language_hint=ocr_language,
             allow_external_ocr=allow_external_ocr,
         )
-        if not settings.ENABLE_BACKGROUND_TASKS
+        if not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION
         else None
     )
     document = Document.objects.create(
@@ -139,7 +158,7 @@ def ingest_upload(
         _append_initial_file(document, initial_file, user=user)
 
     if extraction is None:
-        _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk])
+        _enqueue_extraction(document, user_id=user.pk, file_ids=None if settings.ENABLE_SOURCE_UNIT_EXTRACTION else [document_file.pk])
         suggestion = Suggestion()
     else:
         suggestion = suggest_metadata(
@@ -166,6 +185,18 @@ def ingest_upload(
 
 def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False, robust=False) -> None:
     """Queue extraction only after the surrounding transaction commits."""
+    if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+        from apps.accounts.models import User
+
+        from .processing import drive_local_processing, request_processing
+
+        actor = User.objects.filter(pk=user_id).first() if user_id is not None else None
+        if user_id is not None and actor is None:
+            raise PermissionDenied("The extraction requester no longer exists.")
+        request_processing(document, user=actor, file_ids=file_ids, replace=replace)
+        if not settings.ENABLE_BACKGROUND_TASKS:
+            transaction.on_commit(lambda: drive_local_processing(document.pk), robust=True)
+        return
     if not settings.ENABLE_BACKGROUND_TASKS:
         return
     from django_q.tasks import async_task
@@ -392,7 +423,7 @@ def _append_initial_file(document: Document, uploaded_file, *, user, run_extract
             language_hint=document.ocr_language,
             allow_external_ocr=document.allow_external_ocr,
         )
-        if run_extraction and not use_async
+        if run_extraction and not use_async and not settings.ENABLE_SOURCE_UNIT_EXTRACTION
         else None
     )
     uploaded_file.seek(0)
@@ -408,7 +439,7 @@ def _append_initial_file(document: Document, uploaded_file, *, user, run_extract
         extracted_chars=extraction.char_count if extraction else 0,
         uploaded_by=user,
     )
-    if use_async:
+    if use_async and not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         document.ocr_status = OcrStatus.PENDING
         document.save(update_fields=["ocr_status", "updated_at"])
         _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk], replace=False)
@@ -431,8 +462,17 @@ def _append_initial_file(document: Document, uploaded_file, *, user, run_extract
     return document_file
 
 
-@locked_mutation
 def re_extract_document(document: Document, *, user) -> dict:
+    result = _request_document_extraction(document, user=user)
+    if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+        document.refresh_from_db()
+        return {"status": document.ocr_status, "characters": len(document.ocr_text),
+                "failures": [document.ocr_notes] if document.ocr_status == OcrStatus.FAILED else []}
+    return result
+
+
+@locked_mutation
+def _request_document_extraction(document: Document, *, user) -> dict:
     """Retry all attachments with current authorization in either runtime mode."""
     if not document.can_user_edit(user):
         raise PermissionDenied("Only the owning office can re-run extraction.")
@@ -441,7 +481,7 @@ def re_extract_document(document: Document, *, user) -> dict:
     if document.ocr_status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
         document.retain_extraction_failure()
         document.save(update_fields=["ocr_notes", "extraction_failed_generation"])
-    if settings.ENABLE_BACKGROUND_TASKS:
+    if settings.ENABLE_BACKGROUND_TASKS or settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         document.ocr_status = OcrStatus.PENDING
         document.save(update_fields=["ocr_status", "updated_at"])
         _enqueue_extraction(document, user_id=user.pk, replace=True)
@@ -522,7 +562,7 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
     from .file_versions import copy_tracking_history
     for document_file in copy_tracking_history(record, document, created_files):
         created_file_ids.append(document_file.pk)
-        if not settings.ENABLE_BACKGROUND_TASKS:
+        if not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
             with document_file.file.open("rb") as buffer:
                 extraction = extract_document_text(
                     buffer,
@@ -539,7 +579,7 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
                 extraction_failures.extend(extraction.notes or ["Text extraction failed. Retry extraction when available."])
 
     document.ocr_text = normalise_text("\n\n".join(part for part in text_parts if part))[:200000]
-    document.ocr_status = OcrStatus.PENDING if settings.ENABLE_BACKGROUND_TASKS else (OcrStatus.DONE if document.ocr_text else OcrStatus.EMPTY)
+    document.ocr_status = OcrStatus.PENDING if settings.ENABLE_BACKGROUND_TASKS or settings.ENABLE_SOURCE_UNIT_EXTRACTION else (OcrStatus.DONE if document.ocr_text else OcrStatus.EMPTY)
     if extraction_failures:
         document.retain_extraction_failure("\n".join(extraction_failures))
     document.ocr_engine = "pending" if settings.ENABLE_BACKGROUND_TASKS else "archive-merge"
@@ -547,9 +587,10 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
     document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "ocr_notes", "extraction_failed_generation", "updated_at"])
 
 
-    if settings.ENABLE_BACKGROUND_TASKS:
+    if settings.ENABLE_BACKGROUND_TASKS or settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         suggestion = Suggestion()
-        _enqueue_extraction(document, user_id=user.pk, file_ids=created_file_ids, replace=False)
+        if not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+            _enqueue_extraction(document, user_id=user.pk, file_ids=created_file_ids, replace=False)
     else:
         suggestion = suggest_metadata(
             text=document.ocr_text, filename=record.subject, office=record.originating_office, user=user
@@ -584,6 +625,10 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
             "status", "approved_by", "approved_at", "is_archived", "archived_at", "updated_at",
         ]
     )
+    if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+        # The narrow local-filing permission checks the recorded approver.
+        # Persist approval before creating this actor-bound intent.
+        _enqueue_extraction(document, user_id=user.pk, file_ids=created_file_ids, replace=False)
     add_activity(
         record,
         RecordActivity.Event.ARCHIVED,

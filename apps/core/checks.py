@@ -6,6 +6,8 @@ from django.core.checks import Error, Tags, register
 
 @register()
 def processing_configuration(app_configs, **kwargs):
+    if not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+        return []
     from django.core.exceptions import ValidationError
 
     from apps.documents.processing_contracts import ExtractionPolicy

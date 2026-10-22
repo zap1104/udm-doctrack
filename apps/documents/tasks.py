@@ -87,6 +87,21 @@ def _extraction_finalization(document_id, generation):
 def extract_document_task(document_id: int, *, user_id=None, file_ids=None, replace=False, generation=None) -> dict:
     """A queued or in-flight job can outlive permanent repository deletion."""
     try:
+        from django.conf import settings
+        if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+            from .processing import drive_local_processing, request_processing
+
+            document = Document.objects.get(pk=document_id)
+            if generation is not None and document.extraction_generation != generation:
+                return _superseded_extraction(document)
+            actor = User.objects.filter(pk=user_id).first() if user_id is not None else None
+            if user_id is not None and actor is None:
+                return _cancel_extraction(document, generation)
+            request_processing(document, user=actor, file_ids=file_ids, replace=replace)
+            if not settings.ENABLE_BACKGROUND_TASKS:
+                drive_local_processing(document.pk)
+            document.refresh_from_db()
+            return {"document_id": document.pk, "status": document.ocr_status, "characters": len(document.ocr_text), "failures": []}
         return _extract_document_task(document_id, user_id=user_id, file_ids=file_ids, replace=replace, generation=generation)
     except Document.DoesNotExist:
         return {"document_id": document_id, "status": OcrStatus.SKIPPED, "characters": 0, "failures": []}

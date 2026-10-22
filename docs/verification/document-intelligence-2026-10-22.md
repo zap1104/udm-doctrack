@@ -32,6 +32,18 @@ Implementation in progress. No push, merge, deployment, original database migrat
 - Wire fixture assertions verify actual multipart bytes <=1,000,000, one-page source mapping, preserved text after partial results, null missing confidence, guard revocation before retry, finite transport retries and resumable429 quota waits. Original PDF bytes remain unchanged; no live requests made.
 - Ruling: image normalization flattens transparency onto white at original dimensions and records color/orientation changes; no silent resizing. A too-large safe image requires action rather than repeated lossy compression.
 
-## Task 4: durable processing (in progress)
+## Task 4: durable processing
 
-Recovery and short-transaction integration regressions are being established. Original runtime still uses its existing path while the new flag is disabled.
+- RED: initial eight recovery/transaction regressions failed before implementation. Additional reproductions covered stale leases, consent revocation, finalization failure, late files, true engine provenance, cross-office filing, disabled flags, fileless filing, physical counts, routing-context preservation and legacy run hashes.
+- Current focused GREEN:27passed in34.75seconds; `.vercel/ai-ml-audit/task4-final.xml`. Earlier related run80passed in59.41seconds and q2-app-registry run31passed in38.57seconds; those earlier runs precede the latest settings/hash/context refinements and are not final branch verification.
+- Provider I/O is outside database mutation locks in both entry modes; recovery preserves original actor identity. Queued invocations dispatch at most one OCR unit. Tests simulate worker interruption/recovery; real OS worker termination remains unverified.
+- Additive0016/0017 introduce separate native/OCR candidates, recovery counters, bounded late-file discovery and a unique suggestion/run relation. These migrations have run only in disposable tests.
+- Ruling: policy snapshot now includes nonsecret backend/language/extractor context, independent of numeric limits; settings changes require a fresh eligible intent. This prevents mislabelling resumed results and costs an explicit retry after configuration changes.
+- Ruling: synchronous web work is bounded and may leave OCR work pending for the worker/recovery command. This avoids unbounded multipage provider loops; a worker is required for unattended scanning.
+- Ruling: failure attention remains separate from readable prior text; stale workers cannot cancel a newer lease. The original no-files and routing-context filing behavior is preserved.
+- Still required in later milestones: durable model/suggestion-stage recovery (Task9), complete chunk-based reads (Task5), scoped review UI/observability (Task11), vocabulary/model/deletion lifecycle and final live-worker/browser/security verification (Task13). These are not claimed complete here.
+- Final task checks:27focused tests and34background-configured tests passed after settings/hash/context fixes. Focused lint, Django checks and migration drift passed. Background report `.vercel/ai-ml-audit/task4-bg-final.xml`;27focused report `task4-final.xml`. Original database remains unmigrated.
+
+## Task 5: source chunk search (in progress)
+
+- Four expected RED failures for missing chunk retrieval. `.vercel/ai-ml-audit/task5-red.xml`.

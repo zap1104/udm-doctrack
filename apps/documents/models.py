@@ -525,6 +525,8 @@ class MetadataSuggestion(models.Model):
     """
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="suggestions")
+    extraction_run = models.OneToOneField("documents.ExtractionRun", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="suggestion_record")
     engine = models.CharField(max_length=32, default="rules")
     engine_version = models.CharField(max_length=16, default="1.0")
     suggested = models.JSONField(default=dict)

@@ -1,7 +1,9 @@
 """External repository browsing, upload and reporting share permission rules."""
 
 import csv
+from contextlib import nullcontext
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count
@@ -73,7 +75,7 @@ class ExternalUploadView(AdminRequiredMixin, View):
         form = ExternalUploadForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             try:
-                with cleanup_new_files(), transaction.atomic():
+                with (nullcontext() if settings.ENABLE_SOURCE_UNIT_EXTRACTION else cleanup_new_files()), (nullcontext() if settings.ENABLE_SOURCE_UNIT_EXTRACTION else transaction.atomic()):
                     document, suggestion = services.ingest_upload(
                         user=request.user, uploaded_files=form.cleaned_data["file"], office=form.cleaned_data["office"],
                         source=form.cleaned_data["source"], collection=Collection.EXTERNAL,
