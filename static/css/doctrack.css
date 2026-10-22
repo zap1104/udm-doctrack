@@ -170,7 +170,7 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 .wordmark .udm { color: var(--udm-gold); }
-.wordmark .doctrack { color: var(--udm-navy-text); }
+.wordmark .doctrack { color: var(--udm-navy-text); text-transform: none; }
 .wordmark--light .doctrack { color: #ffffff; }
 
 /* ------------------------------------------------------------------ shell */
@@ -712,7 +712,7 @@ a:hover { text-decoration: underline; }
 .account-signout { color:var(--udm-red); }
 .account-signout:hover,.account-signout:focus { background:var(--udm-red-soft); color:var(--udm-red); }
 .sidebar-brand-content { display:flex; align-items:center; gap:10px; }
-.sidebar-brand-icon { display:block; width:38px; height:38px; min-width:38px; max-width:38px; min-height:38px; max-height:38px; flex:0 0 38px; border-radius:10px; object-fit:contain; }
+.sidebar-brand-icon { display:block; width:44px; height:44px; min-width:44px; max-width:44px; min-height:44px; max-height:44px; flex:0 0 44px; border-radius:50%; object-fit:contain; }
 .app-sidebar .wordmark { display:inline-flex; align-items:baseline; flex-wrap:nowrap; gap:6px; font-size:14px; white-space:nowrap; }
 .sidebar-office { padding:0 12px; color:#cdd9e8; font-size:13px; }
 .sidebar-office-name { color:#fff; font-weight:600; }
@@ -1615,6 +1615,7 @@ body.sidebar-open { overflow:hidden; }
 .login-brand { position:relative; z-index:1; display:inline-flex; align-items:center; gap:11px; color:#fff; text-decoration:none; }
 .login-brand:hover { text-decoration:none; }
 .login-brand img { width:42px; height:42px; border-radius:10px; }
+.login-brand .login-brand-mark { width:56px; height:56px; flex:0 0 56px; border-radius:50%; object-fit:contain; }
 .login-institution { position:relative; z-index:1; margin:0; color:rgba(255,255,255,.68); font-size:13px; }
 .login-form-heading { margin-bottom:20px; }
 .login-form-heading h2 { margin:2px 0 5px; font-size:27px; }
@@ -3157,7 +3158,7 @@ a:hover { color: var(--udm-teal-ink-dark); }
   border-right: 1px solid #285d43;
   box-shadow: none;
 }
-.sidebar-brand-icon { filter: saturate(.75) brightness(1.1); }
+.sidebar-brand-icon { filter: none; }
 .wordmark--light .udm { color: #d5b86a; }
 .wordmark--light .doctrack { color: #f7fbf3; }
 .app-sidebar .nav-section {

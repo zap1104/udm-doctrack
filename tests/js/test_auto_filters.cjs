@@ -5,7 +5,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const source = readFileSync(resolve(__dirname, '../../static/js/auto-filters.js'),'utf8');
 
-function harness(withHtmx = true) {
+function harness(withHtmx = true, options = {}) {
   const events = {}, windowEvents = {}, timers = new Map(), requests = [], navigations = [];
   let nextTimer = 0;
   const forms = [];
@@ -32,7 +32,10 @@ function harness(withHtmx = true) {
   if (withHtmx) window.htmx = {process(){},trigger(element,event) { requests.push({element,event}); }};
   function form() {
     const fallback = {hidden:false};
-    const f = {elements:[],isConnected:true,method:'get',querySelectorAll:() => [fallback],matches:s => s === 'form' || s.includes('form[data-auto-filter]')};
+    const attrs = {'data-filter-mode':options.mode || 'change', 'data-filter-sync':options.sync === undefined ? 'dashboard' : options.sync};
+    const f = {elements:[],isConnected:true,method:'get',id:'form-' + forms.length,attrs,
+      getAttribute:name => attrs[name] || null, hasAttribute:name => name in attrs,
+      querySelectorAll:() => [fallback],matches:s => s === 'form' || s.includes('form[data-auto-filter]')};
     forms.push(f); return {f,fallback};
   }
   function field(f,name,value,type='select') {
@@ -47,7 +50,7 @@ function harness(withHtmx = true) {
   }
   runInNewContext(source,{window,document,WeakSet,URL,DOMParser});
   function emit(name,detail,target) { (events[name] || []).forEach(fn => fn({detail,target})); }
-  return {window,forms,first,second,office,month,main,status,message,retry,requests,navigations,emit,
+  return {window,forms,first,second,office,month,main,status,message,retry,requests,navigations,emit,field,
     tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
     restore() { windowEvents.popstate?.(); emit('htmx:historyRestore'); }};
 }
@@ -64,6 +67,35 @@ test('rapid changes across forms issue only the last automatic request', () => {
   assert.equal(submissions.length,1);
   assert.equal(submissions[0].element,h.second.f);
   assert.equal(h.first.fallback.hidden,true);
+});
+
+test('submit-only dropdown changes wait for Search and retain a native submit button', () => {
+  const h = harness(true, {mode:'submit'});
+  h.emit('change',null,h.office); h.emit('change',null,h.month); h.tick();
+  assert.equal(h.requests.length,0);
+  assert.equal(h.first.fallback.hidden,false);
+});
+
+for (const type of ['date','checkbox','range']) test(`${type} fields never independently submit a search`, () => {
+  const h = harness();
+  const field = h.field(h.first.f,'search-control','2026-10-21',type);
+  h.emit('change',null,field); h.tick();
+  assert.equal(h.requests.length,0);
+});
+
+test('independent forms do not merge unfinished values without an explicit sync group', () => {
+  const h = harness(true, {sync:''});
+  const detail = {elt:h.first.f,parameters:{office:'2',q:'applied query',status:['RECEIVED','IN_PROCESS']}};
+  h.emit('htmx:configRequest',detail);
+  assert.deepEqual(detail.parameters,{office:'2',q:'applied query',status:['RECEIVED','IN_PROCESS']});
+});
+
+test('a synchronization group excludes unrelated forms and their pending dates', () => {
+  const h = harness();
+  h.second.f.attrs['data-filter-sync'] = 'another-panel';
+  const detail = {elt:h.first.f,parameters:{office:'2',month:'2026-09'}};
+  h.emit('htmx:configRequest',detail);
+  assert.deepEqual(detail.parameters,{office:'2',month:'2026-09'});
 });
 test('request parameters retain repeated stages while using current visible values across forms', () => {
   const h = harness();

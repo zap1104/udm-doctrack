@@ -21,7 +21,7 @@
         {% csrf_token %}
         {% include "partials/_form_errors.html" %}
         <div class="form-field mb-3{% if form.file.errors %} form-field--error{% endif %}">
-          <label class="form-label" for="{{ form.file.id_for_label }}">Document file <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></label>
+          <label class="form-label" for="{{ form.file.id_for_label }}">Document files <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></label>
           <div class="phase2-upload-box">
             {{ form.file }}
             <div class="form-text mt-2" id="{{ form.file.auto_id }}_helptext">{{ form.file.help_text }}</div>

@@ -313,12 +313,15 @@ def purge_deleted_documents(*, now=None, limit=100):
                            "deleted_at": document.deleted_at.isoformat()},
                 )
                 seen = set()
-                for document_file in document.files.all():
+                from .models import DocumentFileVersion
+                stored_rows = list(document.files.all()) + list(DocumentFileVersion.objects.filter(document_file__document=document))
+                for document_file in stored_rows:
                     name = document_file.file.name
                     if not name or name in seen:
                         continue
                     seen.add(name)
                     shared = DocumentFile.objects.filter(file=name).exclude(document_id=document.pk).exists()
+                    shared = shared or DocumentFileVersion.objects.filter(file=name).exclude(document_file__document_id=document.pk).exists()
                     if shared or Attachment.objects.filter(file=name).exists() or ExternalAttachment.objects.filter(file=name).exists():
                         continue
                     storage = document_file.file.storage

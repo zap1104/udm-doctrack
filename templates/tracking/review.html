@@ -57,7 +57,7 @@
               </tr>
               <tr>
                 <th>Attachments</th>
-                <td>{% for attachment in record.attachments.all %}<div>{{ attachment.original_name }}</div>{% empty %}—{% endfor %}</td>
+                <td>{% for attachment in attachments %}<div>{{ attachment.original_name }} · Version {{ attachment.version_number }}</div>{% empty %}—{% endfor %}</td>
               </tr>
             </tbody>
           </table>

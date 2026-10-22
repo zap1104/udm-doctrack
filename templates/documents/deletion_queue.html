@@ -6,7 +6,7 @@
   <div class="page-head"><div><div class="eyebrow">{% if is_external_collection %}External {% endif %}Document Repository · Administrators</div><h1>Deletion review</h1><p class="sub">Review whether filed documents should be kept or removed from the repository.</p></div></div>
   {% if is_external_collection %}{% include "documents/external/_nav.html" %}{% else %}{% include "documents/_subtabs.html" with active="deletion" %}{% endif %}
   <p class="help-note">Removal requires an administrator's approval. Removed documents can be restored for 30 days. After that, their repository files and metadata are permanently deleted; completed Tracking history and a minimal audit entry remain.</p>
-  <form method="get" class="repository-filters card-udm workspace-toolbar" aria-label="Filter deletion reviews" {% include "partials/_auto_filter_attrs.html" %}>
+  <form id="deletion-review-filters" method="get" class="repository-filters card-udm workspace-toolbar" aria-label="Filter deletion reviews" {% include "partials/_auto_filter_attrs.html" %}>
     <input type="hidden" name="per_page" value="{{ page_size }}">
     <div class="repository-filter-grid deletion-review-filters">
       <div>{% include "partials/_field.html" with field=form.q %}</div>
@@ -14,7 +14,7 @@
       <div>{% include "partials/_field.html" with field=form.status %}</div>
     </div>
     <button class="btn btn-udm" type="submit">Search</button>
-    <a class="btn btn-udm-outline" href="{{ request.path }}" data-filter-reset>Clear filters</a>
+    <a class="btn btn-udm-outline" href="{{ request.path }}" data-filter-reset data-filter-discard>Clear filters</a>
   </form>
   <nav class="deletion-review-tabs" aria-label="Deletion review queues">
     <a href="{{ queue_links.due }}" data-filter-reset{% if status == 'due' %} aria-current="page"{% endif %}>Due for review <strong>{{ queue_counts.due }}</strong></a>
@@ -23,7 +23,7 @@
     <a href="{{ queue_links.deleted }}" data-filter-reset{% if status == 'deleted' %} aria-current="page"{% endif %}>Deleted documents <strong>{{ queue_counts.deleted }}</strong></a>
   </nav>
   <div class="repository-results"><span>{{ total }} document{{ total|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>{% pager section="size" %}</div>
-  <div class="deletion-review-list">
+  <div id="deletion-review-results" data-filter-region class="deletion-review-list">
     {% for document in page_obj %}
       <article class="card-udm deletion-review-item">
         <div><h2>{{ document.title }}</h2><p class="text-muted mb-1">{{ document.office.name }} · {{ document.document_type_names|default:"Unclassified" }}</p>{% if document.reference_number %}<p class="mono mb-1">{{ document.reference_number }}</p>{% endif %}<p class="mb-0">{% if not document.is_active %}{% if document.deletion_recovery_open %}<span class="pill pill-muted">Can be restored</span>{% else %}<span class="pill pill-muted">Awaiting permanent deletion</span>{% endif %}{% elif document.retention_until %}Review date: <strong>{{ document.retention_until|date:"d M Y" }}</strong>{% else %}No deletion review date set{% endif %}</p>{% if not document.is_active and document.deletion_purge_at %}<p class="supporting-copy mt-2 mb-0">{% if document.deletion_recovery_open %}Restore before{% else %}Recovery ended{% endif %} <strong>{{ document.deletion_purge_at|date:"d M Y, g:i A T" }}</strong>.</p>{% endif %}</div>

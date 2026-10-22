@@ -11,7 +11,7 @@ from django.db import IntegrityError, close_old_connections, transaction
 from apps.core.storage import cleanup_new_files
 from apps.documents.extraction import ExtractionResult
 from apps.documents.models import Document, DocumentFile, OcrStatus
-from apps.documents.services import add_file_to_document, ingest_upload, re_extract_document
+from apps.documents.services import ingest_upload, re_extract_document
 from apps.documents.tasks import extract_document_task
 from apps.tracking import external_services
 from apps.tracking.models import Attachment, ExternalAttachment
@@ -35,7 +35,7 @@ def document(users, settings, tmp_path):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("operation", ["upload", "addfile", "tracking", "external"])
+@pytest.mark.parametrize("operation", ["upload", "initial_batch", "tracking", "external"])
 @pytest.mark.parametrize("failure", ["row_save", "later_write"])
 def test_database_failure_removes_only_new_storage_bytes(users, document, tmp_path, operation, failure):
     original = DocumentFile.objects.create(document=document, file=upload("original.txt"), original_name="original.txt")
@@ -45,11 +45,11 @@ def test_database_failure_removes_only_new_storage_bytes(users, document, tmp_pa
         later = "apps.documents.services.log_action"
         def action():
             return ingest_upload(user=users["med"], uploaded_file=upload())
-    elif operation == "addfile":
+    elif operation == "initial_batch":
         model = DocumentFile
         later = "apps.documents.models.Document.rebuild_index"
         def action():
-            return add_file_to_document(document, upload(), user=users["med"])
+            return ingest_upload(user=users["med"], uploaded_files=[upload(), upload("second.txt")])
     elif operation == "tracking":
         record = create_draft_record(user=users["med"], subject="Files", instructions="Review")
         model = Attachment
@@ -81,7 +81,7 @@ def test_database_failure_removes_only_new_storage_bytes(users, document, tmp_pa
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("operation", ["upload", "addfile", "retry"])
+@pytest.mark.parametrize("operation", ["upload", "initial_batch", "retry"])
 def test_queue_failure_keeps_committed_work_and_exposes_retry(users, document, settings, operation):
     settings.ENABLE_BACKGROUND_TASKS = True
     if operation == "retry":
@@ -89,16 +89,16 @@ def test_queue_failure_keeps_committed_work_and_exposes_retry(users, document, s
     with patch("django_q.tasks.async_task", side_effect=ConnectionError("queue unavailable")):
         if operation == "upload":
             document, _ = ingest_upload(user=users["med"], uploaded_file=upload())
-        elif operation == "addfile":
-            add_file_to_document(document, upload(), user=users["med"])
+        elif operation == "initial_batch":
+            document, _ = ingest_upload(user=users["med"], uploaded_files=[upload(), upload("second.txt")])
         else:
             re_extract_document(document, user=users["med"])
     document.refresh_from_db()
-    assert document.files.count() == 1
+    assert document.files.count() == (2 if operation == "initial_batch" else 1)
     assert document.files.first().file.storage.exists(document.files.first().file.name)
     assert document.ocr_status == OcrStatus.FAILED
     assert "retry" in document.ocr_notes.lower()
-    if operation != "upload":
+    if operation == "retry":
         assert document.ocr_text == "Last usable text"
 
 
@@ -143,11 +143,12 @@ def test_older_full_retry_cannot_overwrite_newer_completed_text(users, document,
 
 
 @pytest.mark.django_db
-def test_failed_added_file_preserves_text_and_records_failure(users, document):
-    with patch("apps.documents.services.extract_document_text", return_value=ExtractionResult(
-        text="", status="FAILED", notes=["Provider refused this file"],
-    )):
-        add_file_to_document(document, upload(), user=users["med"])
+def test_failed_initial_sibling_preserves_text_and_records_failure(users, document):
+    with patch("apps.documents.services.extract_document_text", side_effect=[
+        ExtractionResult(text="Last usable text", status="DONE"),
+        ExtractionResult(text="", status="FAILED", notes=["Provider refused this file"]),
+    ]):
+        document, _ = ingest_upload(user=users["med"], uploaded_files=[upload("first.txt"), upload("failed.txt")])
     document.refresh_from_db()
     assert document.ocr_text == "Last usable text"
     assert document.ocr_status == OcrStatus.FAILED
@@ -164,7 +165,8 @@ def test_failure_after_commit_does_not_remove_committed_files(users, document, c
         with cleanup_new_files(), transaction.atomic():
             if callback_first:
                 transaction.on_commit(callback)
-            added = add_file_to_document(document, upload(), user=users["med"])
+            created, _ = ingest_upload(user=users["med"], uploaded_file=upload())
+            added = created.files.get()
             if not callback_first:
                 transaction.on_commit(callback)
     assert DocumentFile.objects.filter(pk=added.pk).exists()
@@ -177,8 +179,8 @@ def test_outer_rollback_compensates_successful_nested_file_mutations(users, docu
     before = stored_files(tmp_path)
     with pytest.raises(RuntimeError, match="later mutation"):
         with cleanup_new_files(), transaction.atomic():
-            add_file_to_document(document, upload(), user=users["med"])
-            add_file_to_document(document, upload("second.txt"), user=users["med"])
+            ingest_upload(user=users["med"], uploaded_files=[upload(), upload("second.txt")])
+            ingest_upload(user=users["med"], uploaded_file=upload("nested.txt"))
             raise RuntimeError("later mutation failed")
     assert stored_files(tmp_path) == before
     assert document.files.count() == 1
@@ -212,9 +214,9 @@ def test_cleanup_in_aborted_outer_transaction_preserves_original_exception(users
     with pytest.raises(IntegrityError) as caught:
         with transaction.atomic():
             with cleanup_new_files():
-                added = add_file_to_document(document, upload(), user=users["med"], run_extraction=False)
-                DocumentFile.objects.create(pk=added.pk, document=document, file=added.file.name,
-                                            original_name="duplicate.txt")
+                created, _ = ingest_upload(user=users["med"], uploaded_file=upload())
+                added = created.files.get()
+                Document.objects.create(pk=created.pk, title="Duplicate", year=2026, office=document.office)
     assert "duplicate key" in str(caught.value)
     assert "Could not remove new storage object" in caplog.text
     assert not DocumentFile.objects.filter(pk=added.pk).exists()

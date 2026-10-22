@@ -2,15 +2,15 @@
 
 import html
 import re
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 from django.core.files.base import ContentFile
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from apps.core.models import Notification, NotificationRead
 from apps.core.notifications import unread_count
-from apps.core.utils import sign_download
+from apps.core.utils import sign_download, unsign_download
 from apps.documents.models import AccessLevel, Document, DocumentAccessGrant, DocumentFile
 from apps.tracking.models import Attachment, RecordAccessGrant, Status, TrackingRecord
 
@@ -151,13 +151,22 @@ def test_rendered_private_download_links_work(client, users, private_download, r
     detail = client.get(obj.get_absolute_url())
     assert detail.status_code == 200
     urls = [html.unescape(url) for url in re.findall(r'href="([^"]+)"', detail.content.decode())
-            if "/attachment/" in url or "/documents/file/" in url]
+            if "/files/download/" in url or "/attachment/" in url or "/documents/file/" in url]
     assert urls
+    assert any("/files/download/" in url for url in urls)
     for url in urls:
         assert "token=" in url
+        if "/files/download/" in url:
+            route = resolve(urlsplit(url).path)
+            assert route.view_name == "core:file_download"
+            token = parse_qs(urlsplit(url).query)["token"][0]
+            assert unsign_download(token) == f"file-version:download:{route.kwargs['kind']}:{route.kwargs['pk']}:{users[role].pk}"
         response = client.get(url)
         assert response.status_code == 200
         assert b"".join(response.streaming_content)
+        client.force_login(users["sup"])
+        assert client.get(url).status_code in {403, 404}
+        client.force_login(users[role])
 
 
 def test_signed_download_rechecks_revoked_access(client, users, offices, private_download):

@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.core.document_types import DocumentTypesMixin
 from apps.core.models import TimeStampedModel
 
+from .file_version_models import AttachmentVersionMixin, ImmutableFileQuerySet
 from .models import Status
 
 
@@ -304,7 +305,13 @@ class ExternalActivity(models.Model):
         return self.recorded_at
 
 
-class ExternalAttachment(TimeStampedModel):
+class ExternalAttachment(AttachmentVersionMixin, TimeStampedModel):
+    file_group = models.ForeignKey("tracking.ExternalAttachmentGroup", on_delete=models.CASCADE, related_name="versions")
+    version_number = models.PositiveIntegerField(default=1)
+    change_summary = models.CharField(max_length=1000, blank=True)
+    uploader_name_snapshot = models.CharField(max_length=150, blank=True)
+    uploader_office_snapshot = models.CharField(max_length=150, blank=True)
+    objects = ImmutableFileQuerySet.as_manager()
     record = models.ForeignKey(ExternalTrackingRecord, on_delete=models.CASCADE, related_name="attachments")
     routing_step = models.ForeignKey(
         ExternalRoutingStep, null=True, blank=True, on_delete=models.PROTECT, related_name="attachments"
@@ -318,6 +325,10 @@ class ExternalAttachment(TimeStampedModel):
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="external_uploads"
     )
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [models.UniqueConstraint(fields=["file_group", "version_number"], name="external_attachment_group_version_unique")]
 
     def __str__(self):
         return self.original_name

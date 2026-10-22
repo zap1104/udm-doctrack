@@ -1,14 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Upload External Document · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="workspace-page workspace-form">
-  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>Upload external document</h1><p class="sub">Choose a file and its managing office, then review the extracted details.</p></div></div>
+<div class="workspace-page workspace-form workspace-upload">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">External UDM offices · Step 1</div>
+      <h1>Upload or Scan an External Document</h1>
+      <p class="sub">Choose a file, its managing office, and the external offices it concerns.</p>
+      <div class="step-indicator mt-2" aria-label="Upload progress">
+        <span class="step active" aria-current="step"><span class="num">1</span> Choose File</span>
+        <span aria-hidden="true">›</span>
+        <span class="step"><span class="num">2</span> Review Extracted Details</span>
+      </div>
+    </div>
+  </div>
   {% include "documents/external/_nav.html" %}
-  <form method="post" enctype="multipart/form-data" class="card-udm"><div class="card-udm-body">
-    {% csrf_token %}
-    {% include "partials/_form_errors.html" %}
-    {% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}
-    <div class="form-actions"><button class="btn btn-udm" type="submit">Upload and review</button><a class="btn btn-udm-outline" href="{% url 'documents:external_repository' %}">Cancel</a></div>
-  </div></form>
+  <div class="row g-4 workspace-columns">
+    <div class="col-lg-7 workspace-primary">
+      <div class="card-udm"><div class="card-udm-body">
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          {% include "partials/_form_errors.html" %}
+          <div class="form-field mb-3{% if form.file.errors %} form-field--error{% endif %}">
+            <label class="form-label" for="{{ form.file.id_for_label }}">{{ form.file.label }}{% if form.file.field.required %} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span>{% endif %}</label>
+            <div class="phase2-upload-box">
+              {{ form.file }}
+              {% if form.file.help_text %}<div class="form-text mt-2" id="{{ form.file.auto_id }}_helptext">{{ form.file.help_text }}</div>{% endif %}
+            </div>
+            {% if form.file.errors %}<div class="field-errors" role="alert" id="{{ form.file.auto_id }}_error">{% for error in form.file.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+          </div>
+          {% for field in form %}{% if field.name != "file" %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}
+          <div class="form-actions">
+            <button class="btn btn-udm" type="submit">Read File and Continue</button>
+            <a class="btn btn-udm-outline" href="{% url 'documents:external_repository' %}">Cancel</a>
+          </div>
+        </form>
+      </div></div>
+    </div>
+    <div class="col-lg-5 workspace-support">
+      <div class="card-udm">
+        <div class="card-udm-head"><h2>What Happens Next</h2></div>
+        <div class="card-udm-body">
+          <ol class="phase2-checklist">
+            <li class="mb-2">Available text is read first from digital PDFs and office files.</li>
+            <li class="mb-2">Scanned pages use OCR only when a provider is configured and you allow external OCR for this record.</li>
+            <li class="mb-2">Rules suggest a title, document type, office, date, and tags.</li>
+            <li class="mb-0"><strong>Review and correct the suggested details.</strong> The uploaded file is already saved; the next screen lets you check its metadata.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="help-note mt-3">Choose external UDM offices managed by the owning office. This document will be saved in the external repository.</div>
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -36,15 +36,15 @@
 <nav class="pill-row mb-3" aria-label="Search modes">
   <div class="pill-row-list">
     <a class="pill-toggle{% if not is_tracking %} is-active{% endif %}"
-       href="{% url 'search:index' %}?mode={{ repository_mode }}"
+       href="{% url 'search:index' %}?mode={{ repository_mode }}" data-filter-discard
        {% if not is_tracking %}aria-current="true"{% endif %}>Document Repository</a>
     <a class="pill-toggle{% if is_tracking %} is-active{% endif %}"
-       href="{% url 'search:index' %}?mode={{ tracking_mode }}"
+       href="{% url 'search:index' %}?mode={{ tracking_mode }}" data-filter-discard
        {% if is_tracking %}aria-current="true"{% endif %}>Document Tracking</a>
   </div>
 </nav>
 
-<form method="get" class="workspace-search-form" {% include "partials/_auto_filter_attrs.html" %}>
+<form id="search-{{ mode }}-filters" method="get" class="workspace-search-form" {% include "partials/_auto_filter_attrs.html" %}>
   {% include "partials/_form_errors.html" %}
   {# Carried so the mode survives a submit of the search box. #}
   <input type="hidden" name="mode" value="{{ mode }}">
@@ -84,6 +84,7 @@
     {% endif %}
     {% include "search/_filters_tracking.html" %}
 
+    <div id="search-tracking-results" data-filter-region>
     {% if has_searched %}
       {% comment %}
         One row over the table, not two. The count, the sort order and the page
@@ -108,13 +109,14 @@
            Example: <code>UDM-OVPA-MED</code> or <code>purchase request</code>.</p>
       </div></div>
     {% endif %}
+    </div>
   {% else %}
     <div class="row g-4 workspace-search-columns">
       <div class="col-lg-3 workspace-search-filters">
         {% include "search/_filters_repository.html" %}
       </div>
 
-      <div class="col-lg-9 workspace-search-results">
+      <div id="search-repository-results" data-filter-region class="col-lg-9 workspace-search-results">
         {% if has_searched %}
           {% include "search/_results_repository.html" %}
         {% else %}

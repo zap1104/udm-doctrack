@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from . import views
+from .version_views import UploadVersionView
 
 app_name = "tracking"
 
@@ -11,6 +12,7 @@ urlpatterns = [
     path("bulk-receipt/", views.BulkConfirmReceiptView.as_view(), name="bulk_confirm_receipt"),
     path("<int:pk>/review/", views.RecordReviewView.as_view(), name="review"),
     path("<int:pk>/", views.RecordDetailView.as_view(), name="detail"),
+    path("<int:pk>/files/<int:group_pk>/versions/", UploadVersionView.as_view(), name="file_version"),
     path("<int:pk>/receipt/", views.ConfirmReceiptView.as_view(), name="confirm_receipt"),
     path("<int:pk>/remark/", views.AddRemarkView.as_view(), name="add_remark"),
     path("<int:pk>/route/", views.RouteRecordView.as_view(), name="route"),

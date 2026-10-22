@@ -268,7 +268,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         pending_count = pending.count()
         if pending_view:
             pending = self._filter_pending(pending, data)
-        pending = pending.annotate(file_count=Count("attachments", distinct=True)).order_by("completed_at", "pk")
+        pending = pending.annotate(file_count=Count("file_groups", distinct=True)).order_by("completed_at", "pk")
         if pending_view:
             page_context = paginate(request, pending, PAGE_SIZE)
             page = page_context["page_obj"]
@@ -396,11 +396,11 @@ class UploadView(OfficeAssignedMixin, View):
             return render(request, self.template_name, {"form": form})
 
         uploaded = form.cleaned_data["file"]
-        duplicate = services.duplicate_of(uploaded, user=request.user)
+        duplicate = services.duplicate_of(uploaded[0], user=request.user)
         try:
             document, suggestion = services.ingest_upload(
                 user=request.user,
-                uploaded_file=uploaded,
+                uploaded_files=uploaded,
                 office=form.cleaned_data["office"],
                 source=form.cleaned_data["source"],
                 ocr_language=form.cleaned_data["ocr_language"],
@@ -532,12 +532,20 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         document = _get_document(request, pk)
+        from apps.tracking.version_views import version_rows
+
+        file_rows = []
+        for file in document.files.prefetch_related("versions"):
+            versions = sorted(file.versions.all(), key=lambda version: version.version_number, reverse=True)
+            if versions:
+                file_rows.append({"current": version_rows(versions[:1], "repository", request.user)[0], "history": version_rows(versions[1:], "repository", request.user), "page_count": file.page_count})
         return render(
             request,
             self.template_name,
             {
                 "document": document,
                 "files": document.files.all(),
+                "file_rows": file_rows,
                 "metadata_values": document.metadata_values.select_related("field"),
                 "suggestion": document.suggestions.first(),
                 "add_files_form": AddFilesForm(),
@@ -591,33 +599,8 @@ class DocumentEditView(OfficeAssignedMixin, View):
 
 class AddFilesView(OfficeAssignedMixin, View):
     def post(self, request, pk):
-        document = _get_document(request, pk)
-        if not document.can_user_edit(request.user):
-            raise PermissionDenied("Only the owning office can add files.")
-        form = AddFilesForm(request.POST, request.FILES)
-        if not form.is_valid():
-            messages.error(request, "Choose at least one file.")
-            return redirect(document.get_absolute_url())
-        added = 0
-        extraction_failed = False
-        extracting = False
-        for uploaded in form.cleaned_data["files"]:
-            try:
-                services.add_file_to_document(document, uploaded, user=request.user)
-                added += 1
-                document.refresh_from_db()
-                extraction_failed |= document.ocr_status == OcrStatus.FAILED
-                extracting |= document.ocr_status in {OcrStatus.PENDING, OcrStatus.RUNNING}
-            except ValidationError as exc:
-                messages.error(request, "; ".join(exc.messages))
-        if added:
-            if extraction_failed:
-                messages.warning(request, f"Saved {added} file(s), but some text extraction did not finish. See the extraction notes before retrying.")
-            elif extracting:
-                messages.success(request, f"Saved {added} file(s). Text extraction is running in the background.")
-            else:
-                messages.success(request, f"Added {added} file(s) and refreshed the search index.")
-        return redirect(document.get_absolute_url())
+        _get_document(request, pk)
+        raise PermissionDenied("Repository file contents are locked. Metadata corrections remain available.")
 
 
 class DocumentFileDownloadView(AppLoginRequiredMixin, View):
@@ -655,7 +638,6 @@ class ReExtractView(OfficeAssignedMixin, View):
         document = _get_document(request, pk)
         if not document.can_user_edit(request.user):
             raise PermissionDenied("Only the owning office can re-run extraction.")
-        from .models import OcrStatus
 
         try:
             result = services.re_extract_document(document, user=request.user)

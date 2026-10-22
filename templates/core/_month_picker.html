@@ -5,7 +5,7 @@
 
   Expects `picker` (core.filters.month_picker) and `picker_id`, unique on the page.
 {% endcomment %}
-<form class="month-picker no-print" method="get" action="" {% include "partials/_auto_filter_attrs.html" %}>
+<form id="{{ picker_id }}-filter" class="month-picker no-print" method="get" action="" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" filter_sync="reports" %}>
   {% for key, value in picker.keep %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
   <label class="month-picker-label" for="{{ picker_id }}">Month</label>
   <select class="form-select form-select-sm" id="{{ picker_id }}" name="{{ picker.param }}">

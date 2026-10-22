@@ -3,38 +3,38 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.documents.extraction import ExtractionResult
 from apps.documents.models import Document, DocumentFile, OcrStatus
-from apps.documents.services import add_file_to_document
+from apps.documents.services import add_file_to_document, ingest_upload
 from apps.documents.tasks import extract_document_task
 
 
 @pytest.mark.django_db
-def test_replacement_job_keeps_text_from_a_file_added_during_extraction(
+def test_replacement_job_keeps_initial_secondary_and_refuses_append_during_extraction(
     users, settings, tmp_path,
 ):
     settings.MEDIA_ROOT = tmp_path
     settings.ENABLE_BACKGROUND_TASKS = False
-    document = Document.objects.create(
-        title="Changing attachment set", office=users["med"].office, uploaded_by=users["med"],
-        year=2026, ocr_text="Previous primary text", ocr_status=OcrStatus.DONE,
-    )
-    DocumentFile.objects.create(
-        document=document, file=SimpleUploadedFile("first.txt", b"Primary attachment contents"),
-        original_name="first.txt", page_count=1, is_primary=True,
-    )
     secondary_text = "Secondary attachment text must stay searchable after the older retry completes."
+    with patch("apps.documents.services.extract_document_text", side_effect=[
+        ExtractionResult(text="Previous primary text", pages=1, status="DONE"),
+        ExtractionResult(text=secondary_text, pages=1, status="DONE"),
+    ]):
+        document, _ = ingest_upload(user=users["med"], uploaded_files=[
+            SimpleUploadedFile("first.txt", b"Primary attachment contents"),
+            SimpleUploadedFile("second.txt", secondary_text.encode()),
+        ])
     added = False
 
     def add_secondary_during_primary_extraction(*args, **kwargs):
         nonlocal added
         if not added:
             added = True
-            add_file_to_document(
-                document, SimpleUploadedFile("second.txt", secondary_text.encode()), user=users["med"],
-            )
+            with pytest.raises(PermissionDenied):
+                add_file_to_document(document, SimpleUploadedFile("late.txt", b"Forbidden later contents"), user=users["med"])
             document.refresh_from_db()
             assert secondary_text in document.ocr_text
         text = secondary_text if args[1] == "second.txt" else "Fresh primary text"

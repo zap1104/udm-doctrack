@@ -49,11 +49,11 @@
         <div class="report-caption">Applied to every figure and chart on this page.</div>
       </div>
       {% if filters.office and not filters.defaulted %}
-        <a class="small" href="{{ report_url }}">{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
+        <a class="small" href="{{ report_url }}" data-filter-discard>{% if user.is_system_admin %}Back to every office{% else %}Back to {{ user.office.code }}{% endif %}</a>
       {% endif %}
     </div>
     <div class="card-udm-body">
-      <form method="get" class="report-scope-picker" {% include "partials/_auto_filter_attrs.html" %}>
+      <form id="report-scope-filter" method="get" class="report-scope-picker" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" filter_sync="reports" %}>
         {% query_fields "office" %}
         {% comment %}
           The report's point of view, not merely a filter: every direction and
@@ -97,7 +97,7 @@
 
 <!-- ------------------------------------------------------------------ tracking -->
 {% if not is_repository_report %}
-<section class="report-panel active" data-report-panel="tracking" aria-labelledby="tracking-reports-heading">
+<section id="tracking-report-results" data-filter-region class="report-panel active" data-report-panel="tracking" aria-labelledby="tracking-reports-heading">
   <div class="report-section-head">
     <div>
       <h2 id="tracking-reports-heading">Document Tracking Reports</h2>
@@ -140,7 +140,7 @@
     {% endcomment %}
     <!-- status mix -->
     <div class="col-12">
-      <section class="card-udm h-100" id="report-document-stages" aria-labelledby="report-document-stages-title">
+      <section class="card-udm h-100" id="report-document-stages" data-filter-region aria-labelledby="report-document-stages-title">
         <div class="card-udm-head">
           <div>
             <h2 id="report-document-stages-title">Documents by stage</h2>
@@ -236,9 +236,9 @@
     </div>
 
     <div class="col-12">
-      <section class="card-udm" aria-labelledby="annual-turnaround-title">
+      <section id="report-annual-turnaround" data-filter-region class="card-udm" aria-labelledby="annual-turnaround-title">
         <div class="card-udm-head"><div><h2 id="annual-turnaround-title">Turnaround across {{ trend_year }}</h2><p class="report-caption">Monthly averages within office hours for this report’s office scope. Months without dots have no observations.</p></div>
-          <form method="get" action="#annual-turnaround-title" class="report-year-picker no-print" {% include "partials/_auto_filter_attrs.html" %}>
+          <form id="report-year-filter" method="get" action="#annual-turnaround-title" class="report-year-picker no-print" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" filter_sync="reports" %}>
             {% query_fields "trend_year" %}
             <div><label for="trend-year" class="form-label">Year</label><select id="trend-year" name="trend_year" class="form-select">{% for year in trend_years %}<option value="{{ year }}"{% if year == trend_year %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></div>
             <button class="btn btn-udm" type="submit" data-filter-fallback>Show year</button>
@@ -248,7 +248,7 @@
     </div>
     <!-- turnaround -->
     <div class="col-xl-5">
-      <div class="card-udm h-100">
+      <div id="report-month-turnaround" data-filter-region class="card-udm h-100">
         <div class="card-udm-head">
           <div>
             <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
@@ -476,7 +476,7 @@
 
 <!-- ----------------------------------------------------------------- documents -->
 {% else %}
-<section class="report-panel active" data-report-panel="documents" aria-labelledby="document-reports-heading">
+<section id="repository-report-results" data-filter-region class="report-panel active" data-report-panel="documents" aria-labelledby="document-reports-heading">
   <div class="report-section-head">
     <div>
       <h2 id="document-reports-heading">Document Repository Report</h2>

@@ -19,9 +19,9 @@ from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, AccessLevel, DeletionRe
 class UploadForm(BootstrapFormMixin, forms.Form):
     """Step 1 of Upload / Scan: pick the file, everything else is proposed after."""
 
-    file = forms.FileField(
-        label="Document file",
-        help_text="PDF, Word, Excel, image or text. Scanned pages go through OCR when it is configured.",
+    file = MultipleFileField(
+        label="Document files",
+        help_text="Select all supporting files now. Contents are locked after this upload; metadata can still be corrected. Original formats are preserved.",
     )
     office = forms.ModelChoiceField(
         queryset=Office.active.all(), label="Owning office", help_text="Which office the record belongs to."

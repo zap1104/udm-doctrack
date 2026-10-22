@@ -12,10 +12,10 @@
 
 <div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
   {% comment %}
-    Dropdowns narrow the list in place. Search submits typed words through
-    the same filter form, preserving the office, role, status and page size.
+    Search submits the pending office, role, status and typed words together,
+    preserving the selected page size.
   {% endcomment %}
-  <form method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
+  <form id="user-filters" method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
     {# Carried so filtering does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
     <div class="col-md-4">
@@ -55,7 +55,7 @@
   </form>
   <div class="admin-filter-summary">
     {{ page_obj.paginator.count }} account{{ page_obj.paginator.count|pluralize }}{% if is_office_scoped %} in {{ user.office_label }}{% endif %}
-    {% if is_filtered %}· <a href="{% url 'accounts:user_list' %}">Clear filters</a>{% endif %}
+    {% if is_filtered %}· <a href="{% url 'accounts:user_list' %}" data-filter-discard>Clear filters</a>{% endif %}
   </div>
 </div></div>
 
@@ -65,7 +65,7 @@
   scroll away.
 {% endcomment %}
 {% pager section="size" %}
-<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+<div id="user-results" data-filter-region class="card-udm"><div class="card-udm-body p-0 table-responsive">
   <table class="table-udm">
     <thead><tr><th>User</th><th>Office</th><th>Role</th><th>Status</th><th></th></tr></thead>
     <tbody>

@@ -43,11 +43,19 @@ def test_partial_extraction_keeps_other_files_in_total_page_count(users, process
     assert processed_document.page_count == 10
 
 
-def test_synchronous_added_file_updates_document_total(users, processed_document):
-    with patch("apps.documents.services.extract_document_text", return_value=ExtractionResult(text="New searchable text", pages=3, status="DONE")):
-        services.add_file_to_document(processed_document, SimpleUploadedFile("second.txt", b"Second file contents"), user=users["med"])
-    processed_document.refresh_from_db()
-    assert processed_document.page_count == 10
+def test_synchronous_initial_batch_updates_document_total(users, processed_document):
+    results = [ExtractionResult(text="First searchable text", pages=7, status="DONE"),
+               ExtractionResult(text="New searchable text", pages=3, status="DONE")]
+    with patch("apps.documents.services.extract_document_text", side_effect=results):
+        document, _ = services.ingest_upload(user=users["med"], uploaded_files=[
+            SimpleUploadedFile("first.txt", b"First file contents"),
+            SimpleUploadedFile("second.txt", b"Second file contents"),
+        ])
+    document.refresh_from_db()
+    assert document.page_count == 10
+    assert document.files.count() == 2
+    assert "First searchable text" in document.ocr_text
+    assert "New searchable text" in document.ocr_text
 
 
 def test_append_job_merges_with_text_saved_while_file_was_processing(users, processed_document):
@@ -102,7 +110,6 @@ def test_failed_retry_preserves_last_searchable_text(users, processed_document, 
     if failure == "missing":
         primary = processed_document.primary_file
         primary.file.delete(save=False)
-        processed_document.files.filter(pk=primary.pk).update(file="documents/missing-primary.txt")
         result = services.re_extract_document(processed_document, user=users["med"])
     else:
         with patch("apps.documents.tasks.extract_document_text", return_value=ExtractionResult(status=failure.upper(), notes=["Could not finish"])):

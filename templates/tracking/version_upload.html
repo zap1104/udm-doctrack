@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Upload new version · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form"><h1>Upload new version</h1><p>{{ record.subject }}</p><div class="card-udm"><div class="card-udm-body">
+<form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}{% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}<div class="form-actions"><button class="btn btn-udm" type="submit">Upload new version</button><a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Reload record and check current version</a></div></form>
+</div></div></div>
+{% endblock %}

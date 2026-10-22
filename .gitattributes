@@ -1,0 +1,2 @@
+# Keep pinned preview assets identical to their recorded SHA-256 checksums.
+/static/vendor/file-preview/** -text

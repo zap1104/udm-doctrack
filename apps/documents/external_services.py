@@ -4,7 +4,6 @@ import logging
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
@@ -14,7 +13,7 @@ from apps.core.permissions import active_writer
 from apps.core.utils import log_action, normalise_text
 from apps.tracking.models import Status
 
-from .models import AccessLevel, Collection, Document, DocumentFile, ExternalDocumentOffice, OcrStatus, Source
+from .models import AccessLevel, Collection, Document, ExternalDocumentOffice, OcrStatus, Source
 from .services import _enqueue_extraction, set_tags
 
 logger = logging.getLogger("doctrack")
@@ -66,20 +65,8 @@ def archive_external_record(record, *, user, expected_revision, tag_names=None, 
                     name_snapshot=name_snapshot, code_snapshot=getattr(office, "code", ""),
                 )
             file_ids = []
-            for attachment in locked.attachments.all():
-                try:
-                    with attachment.file.open("rb") as source_file:
-                        payload = source_file.read()
-                except Exception as exc:
-                    raise ValidationError("An attachment could not be read. Restore the file and retry filing.") from exc
-                copied = DocumentFile(
-                    document=document, original_name=attachment.original_name,
-                    content_type=attachment.content_type, size=attachment.size or len(payload),
-                    checksum=attachment.checksum, is_primary=not file_ids, uploaded_by=actor,
-                )
-                copied.file.save(attachment.original_name, ContentFile(payload), save=False)
-                created_files.append((copied.file.storage, copied.file.name))
-                copied.save()
+            from .file_versions import copy_tracking_history
+            for copied in copy_tracking_history(locked, document, created_files):
                 file_ids.append(copied.pk)
             document.ocr_text = normalise_text("\n\n".join(filter(None, [locked.title, locked.description, locked.original_reference])))[:200000]
             document.ocr_status = OcrStatus.PENDING if file_ids else OcrStatus.DONE

@@ -295,7 +295,7 @@ def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup
     client.force_login(users["med"])
     response = client.get(f"{TRACK}&q=electrical")
     body = response.content.decode()
-    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+    queue_nav = body[body.index("tracking-queue-nav"):body.index('<div class="tracking-filters">')]
 
     assert ">All in Tracking</a>" in queue_nav
     groups = response.context["direction_filter_groups"]

@@ -1,11 +1,15 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from . import views
+from . import file_views, views
 
 app_name = "core"
 
 urlpatterns = [
+    path("files/preview-frame/", file_views.PreviewFrameView.as_view(), name="file_preview_frame"),
+    path("files/preview/<slug:kind>/<int:pk>/", file_views.FilePreviewView.as_view(), name="file_preview"),
+    path("files/content/<slug:kind>/<int:pk>/", file_views.FileContentView.as_view(), name="file_content"),
+    path("files/download/<slug:kind>/<int:pk>/", file_views.FileVersionDownloadView.as_view(), name="file_download"),
     path("healthz/", views.HealthzView.as_view(), name="healthz"),
     path("notifications/", views.NotificationListView.as_view(), name="notifications"),
     path("notifications/count/", views.NotificationCountView.as_view(), name="notification_count"),

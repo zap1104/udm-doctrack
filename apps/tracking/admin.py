@@ -5,6 +5,7 @@ from django.contrib import admin
 
 from .models import (
     Attachment,
+    ExternalAttachment,
     RecordAccessGrant,
     RecordActivity,
     RoutingSLA,
@@ -60,10 +61,22 @@ class RecordActivityAdmin(admin.ModelAdmin):
         return False  # the timeline is written by services only
 
 
-@admin.register(Attachment)
+@admin.register(Attachment, ExternalAttachment)
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ("original_name", "record", "size", "uploaded_by", "created_at")
     search_fields = ("original_name", "record__tracking_number")
+
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in self.model._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(RecordAccessGrant)

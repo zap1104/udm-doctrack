@@ -28,7 +28,7 @@ def test_bulk_and_individual_receipts_by_same_user_do_not_deadlock(users, office
 
         def synchronize(execute, sql, params, many, context):
             nonlocal first_lock
-            row_lock = "FOR UPDATE" in sql.upper()
+            row_lock = "FOR UPDATE" in sql.upper() or "FOR NO KEY UPDATE" in sql.upper()
             account_lock = row_lock and f'"{User._meta.db_table}"' in sql
             record_lock = row_lock and f'"{TrackingRecord._meta.db_table}"' in sql
             if bulk and first_lock and account_lock:

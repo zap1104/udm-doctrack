@@ -23,7 +23,7 @@
       <a class="notification-filter{% if active_filter == 'all' %} is-active{% endif %}" href="?filter=all{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'all' %} aria-current="true"{% endif %}>All</a>
       <a class="notification-filter{% if active_filter == 'unread' %} is-active{% endif %}" href="?filter=unread{% if active_kind %}&kind={{ active_kind }}{% endif %}&per_page={{ page_size }}"{% if active_filter == 'unread' %} aria-current="true"{% endif %}>Unread</a>
     </nav>
-    <form class="notification-kind-filter ms-auto" method="get" {% include "partials/_auto_filter_attrs.html" %}>
+    <form id="notification-kind-filter" class="notification-kind-filter ms-auto" method="get" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" %}>
       <input type="hidden" name="filter" value="{{ active_filter }}">
       {# Carried, or changing the type filter would reset the page length. #}
       <input type="hidden" name="per_page" value="{{ page_size }}">
@@ -37,7 +37,7 @@
   </div>
 </div>
 
-<section aria-labelledby="notification-list-heading">
+<section id="notification-results" data-filter-region aria-labelledby="notification-list-heading">
   <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-3 mb-2 workspace-results-head">
     <h2 id="notification-list-heading" class="section-title mb-0">{{ notification_count }} update{{ notification_count|pluralize }}</h2>
     <span class="text-muted small">Unread updates appear first</span>

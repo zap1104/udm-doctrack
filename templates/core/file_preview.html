@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}File preview · DocTrack{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/file-preview.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/file-preview/pdfjs-dist/web/pdf_viewer.css' %}">
+{% endblock %}
+{% block content %}
+<section class="file-preview" data-file-preview data-kind="{{ preview_kind }}" data-content-url="{{ content_url }}" data-frame-url="{{ frame_url }}" data-vendor-root="{% static 'vendor/file-preview/' %}">
+  <div class="d-flex flex-wrap gap-3 align-items-start justify-content-between mb-3">
+    <div><p class="eyebrow">Read-only file preview</p><h1 class="h4 text-break">{{ file.original_name }}</h1>
+      <p class="mb-0">Viewing Version {{ version_number }} of {{ current_number }}{% if version_number < current_number %} <strong class="badge text-bg-warning">Earlier version</strong>{% endif %}</p>
+    </div>
+    <div class="d-flex gap-2"><a class="btn btn-udm-outline" href="{{ back_url }}">Back to record</a><a class="btn btn-udm" href="{{ download_url }}">Download original</a></div>
+  </div>
+  {% if preview_kind == 'docx' %}<p class="alert alert-info">Approximate DOCX preview. Download the original for exact layout and signature inspection. DocTrack does not create or verify signatures.</p>{% endif %}
+  {% if preview_kind == 'table' %}
+    {% if worksheets %}<form method="get" class="d-flex gap-2 align-items-center mb-3"><input type="hidden" name="token" value="{{ request.GET.token }}"><label for="worksheet">Worksheet</label><select class="form-select w-auto" name="worksheet" id="worksheet">{% for name in worksheets %}<option{% if name == worksheet %} selected{% endif %}>{{ name }}</option>{% endfor %}</select><button class="btn btn-outline-primary">Show worksheet</button></form><p class="small text-muted">Stored worksheet values only. Formulas are not executed or recalculated. Missing cached values appear blank.</p>{% endif %}
+    <div class="table-responsive" tabindex="0" role="region" aria-label="File values"><table class="table table-bordered"><tbody>{% for row in rows %}<tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>{% empty %}<tr><td>No stored values to preview.</td></tr>{% endfor %}</tbody></table></div>
+  {% elif preview_kind == 'txt' %}<pre class="preview-text">{{ text }}</pre>
+  {% elif preview_kind == 'unavailable' %}<div class="alert alert-info">{{ preview_error|default:"Preview unavailable for this format. Download the original file to view it." }}</div>
+  {% else %}
+    <div class="preview-toolbar" hidden data-preview-toolbar aria-label="Preview controls">
+      {% if preview_kind == 'pdf' %}<button type="button" class="btn btn-udm-outline" data-prev>Previous page</button><span data-page-count aria-live="polite"></span><button type="button" class="btn btn-udm-outline" data-next>Next page</button>{% endif %}
+      {% if preview_kind != 'docx' %}<button type="button" class="btn btn-udm-outline" data-zoom-out aria-label="Zoom out">−</button><output data-zoom>100%</output><button type="button" class="btn btn-udm-outline" data-zoom-in aria-label="Zoom in">+</button>{% endif %}
+    </div>
+    <p role="status" data-preview-status>Loading preview…</p><div class="preview-surface" data-preview-surface tabindex="0" aria-label="File preview"></div>
+    <noscript><p>JavaScript is needed for this preview. The original download and version history remain available.</p></noscript>
+  {% endif %}
+  {% if truncated %}<p class="alert alert-warning">Preview truncated to a maximum of 200,000 text bytes or 200 rows, 50 columns and 2,000 characters per cell. Download the original for all content.</p>{% endif %}
+</section>
+{% endblock %}
+{% block extra_scripts %}
+{% if preview_kind == 'docx' %}<script src="{% static 'vendor/file-preview/jszip/dist/jszip.min.js' %}"></script><script src="{% static 'vendor/file-preview/docx-preview/dist/docx-preview.min.js' %}"></script>{% endif %}
+<script type="module" src="{% static 'js/file-preview.js' %}"></script>
+{% endblock %}

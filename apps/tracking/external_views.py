@@ -350,11 +350,18 @@ class ExternalCreateView(AdminRequiredMixin, View):
     def post(self, request):
         form = ExternalCreateForm(request.POST, user=request.user)
         if form.is_valid():
+            data = dict(form.cleaned_data)
+            recipient = data.pop("to_office", None)
+            external_recipient = data.pop("to_external_office", None)
             try:
-                record = services.create_record(user=request.user, **form.cleaned_data)
+                record = services.create_record(user=request.user, **data)
             except ValidationError as exc:
                 _form_error(form, exc)
             else:
+                if recipient or external_recipient:
+                    request.session[f"external_draft_recipient_{record.pk}"] = (
+                        f"internal:{recipient.pk}" if recipient else f"external:{external_recipient.pk}"
+                    )
                 return redirect("tracking:external_review", pk=record.pk)
         return _form_page(
             request, form, title="New external tracking draft", status=400, submit_label="Create draft and review"
@@ -363,6 +370,8 @@ class ExternalCreateView(AdminRequiredMixin, View):
 
 class ExternalDetailView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
+        from .version_views import tracking_file_rows
+
         record = _record(request, pk)
         attachments = []
         for attachment in record.attachments.all():
@@ -382,6 +391,7 @@ class ExternalDetailView(AppLoginRequiredMixin, View):
                 activities=record.activities.all(),
                 corrections=record.revisions.all(),
                 attachments=attachments,
+                file_rows=tracking_file_rows(record, request.user, external=True),
                 can_manage=record.can_manage(request.user),
                 can_act=record.can_act(request.user),
                 can_receipt=record.can_confirm_receipt(request.user),
@@ -412,7 +422,7 @@ class ExternalSlipView(AppLoginRequiredMixin, View):
             _context(
                 record=record,
                 steps=record.routing_steps.all(),
-                attachments=record.attachments.all(),
+                attachments=[group.latest_version for group in record.file_groups.prefetch_related("versions")],
                 annotations=record.activities.filter(event="ANNOTATION"),
                 printed_at=timezone.localtime(),
                 print_reference=entry.pk,
@@ -455,13 +465,24 @@ class ExternalActionView(AppLoginRequiredMixin, View):
         kwargs = {"initial": {"revision": record.revision}}
         if action == "route":
             kwargs.update(user=request.user, record=record)
+            if record.status == Status.DRAFT:
+                remembered = request.session.get(f"external_draft_recipient_{record.pk}")
+                if isinstance(remembered, str):
+                    kwargs["initial"]["to_endpoint"] = remembered
         if action == "complete":
             kwargs["record"] = record
         return record, form_class, kwargs, title, label
 
     def get(self, request, pk, action):
         record, form_class, kwargs, title, label = self._prepare(request, pk, action)
-        return _form_page(request, form_class(**kwargs), title=title, record=record, submit_label=label, action=action)
+        form = form_class(**kwargs)
+        if action == "route" and record.status == Status.DRAFT:
+            remembered = form.initial.get("to_endpoint")
+            if remembered and not form.fields["to_endpoint"].valid_value(remembered):
+                form.initial.pop("to_endpoint", None)
+                request.session.pop(f"external_draft_recipient_{record.pk}", None)
+                messages.warning(request, "The selected recipient is no longer available. Choose another before sending.")
+        return _form_page(request, form, title=title, record=record, submit_label=label, action=action)
 
     def post(self, request, pk, action):
         record, form_class, kwargs, title, label = self._prepare(request, pk, action)
@@ -491,6 +512,8 @@ class ExternalActionView(AppLoginRequiredMixin, View):
             except ValidationError as exc:
                 _form_error(form, exc)
             else:
+                if action == "route":
+                    request.session.pop(f"external_draft_recipient_{record.pk}", None)
                 messages.success(request, "External tracking record updated.")
                 return redirect(record)
         return _form_page(request, form, title=title, record=record, submit_label=label, status=400, action=action)

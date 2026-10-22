@@ -7,6 +7,7 @@ from .models import (
     Document,
     DocumentAccessGrant,
     DocumentFile,
+    DocumentFileVersion,
     DocumentMetadata,
     MetadataSuggestion,
     SearchQueryLog,
@@ -17,7 +18,29 @@ from .models import (
 class DocumentFileInline(admin.TabularInline):
     model = DocumentFile
     extra = 0
-    readonly_fields = ("checksum", "size", "created_at")
+    readonly_fields = tuple(field.name for field in DocumentFile._meta.fields)
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DocumentFile, DocumentFileVersion)
+class ImmutableRepositoryFileAdmin(admin.ModelAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in self.model._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class DocumentMetadataInline(admin.TabularInline):

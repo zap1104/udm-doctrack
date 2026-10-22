@@ -1127,11 +1127,16 @@ def test_the_picker_carries_the_filters_already_applied(client, users, offices, 
     body = client.get(
         f"{TRACKING}?office={offices['SUP'].pk}&scope=incoming&owner=mine&overdue=yes&offices={offices['SUP'].pk}"
     ).content.decode()
-    form = re.search(r'<form class="dashboard-scope".*?</form>', body, re.S).group(0)
+    from tests.test_template_accessibility import RenderedHTML
+
+    html = RenderedHTML(body)
+    form = html.by_id("tracking-office-filter")
+    carried = {(node["attrs"].get("name"), node["attrs"].get("value"))
+               for node in html.nodes if node["tag"] == "input" and node["parent"] is form}
 
     for name, value in (("scope", "incoming"), ("owner", "mine"),
                         ("overdue", "yes"), ("offices", str(offices["SUP"].pk))):
-        assert f'name="{name}" value="{value}"' in form, name
+        assert (name, value) in carried, name
 
 
 @pytest.mark.django_db

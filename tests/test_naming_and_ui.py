@@ -388,14 +388,14 @@ def test_the_sign_in_heading_names_the_system(client):
 @pytest.mark.django_db
 def test_the_sign_in_page_carries_both_marks(client):
     """Each mark is looked up through `static()`, the way the template writes
-    it. CI and production serve fingerprinted names, favicon.26db27d1acf8.svg,
-    so the literal "favicon.svg" appears only under DEBUG."""
+    it. CI and production serve fingerprinted names, so asset filenames are
+    resolved through static() instead of assuming DEBUG URLs."""
     from django.templatetags.static import static
 
     body = client.get("/accounts/login/").content.decode()
 
     assert static("img/UniversidadDeManila.jpg") in body, "the university seal"
-    assert static("img/favicon.svg") in body, "the DocTrack mark"
+    assert static("img/doctrack-logo.svg") in body, "the DocTrack mark"
 
 
 @pytest.mark.django_db

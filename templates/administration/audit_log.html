@@ -14,10 +14,10 @@
 </div></div>
 {% include "administration/_tabs.html" with tab='audit' %}
 
-<section class="workspace-section" aria-labelledby="system-activity-heading">
+<section id="audit-system-results" data-filter-region class="workspace-section" aria-labelledby="system-activity-heading">
 <div class="workspace-section-head"><h2 id="system-activity-heading" class="section-title">System activity</h2></div>
 <div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
-  <form method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
+  <form id="audit-system-filters" method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
     {% comment %}
       Both sizes ride through the filter, so narrowing the log does not silently
       snap a reader who asked for 100 rows back to 25. `page` is deliberately not
@@ -64,7 +64,7 @@
   </form>
   <div class="admin-filter-summary">
     {{ system_page.page_obj.paginator.count }} entr{{ system_page.page_obj.paginator.count|pluralize:"y,ies" }}
-    {% if system_is_filtered %}· <a href="?{% for name, value in access_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}">Clear these filters</a>{% endif %}
+    {% if system_is_filtered %}· <a href="?{% for name, value in access_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}" data-filter-discard="#audit-system-filters">Clear these filters</a>{% endif %}
   </div>
 </div></div>
 
@@ -101,7 +101,7 @@
   logging reads worth doing: a view-only account leaves no other trace, so
   without somewhere to inspect these rows the trail answers nobody.
 {% endcomment %}
-<div class="card-udm mt-4 workspace-panel">
+<div id="audit-access-results" data-filter-region class="card-udm mt-4 workspace-panel">
   <div class="card-udm-head">
     <div>
       <h2>Record access</h2>
@@ -114,7 +114,7 @@
     </div>
   </div>
   <div class="card-udm-body">
-    <form method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
+    <form id="audit-access-filters" method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
       {# Carried through so filtering one panel does not reset the other. #}
       {% for name, value in system_filters.items %}{% if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}
       <input type="hidden" name="per_page" value="{{ system_page.page_size }}">
@@ -150,7 +150,7 @@
     </form>
     <div class="admin-filter-summary">
       {{ access_page.page_obj.paginator.count }} entr{{ access_page.page_obj.paginator.count|pluralize:"y,ies" }}
-      {% if access_is_filtered %}· <a href="?{% for name, value in system_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}">Clear these filters</a>{% endif %}
+      {% if access_is_filtered %}· <a href="?{% for name, value in system_filters.items %}{% if value %}{{ name }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}" data-filter-discard="#audit-access-filters">Clear these filters</a>{% endif %}
     </div>
   </div>
   <div class="card-udm-body pb-0">{% pager access_page section="size" %}</div>

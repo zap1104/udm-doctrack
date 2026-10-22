@@ -67,22 +67,7 @@
     <div class="card-udm mt-4 tracking-record-files">
       <div class="card-udm-head"><h2>Files</h2></div>
       <div class="card-udm-body">
-        {% if older_attachments %}
-          <details class="fold" open>
-            <summary class="disclosure-control">
-              <span class="disclosure-copy"><span class="disclosure-title">{{ older_attachments|length }} earlier file{{ older_attachments|length|pluralize }}</span><span class="disclosure-description">View files from earlier in this record's history.</span></span>
-              {% include "core/_disclosure_state.html" %}
-            </summary>
-            {% for attachment in older_attachments %}
-              {% include "tracking/_attachment_chip.html" %}
-            {% endfor %}
-          </details>
-        {% endif %}
-        {% for attachment in recent_attachments %}
-          {% include "tracking/_attachment_chip.html" %}
-        {% empty %}
-          <p class="text-muted mb-0">No files attached.</p>
-        {% endfor %}
+        {% include "partials/_file_versions.html" %}
       </div>
     </div>
 

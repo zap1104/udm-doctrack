@@ -23,6 +23,8 @@ from django.utils import timezone
 from apps.core.document_types import DocumentTypesMixin
 from apps.core.models import DocumentType, TimeStampedModel
 
+from .file_version_models import AttachmentVersionMixin, ImmutableFileQuerySet
+
 
 def attachment_upload_path(instance, filename: str) -> str:
     record = instance.record
@@ -855,7 +857,13 @@ class RecordActivity(models.Model):
 QUIET_EVENTS = {RecordActivity.Event.VIEWED}
 
 
-class Attachment(TimeStampedModel):
+class Attachment(AttachmentVersionMixin, TimeStampedModel):
+    file_group = models.ForeignKey("tracking.AttachmentGroup", on_delete=models.CASCADE, related_name="versions")
+    version_number = models.PositiveIntegerField(default=1)
+    change_summary = models.CharField(max_length=1000, blank=True)
+    uploader_name_snapshot = models.CharField(max_length=150, blank=True)
+    uploader_office_snapshot = models.CharField(max_length=150, blank=True)
+    objects = ImmutableFileQuerySet.as_manager()
     record = models.ForeignKey(TrackingRecord, on_delete=models.CASCADE, related_name="attachments")
     routing_step = models.ForeignKey(
         RoutingStep, null=True, blank=True, on_delete=models.SET_NULL, related_name="attachments"
@@ -872,6 +880,7 @@ class Attachment(TimeStampedModel):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [models.UniqueConstraint(fields=["file_group", "version_number"], name="attachment_group_version_unique")]
 
     def __str__(self) -> str:
         return self.original_name
@@ -920,3 +929,4 @@ from .external_models import (  # noqa: E402,F401
     ExternalRoutingStep,
     ExternalTrackingRecord,
 )
+from .file_version_models import AttachmentGroup, ExternalAttachmentGroup  # noqa: E402,F401

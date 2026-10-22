@@ -2,12 +2,14 @@
 {% load static %}
 {% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/external.css' %}">{% endblock %}
 {% block content %}
-<div class="external-workspace">
-  <nav class="external-nav" aria-label="External workspace">
-    <a href="{% url 'tracking:external_list' %}">External Tracking</a>
-    <a href="{% url 'tracking:external_reports' %}{% if filter_query %}?{{ filter_query }}{% endif %}">External Reports</a>
-    <a href="{% url 'tracking:external_offices' %}">External Offices</a>
-    {% url 'documents:external_repository' as external_repository_url %}{% if external_repository_url %}<a href="{{ external_repository_url }}">External Repository</a>{% endif %}
+<div class="external-workspace workspace-page">
+  <nav class="subtabs external-nav no-print" aria-label="External workspace">
+    {% with current=request.resolver_match.url_name %}
+    <a class="subtab{% if current != 'external_reports' and current != 'external_offices' and current != 'external_office_create' and current != 'external_office_edit' and current != 'external_office_deactivate' %} is-active{% endif %}" href="{% url 'tracking:external_list' %}"{% if current != 'external_reports' and current != 'external_offices' and current != 'external_office_create' and current != 'external_office_edit' and current != 'external_office_deactivate' %} aria-current="page"{% endif %}>External Tracking</a>
+    <a class="subtab{% if current == 'external_reports' %} is-active{% endif %}" href="{% url 'tracking:external_reports' %}{% if filter_query %}?{{ filter_query }}{% endif %}"{% if current == 'external_reports' %} aria-current="page"{% endif %}>Reports</a>
+    <a class="subtab{% if current == 'external_offices' or current == 'external_office_create' or current == 'external_office_edit' or current == 'external_office_deactivate' %} is-active{% endif %}" href="{% url 'tracking:external_offices' %}"{% if current == 'external_offices' or current == 'external_office_create' or current == 'external_office_edit' or current == 'external_office_deactivate' %} aria-current="page"{% endif %}>External Offices</a>
+    <a class="subtab" href="{% url 'documents:external_repository' %}">External Repository</a>
+    {% endwith %}
   </nav>
   {% block external_content %}{% endblock %}
 </div>

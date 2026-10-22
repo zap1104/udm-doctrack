@@ -27,6 +27,7 @@ from django.utils import timezone
 
 from apps.core.document_types import DocumentTypesMixin
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag, TimeStampedModel
+from apps.tracking.file_version_models import ImmutableFileMixin, ImmutableFileQuerySet
 
 
 def document_upload_path(instance, filename: str) -> str:
@@ -443,7 +444,9 @@ class DeletionReview(models.Model):
         return f"{self.get_decision_display()}: {self.document}"
 
 
-class DocumentFile(TimeStampedModel):
+class DocumentFile(ImmutableFileMixin, TimeStampedModel):
+    immutable_fields = ("document_id", "file", "original_name", "content_type", "size", "checksum", "uploaded_by_id", "created_at")
+    objects = ImmutableFileQuerySet.as_manager()
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="files")
     file = models.FileField(upload_to=document_upload_path, max_length=400)
     original_name = models.CharField(max_length=255)
@@ -462,6 +465,25 @@ class DocumentFile(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.original_name
+
+    def save(self, *args, create_snapshot=True, **kwargs):
+        from django.db import transaction
+
+        from .file_versions import initial_snapshot
+        self._check_immutable()
+        creating = self._state.adding
+        with transaction.atomic():
+            result = super().save(*args, **kwargs)
+            if creating and create_snapshot:
+                initial_snapshot(self)
+            return result
+
+    @property
+    def version_number(self):
+        cached = getattr(self, "_prefetched_objects_cache", {}).get("versions")
+        if cached is not None:
+            return max((row.version_number for row in cached), default=1)
+        return self.versions.order_by("-version_number").values_list("version_number", flat=True).first() or 1
 
     @property
     def extension(self) -> str:
@@ -591,3 +613,6 @@ class SearchResultClick(models.Model):
 
     def __str__(self) -> str:
         return f"Query {self.query_log_id} clicked document {self.document_id} at rank {self.rank}"
+
+
+from .file_versions import DocumentFileVersion  # noqa: E402,F401

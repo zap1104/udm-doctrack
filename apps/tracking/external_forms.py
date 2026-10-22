@@ -69,6 +69,62 @@ class EndpointMixin:
         if bool(data.get(f"{prefix}_office")) == bool(data.get(f"{prefix}_external_office")):
             raise forms.ValidationError("Choose exactly one internal office or external office.")
 
+    def single_endpoint(self, prefix):
+        """Present one choice while retaining the existing scoped validators."""
+        internal = self.fields.pop(f"{prefix}_office")
+        external = self.fields.pop(f"{prefix}_external_office")
+        if not hasattr(self, "_endpoint_validators"):
+            self._endpoint_validators = {}
+        self._endpoint_validators[prefix] = (internal, external)
+        name = f"{prefix}_endpoint"
+        self.fields[name].choices = [
+            ("", "Choose an office"),
+            ("Internal offices", [(f"internal:{office.pk}", str(office)) for office in internal.queryset]),
+            ("External UDM offices", [(f"external:{office.pk}", str(office)) for office in external.queryset]),
+        ]
+        # Accept existing callers without rendering their old inputs. Leaving
+        # old IDs in hidden controls would conflict after an error redisplay
+        # when a user changes the single dropdown, including without JS.
+        if self.is_bound and name not in self.data:
+            old_internal = self.data.get(f"{prefix}_office")
+            old_external = self.data.get(f"{prefix}_external_office")
+            if bool(old_internal) != bool(old_external):
+                kind, value = ("internal", old_internal) if old_internal else ("external", old_external)
+                try:
+                    value = int(value)
+                except (ValueError, TypeError):
+                    value = "invalid"
+                self.data = self.data.copy()
+                self.data[name] = f"{kind}:{value}"
+
+    def clean_single_endpoint(self, data, prefix):
+        name = f"{prefix}_endpoint"
+        token = data.pop(name, None)
+        names = (name, f"{prefix}_office", f"{prefix}_external_office")
+        if hasattr(self.data, "getlist") and any(len(self.data.getlist(key)) > 1 for key in names):
+            self.add_error(name, "Choose only one office.")
+            return
+        if not token:
+            return
+        kind, value = token.split(":", 1)
+        internal, external = self._endpoint_validators[prefix]
+        try:
+            # Reuse ModelChoiceField validation so inactive, inaccessible, or
+            # changed office entries cannot bypass the original querysets.
+            selected = (internal if kind == "internal" else external).clean(value)
+            old_internal = internal.clean(self.data.get(f"{prefix}_office"))
+            old_external = external.clean(self.data.get(f"{prefix}_external_office"))
+        except forms.ValidationError:
+            self.add_error(name, "Choose an available office from the list.")
+            return
+        if (old_internal and (kind != "internal" or old_internal.pk != selected.pk)) or (
+            old_external and (kind != "external" or old_external.pk != selected.pk)
+        ):
+            self.add_error(name, "Conflicting office choices were submitted. Choose one office and try again.")
+            return
+        data[f"{prefix}_office"] = selected if kind == "internal" else None
+        data[f"{prefix}_external_office"] = selected if kind == "external" else None
+
 
 class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
     managing_office = forms.ModelChoiceField(queryset=Office.objects.none())
@@ -79,7 +135,10 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
         queryset=DocumentType.objects.filter(is_active=True),
         required=False,
         label="Document types",
-        widget=forms.SelectMultiple(attrs={"size": 5, "data-document-type-selection": ""}),
+        widget=forms.SelectMultiple(attrs={
+            "size": 5, "class": "js-searchable", "data-item-noun": "document type",
+            "data-placeholder": "Find a document type…", "data-document-type-selection": "",
+        }),
         help_text="Select every type included in this paper packet.",
     )
     document_type = forms.ModelChoiceField(
@@ -89,15 +148,33 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
         widget=forms.Select(attrs={"data-main-document-type": ""}),
         help_text="Choose a main type for packets with several types. It controls deadlines and deletion review.",
     )
+    from_endpoint = forms.ChoiceField(
+        label="From office", help_text="The office the paper comes from. Choose an internal or external UDM office.",
+    )
     from_office = forms.ModelChoiceField(queryset=Office.objects.none(), required=False, label="Source internal office")
     from_external_office = forms.ModelChoiceField(
         queryset=ExternalOffice.objects.none(), required=False, label="Source external UDM office"
     )
+    to_endpoint = forms.ChoiceField(
+        required=False, label="To office",
+        help_text="Choose the next receiving office. You will review the selection before sending.",
+    )
+    to_office = forms.ModelChoiceField(queryset=Office.objects.none(), required=False)
+    to_external_office = forms.ModelChoiceField(queryset=ExternalOffice.objects.none(), required=False)
     actual_at = actual_time("Known source time")
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_endpoints(user=user)
+        self.single_endpoint("from")
+        self.single_endpoint("to")
+        # New first-page forms always submit this control. Older callers that
+        # predate recipient selection can still create a draft for review.
+        recipient = self.fields["to_endpoint"]
+        recipient.required = not self.is_bound or any(
+            name in self.data for name in ("to_endpoint", "to_office", "to_external_office")
+        )
+        recipient.widget.attrs["aria-required"] = str(recipient.required).lower()
         self.fields["managing_office"].queryset = Office.objects.filter(is_active=True)
         if not user.is_system_admin:
             self.fields["managing_office"].queryset = Office.objects.filter(pk=user.office_id)
@@ -106,11 +183,19 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
 
     def clean(self):
         data = super().clean()
-        self.require_endpoint(data, "from")
-        external = data.get("from_external_office")
+        self.clean_single_endpoint(data, "from")
+        self.clean_single_endpoint(data, "to")
         managing = data.get("managing_office")
-        if external and managing and external.managing_office_id != managing.pk:
-            self.add_error("from_external_office", "Choose an entry belonging to the managing office.")
+        for prefix in ("from", "to"):
+            external = data.get(f"{prefix}_external_office")
+            if external and managing and external.managing_office_id != managing.pk:
+                self.add_error(f"{prefix}_endpoint", "Choose an entry belonging to the managing office.")
+        if data.get("from_office") and managing and data["from_office"].pk != managing.pk:
+            self.add_error("from_endpoint", "The internal source must be the managing office.")
+        if (data.get("from_office") and data.get("from_office") == data.get("to_office")) or (
+            data.get("from_external_office") and data.get("from_external_office") == data.get("to_external_office")
+        ):
+            self.add_error("to_endpoint", "Choose a receiving office different from the source office.")
         if "document_types" in data and "document_type" in data:
             selected = data["document_types"]
             if "document_types" not in self.data and data["document_type"]:
@@ -123,6 +208,9 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
 
 
 class ExternalRouteForm(EndpointMixin, RevisionForm):
+    to_endpoint = forms.ChoiceField(
+        label="To office", help_text="Choose the next receiving office. Sending starts a new receipt wait.",
+    )
     to_office = forms.ModelChoiceField(
         queryset=Office.objects.none(), required=False, label="Recipient internal office"
     )
@@ -141,6 +229,7 @@ class ExternalRouteForm(EndpointMixin, RevisionForm):
     def __init__(self, *args, user, record, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_endpoints(user=user, record=record)
+        self.single_endpoint("to")
         self.initial["revision"] = record.revision
         if record.status == "DRAFT":
             self.fields["action"].choices = [("SEND", "Send initial route")]
@@ -152,7 +241,7 @@ class ExternalRouteForm(EndpointMixin, RevisionForm):
 
     def clean(self):
         data = super().clean()
-        self.require_endpoint(data, "to")
+        self.clean_single_endpoint(data, "to")
         return data
 
 

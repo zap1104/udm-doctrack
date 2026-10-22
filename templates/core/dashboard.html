@@ -26,7 +26,7 @@
       the other selections along; the button remains a no-script fallback.
     {% endcomment %}
     {% if scope.can_pick %}
-      <form class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}" {% include "partials/_auto_filter_attrs.html" %}>
+      <form id="dashboard-scope-filter" class="dashboard-scope" method="get" action="{% url 'core:dashboard' %}" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" filter_sync="dashboard" %}>
         {% query_fields "office" "ring" "turnaround_window" %}
         <label class="dashboard-scope-label" for="dashboard-scope">Showing</label>
         <select class="form-select form-select-sm" id="dashboard-scope" name="office">
@@ -460,7 +460,7 @@
           rather than drawn at zero: nothing finished is not the same as finished
           instantly.
         {% endcomment %}
-    <div class="card-udm dashboard-turnaround" id="turnaround-panel">
+    <div class="card-udm dashboard-turnaround" id="turnaround-panel" data-filter-region>
       <div class="card-udm-head">
         <div>
           <h2>Turnaround Time for the Month of {{ turnaround.month|date:"F Y" }}</h2>
@@ -477,7 +477,7 @@
           </div>
         </div>
         <div class="card-udm-body">
-          <form class="dashboard-turnaround-filters no-print" method="get" action="#turnaround-panel" aria-label="Turnaround filters" {% include "partials/_auto_filter_attrs.html" %}>
+          <form id="dashboard-turnaround-filters" class="dashboard-turnaround-filters no-print" method="get" action="#turnaround-panel" aria-label="Turnaround filters" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" filter_sync="dashboard" %}>
             {% for key, value in turnaround_filters.keep %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
             <div>
               <label for="turnaround-month">Month</label>
@@ -493,7 +493,7 @@
             </div>
             <div class="dashboard-turnaround-filter-actions">
               <button type="submit" class="btn btn-sm btn-udm" data-filter-fallback>Apply</button>
-              <a class="btn btn-sm btn-udm-outline" href="{{ turnaround_filters.reset_url }}" data-filter-reset>Reset</a>
+              <a class="btn btn-sm btn-udm-outline" href="{{ turnaround_filters.reset_url }}" data-filter-reset data-filter-discard>Reset</a>
             </div>
           </form>
           <p class="dashboard-turnaround-period">Daily view · {{ turnaround.month|date:"F Y" }}{% if turnaround.is_current %} &middot; current month so far{% endif %}</p>

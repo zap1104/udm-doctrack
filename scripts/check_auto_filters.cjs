@@ -6,7 +6,9 @@ const {createServer} = require('node:http');
 const {chromium} = require('playwright');
 const root = resolve(__dirname, '..');
 const attrs = readFileSync(resolve(root, 'templates/partials/_auto_filter_attrs.html'), 'utf8')
-  .replace('{{ request.path }}', '/tracking/');
+  .replace('{{ request.path }}', '/tracking/')
+  .replace("{{ filter_mode|default:'submit' }}", 'change')
+  .replace('{% if filter_sync %} data-filter-sync="{{ filter_sync }}"{% endif %}', ' data-filter-sync="fixture"');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function html(params = new URLSearchParams()) {

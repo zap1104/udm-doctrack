@@ -4,7 +4,7 @@
     <a class="pill-toggle{% if not resolved.scope and not selected_statuses %} is-active{% endif %}"
        href="{{ all_tracking_href }}">All in Tracking</a>
     {% if selected_scope or selected_statuses or selected_owner or selected_office_ids or resolved.overdue or selected_sort %}
-      <a class="pill-toggle" href="{% url 'search:index' %}?mode={{ tracking_mode }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Clear filters</a>
+      <a class="pill-toggle" href="{% url 'search:index' %}?mode={{ tracking_mode }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}" data-filter-discard>Clear filters</a>
     {% endif %}
   </div>
 </div>

@@ -499,12 +499,20 @@ def test_incoming_and_outgoing_are_disabled_across_every_office(client, users, u
     than hidden: a row that loses two pills when the picker changes reads as the
     page breaking."""
     client.force_login(users["admin"])
-    body = client.get(url).content.decode()
-    queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
+    from tests.test_template_accessibility import RenderedHTML
 
-    assert queue_nav.count("pill-toggle is-disabled") == 8  # Both parents and all six children.
-    assert "scope=incoming" not in queue_nav
-    assert "scope=outgoing" not in queue_nav
+    html = RenderedHTML(client.get(url).content.decode())
+    navigation = next(node for node in html.nodes if node["attrs"].get("aria-label") == "Direction and document stage")
+    children = []
+    for node in html.nodes:
+        parent = node["parent"]
+        while parent and parent is not navigation:
+            parent = parent["parent"]
+        if parent is navigation:
+            children.append(node)
+    assert sum(node["attrs"].get("aria-disabled") == "true" for node in children) == 8
+    assert not any("scope=incoming" in node["attrs"].get("href", "") for node in children)
+    assert not any("scope=outgoing" in node["attrs"].get("href", "") for node in children)
 
 
 @pytest.mark.django_db

@@ -12,7 +12,10 @@ def active_writer(user):
 
     if not getattr(user, "is_authenticated", False) or not getattr(user, "is_records_staff", False):
         raise PermissionDenied("An active account with permission to make changes is required.")
-    actor = User.objects.select_for_update().filter(pk=user.pk, is_active=True).first()
+    # Serialize permission/office changes without blocking foreign-key reads.
+    # Filing history can reference this actor while an upload waits for the
+    # record; FOR UPDATE would create a User -> Record -> User deadlock.
+    actor = User.objects.select_for_update(no_key=True).filter(pk=user.pk, is_active=True).first()
     if actor is None or not actor.can_start_work:
         raise PermissionDenied("Your account cannot make changes. Contact your office administrator.")
     return actor

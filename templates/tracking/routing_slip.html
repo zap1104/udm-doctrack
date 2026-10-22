@@ -439,7 +439,7 @@
       <span>{{ attachments|length }} file{{ attachments|length|pluralize }}</span>
     </div>
     {% if attachments %}
-      <ol>{% for attachment in attachments %}<li>{{ attachment.original_name }}</li>{% endfor %}</ol>
+      <ol>{% for attachment in attachments %}<li>{{ attachment.original_name }} · Version {{ attachment.version_number }} ({{ attachment.version_number }} version{{ attachment.version_number|pluralize }} retained)</li>{% endfor %}</ol>
     {% else %}
       <p>None</p>
     {% endif %}

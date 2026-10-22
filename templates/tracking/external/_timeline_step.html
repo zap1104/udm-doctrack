@@ -1,0 +1,27 @@
+<li class="{% if step.received_at %}is-done{% else %}is-pending{% endif %}">
+  <div class="t-title">{{ step.sequence }}. {{ step.get_action_display }}: {{ step.from_name_snapshot }} → {{ step.to_name_snapshot }}</div>
+  <div class="t-meta">{% if step.from_external_office_id %}External sender{% else %}Internal sender{% endif %} · {% if step.to_external_office_id %}External recipient{% else %}Internal recipient{% endif %}</div>
+  <div class="t-meta">Actual dispatch: {{ step.sent_at|date:'d M Y, g:i A' }}</div>
+  <div class="t-meta {% if step.received_at %}t-received{% else %}t-awaiting{% endif %}">Actual receipt: {{ step.received_at|date:'d M Y, g:i A'|default:'Awaiting receipt' }}</div>
+  {% if step.instructions %}<div class="t-detail">{{ step.instructions }}</div>{% endif %}
+  {% if step.receipt_note %}<div class="t-detail">Receipt note: {{ step.receipt_note }}</div>{% endif %}
+  <details class="fold mt-2" open>
+    <summary class="disclosure-control">
+      <span class="disclosure-copy"><span class="disclosure-title">Recorded dates and people<span class="visually-hidden"> for movement {{ step.sequence }}</span></span><span class="disclosure-description">View when dispatch and receipt were entered, and who recorded them.</span></span>
+      {% include 'core/_disclosure_state.html' %}
+    </summary>
+    <table class="table table-sm table-stacked mb-0">
+      <caption class="visually-hidden">Recording details for movement {{ step.sequence }}</caption>
+      <tbody>
+        <tr><th scope="row" class="text-muted fw-normal">Dispatch recorded</th><td>{{ step.sent_recorded_at|date:'d M Y, g:i A' }}</td></tr>
+        <tr><th scope="row" class="text-muted fw-normal">Dispatch recorded by</th><td>{{ step.sent_recorded_by.display_name|default:'Not recorded' }}</td></tr>
+        <tr><th scope="row" class="text-muted fw-normal">Receipt recorded</th><td>{{ step.received_recorded_at|date:'d M Y, g:i A'|default:'Not recorded' }}</td></tr>
+        <tr><th scope="row" class="text-muted fw-normal">Receipt recorded by</th><td>{{ step.receipt_recorded_by.display_name|default:'Not recorded' }}</td></tr>
+        {% if step.to_office_id and step.received_at %}<tr><th scope="row" class="text-muted fw-normal">Internal receipt confirmed by</th><td>{{ step.received_by.display_name|default:'Not recorded' }}</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </details>
+  {% if can_manage and not is_filed %}
+    {% if step.from_external_office_id or step.to_external_office_id %}<a class="btn btn-sm btn-udm-outline no-print" href="{% url 'tracking:external_correct' record.pk step.pk %}">Correct external facts<span class="visually-hidden"> for movement {{ step.sequence }}</span></a>{% endif %}
+  {% endif %}
+</li>

@@ -109,6 +109,8 @@ class MultipleFileField(forms.FileField):
 
     def clean(self, data, initial=None):
         single_clean = super().clean
+        if isinstance(data, list | tuple) and not data:
+            data = None
         if isinstance(data, list | tuple):
             from django.conf import settings
 

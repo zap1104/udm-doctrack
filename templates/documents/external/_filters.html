@@ -1,9 +1,24 @@
-<form method="get" class="card-udm mb-4" role="search" aria-label="Filter external documents" {% include "partials/_auto_filter_attrs.html" %}>
-  <div class="card-udm-body">
-    {% include "partials/_form_errors.html" %}
-    <div class="row g-3">
-      {% for field in form %}<div class="col-md-6 col-xl-4">{% include "partials/_field.html" with field=field %}</div>{% endfor %}
-    </div>
-    <div class="form-actions"><button class="btn btn-udm" type="submit">Search</button><a class="btn btn-udm-outline" href="{{ request.path }}" data-filter-reset>Clear filters</a></div>
+<form id="external-repository-filters" method="get" class="repository-filters card-udm workspace-toolbar" role="search" aria-label="Filter external documents" {% include "partials/_auto_filter_attrs.html" %}>
+  {% include "partials/_form_errors.html" %}
+  <div class="repository-search">
+    <div><label for="{{ form.q.id_for_label }}">Title, reference, or document text</label>{{ form.q }}{{ form.q.errors }}</div>
+    <button class="btn btn-udm" type="submit">Search</button>
+    <a class="btn btn-udm-outline" href="{{ request.path }}" data-filter-reset data-filter-discard>Clear filters</a>
   </div>
+  <div class="repository-filter-grid repository-filter-grid--primary">
+    <div><label for="{{ form.office.id_for_label }}">{{ form.office.label }}</label>{{ form.office }}{{ form.office.errors }}</div>
+    <div><label for="{{ form.external_office.id_for_label }}">{{ form.external_office.label }}</label>{{ form.external_office }}{{ form.external_office.errors }}</div>
+    <div><label for="{{ form.document_type.id_for_label }}">{{ form.document_type.label }}</label>{{ form.document_type }}{{ form.document_type.errors }}</div>
+    <div><label for="{{ form.year.id_for_label }}">Document year</label>{{ form.year }}{{ form.year.errors }}</div>
+  </div>
+  <details id="external-repository-more-filters" class="repository-more-filters"{% if form.date_from.value or form.date_to.value or form.tag.value or form.source.value or form.retention.value or form.errors %} open{% endif %}>
+    <summary>More filters <span>Dates, tags, origin, and deletion review</span></summary>
+    <div class="repository-filter-grid">
+      <div><label for="{{ form.date_from.id_for_label }}">{{ form.date_from.label }}</label>{{ form.date_from }}{{ form.date_from.errors }}</div>
+      <div><label for="{{ form.date_to.id_for_label }}">{{ form.date_to.label }}</label>{{ form.date_to }}{{ form.date_to.errors }}</div>
+      <div><label for="{{ form.tag.id_for_label }}">{{ form.tag.label }}</label>{{ form.tag }}{{ form.tag.errors }}</div>
+      <div><label for="{{ form.source.id_for_label }}">{{ form.source.label }}</label>{{ form.source }}{{ form.source.errors }}</div>
+      <div><label for="{{ form.retention.id_for_label }}">{{ form.retention.label }}</label>{{ form.retention }}{{ form.retention.errors }}</div>
+    </div>
+  </details>
 </form>

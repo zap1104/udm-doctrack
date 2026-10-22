@@ -23,7 +23,7 @@
   {% endif %}
 </div>
 {% include "tracking/_subtabs.html" with active="tracking" %}
-<form method="get" class="card-udm mb-3 workspace-toolbar no-print" aria-label="Search tracking records" {% include "partials/_auto_filter_attrs.html" %}>
+<form id="tracking-search-filters" method="get" class="card-udm mb-3 workspace-toolbar no-print" aria-label="Search tracking records" {% include "partials/_auto_filter_attrs.html" %}>
   {% if resolved.as_office %}<input type="hidden" name="office" value="{{ resolved.as_office.pk }}">{% elif resolved.all_offices %}<input type="hidden" name="office" value="all">{% endif %}
   {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
   {% for stage in selected_statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
@@ -42,7 +42,7 @@
     <a class="pill-toggle{% if not resolved.scope and not resolved.statuses %} is-active{% endif %}"
        href="{{ all_tracking_href }}">All in Tracking</a>
     {% if resolved.scope or resolved.statuses or resolved.raised_by_ids or selected_owner or request.GET.office or resolved.overdue or query or selected_sort %}
-      <a class="pill-toggle" href="{% url 'tracking:list' %}">Clear filters</a>
+      <a class="pill-toggle" href="{% url 'tracking:list' %}" data-filter-discard>Clear filters</a>
     {% endif %}
   </div>
 </div>
@@ -78,7 +78,7 @@
     {% endcomment %}
     <div class="tracking-filter-row tracking-filter-row--scope">
       <span class="tracking-filter-label" id="filter-as-office-label">Viewing as</span>
-      <form class="dashboard-scope" method="get" action="{% url 'tracking:list' %}" {% include "partials/_auto_filter_attrs.html" %}>
+      <form id="tracking-office-filter" class="dashboard-scope" method="get" action="{% url 'tracking:list' %}" {% include "partials/_auto_filter_attrs.html" with filter_mode="change" %}>
         {% if resolved.scope %}<input type="hidden" name="scope" value="{{ resolved.scope }}">{% endif %}
         {% for stage in selected_statuses %}<input type="hidden" name="status" value="{{ stage }}">{% endfor %}
         {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}">{% endif %}
@@ -287,7 +287,7 @@
   <div><dt>Awaiting receipt</dt><dd>offices that still need to confirm receipt. Once confirmed, they appear under Received by.</dd></div>
 </dl>
 {% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
-<div class="card-udm">
+<div id="tracking-results" data-filter-region class="card-udm">
   <div class="card-udm-head">
     <h2>{{ total }} tracking record{{ total|pluralize }}</h2>
     <a class="small" href="{% url 'core:report_export' %}?{{ request.GET.urlencode }}&amp;source=tracking">Export CSV</a>
@@ -379,7 +379,7 @@
               {% else %}
                 <p>Clear the filters or choose another queue above to see more records.</p>
               {% endif %}
-              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}">Clear filters</a>
+              <a class="btn btn-udm-outline" href="{% url 'tracking:list' %}" data-filter-discard>Clear filters</a>
             </div>
           </td></tr>
         {% endfor %}

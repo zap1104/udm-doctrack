@@ -10,7 +10,7 @@
 {% include "administration/_tabs.html" %}
 
 <div class="card-udm mb-3 workspace-toolbar"><div class="card-udm-body">
-  <form method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
+  <form id="masterdata-filters" method="get" class="row g-2 align-items-end admin-filters" {% include "partials/_auto_filter_attrs.html" %}>
     {# Carried so searching does not snap a reader who asked for 100 rows back to 25. #}
     <input type="hidden" name="per_page" value="{{ page_size }}">
     <div class="col-md-{% if has_status %}7{% else %}10{% endif %}">
@@ -32,7 +32,7 @@
   </form>
   <div class="admin-filter-summary">
     {{ page_obj.paginator.count }} {% if page_obj.paginator.count == 1 %}{{ config.singular }}{% else %}{{ config.label|lower }}{% endif %}
-    {% if query or selected_status %}· <a href="{% url 'core:masterdata_list' slug %}">Clear filters</a>{% endif %}
+    {% if query or selected_status %}· <a href="{% url 'core:masterdata_list' slug %}" data-filter-discard>Clear filters</a>{% endif %}
   </div>
 </div></div>
 
@@ -42,7 +42,7 @@
   scroll away.
 {% endcomment %}
 {% pager section="size" %}
-<div class="card-udm"><div class="card-udm-body p-0 table-responsive">
+<div id="masterdata-results" data-filter-region class="card-udm"><div class="card-udm-body p-0 table-responsive">
   <table class="table-udm">
     <thead><tr>{% for name, label in config.columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr></thead>
     <tbody>

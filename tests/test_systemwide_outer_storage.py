@@ -7,7 +7,6 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from apps.documents.extraction import ExtractionResult
 from apps.documents.models import Document, DocumentFile, OcrStatus
 from apps.tracking.models import Attachment
 from apps.tracking.services import confirm_receipt, create_draft_record, route_record
@@ -60,7 +59,7 @@ def test_draft_edit_later_failure_rolls_back_bytes_and_metadata(client, users, o
     assert files_under(tmp_path) == set()
 
 
-def test_added_file_failure_feedback_does_not_claim_index_refreshed(client, users, settings, tmp_path):
+def test_frozen_repository_rejects_added_file_without_success_feedback(client, users, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     settings.ENABLE_BACKGROUND_TASKS = False
     document = Document.objects.create(
@@ -68,17 +67,18 @@ def test_added_file_failure_feedback_does_not_claim_index_refreshed(client, user
         uploaded_by=users["med"], ocr_text="Original usable text", ocr_status=OcrStatus.DONE,
     )
     client.force_login(users["med"])
-    with patch("apps.documents.services.extract_document_text", return_value=ExtractionResult(
-        status="FAILED", notes=["Simulated provider failure"],
-    )):
+    with patch("apps.documents.services.extract_document_text") as extractor:
         response = client.post(reverse("documents:add_files", args=[document.pk]), {"files": upload()}, follow=True)
-    assert response.status_code == 200
-    assert DocumentFile.objects.filter(document=document).count() == 1
+    assert response.status_code == 403
+    extractor.assert_not_called()
+    assert not DocumentFile.objects.filter(document=document).exists()
+    assert files_under(tmp_path) == set()
     document.refresh_from_db()
     assert document.ocr_text == "Original usable text"
-    messages = [str(message) for message in response.context["messages"]]
+    assert document.ocr_status == OcrStatus.DONE
+    messages = [str(message) for message in response.wsgi_request._messages]
     assert not any("refreshed the search index" in message for message in messages)
-    assert any("saved" in message.lower() and "extract" in message.lower() for message in messages)
+    assert not any("saved" in message.lower() or "uploaded" in message.lower() for message in messages)
 
 
 @pytest.mark.django_db(transaction=True)

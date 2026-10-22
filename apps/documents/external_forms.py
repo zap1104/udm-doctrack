@@ -16,6 +16,10 @@ class ExternalUploadForm(UploadForm):
         queryset=ExternalOffice.objects.none(),
         required=True,
         label="External UDM offices",
+        widget=forms.SelectMultiple(attrs={
+            "size": 5, "class": "js-searchable", "data-item-noun": "external office",
+            "data-placeholder": "Find an external office…",
+        }),
     )
 
     def __init__(self, *args, user, **kwargs):

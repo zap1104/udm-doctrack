@@ -80,7 +80,7 @@ def _event(record, user, event, message, *, detail="", actual_at=None, routing_s
 
 def _mutation(function):
     @wraps(function)
-    def wrapped(record, *, user, expected_revision, **kwargs):
+    def wrapped(record, *args, user, expected_revision, **kwargs):
         with transaction.atomic():
             actor = active_writer(user)
             locked = type(record).objects.select_for_update().get(pk=record.pk)
@@ -88,7 +88,7 @@ def _mutation(function):
                 raise PermissionDenied("This external record is outside your office scope.")
             if expected_revision is None or str(expected_revision) != str(locked.revision):
                 raise ValidationError("This record changed. Reload it before trying again.")
-            result = function(locked, user=actor, **kwargs)
+            result = function(locked, *args, user=actor, **kwargs)
             locked.revision += 1
             locked.save()
             record.refresh_from_db()

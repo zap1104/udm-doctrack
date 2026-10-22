@@ -6,7 +6,6 @@ import logging
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
@@ -54,7 +53,7 @@ def suggested_tags_for(user, *, collection=Collection.OVPA):
 @compensate_storage
 @transaction.atomic
 def ingest_upload(
-    *, user, uploaded_file, office=None, source=Source.UPLOAD,
+    *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
     ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
 ) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
@@ -68,7 +67,14 @@ def ingest_upload(
         raise ValidationError("Choose a valid repository collection.")
     if collection == Collection.EXTERNAL and not user.is_office_admin:
         raise PermissionDenied("Only administrators can upload external documents.")
-    validate_upload(uploaded_file)
+    if uploaded_file is not None and uploaded_files is not None:
+        raise ValidationError("Supply either one file or the initial file list.")
+    initial_files = list(uploaded_files) if uploaded_files is not None else ([uploaded_file] if uploaded_file is not None else [])
+    if not initial_files or len(initial_files) > settings.MAX_UPLOAD_FILES:
+        raise ValidationError(f"Upload between 1 and {settings.MAX_UPLOAD_FILES} files at a time.")
+    for initial_file in initial_files:
+        validate_upload(initial_file)
+    uploaded_file = initial_files[0]
     office = office or user.office
     if not user.is_authenticated or not user.is_active or user.is_viewer:
         raise PermissionDenied("Your account cannot upload documents.")
@@ -129,12 +135,15 @@ def ingest_upload(
     for counterpart in counterparts:
         ExternalDocumentOffice.objects.create(document=document, external_office=counterpart, name_snapshot=counterpart.name, code_snapshot=counterpart.code)
 
+    for initial_file in initial_files[1:]:
+        _append_initial_file(document, initial_file, user=user)
+
     if extraction is None:
         _enqueue_extraction(document, user_id=user.pk, file_ids=[document_file.pk])
         suggestion = Suggestion()
     else:
         suggestion = suggest_metadata(
-            text=extraction.text, filename=uploaded_file.name, office=office, user=user
+            text=document.ocr_text, filename=uploaded_file.name, office=office, user=user
         )
         suggestion.notes.extend(extraction.notes)
         MetadataSuggestion.objects.create(
@@ -363,9 +372,12 @@ def set_metadata_values(document: Document, metadata_values: dict) -> None:
             DocumentMetadata.objects.filter(document=document, field=definition).delete()
 
 
-@compensate_storage
-@locked_mutation
 def add_file_to_document(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
+    raise PermissionDenied("Repository file contents are frozen after filing. Create a new Tracking record for new files.")
+
+
+def _append_initial_file(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
+    """Append only inside ingest_upload's initial, compensated transaction."""
     if not document.can_user_edit(user):
         raise PermissionDenied("Only the owning office can add files.")
     if document.ocr_status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
@@ -506,51 +518,33 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
     document.document_types.set(record.selected_document_types)
     text_parts = [record.subject, record.instructions, record.remarks, record.completion_note]
     created_file_ids = []
-    for attachment in record.attachments.all():
-        try:
-            with attachment.file.open("rb") as source_file:
-                payload = source_file.read()
-        except Exception as exc:
-            logger.warning("Could not read attachment %s: %s", attachment.pk, exc)
-            raise ValidationError(
-                "Filing stopped because an attachment could not be read from storage. "
-                "Restore the missing file and retry; this record is still waiting to be filed."
-            ) from exc
-
-        document_file = DocumentFile(
-            document=document,
-            original_name=attachment.original_name,
-            content_type=attachment.content_type,
-            size=attachment.size or len(payload),
-            checksum=attachment.checksum,
-            is_primary=not document.files.exists(),
-            page_count=0,
-            extracted_chars=0,
-            uploaded_by=user,
-        )
-        document_file.file.save(attachment.original_name, ContentFile(payload), save=False)
-        created_files.append((document_file.file.storage, document_file.file.name))
-        document_file.save()
+    extraction_failures = []
+    from .file_versions import copy_tracking_history
+    for document_file in copy_tracking_history(record, document, created_files):
         created_file_ids.append(document_file.pk)
         if not settings.ENABLE_BACKGROUND_TASKS:
-            buffer = ContentFile(payload)
-            extraction = extract_document_text(
-                buffer,
-                attachment.original_name,
-                language_hint=document.ocr_language,
-                allow_external_ocr=document.allow_external_ocr,
-            )
+            with document_file.file.open("rb") as buffer:
+                extraction = extract_document_text(
+                    buffer,
+                    document_file.original_name,
+                    language_hint=document.ocr_language,
+                    allow_external_ocr=document.allow_external_ocr,
+                )
             document_file.page_count = extraction.pages
             document_file.extracted_chars = extraction.char_count
             document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
             if extraction.text:
                 text_parts.append(extraction.text)
+            if extraction.status == OcrStatus.FAILED:
+                extraction_failures.extend(extraction.notes or ["Text extraction failed. Retry extraction when available."])
 
     document.ocr_text = normalise_text("\n\n".join(part for part in text_parts if part))[:200000]
     document.ocr_status = OcrStatus.PENDING if settings.ENABLE_BACKGROUND_TASKS else (OcrStatus.DONE if document.ocr_text else OcrStatus.EMPTY)
+    if extraction_failures:
+        document.retain_extraction_failure("\n".join(extraction_failures))
     document.ocr_engine = "pending" if settings.ENABLE_BACKGROUND_TASKS else "archive-merge"
     document.page_count = document.file_page_count
-    document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "updated_at"])
+    document.save(update_fields=["ocr_text", "ocr_status", "ocr_engine", "page_count", "ocr_notes", "extraction_failed_generation", "updated_at"])
 
 
     if settings.ENABLE_BACKGROUND_TASKS:

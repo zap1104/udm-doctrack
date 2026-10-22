@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import external_views as views
+from .version_views import UploadVersionView
 
 urlpatterns = [
     path("", views.ExternalListView.as_view(), name="external_list"),
@@ -15,6 +16,7 @@ urlpatterns = [
     ),
     path("attachments/<int:pk>/", views.ExternalAttachmentDownloadView.as_view(), name="external_attachment"),
     path("<int:pk>/", views.ExternalDetailView.as_view(), name="external_detail"),
+    path("<int:pk>/files/<int:group_pk>/versions/", UploadVersionView.as_view(external=True), name="external_file_version"),
     path("<int:pk>/review/", views.ExternalReviewView.as_view(), name="external_review"),
     path("<int:pk>/slip/", views.ExternalSlipView.as_view(), name="external_slip"),
     path("<int:pk>/correct/<int:step_pk>/", views.ExternalCorrectionView.as_view(), name="external_correct"),

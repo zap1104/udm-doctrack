@@ -2,12 +2,33 @@
 {% block title %}External Repository Reports · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-page workspace-reports">
-  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Repository Reports</h1><p class="sub">{{ total }} matching filed document{{ total|pluralize }} of {{ all_count }} available.</p></div><a class="btn btn-udm-outline" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=csv">Export CSV</a></div>
+  <div class="page-head reports-page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Repository Reports</h1><p class="sub">{{ total }} matching filed document{{ total|pluralize }} of {{ all_count }} available. Totals respect your document and office permissions.</p></div><div class="page-actions"><a class="btn btn-udm-outline" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=csv">Export CSV</a></div></div>
   {% include "documents/external/_nav.html" %}
   {% include "documents/external/_filters.html" %}
+  <div id="external-repository-report-results" data-filter-region>
+  <div class="report-metrics report-metrics--tracking">
+    <div><div class="stat-card navy"><div class="label">Matching documents</div><div class="value">{{ total }}</div><div class="hint">Filed external documents matching the selected filters.</div></div></div>
+    <div><div class="stat-card"><div class="label">Available documents</div><div class="value">{{ all_count }}</div><div class="hint">All filed external documents available to your account.</div></div></div>
+    <div><div class="stat-card gold"><div class="label">Deletion review due</div><div class="value">{{ due_count }}</div><div class="hint">Matching documents whose deletion review date is due.</div></div></div>
+  </div>
   <div class="row g-4">
-    <div class="col-md-6"><div class="card-udm"><div class="card-udm-body"><h2 class="h5">Managing offices</h2><ul>{% for row in offices %}<li>{{ row.office__name }}: {{ row.total }}</li>{% empty %}<li>No matching documents</li>{% endfor %}</ul></div></div></div>
-    <div class="col-md-6"><div class="card-udm"><div class="card-udm-body"><h2 class="h5">Acquisition sources</h2><ul>{% for row in sources %}<li>{{ row.source }}: {{ row.total }}</li>{% empty %}<li>No matching documents</li>{% endfor %}</ul><p>{{ due_count }} document{{ due_count|pluralize }} due for deletion review.</p></div></div></div>
+    <div class="col-md-6">
+      <section class="card-udm h-100" aria-labelledby="external-report-offices-title">
+        <div class="card-udm-head"><div><h2 id="external-report-offices-title">Managing offices</h2><div class="report-caption">Matching external documents by owning office.</div></div></div>
+        <div class="card-udm-body">
+          <ul class="list-unstyled mb-0">{% for row in offices %}<li class="d-flex justify-content-between gap-3 py-2 border-bottom"><span>{{ row.office__name|default:"Unknown office" }}</span><strong class="num">{{ row.total }}</strong></li>{% empty %}<li class="supporting-copy">No matching documents</li>{% endfor %}</ul>
+        </div>
+      </section>
+    </div>
+    <div class="col-md-6">
+      <section class="card-udm h-100" aria-labelledby="external-report-sources-title">
+        <div class="card-udm-head"><div><h2 id="external-report-sources-title">Acquisition sources</h2><div class="report-caption">How matching documents entered the external repository.</div></div></div>
+        <div class="card-udm-body">
+          <ul class="list-unstyled mb-0">{% for row in sources %}<li class="d-flex justify-content-between gap-3 py-2 border-bottom"><span>{% if row.source == 'DTS' %}Archived from tracking{% elif row.source == 'UPLOAD' %}Uploaded file{% elif row.source == 'SCAN' %}Scanned document{% else %}{{ row.source|default:"Unknown source" }}{% endif %}</span><strong class="num">{{ row.total }}</strong></li>{% empty %}<li class="supporting-copy">No matching documents</li>{% endfor %}</ul>
+        </div>
+      </section>
+    </div>
+  </div>
   </div>
 </div>
 {% endblock %}

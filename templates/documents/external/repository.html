@@ -2,21 +2,39 @@
 {% load doctrack %}
 {% block title %}External Document Repository · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="workspace-page workspace-repository">
+<div class="repository-page workspace-page workspace-repository">
   <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Document Repository</h1><p class="sub">Filed external cases, historical uploads and scanned documents. {{ total }} matching document{{ total|pluralize }} of {{ all_count }} available.</p></div>{% if can_upload %}<a class="btn btn-udm" href="{% url 'documents:external_upload' %}">Upload external document</a>{% endif %}</div>
   {% include "documents/external/_nav.html" %}
   {% include "documents/external/_filters.html" %}
-  <div class="row g-3">
+  <div id="external-repository-results" data-filter-region>
+  <div class="repository-results"><span>{{ total }} document{{ total|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>{% pager section="size" %}</div>
+  <div class="repository-document-list">
     {% for document in documents %}
-      <div class="col-md-6 col-xl-4"><article class="card-udm h-100"><div class="card-udm-body">
-        <div class="eyebrow">{{ document.get_source_display }}</div>
-        <h2 class="h5"><a href="{{ document.get_absolute_url }}">{{ document.title }}</a></h2>
-        <p>{{ document.office.name }} · {{ document.year }}</p>
-        {% if document.reference_number %}<p class="mono">{{ document.reference_number }}</p>{% endif %}
-        <p class="supporting-copy">{{ document.snippet }}</p>
-      </div></article></div>
-    {% empty %}<div class="col-12"><div class="card-udm"><div class="card-udm-body">No external documents match these filters.</div></div></div>{% endfor %}
+      <article class="repository-document card-udm">
+        <span class="repository-file-icon" aria-hidden="true"><svg viewBox="0 0 24 28" fill="none"><path d="M4 1h10l7 7v18H4zM14 1v8h7M8 15h9M8 20h7" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+        <div class="repository-document-copy">
+          <h3><a href="{{ document.get_absolute_url }}">{{ document.title }}</a></h3>
+          <div class="repository-document-meta">
+            {% include "partials/_office_badge.html" with office=document.office %}
+            <span>{{ document.document_type_names|default:"Unclassified" }}</span>
+            <span>{% if document.document_date %}{{ document.document_date|date:"d M Y" }}{% else %}Added {{ document.created_at|date:"d M Y" }}{% endif %}</span>
+          </div>
+          {% if document.reference_number %}<p class="mono">{{ document.reference_number }}</p>{% endif %}
+          {% if document.snippet %}<p class="supporting-copy">{{ document.snippet }}</p>{% endif %}
+          <div class="repository-document-tags">{% for tag in document.tags.all|slice:":3" %}<span>{{ tag.name }}</span>{% endfor %}</div>
+        </div>
+        <div class="repository-document-state">
+          <span class="pill {% if document.source == 'DTS' %}pill-completed{% else %}pill-muted{% endif %}">{{ document.get_source_display }}</span>
+          <span>{{ document.file_count }} file{{ document.file_count|pluralize }}</span>
+          {% if document.retention_is_due %}<span class="text-danger">Deletion review due</span>{% endif %}
+        </div>
+        <a class="btn btn-sm btn-udm-outline repository-open" href="{{ document.get_absolute_url }}" aria-label="Open {{ document.title }}">Open</a>
+      </article>
+    {% empty %}
+      <div class="card-udm empty-state"><h2 class="h5">No external documents found</h2><p>No external documents match these filters.</p><a class="btn btn-udm-outline" href="{% url 'documents:external_repository' %}" data-filter-reset data-filter-discard>Clear filters</a></div>
+    {% endfor %}
   </div>
-  {% pager %}
+  {% pager section="steps" %}
+  </div>
 </div>
 {% endblock %}

@@ -50,6 +50,7 @@ from .models import (
     Status,
     TrackingRecord,
 )
+from .version_views import tracking_file_rows
 
 #: Rows of the pending-upload queue shown before it collapses to a link.
 PENDING_UPLOAD_SHOWN = 5
@@ -317,7 +318,7 @@ class RecordCreateView(OfficeAssignedMixin, View):
         return render(request, self.template_name, {
             "form": form,
             "record": record,
-            "attachments": record.attachments.all() if record else [],
+            "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")] if record else [],
             "originating_office": record.originating_office if record else request.user.office,
         })
 
@@ -417,6 +418,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
             offices = list(form.cleaned_data.get("receiving_offices") or [])
         return {
             "record": record,
+            "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")],
             "form": form,
             "offices": offices,
             **_deadline_summary(form),
@@ -524,7 +526,8 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             .exclude(event__in=QUIET_EVENTS)
             .order_by("created_at", "id")
         )
-        attachments = list(record.attachments.select_related("uploaded_by"))
+        file_rows = tracking_file_rows(record, request.user)
+        attachments = [row["current"]["item"] for row in file_rows]
         archived_document = getattr(record, "archived_document", None)
         can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
         # Filing a record handled by this office does not grant access to the
@@ -568,6 +571,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "older_attachments": attachments[:-TIMELINE_VISIBLE],
                 "recent_attachments": attachments[-TIMELINE_VISIBLE:],
                 "attachments": attachments,
+                "file_rows": file_rows,
                 "receipt_form": ConfirmReceiptForm(),
                 "remark_form": RemarkForm(),
                 # Distinct IDs from RemarkForm's attachments; POST field names
@@ -872,7 +876,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 "steps": record.routing_steps.select_related(
                     "from_office", "to_office", "sent_by", "received_by"
                 ).order_by("sequence"),
-                "attachments": record.attachments.all(),
+                "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")],
                 "printed_at": timezone.localtime(),
                 "printed_by": request.user,
                 # Printed on the slip so a paper copy can be matched to the

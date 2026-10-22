@@ -103,7 +103,10 @@ def test_external_filing_is_atomic_idempotent_and_searchable(external_case, user
     counterpart = external_case.routing_steps.get().from_external_office
     counterpart.name = "College of Education"
     counterpart.save(update_fields=["name"])
-    attachment = ExternalAttachment.objects.create(record=external_case, file=ContentFile(b"Evidence paper", name="evidence.txt"), original_name="evidence.txt", size=14, checksum="proof", uploaded_by=users["med_admin"])
+    import hashlib
+
+    evidence_checksum = hashlib.sha256(b"Evidence paper").hexdigest()
+    attachment = ExternalAttachment.objects.create(record=external_case, file=ContentFile(b"Evidence paper", name="evidence.txt"), original_name="evidence.txt", size=14, checksum=evidence_checksum, uploaded_by=users["med_admin"])
     with patch("django_q.tasks.async_task") as queue:
         with django_capture_on_commit_callbacks(execute=False) as callbacks:
             document = archive_external_record(external_case, user=users["med_admin"], expected_revision=1)
@@ -116,7 +119,7 @@ def test_external_filing_is_atomic_idempotent_and_searchable(external_case, user
     assert document.external_office_links.get().name_snapshot == "Original college name"
     assert document.files.get().file.name != attachment.file.name
     assert document.files.get().file.read() == b"Evidence paper"
-    assert document.files.get().checksum == "proof"
+    assert document.files.get().checksum == evidence_checksum
     external_case.refresh_from_db()
     assert external_case.status == Status.COMPLETED and external_case.filed_at and external_case.revision == 2
     assert archive_external_record(external_case, user=users["med_admin"], expected_revision=1).pk == document.pk

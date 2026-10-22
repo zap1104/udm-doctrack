@@ -21,7 +21,7 @@
   {% endif %}
   <link rel="stylesheet" href="{% static 'css/doctrack.css' %}">
   <link rel="stylesheet" href="{% static 'css/workspace.css' %}" media="screen">
-  <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="icon" href="{% static 'img/doctrack-logo.svg' %}" type="image/svg+xml">
   {% block extra_head %}{% endblock %}
 </head>
 <body data-max-upload-mb="{{ MAX_UPLOAD_MB }}">
@@ -78,6 +78,7 @@
   <script src="{% static 'js/auto-filters.js' %}"></script>
   <script src="{% static 'js/document-types.js' %}"></script>
   <script src="{% static 'js/form-errors.js' %}"></script>
+  <script src="{% static 'js/file-history-focus.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

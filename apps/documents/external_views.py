@@ -56,7 +56,10 @@ def external_documents(request):
 class ExternalRepositoryView(AppLoginRequiredMixin, View):
     def get(self, request):
         form, documents, visible = external_documents(request)
-        context = paginate(request, documents.with_related().order_by("-document_date", "-pk"))
+        context = paginate(
+            request,
+            documents.with_related().annotate(file_count=Count("files", distinct=True)).order_by("-document_date", "-pk"),
+        )
         context.update(form=form, documents=context["page_obj"].object_list, total=context["page_obj"].paginator.count,
                        all_count=visible.count(), can_upload=request.user.can_start_work and request.user.is_office_admin)
         return render(request, "documents/external/repository.html", context)
@@ -72,7 +75,7 @@ class ExternalUploadView(AdminRequiredMixin, View):
             try:
                 with cleanup_new_files(), transaction.atomic():
                     document, suggestion = services.ingest_upload(
-                        user=request.user, uploaded_file=form.cleaned_data["file"], office=form.cleaned_data["office"],
+                        user=request.user, uploaded_files=form.cleaned_data["file"], office=form.cleaned_data["office"],
                         source=form.cleaned_data["source"], collection=Collection.EXTERNAL,
                         external_offices=form.cleaned_data["external_offices"],
                         ocr_language=form.cleaned_data["ocr_language"], allow_external_ocr=form.cleaned_data["allow_external_ocr"],

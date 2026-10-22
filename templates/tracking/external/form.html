@@ -1,25 +1,108 @@
 {% extends "tracking/external/base.html" %}
 {% block title %}{{ title }} · {{ SITE_NAME }}{% endblock %}
 {% block external_content %}
-<div class="page-head"><div><div class="eyebrow">External Tracking</div><h1>{{ title }}</h1>{% if record %}<p class="sub">{{ record.title }} · {{ record.display_tracking_number }}</p>{% endif %}</div></div>
-<div class="card-udm external-form-card"><div class="card-udm-body">
-  {% if action == 'receipt' %}<p>Your office and the current server time will be recorded for this receipt.</p>{% endif %}
-  {% if correction %}<p>Only external paper facts can be corrected. The reason, original values, replacement values, your identity and recording time remain in the history.</p>{% endif %}
-  {% if action == 'file' %}<p>This approves the completed paper record into the External repository and freezes its custody history. Later explanations can be added as annotations.</p>{% endif %}
-  {% if record.status == 'DRAFT' %}<p>Review the source and recipient before sending. An external tracking number is assigned when the draft is first routed.</p>{% endif %}
-  <form method="post" enctype="multipart/form-data" novalidate>
-    {% csrf_token %}{% include "partials/_form_errors.html" %}
-    {% for field in form %}
-      {% if field.is_hidden %}{{ field }}{% else %}
-      <div class="mb-3">
-        {% if field.field.widget.input_type == 'checkbox' %}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
-        {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="text-muted"> (required)</span>{% endif %}</label>{{ field }}{% endif %}
-        {% if field.help_text %}<p class="form-text">{{ field.help_text }}</p>{% endif %}
-        {% for error in field.errors %}<p class="text-danger small">{{ error }}</p>{% endfor %}
+<div class="workspace-form-page tracking-form-page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">External {% if form.name %}Office Directory{% else %}Tracking{% endif %}</div>
+      <h1>{{ title }}</h1>
+      {% if record %}<p class="sub">{{ record.title }} · <span class="mono">{{ record.display_tracking_number }}</span></p>{% endif %}
+      {% if form.title or record.status == 'DRAFT' %}
+      <div class="step-indicator mt-2" aria-label="External slip creation">
+        <span class="step{% if not record %} active{% endif %}"{% if not record %} aria-current="step"{% endif %}><span class="num">1</span> Document and office details</span>
+        <span aria-hidden="true">›</span>
+        <span class="step{% if record %} active{% endif %}"{% if record %} aria-current="step"{% endif %}><span class="num">2</span> Review and send</span>
       </div>
       {% endif %}
-    {% endfor %}
-    <div class="external-actions"><button type="submit" class="btn btn-udm">{{ submit_label }}</button><a class="btn btn-udm-outline" href="{% if record %}{{ record.get_absolute_url }}{% else %}{% url 'tracking:external_list' %}{% endif %}">Cancel</a></div>
+    </div>
+  </div>
+  <form method="post" enctype="multipart/form-data" class="workspace-form" novalidate>
+    {% csrf_token %}
+    {% include "partials/_form_errors.html" %}
+    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+    <div class="row g-4 workspace-form-layout">
+      <div class="col-lg-8 workspace-form-main">
+        <section class="card-udm">
+          <div class="card-udm-head">
+            <div><h2>{% if form.title %}Document and Office Details{% else %}{{ title }}{% endif %}</h2><div class="phase2-card-caption">Check the details before saving this external record.</div></div>
+            <span class="phase2-required-note"><span class="required-mark" aria-hidden="true">*</span> Required fields</span>
+          </div>
+          <div class="card-udm-body">
+            {% if action == 'receipt' %}<p class="help-note">Your office and the current server time will be recorded when you confirm receipt.</p>{% endif %}
+            {% if correction %}<p class="help-note">Correct manually recorded external facts only. Your reason, original and replacement values, identity, and recording time remain in the history.</p>{% endif %}
+            {% if action == 'file' %}<p class="help-note">Approve this completed record into the External Repository. Its custody history becomes read-only; later explanations can be added as annotations.</p>{% endif %}
+            {% if form.title %}
+              <section class="phase2-form-section" aria-labelledby="external-document-details">
+                <h3 id="external-document-details" class="phase2-section-title">Document details</h3>
+                {% include "partials/_field.html" with field=form.title %}
+                {% include "partials/_field.html" with field=form.description %}
+                {% include "partials/_document_types_field.html" %}
+                {% include "partials/_field.html" with field=form.original_reference %}
+                <p class="form-text">Original paper reference means a number already printed on the document, such as “Memo 2026-015”. Leave it blank if there is none. DocTrack assigns its own external tracking number when the draft is sent.</p>
+              </section>
+              <section class="phase2-form-section phase2-form-section--last" aria-labelledby="external-source-details">
+                <h3 id="external-source-details" class="phase2-section-title">Offices and paper history</h3>
+                {% include "partials/_field.html" with field=form.managing_office %}
+                <div class="row workspace-field-pair">
+                  <div class="col-md-6">{% include "partials/_field.html" with field=form.from_endpoint %}</div>
+                  <div class="col-md-6">{% include "partials/_field.html" with field=form.to_endpoint %}</div>
+                </div>
+                {% include "partials/_field.html" with field=form.actual_at %}
+              </section>
+            {% elif form.to_endpoint %}
+              <section class="phase2-form-section" aria-labelledby="external-recipient-details">
+                <h3 id="external-recipient-details" class="phase2-section-title">From and to offices</h3>
+                <div class="row workspace-field-pair">
+                  <div class="col-md-6">
+                    <div class="form-field mb-3">
+                      <label class="form-label" for="external-from-office">From office</label>
+                      <input class="form-control" id="external-from-office" value="{{ record.current_office_snapshot }}" aria-describedby="external-from-office-help" readonly>
+                      <div class="form-text" id="external-from-office-help">{% if record.current_external_office_id %}External UDM office.{% else %}Internal office.{% endif %} This is the recorded current custodian.</div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">{% include "partials/_field.html" with field=form.to_endpoint %}</div>
+                </div>
+              </section>
+              <section class="phase2-form-section phase2-form-section--last" aria-labelledby="external-routing-details">
+                <h3 id="external-routing-details" class="phase2-section-title">Routing details</h3>
+                {% for field in form.visible_fields %}
+                  {% if field.name != 'to_endpoint' %}{% include "partials/_field.html" with field=field %}{% endif %}
+                {% endfor %}
+              </section>
+            {% else %}
+              {% for field in form.visible_fields %}
+                {% if field.name == 'uploaded_file' %}<div class="phase2-upload-box">{% include "partials/_field.html" with field=field %}</div>
+                {% else %}{% include "partials/_field.html" with field=field %}{% endif %}
+              {% endfor %}
+            {% endif %}
+            <div class="form-actions">
+              <button type="submit" class="btn btn-udm">{{ submit_label }}</button>
+              <a class="btn btn-udm-outline" href="{% if record %}{{ record.get_absolute_url }}{% elif form.name %}{% url 'tracking:external_offices' %}{% else %}{% url 'tracking:external_list' %}{% endif %}">Cancel</a>
+            </div>
+          </div>
+        </section>
+      </div>
+      <aside class="col-lg-4 workspace-form-aside" aria-label="External workflow guidance">
+        <div class="card-udm phase2-sticky-card">
+          <div class="card-udm-head"><h2>Before You Continue</h2></div>
+          <div class="card-udm-body">
+            <ol class="phase2-checklist">
+              {% if form.name %}
+              <li><strong>Choose the correct managing office.</strong> Its administrators maintain this external office entry.</li>
+              <li><strong>External offices do not receive accounts.</strong> Contact details identify the paper's counterpart.</li>
+              <li><strong>History is preserved.</strong> Renaming or deactivating an office does not rewrite earlier movements.</li>
+              {% else %}
+              <li><strong>External records stay separate.</strong> This case belongs to External Tracking and, after filing, the External Repository.</li>
+              <li><strong>External updates are recorded manually.</strong> Authorized administrators record receipt and work updates for offices without access to DocTrack.</li>
+              <li><strong>Internal receipt uses server time.</strong> Internal recipients confirm their own receipt and carry out their permitted actions.</li>
+              <li><strong>Use known paper times.</strong> Actual event time and who recorded it are kept separately. Do not invent missing history.</li>
+              {% endif %}
+            </ol>
+          </div>
+        </div>
+        {% if record.status == 'DRAFT' %}<div class="help-note mt-3">Review the source and recipient before sending. An external tracking number is assigned on the first route; sending means Pending Receipt until receipt is recorded.</div>{% endif %}
+      </aside>
+    </div>
   </form>
-</div></div>
+</div>
 {% endblock %}

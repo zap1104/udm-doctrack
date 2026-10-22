@@ -1,0 +1,17 @@
+{% load doctrack %}
+<ul class="list-unstyled mb-0">
+{% for row in file_rows %}
+  <li class="py-3 border-bottom">
+    <div class="fw-semibold text-break">{{ row.current.item.original_name }}</div>
+    <p class="text-muted small mb-2">Version {{ row.current.item.version_number }} · {{ row.current.item.size|human_size }}{% if row.page_count %} · {{ row.page_count }} page{{ row.page_count|pluralize }}{% endif %}{% if row.current.item.uploaded_at %} · {{ row.current.item.uploaded_at|date:"d M Y, g:i A" }}{% elif row.current.item.created_at %} · {{ row.current.item.created_at|date:"d M Y, g:i A" }}{% endif %}</p>
+    {% if row.current.item.note %}<p class="small text-break">{{ row.current.item.note }}</p>{% endif %}
+    {% if row.current.item.change_summary %}<p class="small text-break">{{ row.current.item.change_summary }}</p>{% endif %}
+    {% if row.current.item.uploader_name_snapshot %}<p class="small text-muted mb-2">Uploaded by {{ row.current.item.uploader_name_snapshot }}{% if row.current.item.uploader_office_snapshot %} · {{ row.current.item.uploader_office_snapshot }}{% endif %}</p>{% endif %}
+    <div class="d-flex gap-2 flex-wrap mb-2"><a id="{{ row.current.entry_id }}" class="btn btn-udm-outline btn-sm" href="{{ row.current.preview_url }}">Preview</a><a class="btn btn-udm-outline btn-sm" href="{{ row.current.download_url }}">Download</a></div>
+    {% if row.history %}<details class="fold mb-2"><summary>Version history ({{ row.history|length }} earlier)</summary><ul class="list-unstyled mt-2">
+      {% for version in row.history %}<li class="p-2 border-bottom"><strong>Version {{ version.item.version_number }}</strong> · <span class="text-break">{{ version.item.original_name }}</span><p class="small mb-1">{{ version.item.change_summary }}{% if version.item.uploader_name_snapshot %} · {{ version.item.uploader_name_snapshot }}{% endif %}{% if version.item.uploader_office_snapshot %} ({{ version.item.uploader_office_snapshot }}){% endif %}{% if version.item.uploaded_at %} · {{ version.item.uploaded_at|date:"d M Y, g:i A" }}{% elif version.item.created_at %} · {{ version.item.created_at|date:"d M Y, g:i A" }}{% endif %}</p><a id="{{ version.entry_id }}" href="{{ version.preview_url }}">Preview Version {{ version.item.version_number }}</a> · <a href="{{ version.download_url }}">Download</a></li>{% endfor %}
+    </ul></details>{% endif %}
+    {% if row.can_update %}<details class="fold"><summary>Upload new version</summary><form method="post" action="{{ row.upload_url }}" enctype="multipart/form-data" class="p-2" novalidate>{% csrf_token %}{% for field in row.form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}<button class="btn btn-udm btn-sm mt-2">Upload new version</button></form></details>{% endif %}
+  </li>
+{% empty %}<li class="text-muted">No files attached.</li>{% endfor %}
+</ul>

@@ -6,8 +6,8 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.documents.extraction import ExtractionResult
-from apps.documents.models import Document, DocumentFile, MetadataSuggestion, OcrStatus
-from apps.documents.services import add_file_to_document, re_extract_document
+from apps.documents.models import Document, MetadataSuggestion, OcrStatus
+from apps.documents.services import _enqueue_extraction, ingest_upload, re_extract_document
 from apps.documents.tasks import extract_document_task
 
 
@@ -15,14 +15,13 @@ from apps.documents.tasks import extract_document_task
 def document(users, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     settings.ENABLE_BACKGROUND_TASKS = False
-    document = Document.objects.create(
-        title="Append generation regression", year=2026, office=users["med"].office,
-        uploaded_by=users["med"], ocr_text="Previous complete text", ocr_status=OcrStatus.DONE,
-    )
-    DocumentFile.objects.create(
-        document=document, file=SimpleUploadedFile("append.txt", b"Stored attachment contents"),
-        original_name="append.txt", is_primary=True,
-    )
+    with patch("apps.documents.services.extract_document_text", side_effect=[
+        ExtractionResult(text="Previous complete text", status=OcrStatus.DONE), ExtractionResult(),
+    ]):
+        document, _ = ingest_upload(user=users["med"], uploaded_files=[
+            SimpleUploadedFile("append.txt", b"Stored attachment contents"),
+            SimpleUploadedFile("queued.txt", b"Queued attachment contents"),
+        ])
     return document
 
 
@@ -44,14 +43,12 @@ def snapshot(document):
 @pytest.mark.parametrize("queued", [False, True], ids=["legacy-direct", "queued"])
 def test_old_append_cannot_change_newer_full_retry_results(users, document, settings, queued):
     actor_id = users["med"].pk
-    append_kwargs = {"user_id": actor_id, "file_ids": [document.files.get().pk]}
+    append_kwargs = {"user_id": actor_id, "file_ids": [document.files.get(original_name="append.txt").pk]}
     if queued:
         settings.ENABLE_BACKGROUND_TASKS = True
         with patch("django_q.tasks.async_task") as queue:
-            appended = add_file_to_document(
-                document, SimpleUploadedFile("queued.txt", b"Queued attachment contents"),
-                user=users["med"],
-            )
+            appended = document.files.get(original_name="queued.txt")
+            _enqueue_extraction(document, user_id=actor_id, file_ids=[appended.pk])
         append_kwargs = queue.call_args.kwargs
         assert append_kwargs["file_ids"] == [appended.pk]
     newer_finished = False
@@ -93,7 +90,8 @@ def test_queued_append_is_rejected_when_newer_retry_finishes_before_delivery(
 ):
     settings.ENABLE_BACKGROUND_TASKS = True
     with patch("django_q.tasks.async_task") as queue, django_capture_on_commit_callbacks(execute=True):
-        add_file_to_document(document, SimpleUploadedFile("later.txt", b"Later file"), user=users["med"])
+        _enqueue_extraction(document, user_id=users["med"].pk,
+            file_ids=[document.files.get(original_name="queued.txt").pk])
         re_extract_document(document, user=users["med"])
     append, retry = queue.call_args_list
     with patch("apps.documents.tasks.extract_document_text", return_value=ExtractionResult(
@@ -115,8 +113,9 @@ def test_sibling_queued_appends_capture_generation_without_superseding_each_othe
     settings.ENABLE_BACKGROUND_TASKS = True
     Document.objects.filter(pk=document.pk).update(extraction_generation=5)
     with patch("django_q.tasks.async_task") as queue, django_capture_on_commit_callbacks(execute=True):
-        add_file_to_document(document, SimpleUploadedFile("first.txt", b"First new file"), user=users["med"])
-        add_file_to_document(document, SimpleUploadedFile("second.txt", b"Second new file"), user=users["med"])
+        document.refresh_from_db()
+        for file in document.files.order_by("pk"):
+            _enqueue_extraction(document, user_id=users["med"].pk, file_ids=[file.pk])
     assert [call.kwargs["generation"] for call in queue.call_args_list] == [5, 5]
     document.refresh_from_db()
     assert document.extraction_generation == 5
@@ -126,5 +125,5 @@ def test_sibling_queued_appends_capture_generation_without_superseding_each_othe
         for queued in queue.call_args_list:
             assert extract_document_task(*queued.args[1:], **queued.kwargs)["status"] == OcrStatus.DONE
     document.refresh_from_db()
-    assert "Unique result from first.txt" in document.ocr_text
-    assert "Unique result from second.txt" in document.ocr_text
+    assert "Unique result from append.txt" in document.ocr_text
+    assert "Unique result from queued.txt" in document.ocr_text

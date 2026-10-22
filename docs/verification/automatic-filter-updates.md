@@ -1,5 +1,7 @@
 # Automatic filter updates, 10 October 2026
 
+This is historical verification. The current update policy and fresh results are documented in [Selective filter updates, 21 October 2026](selective-filter-updates-2026-10-21.md). Multi-input searches now wait for Search; only explicitly designated controls update automatically.
+
 Dropdown filters now request updated page content through the existing GET views. The main workspace refreshes without reloading the browser document, sidebar, theme controls, or session warning. No backend query, permission, routing, data model, or record-saving behavior was changed.
 
 ## Coverage
