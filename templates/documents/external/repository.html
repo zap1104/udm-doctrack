@@ -2,8 +2,9 @@
 {% load doctrack %}
 {% block title %}External Document Repository · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+{% external_office_query as external_query %}
 <div class="repository-page workspace-page workspace-repository">
-  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Document Repository</h1><p class="sub">Filed external cases, historical uploads and scanned documents. {{ total }} matching document{{ total|pluralize }} of {{ all_count }} available.</p></div>{% if can_upload %}<a class="btn btn-udm" href="{% url 'documents:external_upload' %}">Upload external document</a>{% endif %}</div>
+  <div class="page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Document Repository</h1><p class="sub">Filed external cases, historical uploads and scanned documents. {{ total }} matching document{{ total|pluralize }} of {{ all_count }} available.</p></div>{% if can_upload %}<a class="btn btn-udm" href="{% url 'documents:external_upload' %}{{ external_query }}">Upload external document</a>{% endif %}</div>
   {% include "documents/external/_nav.html" %}
   {% include "documents/external/_filters.html" %}
   <div id="external-repository-results" data-filter-region>
@@ -13,7 +14,7 @@
       <article class="repository-document card-udm">
         <span class="repository-file-icon" aria-hidden="true"><svg viewBox="0 0 24 28" fill="none"><path d="M4 1h10l7 7v18H4zM14 1v8h7M8 15h9M8 20h7" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
         <div class="repository-document-copy">
-          <h3><a href="{{ document.get_absolute_url }}">{{ document.title }}</a></h3>
+          <h3><a href="{{ document.get_absolute_url }}{{ external_query }}">{{ document.title }}</a></h3>
           <div class="repository-document-meta">
             {% include "partials/_office_badge.html" with office=document.office %}
             <span>{{ document.document_type_names|default:"Unclassified" }}</span>
@@ -28,7 +29,7 @@
           <span>{{ document.file_count }} file{{ document.file_count|pluralize }}</span>
           {% if document.retention_is_due %}<span class="text-danger">Deletion review due</span>{% endif %}
         </div>
-        <a class="btn btn-sm btn-udm-outline repository-open" href="{{ document.get_absolute_url }}" aria-label="Open {{ document.title }}">Open</a>
+        <a class="btn btn-sm btn-udm-outline repository-open" href="{{ document.get_absolute_url }}{{ external_query }}" aria-label="Open {{ document.title }}">Open</a>
       </article>
     {% empty %}
       <div class="card-udm empty-state"><h2 class="h5">No external documents found</h2><p>No external documents match these filters.</p><a class="btn btn-udm-outline" href="{% url 'documents:external_repository' %}" data-filter-reset data-filter-discard>Clear filters</a></div>

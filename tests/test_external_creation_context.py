@@ -151,3 +151,32 @@ def test_repeated_legacy_owner_cannot_override_context(client, users, offices, c
     response = client.post(reverse("tracking:external_create"), payload)
     assert response.status_code == 302
     assert ExternalTrackingRecord.objects.get(title="Legacy owner cannot transfer").managing_office_id == offices["MED"].pk
+
+
+@pytest.mark.parametrize("assigned", [True, False])
+def test_repository_upload_link_preserves_selected_filing_context(client, users, offices, assigned):
+    admin = users["admin"]
+    admin.office = offices["MED"] if assigned else None
+    admin.save(update_fields=["office"])
+    client.force_login(admin)
+    selected = str(offices["SUP"].pk)
+    response = client.get(reverse("documents:external_repository"), {"office": selected})
+    links = Links(response.content.decode()).hrefs
+    href = next(link for link in links if urlsplit(link).path == reverse("documents:external_upload"))
+    assert parse_qs(urlsplit(href).query).get("office") == [selected]
+    upload = client.get(href)
+    assert upload.status_code == 200
+    assert upload.context["form"].recording_office.pk == offices["SUP"].pk
+
+
+def test_directory_navigation_and_save_preserve_selected_office(client, users, offices):
+    client.force_login(users["admin"])
+    selected = str(offices["SUP"].pk)
+    url = reverse("tracking:external_office_create") + "?office=" + selected
+    response = client.get(url)
+    links = Links(response.content.decode()).hrefs
+    report_link = next(link for link in links if urlsplit(link).path == reverse("tracking:external_reports"))
+    assert parse_qs(urlsplit(report_link).query).get("office") == [selected]
+    saved = client.post(url, {"name": "Office context survives saving", "code": "CTX"})
+    assert saved.status_code == 302
+    assert parse_qs(urlsplit(saved.url).query).get("office") == [selected]

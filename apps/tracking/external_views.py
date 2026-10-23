@@ -67,6 +67,15 @@ def _context(**kwargs):
     return {"nav_active": "external_tracking", **kwargs}
 
 
+def _scoped_redirect(request, target):
+    response = redirect(target)
+    values = request.GET.getlist("office")
+    if values:
+        separator = "&" if "?" in response.url else "?"
+        response["Location"] += separator + urlencode([("office", value) for value in values])
+    return response
+
+
 def _form_page(request, form, *, title, record=None, status=200, submit_label="Save", **kwargs):
     return render(
         request,
@@ -127,6 +136,7 @@ def _filtered(request, *, include_filed=False):
         if perspective:
             records = records.filter(
                 Q(managing_office=perspective)
+                | Q(archived_document__office=perspective)
                 | Q(routing_steps__from_office=perspective)
                 | Q(routing_steps__to_office=perspective)
             ).distinct()
@@ -337,7 +347,7 @@ class ExternalOfficeEditView(RecoverableUploadMixin, AdminRequiredMixin, View):
                 _form_error(form, exc)
             else:
                 messages.success(request, "External office saved.")
-                return redirect("tracking:external_offices")
+                return _scoped_redirect(request, "tracking:external_offices")
         return _form_page(request, form, title="Edit external office" if pk else "Add external office", status=400)
 
 
@@ -356,7 +366,7 @@ class ExternalOfficeDeactivateView(AdminRequiredMixin, View):
                 _form_error(form, exc)
             else:
                 messages.success(request, "External office deactivated. Its history remains available.")
-                return redirect("tracking:external_offices")
+                return _scoped_redirect(request, "tracking:external_offices")
         return _form_page(request, form, title="Deactivate external office", status=400)
 
 
@@ -425,7 +435,7 @@ class ExternalSlipView(AppLoginRequiredMixin, View):
             messages.info(
                 request, "Send the draft first to assign its external tracking number and create a routing slip."
             )
-            return redirect(record)
+            return _scoped_redirect(request, record)
         entry = log_action(
             AuditLog.Action.PRINT,
             f"Generated external routing slip {record.tracking_number}",
@@ -536,7 +546,7 @@ class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
 
                     document = archive_external_record(record, user=request.user, expected_revision=revision)
                     messages.success(request, "Filed into the External repository.")
-                    return redirect(document.get_absolute_url())
+                    return _scoped_redirect(request, document.get_absolute_url())
                 functions[action](record, user=request.user, expected_revision=revision, **data)
                 if action == "complete" and archive_now and record.can_manage(request.user):
                     from apps.documents.external_services import archive_external_record
@@ -545,16 +555,16 @@ class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                     except Exception:
                         logging.getLogger("doctrack").exception("Optional filing failed after completion for external record %s", record.pk)
                         messages.warning(request, "Completed, but filing failed. Retry approval from Pending Filing.")
-                        return redirect(record)
+                        return _scoped_redirect(request, record)
                     messages.success(request, "Filed into the External repository.")
-                    return redirect(document.get_absolute_url())
+                    return _scoped_redirect(request, document.get_absolute_url())
             except ValidationError as exc:
                 _form_error(form, exc)
             else:
                 if action == "route":
                     request.session.pop(f"external_draft_recipient_{record.pk}", None)
                 messages.success(request, "External tracking record updated.")
-                return redirect(record)
+                return _scoped_redirect(request, record)
         return _form_page(request, form, title=title, record=record, submit_label=label, status=400, action=action)
 
 
@@ -613,7 +623,7 @@ class ExternalCorrectionView(AppLoginRequiredMixin, View):
                 _form_error(form, exc)
             else:
                 messages.success(request, "Correction saved with the original values and reason.")
-                return redirect(record)
+                return _scoped_redirect(request, record)
         return _form_page(
             request, form, title="Correct external paper history", record=record, correction=True, status=400
         )

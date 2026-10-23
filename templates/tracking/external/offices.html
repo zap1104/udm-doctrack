@@ -28,9 +28,9 @@
                 <td>
                   {% if office.can_edit_entry %}
                   <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-sm btn-udm-outline" href="{% url 'tracking:external_office_edit' office.pk %}">Edit<span class="visually-hidden"> {{ office.name }}</span></a>
+                    <a class="btn btn-sm btn-udm-outline" href="{% url 'tracking:external_office_edit' office.pk %}{{ external_query }}">Edit<span class="visually-hidden"> {{ office.name }}</span></a>
                     {% if office.is_active %}
-                      <form method="post" action="{% url 'tracking:external_office_deactivate' office.pk %}">
+                      <form method="post" action="{% url 'tracking:external_office_deactivate' office.pk %}{{ external_query }}">
                         {% csrf_token %}
                         <input type="hidden" name="revision" value="{{ office.revision }}">
                         <button type="submit" class="btn btn-sm btn-udm-outline">Deactivate<span class="visually-hidden"> {{ office.name }}</span></button>

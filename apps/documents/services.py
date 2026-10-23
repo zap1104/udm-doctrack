@@ -103,12 +103,11 @@ def _persist_upload(
         raise ValidationError("Your account has no office, so it cannot own a document.")
     counterparts = []
     if collection == Collection.EXTERNAL:
-        from apps.tracking.external_services import recording_office
-        from apps.tracking.models import ExternalOffice
+        from apps.tracking.external_services import lock_external_offices, recording_office
 
         office = recording_office(user, office)
         supplied = {getattr(entry, "pk", entry) for entry in (external_offices or [])}
-        counterparts = list(ExternalOffice.objects.select_for_update().filter(pk__in=supplied, is_active=True))
+        counterparts = list(lock_external_offices(supplied).values())
         if not supplied or len(counterparts) != len(supplied):
             raise ValidationError("Choose at least one active external office from the shared directory.")
 

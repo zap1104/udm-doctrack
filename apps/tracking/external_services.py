@@ -115,12 +115,19 @@ def _open(record):
         raise ValidationError("Completed custody history is frozen. Reopen unfinished work before routing.")
 
 
+def lock_external_offices(entries):
+    """Serialize shared directory use in one order, including multi-endpoint edits."""
+    ids = {getattr(entry, "pk", entry) for entry in entries}
+    locked = {entry.pk: entry for entry in ExternalOffice.objects.select_for_update().filter(
+        pk__in=ids, is_active=True,
+    ).order_by("pk")}
+    if None in ids or set(locked) != ids:
+        raise ValidationError("Choose an active external office from the shared directory.")
+    return locked
+
+
 def _external(record, external):
-    try:
-        external = ExternalOffice.objects.select_for_update().get(pk=external.pk, is_active=True)
-    except ExternalOffice.DoesNotExist as exc:
-        raise ValidationError("Choose an active external office from the shared directory.") from exc
-    return external
+    return lock_external_offices([external])[external.pk]
 
 
 def _save_directory_entry(entry):
@@ -493,10 +500,11 @@ def correct_step(record, *, step, user, reason, changes):
         raise ValidationError("Only externally recorded facts can be corrected.")
     old = {}
     new = {}
+    endpoints = lock_external_offices([changes[field] for field in endpoint_fields])
     for field, value in changes.items():
         prior = getattr(step, field)
         if field in endpoint_fields:
-            value = _external(record, value)
+            value = endpoints[value.pk]
             direction = field.split("_")[0]
             snapshot_field = direction + "_name_snapshot"
             old[field] = {"id": prior.pk, "name": getattr(step, snapshot_field)}

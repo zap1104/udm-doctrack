@@ -16,7 +16,7 @@ def _parent(group):
     if hasattr(group, "record_id"):
         record = group.record
         external = record._meta.model_name == "externaltrackingrecord"
-        return record, "external" if external else "tracking", "EXTERNAL" if external else "OVPA", getattr(record, "managing_office_id", None) if external else record.originating_office_id
+        return record, "external" if external else "tracking", "EXTERNAL" if external else "OVPA", record.responsible_office_id if external else record.originating_office_id
     document = group.document
     return document, "repository", document.collection, document.office_id
 

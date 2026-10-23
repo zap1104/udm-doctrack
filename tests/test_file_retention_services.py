@@ -42,6 +42,15 @@ def next_version(record, first, actor, external, number, expected=None):
     return (upload_external_attachment_version if external else upload_attachment_version)(record, first.file_group_id, upload(number), **kwargs)
 
 
+def test_external_retirement_audits_follow_confirmed_internal_custody(users, offices):
+    record, actor, versions = history(users, True, 5)
+    external_services.route_record(record, user=actor, expected_revision=record.revision, to_office=offices["SUP"])
+    external_services.confirm_receipt(record, user=users["sup"], expected_revision=record.revision)
+    next_version(record, versions[0], users["sup"], True, 6)
+    assert list(FileLifecycleEvent.objects.values_list("office_id_snapshot", flat=True)) == [offices["SUP"].pk]
+    assert list(StorageCleanupIntent.objects.values_list("office_id_snapshot", flat=True)) == [offices["SUP"].pk]
+
+
 @pytest.mark.parametrize("external", [False, True])
 def test_sixth_and_seventh_retire_exact_oldest_versions_without_renumbering(users, external):
     record, actor, versions = history(users, external, 5)

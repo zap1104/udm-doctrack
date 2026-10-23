@@ -78,7 +78,7 @@
             {% endif %}
             <div class="form-actions">
               <button type="submit" class="btn btn-udm">{{ submit_label }}</button>
-              <a class="btn btn-udm-outline" href="{% if record %}{{ record.get_absolute_url }}{% elif form.name %}{% url 'tracking:external_offices' %}{% else %}{% url 'tracking:external_list' %}{% endif %}">Cancel</a>
+              <a class="btn btn-udm-outline" href="{% if record %}{{ record.get_absolute_url }}{% elif form.name %}{% url 'tracking:external_offices' %}{% else %}{% url 'tracking:external_list' %}{% endif %}{{ external_query }}">Cancel</a>
             </div>
           </div>
         </section>
