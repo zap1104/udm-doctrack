@@ -61,6 +61,8 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
             creation_office_id = selected.pk
     if workflow in CREATION_WORKFLOWS:
         if not creation_office_id or not Office.objects.filter(pk=creation_office_id, is_active=True).exists():
+            if external:
+                raise ValidationError("Select an internal office perspective before creating an external entry.")
             raise PermissionDenied("Select an active office before creating an upload.")
         if target_id is not None or group_id is not None:
             raise ValidationError("A creation upload cannot target an existing record.")

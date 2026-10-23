@@ -27,7 +27,19 @@ from .models import (
 
 def _manager(user, office_id):
     if not user.is_office_admin or not (user.is_system_admin or user.office_id == office_id):
-        raise PermissionDenied("Only the managing office administrator can make this change.")
+        raise PermissionDenied("Only an authorized administrator for the responsible office can make this change.")
+
+
+def recording_office(user, selected=None):
+    """Revalidate creation context inside the caller's write transaction."""
+    office_id = getattr(selected, "pk", selected) if selected is not None else user.office_id
+    if not user.is_system_admin and (not user.office_id or office_id != user.office_id):
+        raise PermissionDenied("Use your own active office to create an external entry.")
+    office = Office.objects.select_for_update(no_key=True).filter(pk=office_id, is_active=True).first()
+    if office is None:
+        raise ValidationError("Select an active internal office perspective before creating an external entry.")
+    _manager(user, office.pk)
+    return office
 
 
 def _text(value, limit=2000):
@@ -73,7 +85,8 @@ def _event(record, user, event, message, *, detail="", actual_at=None, routing_s
         message,
         actor=user,
         target=record,
-        extra={"managing_office_id": record.managing_office_id, "revision": record.revision, "external_event": event},
+        extra={"managing_office_id": record.managing_office_id, "responsible_office_id": record.responsible_office_id,
+               "revision": record.revision, "external_event": event},
     )
     return activity
 
@@ -104,11 +117,9 @@ def _open(record):
 
 def _external(record, external):
     try:
-        external = ExternalOffice.objects.get(
-            pk=external.pk, managing_office_id=record.managing_office_id, is_active=True
-        )
+        external = ExternalOffice.objects.select_for_update().get(pk=external.pk, is_active=True)
     except ExternalOffice.DoesNotExist as exc:
-        raise ValidationError("Choose an active external office from the managing office directory.") from exc
+        raise ValidationError("Choose an active external office from the shared directory.") from exc
     return external
 
 
@@ -119,20 +130,19 @@ def _save_directory_entry(entry):
         diagnostic = getattr(exc.__cause__, "diag", None)
         if getattr(diagnostic, "constraint_name", None) != "external_office_unique_owner_name":
             raise
-        raise ValidationError("An external office with this name already exists in this managing office.") from exc
+        raise ValidationError("An external office with this name already exists for your office.") from exc
 
 
 @transaction.atomic
 def create_external_office(*, user, managing_office=None, **fields):
     user = active_writer(user)
-    managing_office = managing_office or user.office
-    _manager(user, getattr(managing_office, "pk", None))
+    managing_office = recording_office(user, managing_office)
     allowed = {"name", "code", "contact_person", "email", "phone", "notes", "is_active"}
     if set(fields) - allowed:
         raise ValidationError("Unsupported directory fields.")
     fields["name"] = _text(fields.get("name"), 150)
     entry = ExternalOffice(managing_office=managing_office, **fields)
-    entry.full_clean()
+    entry.full_clean(validate_constraints=False)
     _save_directory_entry(entry)
     log_action("CREATE", "Created external directory office", actor=user, target=entry)
     return entry
@@ -150,7 +160,7 @@ def save_external_office(office, *, user, expected_revision, **fields):
     for field, value in fields.items():
         setattr(entry, field, _text(value, 150) if field == "name" else value)
     entry.revision += 1
-    entry.full_clean()
+    entry.full_clean(validate_constraints=False)
     _save_directory_entry(entry)
     office.refresh_from_db()
     log_action("UPDATE", "Updated external directory office", actor=user, target=entry)
@@ -174,13 +184,12 @@ def create_record(
     from .models import ExternalTrackingRecord
 
     user = active_writer(user)
-    managing_office = managing_office or user.office
-    _manager(user, getattr(managing_office, "pk", None))
+    managing_office = recording_office(user, managing_office)
     if from_office and from_external_office:
         raise ValidationError("Choose one initial custodian.")
     from_office = from_office or (None if from_external_office else managing_office)
     if from_office and from_office.pk != managing_office.pk:
-        raise ValidationError("An internal initial custodian must be the managing office.")
+        raise ValidationError("An internal initial custodian must match the selected office perspective.")
     record = ExternalTrackingRecord(
         managing_office=managing_office,
         title=_text(title, 255),
@@ -235,7 +244,7 @@ def route_record(
     _open(record)
     if not record.can_act(user):
         raise PermissionDenied(
-            "Only the confirmed internal custodian or managing administrator for external custody can route this record."
+            "Only the confirmed internal custodian or responsible administrator for external custody can route this record."
         )
     if bool(to_office) == bool(to_external_office):
         raise ValidationError("Choose exactly one recipient.")
@@ -303,7 +312,7 @@ def _receive(record, user, *, received_at=None, note="", external=False):
     if step is None or step.received_at:
         raise ValidationError("There is no pending receipt to confirm.")
     if external:
-        _manager(user, record.managing_office_id)
+        _manager(user, record.responsible_office_id)
         if not step.to_external_office_id:
             raise ValidationError("This recipient is an internal DocTrack office.")
         received_at = _actual(received_at, earliest=step.sent_at)
@@ -362,7 +371,7 @@ def add_remark(record, *, user, message):
 @_mutation
 def record_external_work(record, *, user, actual_at=None, message=""):
     _open(record)
-    _manager(user, record.managing_office_id)
+    _manager(user, record.responsible_office_id)
     if record.status == Status.DRAFT:
         raise ValidationError("Route the draft first before recording external work.")
     if not record.current_external_office_id or not record.can_act(user):
@@ -425,7 +434,7 @@ def complete_record(record, *, user, note="", completed_at=None):
 
     resolve_for_external_record(record)
     notify_office(
-        record.managing_office,
+        record.responsible_office,
         kind="COMPLETED",
         title="External slip awaiting filing",
         message=record.title,
@@ -436,7 +445,7 @@ def complete_record(record, *, user, note="", completed_at=None):
 
 @_mutation
 def reopen_record(record, *, user, note=""):
-    _manager(user, record.managing_office_id)
+    _manager(user, record.responsible_office_id)
     if record.status != Status.COMPLETED_PENDING_UPLOAD:
         raise ValidationError("Only a record pending filing can return to active tracking.")
     record.status = Status.RECEIVED
@@ -449,7 +458,7 @@ def reopen_record(record, *, user, note=""):
 
 @_mutation
 def annotate_record(record, *, user, message):
-    _manager(user, record.managing_office_id)
+    _manager(user, record.responsible_office_id)
     message = _text(message)
     if not message:
         raise ValidationError("An annotation is required.")
@@ -458,7 +467,7 @@ def annotate_record(record, *, user, message):
 
 @_mutation
 def correct_step(record, *, step, user, reason, changes):
-    _manager(user, record.managing_office_id)
+    _manager(user, record.responsible_office_id)
     if record.status == Status.COMPLETED:
         raise ValidationError("Filed custody history is frozen. Add an annotation instead.")
     reason = _text(reason)

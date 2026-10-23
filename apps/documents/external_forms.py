@@ -22,24 +22,25 @@ class ExternalUploadForm(UploadForm):
         }),
     )
 
-    def __init__(self, *args, user, **kwargs):
+    def __init__(self, *args, user, recording_office=None, **kwargs):
         super().__init__(*args, user=user, **kwargs)
+        self.recording_office = recording_office or user.office
+        self.fields.pop("office")
         offices = ExternalOffice.objects.filter(is_active=True)
-        if not user.is_system_admin:
-            offices = offices.filter(managing_office_id=user.office_id)
         self.fields["external_offices"].queryset = offices
+        self.fields["external_offices"].label_from_instance = lambda office: office.selection_label
 
     def clean(self):
         data = super().clean()
-        managing = data.get("office")
-        if managing and any(office.managing_office_id != managing.pk for office in data.get("external_offices", [])):
-            self.add_error("external_offices", "Choose external offices managed by the owning office.")
+        data["office"] = self.recording_office
+        if not self.recording_office or not Office.objects.filter(pk=self.recording_office.pk, is_active=True).exists():
+            raise forms.ValidationError("Select an active internal office perspective before uploading.")
         return data
 
 
 class ExternalRepositoryFilterForm(BootstrapFormMixin, forms.Form):
     q = forms.CharField(required=False, label="Search")
-    office = forms.ModelChoiceField(queryset=Office.objects.none(), required=False, label="Managing office")
+    office = forms.ModelChoiceField(queryset=Office.objects.none(), required=False, label="Filing office")
     external_office = forms.ModelChoiceField(
         queryset=ExternalOffice.objects.none(), required=False, label="External counterpart"
     )
@@ -77,7 +78,7 @@ class ExternalRepositoryFilterForm(BootstrapFormMixin, forms.Form):
         )
         self.fields["tag"].queryset = Tag.objects.filter(documents__in=visible).distinct()
         for name, label in {
-            "office": "All authorized managing offices",
+            "office": "All authorized filing offices",
             "external_office": "All authorized counterparts",
             "document_type": "All document types",
             "tag": "All tags",

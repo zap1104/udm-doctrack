@@ -26,7 +26,6 @@
           <table class="table table-sm table-stacked mb-0">
             <caption class="visually-hidden">External paper and current custody</caption>
             <tbody>
-              <tr><th scope="row" class="text-muted fw-normal">Managing internal office</th><td>{{ record.managing_office.name }}</td></tr>
               <tr><th scope="row" class="text-muted fw-normal">Original paper reference</th><td>{{ record.original_reference|default:'Not supplied' }}</td></tr>
               <tr><th scope="row" class="text-muted fw-normal">Document types</th><td>{{ record.document_type_names|default:'Not specified' }}</td></tr>
               <tr><th scope="row" class="text-muted fw-normal">Confirmed custodian</th><td>{{ record.current_office_snapshot }}<div class="small text-muted">{% if record.current_external_office_id %}External UDM office{% else %}Internal DocTrack office{% endif %}</div></td></tr>

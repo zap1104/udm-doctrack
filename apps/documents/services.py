@@ -103,12 +103,14 @@ def _persist_upload(
         raise ValidationError("Your account has no office, so it cannot own a document.")
     counterparts = []
     if collection == Collection.EXTERNAL:
+        from apps.tracking.external_services import recording_office
         from apps.tracking.models import ExternalOffice
 
+        office = recording_office(user, office)
         supplied = {getattr(entry, "pk", entry) for entry in (external_offices or [])}
-        counterparts = list(ExternalOffice.objects.select_for_update().filter(pk__in=supplied, managing_office=office, is_active=True))
+        counterparts = list(ExternalOffice.objects.select_for_update().filter(pk__in=supplied, is_active=True))
         if not supplied or len(counterparts) != len(supplied):
-            raise ValidationError("Choose at least one active external office managed by the owning office.")
+            raise ValidationError("Choose at least one active external office from the shared directory.")
 
     extraction = (
         extract_document_text(
@@ -264,7 +266,7 @@ def save_document_metadata(document: Document, *, user, data: dict, tag_names, m
     if data.get("office") and not user.is_system_admin and data["office"].pk != document.office_id:
         raise PermissionDenied("Only a system administrator can transfer ownership.")
     if document.is_external and data.get("office") and data["office"].pk != document.office_id:
-        raise ValidationError("An external document must retain its managing office.")
+        raise ValidationError("An external document must retain its filing office.")
     from apps.core.document_types import resolve_document_types
     previous_types = document.selected_document_types
     main = data.get("document_type")

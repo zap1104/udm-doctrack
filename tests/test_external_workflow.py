@@ -27,7 +27,8 @@ def case(users, offices):
 
 def test_directory_and_draft_are_office_scoped(case, users):
     record, ext = case
-    assert ExternalOffice.objects.visible_to(users["sup_admin"]).count() == 0
+    assert ExternalOffice.objects.visible_to(users["sup_admin"]).filter(pk=ext.pk).exists()
+    assert not ext.can_edit(users["sup_admin"])
     assert not ExternalTrackingRecord.objects.visible_to(users["sup"]).filter(pk=record.pk).exists()
     assert not TrackingRecord.objects.exists()
     with pytest.raises(PermissionDenied):
@@ -51,20 +52,20 @@ def test_mixed_custody_revision_and_internal_confirmation(case, users, offices):
     services.add_remark(record, user=users["sup"], expected_revision=3, message="Working")
     assert record.status == Status.IN_PROCESS
     services.route_record(record, user=users["sup"], expected_revision=4, to_external_office=ext)
-    services.record_external_receipt(record, user=users["med_admin"], expected_revision=5)
+    services.record_external_receipt(record, user=users["sup_admin"], expected_revision=5)
     assert record.current_external_office_id == ext.pk
     assert record.current_office_id is None
 
 
-def test_endpoint_constraint_and_external_directory_ownership(case, users, offices):
+def test_endpoint_constraint_and_shared_directory_selection(case, users, offices):
     record, ext = case
     other = services.create_external_office(user=users["sup_admin"], name="Other")
-    with pytest.raises(ValidationError):
-        services.route_record(record, user=users["med_admin"], expected_revision=1, to_external_office=other)
+    services.route_record(record, user=users["med_admin"], expected_revision=1, to_external_office=other)
+    assert record.current_step.to_external_office_id == other.pk
     with transaction.atomic(), pytest.raises(IntegrityError):
         ExternalRoutingStep.objects.create(
             record=record,
-            sequence=1,
+            sequence=2,
             from_external_office=ext,
             to_office=offices["SUP"],
             to_external_office=ext,
@@ -94,7 +95,7 @@ def test_correction_is_audited_and_internal_facts_protected(case, users, offices
         services.correct_step(
             record,
             step=step,
-            user=users["med_admin"],
+            user=users["sup_admin"],
             expected_revision=4,
             reason="Forbidden internal edit",
             changes={"received_at": sent},
@@ -280,12 +281,20 @@ def test_concurrent_directory_names_show_validation_error_instead_of_database_er
         ]
     validated = Barrier(2)
     original_clean = ExternalOffice.full_clean
+    original_recording = services.recording_office
+
+    def recording_then_lock(*args, **kwargs):
+        validated.wait(timeout=30)
+        return original_recording(*args, **kwargs)
 
     def clean_then_wait(entry, *args, **kwargs):
         original_clean(entry, *args, **kwargs)
-        validated.wait(timeout=10)
+        if operation == "rename":
+            validated.wait(timeout=30)
 
     monkeypatch.setattr(ExternalOffice, "full_clean", clean_then_wait)
+    if operation == "create":
+        monkeypatch.setattr(services, "recording_office", recording_then_lock)
 
     def attempt(index):
         try:

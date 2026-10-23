@@ -22,6 +22,14 @@ register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
+def external_office_query(context):
+    """Keep request-local office scope, including invalid repeats for refusal."""
+    request = context.get("request")
+    values = request.GET.getlist("office") if request is not None else []
+    return "?" + urlencode([("office", value) for value in values]) if values else ""
+
+
+@register.simple_tag(takes_context=True)
 def signed_download_url(context, view_name, file_pk):
     """Issue a short-lived file link bound to the account viewing this page."""
     kinds = {

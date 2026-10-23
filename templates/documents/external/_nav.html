@@ -1,9 +1,10 @@
+{% load doctrack %}{% external_office_query as external_query %}
 {% with current_page=request.resolver_match.url_name %}
 <nav class="subtabs mb-4" aria-label="External repository navigation">
   <a class="subtab" href="{% url 'documents:repository' %}">OVPA repository</a>
-  <a class="subtab{% if current_page == 'external_repository' or current_page == 'external_upload' %} is-active{% endif %}" href="{% url 'documents:external_repository' %}"{% if current_page == 'external_repository' or current_page == 'external_upload' %} aria-current="page"{% endif %}>External documents</a>
-  <a class="subtab{% if current_page == 'external_reports' %} is-active{% endif %}" href="{% url 'documents:external_reports' %}"{% if current_page == 'external_reports' %} aria-current="page"{% endif %}>External reports</a>
-  {% if request.user.is_office_admin %}<a class="subtab{% if current_page == 'external_deletion_queue' %} is-active{% endif %}" href="{% url 'documents:external_deletion_queue' %}"{% if current_page == 'external_deletion_queue' %} aria-current="page"{% endif %}>External deletion review</a>{% endif %}
-  <a class="subtab{% if current_page == 'external_list' %} is-active{% endif %}" href="{% url 'tracking:external_list' %}"{% if current_page == 'external_list' %} aria-current="page"{% endif %}>External tracking</a>
+  <a class="subtab{% if current_page == 'external_repository' or current_page == 'external_upload' %} is-active{% endif %}" href="{% url 'documents:external_repository' %}{{ external_query }}"{% if current_page == 'external_repository' or current_page == 'external_upload' %} aria-current="page"{% endif %}>External documents</a>
+  <a class="subtab{% if current_page == 'external_reports' %} is-active{% endif %}" href="{% url 'documents:external_reports' %}{{ external_query }}"{% if current_page == 'external_reports' %} aria-current="page"{% endif %}>External reports</a>
+  {% if request.user.is_office_admin %}<a class="subtab{% if current_page == 'external_deletion_queue' %} is-active{% endif %}" href="{% url 'documents:external_deletion_queue' %}{{ external_query }}"{% if current_page == 'external_deletion_queue' %} aria-current="page"{% endif %}>External deletion review</a>{% endif %}
+  <a class="subtab{% if current_page == 'external_list' %} is-active{% endif %}" href="{% url 'tracking:external_list' %}{{ external_query }}"{% if current_page == 'external_list' %} aria-current="page"{% endif %}>External tracking</a>
 </nav>
 {% endwith %}

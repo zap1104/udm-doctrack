@@ -1,4 +1,6 @@
 """Explicit adapters from private saved uploads into existing Tracking services."""
+from urllib.parse import urlencode
+
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 
@@ -69,5 +71,7 @@ def finalize_tracking_upload(context, data, files, *, user, expected_version):
     redirect_url = record.get_absolute_url()
     if workflow in {"tracking-create", "tracking-edit", "external-create"}:
         redirect_url = reverse("tracking:external_review" if external else "tracking:review", args=[record.pk])
+    if workflow == "external-create" and context.creation_office_id != context.actor_office_id:
+        redirect_url += "?" + urlencode({"office": context.creation_office_id})
     return UploadResult(workflow, "external" if external else "tracking", record.pk, redirect_url,
                         getattr(record, "revision", None), version.version_number if version else None)

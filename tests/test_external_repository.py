@@ -199,8 +199,8 @@ def test_external_upload_service_rejects_non_admin_before_extraction(users, role
 
 
 @pytest.mark.django_db
-def test_external_upload_requires_a_counterpart_from_its_managing_office(users, offices):
-    wrong = ExternalOffice.objects.create(name="Other office counterpart", managing_office=offices["SUP"])
+def test_external_upload_requires_active_shared_counterparts(users, offices):
+    wrong = ExternalOffice.objects.create(name="Inactive counterpart", managing_office=offices["SUP"], is_active=False)
     for selected in ([], [wrong]):
         with patch("apps.documents.services.extract_document_text") as extract:
             with pytest.raises(ValidationError, match="at least one active external office"):
@@ -223,7 +223,7 @@ def test_external_upload_keeps_source_and_counterpart_snapshot(users, offices, s
 
 
 @pytest.mark.django_db
-def test_external_metadata_review_keeps_managing_office_when_ocr_suggests_another(client, users, offices):
+def test_external_metadata_review_keeps_filing_office_when_ocr_suggests_another(client, users, offices):
     from apps.documents.models import MetadataSuggestion
 
     document = Document.objects.create(title="External document", office=offices["MED"], collection="EXTERNAL")
@@ -231,8 +231,9 @@ def test_external_metadata_review_keeps_managing_office_when_ocr_suggests_anothe
     client.force_login(users["med_admin"])
     response = client.get(reverse("documents:review", args=[document.pk]))
     assert response.status_code == 200
-    assert response.context["form"].fields["office"].disabled
-    assert response.context["form"]["office"].value() == document.office_id
+    assert "office" not in response.context["form"].fields
+    assert response.context["form"].instance.office_id == document.office_id
+    assert 'name="office"' not in response.content.decode()
 
 
 @pytest.mark.django_db

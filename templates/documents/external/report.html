@@ -14,7 +14,7 @@
   <div class="row g-4">
     <div class="col-md-6">
       <section class="card-udm h-100" aria-labelledby="external-report-offices-title">
-        <div class="card-udm-head"><div><h2 id="external-report-offices-title">Managing offices</h2><div class="report-caption">Matching external documents by owning office.</div></div></div>
+        <div class="card-udm-head"><div><h2 id="external-report-offices-title">Filing offices</h2><div class="report-caption">Matching external documents by filing office.</div></div></div>
         <div class="card-udm-body">
           <ul class="list-unstyled mb-0">{% for row in offices %}<li class="d-flex justify-content-between gap-3 py-2 border-bottom"><span>{{ row.office__name|default:"Unknown office" }}</span><strong class="num">{{ row.total }}</strong></li>{% empty %}<li class="supporting-copy">No matching documents</li>{% endfor %}</ul>
         </div>

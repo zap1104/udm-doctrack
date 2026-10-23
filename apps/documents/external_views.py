@@ -84,7 +84,7 @@ class ExternalRepositoryReportView(AppLoginRequiredMixin, View):
             response = HttpResponse(content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = 'attachment; filename="external-repository.csv"'
             writer = csv.writer(response)
-            writer.writerow(["Reference", "Title", "Managing office", "Source", "Year", "External counterparts"])
+            writer.writerow(["Reference", "Title", "Filing office", "Source", "Year", "External counterparts"])
             for document in documents.with_related().prefetch_related("external_office_links").order_by("pk"):
                 values = [document.reference_number, document.title, document.office.name, document.get_source_display(), str(document.year), "; ".join(link.name_snapshot for link in document.external_office_links.all())]
                 writer.writerow(["'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value for value in values])

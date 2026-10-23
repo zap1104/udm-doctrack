@@ -43,7 +43,6 @@
               </section>
               <section class="phase2-form-section phase2-form-section--last" aria-labelledby="external-source-details">
                 <h3 id="external-source-details" class="phase2-section-title">Offices and paper history</h3>
-                {% include "partials/_field.html" with field=form.managing_office %}
                 <div class="row workspace-field-pair">
                   <div class="col-md-6">{% include "partials/_field.html" with field=form.from_endpoint %}</div>
                   <div class="col-md-6">{% include "partials/_field.html" with field=form.to_endpoint %}</div>
@@ -90,7 +89,7 @@
           <div class="card-udm-body">
             <ol class="phase2-checklist">
               {% if form.name %}
-              <li><strong>Choose the correct managing office.</strong> Its administrators maintain this external office entry.</li>
+              <li><strong>Your office registers the entry.</strong> Its administrators can maintain it; all offices may select it.</li>
               <li><strong>External offices do not receive accounts.</strong> Contact details identify the paper's counterpart.</li>
               <li><strong>History is preserved.</strong> Renaming or deactivating an office does not rewrite earlier movements.</li>
               {% else %}

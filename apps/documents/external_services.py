@@ -29,7 +29,7 @@ def archive_external_record(record, *, user, expected_revision, tag_names=None, 
             actor = active_writer(user)
             locked = ExternalTrackingRecord.objects.select_for_update().get(pk=record.pk)
             if not locked.can_manage(actor):
-                raise PermissionDenied("Only an administrator for the managing office can file this case.")
+                raise PermissionDenied("Only an administrator for the responsible office can file this case.")
             existing = Document.objects.filter(external_tracking_record=locked).first()
             if existing:
                 return existing
@@ -42,7 +42,7 @@ def archive_external_record(record, *, user, expected_revision, tag_names=None, 
             document = Document.objects.create(
                 title=locked.title[:255], description=description or locked.description,
                 source=Source.DTS, collection=Collection.EXTERNAL, external_tracking_record=locked,
-                reference_number=locked.tracking_number, office=locked.managing_office,
+                reference_number=locked.tracking_number, office=locked.responsible_office,
                 document_type=locked.document_type, document_date=document_date, year=document_date.year,
                 access_level=AccessLevel.OFFICE, uploaded_by=actor, allow_external_ocr=False,
                 ocr_status=OcrStatus.PENDING,
@@ -89,7 +89,7 @@ def archive_external_record(record, *, user, expected_revision, tag_names=None, 
                 extra={"collection": Collection.EXTERNAL, "external_record_id": locked.pk, "external_tracking_number": locked.tracking_number},
             )
             notify_office(
-                locked.managing_office, kind=Notification.Kind.COMPLETED,
+                locked.responsible_office, kind=Notification.Kind.COMPLETED,
                 title=f"External case filed: {locked.tracking_number}"[:180],
                 message=f"{locked.title} is now in the External Document Repository.",
                 url=document.get_absolute_url(), external_record=locked, document=document,

@@ -10,6 +10,8 @@ from django.http import QueryDict
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
+from apps.accounts.models import Office
+
 from .file_access import file_url
 from .models import UploadDraft
 from .upload_context import UploadContext, form_nonce_for, resolve_upload_context
@@ -71,7 +73,8 @@ def form_factory_for(context, user):
         from apps.documents.external_forms import ExternalUploadForm
         from apps.documents.forms import UploadForm
         cls = ExternalUploadForm if context.collection == "EXTERNAL" else UploadForm
-        return lambda data=None, files=None: cls(data, files, user=user), "file"
+        kwargs = {"recording_office": Office.objects.get(pk=context.creation_office_id)} if context.collection == "EXTERNAL" else {}
+        return lambda data=None, files=None: cls(data, files, user=user, **kwargs), "file"
     from apps.tracking import external_forms
     from apps.tracking.forms import CreateRecordForm, RemarkForm, RouteForm
     from apps.tracking.models import ExternalTrackingRecord, TrackingRecord
@@ -83,7 +86,9 @@ def form_factory_for(context, user):
         initial = {"expected_version": latest.version_number, "expected_revision": getattr(record, "revision", None)}
         return lambda data=None, files=None: VersionUploadForm(data, files, initial=initial, prefix=f"version-{context.group_id}"), "file"
     if workflow == "external-create":
-        return lambda data=None, files=None: external_forms.ExternalCreateForm(data, files, user=user), "attachments"
+        return lambda data=None, files=None: external_forms.ExternalCreateForm(
+            data, files, user=user, recording_office=Office.objects.get(pk=context.creation_office_id)
+        ), "attachments"
     if workflow == "external-attachment":
         record = ExternalTrackingRecord.objects.get(pk=context.target_id)
         return lambda data=None, files=None: external_forms.ExternalAttachmentForm(data, files, initial={"revision": record.revision}), "uploaded_file"
@@ -183,9 +188,8 @@ class UploadFormRecovery:
                     self.draft = candidate  # finalize_upload performs the fresh replay authorization.
                 else:
                     self.draft = read_draft(candidate.pk, user=request.user, context=bound)
-        if not self.draft and request.method == "POST" and workflow in {"repository-upload", "external-repository-upload", "external-create"}:
-            office_name = "managing_office" if workflow == "external-create" else "office"
-            selected = one_value(request.POST, office_name)
+        if not self.draft and request.method == "POST" and workflow == "repository-upload":
+            selected = one_value(request.POST, "office")
             if selected and "office" not in query and request.user.is_system_admin:
                 try:
                     self.context = resolve_upload_context(request.user, workflow, query={"office": selected})

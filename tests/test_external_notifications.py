@@ -66,14 +66,14 @@ def test_resolving_external_notices_does_not_touch_matching_legacy_ids(users, of
 
 
 @pytest.mark.django_db
-def test_external_audit_uses_managing_office_not_physical_custodian(users, offices):
+def test_external_audit_snapshots_the_current_responsible_office(users, offices):
     from apps.core.views import audit_entries_for
     from apps.tracking.external_services import confirm_receipt
 
     record = _case(users, offices)
     confirm_receipt(record, user=users["hr"], expected_revision=record.revision)
     entry = log_action(AuditLog.Action.UPDATE, "External correction", actor=users["med_admin"], target=record)
-    assert entry.extra["audit_target_office_id"] == offices["MED"].pk
+    assert entry.extra["audit_target_office_id"] == offices["HR"].pk
     assert audit_entries_for(users["med_admin"]).filter(pk=entry.pk).exists()
     assert not audit_entries_for(users["sup_admin"]).filter(pk=entry.pk).exists()
 
@@ -126,7 +126,7 @@ def test_external_repository_print_audit_is_not_restricted_to_ovpa_collection(cl
 
 
 @pytest.mark.django_db
-def test_completion_resolves_overdue_and_notifies_the_managing_office(users, offices):
+def test_completion_resolves_overdue_and_notifies_the_responsible_office(users, offices):
     from apps.tracking.external_services import complete_record, confirm_receipt
 
     record = _case(users, offices)
@@ -138,5 +138,5 @@ def test_completion_resolves_overdue_and_notifies_the_managing_office(users, off
     assert overdue.resolved_at is not None
     filing = Notification.objects.get(external_record=record, kind=Notification.Kind.COMPLETED,
                                        resolved_at__isnull=True)
-    assert filing.office_id == offices["MED"].pk
+    assert filing.office_id == offices["HR"].pk
     assert filing.url == record.get_absolute_url()

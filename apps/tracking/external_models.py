@@ -21,13 +21,12 @@ def external_attachment_path(instance, filename):
 
 class ExternalOfficeQuerySet(models.QuerySet):
     def visible_to(self, user):
-        if not getattr(user, "is_authenticated", False) or not user.is_active:
+        if (not getattr(user, "is_authenticated", False) or not user.is_active
+                or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
             return self.none()
-        if user.is_system_admin:
-            return self
-        if not user.office_id:
+        if not user.is_system_admin and not user.office_id:
             return self.none()
-        return self.filter(managing_office_id=user.office_id)
+        return self
 
 
 class ExternalOffice(TimeStampedModel):
@@ -55,6 +54,17 @@ class ExternalOffice(TimeStampedModel):
     def label(self):
         return self.code or self.name
 
+    @property
+    def selection_label(self):
+        details = " · ".join(filter(None, [self.code, self.contact_person]))
+        return f"{self.name}{' · ' + details if details else ''} · Entry {self.pk}"
+
+    def can_edit(self, user):
+        return bool(
+            getattr(user, "is_authenticated", False) and user.is_active and user.is_office_admin
+            and (user.is_system_admin or user.office_id == self.managing_office_id)
+        )
+
 
 class ExternalRecordQuerySet(models.QuerySet):
     def visible_to(self, user):
@@ -68,7 +78,7 @@ class ExternalRecordQuerySet(models.QuerySet):
             return self
         if not user.office_id:
             return self.none()
-        own = Q(managing_office_id=user.office_id)
+        own = Q(managing_office_id=user.office_id) | Q(archived_document__office_id=user.office_id)
         involved = Q(routing_steps__from_office_id=user.office_id) | Q(routing_steps__to_office_id=user.office_id)
         scope = self.filter(own | (involved & ~Q(status=Status.DRAFT))).distinct()
         return scope if user.is_office_admin else scope.exclude(status=Status.DRAFT)
@@ -131,12 +141,35 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
     def current_step(self):
         return self.routing_steps.order_by("-sequence").first()
 
+    @property
+    def responsible_office_id(self):
+        """Confirmed custody controls work; existing filing ownership stays fixed."""
+        from apps.documents.models import Document
+
+        if self.pk is None:
+            return self.current_office_id or self.managing_office_id
+        filed_office = Document.objects.filter(external_tracking_record_id=self.pk).values_list("office_id", flat=True).first()
+        if filed_office:
+            return filed_office
+        if self.current_office_id:
+            return self.current_office_id
+        latest_internal = self.routing_steps.filter(
+            received_at__isnull=False, to_office__isnull=False
+        ).order_by("-sequence").values_list("to_office_id", flat=True).first()
+        return latest_internal or self.managing_office_id
+
+    @property
+    def responsible_office(self):
+        from apps.accounts.models import Office
+
+        return Office.objects.get(pk=self.responsible_office_id)
+
     def can_manage(self, user):
         return bool(
             getattr(user, "is_authenticated", False)
             and user.is_active
             and user.is_office_admin
-            and (user.is_system_admin or user.office_id == self.managing_office_id)
+            and (user.is_system_admin or user.office_id == self.responsible_office_id)
         )
 
     def can_act(self, user):
@@ -145,6 +178,8 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
         step = self.current_step
         if step and not step.received_at:
             return False
+        if self.status == Status.DRAFT and step is None and self.can_manage(user):
+            return True
         if self.current_external_office_id:
             return self.can_manage(user)
         return bool(user.office_id and user.office_id == self.current_office_id)

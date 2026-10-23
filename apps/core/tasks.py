@@ -38,11 +38,11 @@ def chase_external_followups():
             unreceived = pending and step.sent_at < cutoff
             overdue = bool(record.due_at and record.due_at < now)
             checks = [
-                (Notification.Kind.UNRECEIVED, unreceived, record.managing_office,
+                (Notification.Kind.UNRECEIVED, unreceived, record.responsible_office,
                  "Follow up on an external slip awaiting receipt",
                  f"{record.tracking_number} is awaiting receipt from {step.to_name_snapshot}.", "unreceived"),
                 (Notification.Kind.OVERDUE, overdue,
-                 (step.to_office if pending else record.current_office) or record.managing_office,
+                 (step.to_office if pending else record.current_office) or record.responsible_office,
                  "An external slip is past its deadline",
                  f"{record.tracking_number} is past its deadline. Check its current receipt or work step.", "overdue"),
             ]

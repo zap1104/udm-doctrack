@@ -114,7 +114,7 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
         self.fields["year"].widget.attrs.update({"min": 1950, "max": timezone.localdate().year + 1})
         self.fields["access_level"].choices = AccessLevel.choices
         if self.instance.is_external:
-            self.fields["office"].disabled = True
+            self.fields.pop("office")
         if not self.instance.document_type_id:
             self.fields["retention_until"].help_text = (
                 "Leave blank to use the main document type's review period when first classified. "
@@ -152,6 +152,8 @@ class DocumentMetadataForm(DocumentTypeSelectionMixin, BootstrapFormMixin, forms
 
     def clean(self):
         cleaned = super().clean()
+        if self.instance.is_external:
+            cleaned["office"] = self.instance.office
         if not cleaned.get("year") and cleaned.get("document_date"):
             cleaned["year"] = cleaned["document_date"].year
         kind = cleaned.get("document_type")

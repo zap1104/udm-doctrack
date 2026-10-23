@@ -372,19 +372,26 @@ def test_concurrent_directory_requests_render_a_duplicate_message(client, users,
         ]
     validated = Barrier(2)
     original_clean = ExternalOffice.full_clean
+    original_recording = external_services.recording_office
+
+    def recording_then_lock(*args, **kwargs):
+        validated.wait(timeout=30)
+        return original_recording(*args, **kwargs)
 
     def clean_then_wait(entry, *args, **kwargs):
         original_clean(entry, *args, **kwargs)
         # ModelForm validates first; synchronize only the service's final
         # validation to reproduce a change arriving after both forms passed.
-        if not args and not kwargs:
-            validated.wait(timeout=10)
+        if operation == "rename" and kwargs.get("validate_constraints") is False:
+            validated.wait(timeout=30)
 
     monkeypatch.setattr(ExternalOffice, "full_clean", clean_then_wait)
+    if operation == "create":
+        monkeypatch.setattr(external_services, "recording_office", recording_then_lock)
 
     def submit(index):
         try:
-            url = reverse("tracking:external_office_create")
+            url = reverse("tracking:external_office_create") + f"?office={offices['MED'].pk}"
             data = {"name": "Concurrent Registrar", "managing_office": offices["MED"].pk, "is_active": "on"}
             if operation == "rename":
                 url = reverse("tracking:external_office_edit", args=[entries[index].pk])

@@ -241,7 +241,7 @@ def test_system_admin_all_offices_perspective_does_not_block_target_uploads(clie
 
 def test_external_repository_upload_recovers_a_file_without_tracking_side_effects(client, users, offices):
     own = ExternalOffice.objects.create(name="Own external counterpart", managing_office=offices["MED"])
-    foreign = ExternalOffice.objects.create(name="Another counterpart", managing_office=offices["SUP"])
+    foreign = ExternalOffice.objects.create(name="Inactive counterpart", managing_office=offices["SUP"], is_active=False)
     client.force_login(users["med_admin"])
     url = "/documents/external/upload/"
     initial = client.get(url)

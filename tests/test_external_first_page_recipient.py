@@ -89,12 +89,19 @@ def test_validation_redisplay_retains_both_offices(client, users, offices, paper
 
 
 @pytest.mark.parametrize("entry", ["foreign", "inactive"])
-def test_invalid_external_destination_does_not_create_a_draft(client, users, offices, paper_offices, entry):
+def test_shared_destination_creates_draft_but_inactive_destination_does_not(client, users, offices, paper_offices, entry):
     client.force_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {
         "title": "Invalid recipient", "from_endpoint": f"internal:{offices['MED'].pk}",
         "to_endpoint": f"external:{paper_offices[entry].pk}",
     })
+    if entry == "foreign":
+        assert response.status_code == 302
+        record = ExternalTrackingRecord.objects.get(title="Invalid recipient")
+        assert record.status == "DRAFT" and not record.routing_steps.exists()
+        review = client.get(response.url)
+        assert review.context["form"]["to_endpoint"].value() == f"external:{paper_offices[entry].pk}"
+        return
     response = follow_upload_recovery(client, response)
     assert response.status_code == 200
     assert "to_endpoint" in response.context["form"].errors

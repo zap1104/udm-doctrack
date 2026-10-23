@@ -34,20 +34,14 @@ class ExternalOfficeForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = ExternalOffice
-        fields = ["managing_office", "name", "code", "contact_person", "email", "phone", "notes", "is_active"]
+        fields = ["name", "code", "contact_person", "email", "phone", "notes", "is_active"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["managing_office"].queryset = Office.objects.filter(is_active=True)
-        if not user.is_system_admin:
-            self.fields["managing_office"].queryset = Office.objects.filter(pk=user.office_id)
-            self.fields["managing_office"].initial = user.office_id
-            self.fields["managing_office"].disabled = True
         if self.instance.pk:
             self.fields["revision"].required = True
             self.initial["revision"] = self.instance.revision
-            self.fields["managing_office"].disabled = True
         else:
             self.initial["is_active"] = True
 
@@ -55,7 +49,6 @@ class ExternalOfficeForm(BootstrapFormMixin, forms.ModelForm):
 class EndpointMixin:
     def scope_endpoints(self, *, user, record=None):
         external = ExternalOffice.objects.filter(is_active=True)
-        external = external.filter(managing_office=record.managing_office) if record else external.visible_to(user)
         for name in ("from_external_office", "to_external_office"):
             if name in self.fields:
                 self.fields[name].queryset = external
@@ -80,7 +73,7 @@ class EndpointMixin:
         self.fields[name].choices = [
             ("", "Choose an office"),
             ("Internal offices", [(f"internal:{office.pk}", str(office)) for office in internal.queryset]),
-            ("External UDM offices", [(f"external:{office.pk}", str(office)) for office in external.queryset]),
+            ("External UDM offices", [(f"external:{office.pk}", office.selection_label) for office in external.queryset]),
         ]
         # Accept existing callers without rendering their old inputs. Leaving
         # old IDs in hidden controls would conflict after an error redisplay
@@ -128,7 +121,6 @@ class EndpointMixin:
 
 class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
     attachments = MultipleFileField(required=False, label="Attachments")
-    managing_office = forms.ModelChoiceField(queryset=Office.objects.none())
     title = forms.CharField(max_length=255)
     description = forms.CharField(required=False, max_length=5000, widget=forms.Textarea(attrs={"rows": 3}))
     original_reference = forms.CharField(required=False, max_length=200, label="Original paper reference")
@@ -164,9 +156,13 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
     to_external_office = forms.ModelChoiceField(queryset=ExternalOffice.objects.none(), required=False)
     actual_at = actual_time("Known source time")
 
-    def __init__(self, *args, user, **kwargs):
+    def __init__(self, *args, user, recording_office=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.recording_office = recording_office or user.office
         self.scope_endpoints(user=user)
+        self.fields["from_office"].queryset = Office.objects.filter(
+            pk=getattr(self.recording_office, "pk", None), is_active=True
+        )
         self.single_endpoint("from")
         self.single_endpoint("to")
         # New first-page forms always submit this control. Older callers that
@@ -176,23 +172,15 @@ class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
             name in self.data for name in ("to_endpoint", "to_office", "to_external_office")
         )
         recipient.widget.attrs["aria-required"] = str(recipient.required).lower()
-        self.fields["managing_office"].queryset = Office.objects.filter(is_active=True)
-        if not user.is_system_admin:
-            self.fields["managing_office"].queryset = Office.objects.filter(pk=user.office_id)
-            self.fields["managing_office"].initial = user.office_id
-            self.fields["managing_office"].disabled = True
 
     def clean(self):
         data = super().clean()
         self.clean_single_endpoint(data, "from")
         self.clean_single_endpoint(data, "to")
-        managing = data.get("managing_office")
-        for prefix in ("from", "to"):
-            external = data.get(f"{prefix}_external_office")
-            if external and managing and external.managing_office_id != managing.pk:
-                self.add_error(f"{prefix}_endpoint", "Choose an entry belonging to the managing office.")
+        managing = self.recording_office
+        data["managing_office"] = managing
         if data.get("from_office") and managing and data["from_office"].pk != managing.pk:
-            self.add_error("from_endpoint", "The internal source must be the managing office.")
+            self.add_error("from_endpoint", "The internal source must match the selected office perspective.")
         if (data.get("from_office") and data.get("from_office") == data.get("to_office")) or (
             data.get("from_external_office") and data.get("from_external_office") == data.get("to_external_office")
         ):
@@ -310,9 +298,7 @@ class ExternalCorrectionForm(RevisionForm):
             if not latest_unconsumed or not selected_id:
                 self.fields.pop(name)
             else:
-                self.fields[name].queryset = ExternalOffice.objects.filter(
-                    managing_office=step.record.managing_office
-                ).filter(Q(is_active=True) | Q(pk=selected_id))
+                self.fields[name].queryset = ExternalOffice.objects.filter(Q(is_active=True) | Q(pk=selected_id))
                 self.initial[name] = selected_id
 
     def clean(self):

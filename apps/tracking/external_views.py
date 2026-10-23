@@ -18,6 +18,7 @@ from apps.accounts.models import Office
 from apps.core.file_history import current_tracking_files
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.models import AuditLog
+from apps.core.upload_context import resolve_upload_context
 from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
 from apps.core.utils import log_action, sign_download, unsign_download
 
@@ -52,6 +53,14 @@ def _counterparts(user):
         | Q(pk__in=visible.values("routing_steps__from_external_office_id"))
         | Q(pk__in=visible.values("routing_steps__to_external_office_id")),
     ).distinct()
+
+
+def _creation_office(request):
+    context = resolve_upload_context(request.user, "external-create", query=request.GET)
+    office = Office.objects.filter(pk=context.creation_office_id, is_active=True).first()
+    if office is None:
+        raise ValidationError("Select an internal office perspective before creating an external entry.")
+    return office
 
 
 def _context(**kwargs):
@@ -91,6 +100,8 @@ def _filtered(request, *, include_filed=False):
         for key in ("q", "status", "office", "external_office", "direction", "overdue")
     }
     errors = []
+    if any(len(request.GET.getlist(key)) > 1 for key in filters):
+        errors.append("Choose one value for each external tracking filter.")
     perspective = None
     if filters["status"]:
         if filters["status"] not in Status.values:
@@ -107,7 +118,7 @@ def _filtered(request, *, include_filed=False):
             records = records.filter(overdue) if filters["overdue"] == "yes" else records.exclude(overdue)
     if filters["office"]:
         allowed = (
-            Office.objects.all() if request.user.is_system_admin else Office.objects.filter(pk=request.user.office_id)
+            Office.active.all() if request.user.is_system_admin else Office.active.filter(pk=request.user.office_id)
         )
         try:
             perspective = allowed.get(pk=int(filters["office"]))
@@ -178,7 +189,7 @@ def _list_context(request, records, filters, errors, perspective):
         status_counts=[(item["label"], item["count"]) for item in summary["stages"]],
         total_count=summary["total"],
         internal_offices=(
-            Office.objects.all() if request.user.is_system_admin else Office.objects.filter(pk=request.user.office_id)
+            Office.active.all() if request.user.is_system_admin else Office.active.filter(pk=request.user.office_id)
         ),
         external_offices=_counterparts(request.user),
         filter_query=params.urlencode(),
@@ -237,7 +248,7 @@ class ExternalExportView(AppLoginRequiredMixin, View):
                 "Title",
                 "Original paper reference",
                 "Current case status",
-                "Managing office",
+                "Responsible office",
                 "Confirmed internal custodian",
                 "Confirmed external custodian",
                 "Pending recipient",
@@ -262,7 +273,7 @@ class ExternalExportView(AppLoginRequiredMixin, View):
                         record.title,
                         record.original_reference,
                         record.get_status_display(),
-                        record.managing_office.name,
+                        record.responsible_office.name,
                         record.current_office_snapshot if record.current_office_id else "",
                         record.current_office_snapshot if record.current_external_office_id else "",
                         pending,
@@ -284,19 +295,27 @@ class ExternalExportView(AppLoginRequiredMixin, View):
 
 class ExternalOfficeListView(AppLoginRequiredMixin, View):
     def get(self, request):
+        offices = list(ExternalOffice.objects.visible_to(request.user).select_related("managing_office"))
+        for office in offices:
+            office.can_edit_entry = office.can_edit(request.user)
         return render(
             request,
             "tracking/external/offices.html",
-            _context(offices=ExternalOffice.objects.visible_to(request.user).select_related("managing_office")),
+            _context(offices=offices),
         )
 
 
-class ExternalOfficeEditView(AdminRequiredMixin, View):
+class ExternalOfficeEditView(RecoverableUploadMixin, AdminRequiredMixin, View):
     def _instance(self, request, pk):
-        return get_object_or_404(ExternalOffice.objects.visible_to(request.user), pk=pk) if pk else None
+        entries = ExternalOffice.objects.all()
+        if not request.user.is_system_admin:
+            entries = entries.filter(managing_office_id=request.user.office_id)
+        return get_object_or_404(entries, pk=pk) if pk else None
 
     def get(self, request, pk=None):
         office = self._instance(request, pk)
+        if office is None:
+            _creation_office(request)
         return _form_page(
             request,
             ExternalOfficeForm(user=request.user, instance=office),
@@ -311,10 +330,9 @@ class ExternalOfficeEditView(AdminRequiredMixin, View):
             revision = data.pop("revision", None)
             try:
                 if office:
-                    data.pop("managing_office")
                     services.save_external_office(office, user=request.user, expected_revision=revision, **data)
                 else:
-                    services.create_external_office(user=request.user, **data)
+                    services.create_external_office(user=request.user, managing_office=_creation_office(request), **data)
             except ValidationError as exc:
                 _form_error(form, exc)
             else:
@@ -326,6 +344,8 @@ class ExternalOfficeEditView(AdminRequiredMixin, View):
 class ExternalOfficeDeactivateView(AdminRequiredMixin, View):
     def post(self, request, pk):
         office = get_object_or_404(ExternalOffice.objects.visible_to(request.user), pk=pk)
+        if not office.can_edit(request.user):
+            raise PermissionDenied("Only the registering office can change this directory entry.")
         form = RevisionForm(request.POST)
         if form.is_valid():
             try:
@@ -550,7 +570,7 @@ class ExternalCorrectionView(AppLoginRequiredMixin, View):
     def _prepare(self, request, pk, step_pk):
         record = _record(request, pk)
         if not record.can_manage(request.user):
-            raise PermissionDenied("Only the managing office's administrator can correct external history.")
+            raise PermissionDenied("Only the responsible office's administrator can correct external history.")
         if record.status == Status.COMPLETED:
             raise PermissionDenied("Filed custody history is frozen. Add an annotation instead.")
         step = get_object_or_404(record.routing_steps.all(), pk=step_pk)

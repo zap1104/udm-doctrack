@@ -34,7 +34,9 @@ def test_external_create_has_one_visible_from_office_and_grouped_choices(users, 
     assert form.fields["from_endpoint"].label == "From office"
     choices = dict(form.fields["from_endpoint"].choices)
     assert [value for value, _ in choices["Internal offices"]] == [f"internal:{offices['MED'].pk}"]
-    assert [value for value, _ in choices["External UDM offices"]] == [f"external:{counterparts['own'].pk}"]
+    assert {value for value, _ in choices["External UDM offices"]} == {
+        f"external:{counterparts['own'].pk}", f"external:{counterparts['other'].pk}"
+    }
 
 
 @pytest.mark.parametrize("kind", ["internal", "external"])
@@ -65,12 +67,13 @@ def test_invalid_combined_source_is_a_visible_field_error(users, bad):
 
 
 @pytest.mark.parametrize("entry", ["other", "inactive"])
-def test_source_dropdown_rejects_foreign_and_inactive_external_entries(users, counterparts, entry):
+def test_source_dropdown_accepts_shared_entries_but_rejects_inactive_entries(users, counterparts, entry):
     form = ExternalCreateForm(
         {"title": "Rejected paper", "from_endpoint": f"external:{counterparts[entry].pk}"}, user=users["med_admin"],
     )
-    assert not form.is_valid()
-    assert "from_endpoint" in form.errors
+    assert form.is_valid() == (entry == "other")
+    if entry == "inactive":
+        assert "from_endpoint" in form.errors
 
 
 def test_conflicting_new_and_legacy_source_is_rejected(users, offices, counterparts):
@@ -182,8 +185,9 @@ def test_office_changed_after_form_initialization_is_rechecked(users, offices, c
     ExternalOffice.objects.filter(pk=external.pk).update(**(
         {"is_active": False} if change == "inactive" else {"managing_office": offices["SUP"]}
     ))
-    assert not form.is_valid()
-    assert "from_endpoint" in form.errors
+    assert form.is_valid() == (change == "owner")
+    if change == "inactive":
+        assert "from_endpoint" in form.errors
 
 
 @pytest.mark.parametrize("kind", ["internal", "external"])
@@ -199,7 +203,7 @@ def test_legacy_destination_posts_still_decode(users, offices, counterparts, kin
 
 
 @pytest.mark.parametrize("entry", ["other", "inactive"])
-def test_forged_destination_is_refused_without_mutating_the_record(client, users, offices, counterparts, entry):
+def test_shared_destination_is_allowed_and_inactive_destination_does_not_mutate(client, users, offices, counterparts, entry):
     admin = users["med_admin"]
     record = create_record(user=admin, title="Protected recipient", from_office=offices["MED"])
     before_revision = record.revision
@@ -207,6 +211,12 @@ def test_forged_destination_is_refused_without_mutating_the_record(client, users
     response = client.post(reverse("tracking:external_review", args=[record.pk]), {
         "revision": record.revision, "action": "SEND", "to_endpoint": f"external:{counterparts[entry].pk}",
     })
+    if entry == "other":
+        assert response.status_code == 302
+        record.refresh_from_db()
+        assert record.status == Status.PENDING_RECEIPT and record.revision == before_revision + 1
+        assert record.current_step.to_external_office_id == counterparts["other"].pk
+        return
     assert response.status_code == 400
     assert "to_endpoint" in response.context["form"].errors
     record.refresh_from_db()
