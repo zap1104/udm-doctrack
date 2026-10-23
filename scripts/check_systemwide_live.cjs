@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const report = {origin:manifest.origin, checks:[], errors:[], httpErrors:[], failedRequests:[], navigations:[], filterRequests:[], screenshots:[], limitations:[
+const report = {origin:manifest.origin, phase:manifest.phase || 'all', checks:[], errors:[], httpErrors:[], failedRequests:[], navigations:[], filterRequests:[], screenshots:[], limitations:[
   'Chromium emulation; physical devices and screen readers were not tested.',
   'Storage is local and OCR/email service checks are simulated.',
   'Print dialog invocation and print CSS are checked; physical printer output is unverified.',
@@ -81,6 +81,7 @@ async function snapshot(page, html) {
     const main = documentToRead.querySelector('#main-content');
     const ids = [...main.querySelectorAll('a[href]')]
       .map(a => new URL(a.getAttribute('href'), location.origin).pathname)
+      .map(value => value.replace(/^\/search\/click\/\d+\/(\d+)\/\d+\/$/, '/documents/$1/'))
       .filter(value => /^\/(?:tracking\/(?:external\/)?|documents\/)\d+\/$/.test(value));
     return {ids:[...new Set(ids)].sort(), headings:[...main.querySelectorAll('h1,h2')].map(x=>x.textContent.replace(/\s+/g,' ').trim()),
       totals:[...main.querySelectorAll('.stat-card .value, .repository-results > span')].map(x=>x.textContent.replace(/\s+/g,' ').trim())};
@@ -207,23 +208,39 @@ async function checkHistoryResetAndPages(page) {
   record('Reset, real second page and page-size control preserve backend results');
 }
 async function checkCombinedDates(page) {
-  await navigate(page,manifest.origin+'/search/?mode=tracking&office='+manifest.offices.MED);
+  await navigate(page,manifest.origin+'/search/?mode=repository');
   const query=page.locator('[data-auto-filter] [name=q]');
   const from=page.locator('[data-auto-filter] [name=date_from]');
   const to=page.locator('[data-auto-filter] [name=date_to]');
+  const relevance=page.locator('[data-auto-filter] [name=min_relevance]');
   await reveal(from); await reveal(to);
   await applyFilter(page,query,async()=>{
-    await query.fill('Browser');
+    await query.fill(manifest.repositoryReference);
     await from.fill(manifest.today); await from.dispatchEvent('change');
     await to.fill(manifest.today); await to.dispatchEvent('change');
-  },'Combined tracking subject and date range');
+    // This journey checks combined filtering, not the lexical score threshold.
+    await relevance.fill('0'); await relevance.dispatchEvent('input'); await relevance.dispatchEvent('change');
+  },'Combined repository identifier and date range');
   const params=new URL(page.url()).searchParams;
-  assert.equal(params.get('q'),'Browser');
+  assert.equal(params.get('q'),manifest.repositoryReference);
   assert.equal(params.get('date_from'),manifest.today);
   assert.equal(params.get('date_to'),manifest.today);
-  const ids=(await snapshot(page)).ids;
-  for(const id of Object.values(manifest.seeded)) assert.ok(ids.includes('/tracking/'+id+'/'),'Seeded matching record missing');
-  record('Combined date range uses one explicit Search and contains independently seeded records');
+  assert.equal(params.get('min_relevance'),'0');
+  assert.deepEqual((await snapshot(page)).ids,['/documents/'+manifest.repositoryAlpha+'/']);
+  record('Combined date range uses one explicit Search and returns the independently seeded repository record');
+}
+async function checkTrackingCombinedSearch(page) {
+  await navigate(page,manifest.origin+'/search/?mode=tracking');
+  const query=page.locator('[data-auto-filter] [name=q]');
+  const office=page.locator('[data-auto-filter] select[name=office]');
+  await applyFilter(page,query,async()=>{
+    await office.selectOption(String(manifest.offices.MED));
+    await query.fill('Browser');
+  },'Tracking office and subject wait for Search');
+  assert.equal(new URL(page.url()).searchParams.get('office'),String(manifest.offices.MED));
+  const expected=[...Object.values(manifest.seeded),manifest.outgoing].map(id=>'/tracking/'+id+'/').sort();
+  assert.deepEqual((await snapshot(page)).ids,expected);
+  record('Combined tracking search returns independently seeded active records');
 }
 async function checkDashboardScroll(page) {
   await navigate(page,manifest.origin+'/?office='+manifest.offices.MED);
@@ -381,7 +398,7 @@ async function run() {
     assert.equal(privateFile.status(),200); assert.equal((await privateFile.body()).toString(),'Private browser audit file');
     record('External manual dispatch, internal receipt, work, completion and approved filing persist');
 
-    for(const role of ['med','med_admin','admin','viewer']) {
+    if(manifest.phase!=='tail') for(const role of ['med','med_admin','admin','viewer']) {
       const page=sessions[role].page;
       for(const route of ['/tracking/?office='+manifest.offices.MED,'/documents/','/search/?mode=repository','/tracking/external/?office='+manifest.offices.MED,'/documents/external/']) await checkFilterControls(page,route,role);
       await checkTrackingPills(page,role);
@@ -415,14 +432,17 @@ async function run() {
       }
       await page.setViewportSize({width:1366,height:950});
     }
-    await checkHistoryResetAndPages(med);
-    await checkCombinedDates(med);
-    await checkFilterControls(admin,'/?office='+manifest.offices.MED,'admin');
-    await checkFilterControls(admin,'/reports/?office='+manifest.offices.MED,'admin');
-    await checkDashboardScroll(admin);
-    await checkDelayedResponseAndRetry(med);
-    await checkExpiredSession(sessions.viewer.page);
-    await checkNoJavaScript(browser);
+    if(manifest.phase!=='core') {
+      await checkHistoryResetAndPages(med);
+      await checkCombinedDates(med);
+      await checkTrackingCombinedSearch(admin);
+      await checkFilterControls(admin,'/?office='+manifest.offices.MED,'admin');
+      await checkFilterControls(admin,'/reports/?office='+manifest.offices.MED,'admin');
+      await checkDashboardScroll(admin);
+      await checkDelayedResponseAndRetry(med);
+      await checkExpiredSession(sessions.viewer.page);
+      await checkNoJavaScript(browser);
+    }
     assert.deepEqual(report.errors,[]);
     assert.deepEqual(report.httpErrors,[]);
     console.log(JSON.stringify({checks:report.checks.length,liveFilterRequests:report.filterRequests.length,errors:report.errors.length}));

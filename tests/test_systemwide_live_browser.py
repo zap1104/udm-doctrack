@@ -20,7 +20,8 @@ pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.skipif(
 )]
 
 
-def test_real_browser_filters_workflows_and_responsive_views(live_server, users, offices, settings, tmp_path, memo_type, tag_urgent):
+@pytest.mark.parametrize("phase", ["core", "tail"])
+def test_real_browser_filters_workflows_and_responsive_views(live_server, users, offices, settings, tmp_path, memo_type, tag_urgent, phase):
     settings.MEDIA_ROOT = tmp_path / "files"
     settings.ENABLE_BACKGROUND_TASKS = False
     settings.SECURE_SSL_REDIRECT = False
@@ -40,6 +41,8 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
         seeded[name] = record.pk
     outgoing = create_draft_record(user=users["med"], subject="Browser Outgoing", instructions="Review this paper")
     route_record(outgoing, [offices["SUP"]], user=users["med"])
+    repository_alpha = None
+    repository_reference = "DFNSEALPHA830241"
     for title, office, collection in (
         ("Browser Repository Alpha", "MED", Collection.OVPA),
         ("Browser Repository Beta", "SUP", Collection.OVPA),
@@ -50,6 +53,7 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
             collection=collection, access_level=AccessLevel.OVPA, ocr_status="SKIPPED",
             document_type=memo_type, document_date=timezone.localdate(),
             allow_external_ocr=False,
+            reference_number=repository_reference if title == "Browser Repository Alpha" else "",
         )
         document.document_types.add(memo_type)
         document.tags.add(tag_urgent)
@@ -58,6 +62,8 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
             original_name="evidence.txt",
         )
         document.rebuild_index()
+        if title == "Browser Repository Alpha":
+            repository_alpha = document.pk
     # Enough visible rows to exercise real pagination, with usable type/tag/date controls.
     for index in range(27):
         document = Document.objects.create(
@@ -77,13 +83,15 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
         external, user=users["med_admin"], expected_revision=external.revision,
         uploaded_file=SimpleUploadedFile("evidence.txt", b"Private browser audit file"),
     )
-    evidence = Path(os.environ.get("LIVE_BROWSER_EVIDENCE_DIR", str(tmp_path / "evidence"))).resolve()
+    evidence = Path(os.environ.get("LIVE_BROWSER_EVIDENCE_DIR", str(tmp_path / "evidence"))).resolve() / phase
     evidence.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "origin": live_server.url, "root": str(settings.BASE_DIR), "output": str(evidence / "live-browser.json"),
+        "origin": live_server.url, "root": str(settings.BASE_DIR), "output": str(evidence / "live-browser.json"), "phase": phase,
         "offices": {key: value.pk for key, value in offices.items()}, "seeded": seeded,
         "today": timezone.localdate().isoformat(), "sessionCookie": settings.SESSION_COOKIE_NAME,
         "external": external.pk, "externalDraftUrl": external.get_absolute_url(),
+        "repositoryAlpha": repository_alpha, "outgoing": outgoing.pk,
+        "repositoryReference": repository_reference,
         "past": timezone.localtime(timezone.now() - timezone.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M"),
         "screenshotDir": str(evidence / "screenshots"),
     }
