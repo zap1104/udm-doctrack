@@ -5,13 +5,14 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.file_lifecycle_models import VersionLifecycleModel
 from apps.tracking.file_version_models import ImmutableFileMixin, ImmutableFileQuerySet
 
 
-class DocumentFileVersion(ImmutableFileMixin, models.Model):
+class DocumentFileVersion(ImmutableFileMixin, VersionLifecycleModel):
     document_file = models.ForeignKey("documents.DocumentFile", on_delete=models.CASCADE, related_name="versions")
     version_number = models.PositiveIntegerField(default=1)
-    file = models.FileField(upload_to="documents/history/%Y/%m/", max_length=400)
+    file = models.FileField(upload_to="documents/history/%Y/%m/", max_length=400, blank=True)
     original_name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=120, blank=True)
     size = models.PositiveBigIntegerField(default=0)

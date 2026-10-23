@@ -2,6 +2,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
+from apps.core.file_lifecycle_models import VersionLifecycleModel, check_lifecycle_update
+
 
 class ImmutableFileQuerySet(models.QuerySet):
     def _protected_fields(self):
@@ -9,18 +11,22 @@ class ImmutableFileQuerySet(models.QuerySet):
         return fields | {name[:-3] for name in fields if name.endswith("_id")}
 
     def update(self, **kwargs):
+        check_lifecycle_update(kwargs)
         protected = self._protected_fields()
         if protected.intersection(kwargs):
             raise ValidationError("Stored file history cannot be changed. Upload a new version.")
         return super().update(**kwargs)
 
     def bulk_update(self, objs, fields, **kwargs):
+        check_lifecycle_update(fields)
         if self._protected_fields().intersection(fields):
             raise ValidationError("Stored file history cannot be changed. Upload a new version.")
         return super().bulk_update(objs, fields, **kwargs)
 
     def bulk_create(self, objs, batch_size=None, ignore_conflicts=False, update_conflicts=False,
                     update_fields=None, unique_fields=None):
+        if update_conflicts:
+            check_lifecycle_update(update_fields or [])
         if update_conflicts and self._protected_fields().intersection(update_fields or []):
             raise ValidationError("Stored file history cannot be changed. Upload a new version.")
         return super().bulk_create(objs, batch_size=batch_size, ignore_conflicts=ignore_conflicts,
@@ -47,12 +53,15 @@ class ImmutableFileMixin:
                 raise ValidationError("Stored file history cannot be changed. Upload a new version.")
 
 
-class AttachmentVersionMixin(ImmutableFileMixin):
+class AttachmentVersionMixin(ImmutableFileMixin, VersionLifecycleModel):
     immutable_fields = (
         "record_id", "file", "original_name", "content_type", "size", "checksum", "note",
         "uploaded_by_id", "file_group_id", "version_number", "change_summary",
         "uploader_name_snapshot", "uploader_office_snapshot", "created_at",
     )
+
+    class Meta:
+        abstract = True
 
     def save(self, *args, **kwargs):
         self._check_immutable()
@@ -74,6 +83,9 @@ class AttachmentVersionMixin(ImmutableFileMixin):
 
 class AttachmentGroup(models.Model):
     record = models.ForeignKey("tracking.TrackingRecord", on_delete=models.CASCADE, related_name="file_groups")
+    discarded_at = models.DateTimeField(null=True, blank=True, editable=False)
+    discarded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="discarded_file_groups", editable=False)
+    discard_reason = models.CharField(max_length=2000, blank=True, editable=False)
 
     class Meta:
         ordering = ["pk"]
@@ -91,6 +103,9 @@ class AttachmentGroup(models.Model):
 
 class ExternalAttachmentGroup(models.Model):
     record = models.ForeignKey("tracking.ExternalTrackingRecord", on_delete=models.CASCADE, related_name="file_groups")
+    discarded_at = models.DateTimeField(null=True, blank=True, editable=False)
+    discarded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="discarded_external_file_groups", editable=False)
+    discard_reason = models.CharField(max_length=2000, blank=True, editable=False)
 
     class Meta:
         ordering = ["pk"]

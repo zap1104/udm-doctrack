@@ -5,6 +5,15 @@ from django.core.checks import Error, Tags, register
 
 
 @register()
+def upload_draft_configuration(app_configs, **kwargs):
+    names = ("UPLOAD_DRAFT_HOURS", "UPLOAD_DRAFT_MAX_OPEN", "UPLOAD_DRAFT_MAX_BYTES")
+    if any(not isinstance(getattr(settings, name, None), int) or isinstance(getattr(settings, name, None), bool)
+           or getattr(settings, name) <= 0 for name in names):
+        return [Error("Upload-draft lifetime and quotas must be positive integers.", id="doctrack.E020")]
+    return []
+
+
+@register()
 def processing_configuration(app_configs, **kwargs):
     if not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         return []

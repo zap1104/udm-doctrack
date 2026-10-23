@@ -1,5 +1,7 @@
 """Compensate new storage writes when their database mutation fails."""
 
+import hashlib
+import json
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -7,6 +9,22 @@ from functools import wraps
 
 logger = logging.getLogger("doctrack")
 _new_files = ContextVar("new_storage_files", default=None)
+
+
+def storage_identity(storage):
+    """Bind exact-object cleanup to a backend/location without persisting secrets."""
+    from urllib.parse import urlsplit
+
+    identity = {"backend": f"{storage.__class__.__module__}.{storage.__class__.__qualname__}"}
+    for name in ("location", "bucket_name", "account_name", "azure_container", "endpoint_url"):
+        value = getattr(storage, name, None)
+        if value is not None:
+            value = str(value)
+            if name == "endpoint_url":
+                parsed = urlsplit(value)
+                value = f"{parsed.scheme}://{parsed.hostname or ''}:{parsed.port or ''}{parsed.path}"
+            identity[name] = value
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
 @contextmanager

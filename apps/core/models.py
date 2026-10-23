@@ -432,3 +432,7 @@ class NotificationPreference(models.Model):
 
     def __str__(self):
         return f"Notification preferences for {self.user}"
+
+
+from .file_lifecycle_models import FileLifecycleEvent, StorageCleanupIntent  # noqa: E402,F401
+from .upload_models import StagedUpload, UploadDraft  # noqa: E402,F401
