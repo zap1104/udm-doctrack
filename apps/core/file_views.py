@@ -27,7 +27,10 @@ from apps.core.utils import file_extension, log_action, unsign_download
 def private(response):
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
-    response["Referrer-Policy"] = "no-referrer"
+    # Native forms (including the account menu) must retain their same-origin
+    # Origin in Chromium. no-referrer makes these POSTs opaque (Origin: null).
+    # No URL is disclosed cross-origin; binary responses stay no-referrer.
+    response["Referrer-Policy"] = "same-origin" if response.get("Content-Type", "").startswith("text/html") else "no-referrer"
     return response
 
 

@@ -45,6 +45,16 @@ def test_recovery_list_is_owner_only_and_full_discard_is_confirmed(client, users
     assert client.post(discard, {"revision": draft.revision, "confirm": "on"}).status_code in {403, 404}
 
 
+def test_saved_form_pages_preserve_same_origin_for_native_csrf_posts(client, users):
+    from django.http import HttpResponse
+    from apps.core.file_views import private
+    client.force_login(users["med"])
+    response = client.get(reverse("core:upload_drafts"))
+    assert response["Referrer-Policy"] == "same-origin"
+    assert response["Cache-Control"] == "private, no-store"
+    assert private(HttpResponse(b"binary", content_type="application/pdf"))["Referrer-Policy"] == "no-referrer"
+
+
 @pytest.mark.django_db(transaction=True)
 def test_expiry_racing_consumption_cannot_delete_a_committed_permanent_copy(users):
     from apps.core.upload_drafts import finalize_upload
