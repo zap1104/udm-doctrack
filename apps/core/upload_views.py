@@ -17,6 +17,7 @@ from .upload_forms import form_factory_for, form_url, normal_form_values, one_va
 
 def serialized_draft(draft, user):
     return {"id": str(draft.pk), "revision": draft.revision, "state": draft.state,
+        "form_url": form_url(UploadContext(**draft.binding), draft.pk),
         "files": [{"id": str(row.pk), "client_upload_id": str(row.client_upload_id), "name": row.original_name,
                    "size": row.size, "preview_url": file_url("upload", row.pk, user)}
                   for row in draft.files.filter(state="saved").order_by("created_at", "pk")]}

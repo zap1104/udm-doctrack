@@ -269,3 +269,25 @@ def test_forged_recovery_id_or_revoked_account_cannot_expose_saved_bytes(client,
     type(users["med"]).objects.filter(pk=users["med"].pk).update(office=offices["SUP"])
     assert client.get(f"/tracking/new/?upload_draft={draft.pk}").status_code == 403
     assert draft.files.count() == 1 and not TrackingRecord.objects.exists()
+
+
+def test_two_inline_forms_keep_their_own_saved_files_on_refresh(client, users, offices):
+    from apps.core.upload_drafts import open_draft, stage_files
+    from apps.tracking.services import attach_files, confirm_receipt, create_draft_record, route_record
+    record = create_draft_record(user=users["sup"], subject="Independent file forms", instructions="Review carefully")
+    route_record(record, [offices["MED"]], user=users["sup"])
+    confirm_receipt(record, user=users["med"])
+    current = attach_files(record, [file(b"V1")], user=users["med"])[0]
+    saved = {}
+    for workflow, group in [("tracking-remark", None), ("tracking-version", current.file_group_id)]:
+        context = resolve_upload_context(users["med"], workflow, target_id=record.pk, group_id=group)
+        draft = open_draft(user=users["med"], context=context, form_nonce=form_nonce_for(users["med"], context))
+        stage_files(draft.pk, [file(workflow.encode())], user=users["med"], expected_revision=0, client_upload_ids=[uuid4()])
+        saved[workflow] = draft.pk
+    client.force_login(users["med"])
+    response = client.get(record.get_absolute_url(), {"upload_draft": saved["tracking-version"],
+        "upload_draft_tracking_remark_0": saved["tracking-remark"],
+        f"upload_draft_tracking_version_{current.file_group_id}": saved["tracking-version"]})
+    assert response.status_code == 200
+    assert len(response.context["remark_form"].recovery["files"]) == 1
+    assert len(response.context["file_rows"][0]["form"].recovery["files"]) == 1

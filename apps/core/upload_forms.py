@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from uuid import UUID, uuid4, uuid5
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import QueryDict
@@ -123,7 +124,9 @@ class UploadFormRecovery:
             query.pop("office")
         self.context = resolve_upload_context(request.user, workflow, target_id=target_id, group_id=group_id, query=query)
         supplied = one_value(request.POST, "upload_draft") if request.method == "POST" else None
-        supplied = supplied or one_value(request.GET, "upload_draft")
+        self.slot = f"upload_draft_{workflow.replace('-', '_')}_{self.context.group_id or 0}"
+        legacy = one_value(request.GET, "upload_draft")
+        supplied = supplied or one_value(request.GET, self.slot) or legacy
         if supplied:
             try:
                 candidate = UploadDraft.objects.filter(pk=supplied).first()
@@ -231,7 +234,8 @@ class UploadFormRecovery:
         self.form.recovery = {"nonce": self.nonce, "batch_id": self.batch_id, "draft_id": self.draft.pk if self.draft else None,
             "revision": self.draft.revision if self.draft else 0, "files": files,
             "workflow": self.context.workflow, "target_id": self.context.target_id, "group_id": self.context.group_id,
-            "file_field": self.form.add_prefix(self.file_field)}
+            "file_field": self.form.add_prefix(self.file_field), "slot": self.slot,
+            "limit": 1 if self.context.workflow.endswith("-version") or self.context.workflow == "external-attachment" else settings.MAX_UPLOAD_FILES}
 
     def validation_response(self):
         if self.response:
