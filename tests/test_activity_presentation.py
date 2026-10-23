@@ -23,3 +23,11 @@ def test_official_status_palette_and_all_internal_event_labels_are_preserved():
     assert hasattr(colors, "activity_presentation")
     for value, _ in RecordActivity.Event.choices:
         assert colors.activity_presentation(value)["label"]
+
+
+def test_activity_icons_render_without_an_external_icon_font():
+    from types import SimpleNamespace
+
+    from django.template.loader import render_to_string
+    html = render_to_string("tracking/_timeline_activity.html", {"activity": SimpleNamespace(event="ATTACHMENT", message="File updated")})
+    assert "<svg" in html and 'aria-hidden="true"' in html

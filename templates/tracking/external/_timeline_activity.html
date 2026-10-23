@@ -1,6 +1,6 @@
 {% load doctrack %}{% activity_style activity as presentation %}
 <li class="activity-entry activity-{{ presentation.token }}">
-  <span class="activity-kind"><i class="bi {{ presentation.icon }}" aria-hidden="true"></i> {{ presentation.label }}</span>
+  <span class="activity-kind">{% include "partials/_activity_icon.html" with presentation=presentation only %} {{ presentation.label }}</span>
   <div class="t-title">{{ activity.message }}</div>
   <div class="t-meta">{{ activity.actor_name_snapshot }} · {{ activity.actor_office_snapshot }}</div>
   <div class="t-meta">Actual time: {{ activity.actual_at|date:'d M Y, g:i A'|default:'Unknown / annotation' }} · Recorded: {{ activity.recorded_at|date:'d M Y, g:i A' }}</div>

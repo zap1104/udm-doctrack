@@ -80,4 +80,17 @@ ACTIVITY_PRESENTATIONS = {
 def activity_presentation(event):
     value = str(getattr(event, "event", event) or "").upper()
     token, icon, label = ACTIVITY_PRESENTATIONS.get(value, ("neutral", "bi-clock-history", "Activity"))
-    return {"token": token, "icon": icon, "label": label}
+    paths = {
+        "draft": "M3 1h6l4 4v10H3z M9 1v4h4 M5 8h6 M5 11h6",
+        "endorsement": "M1 7L14 1 9 14 6 9z M6 9l8-8",
+        "receipt": "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1 M4 8l3 3 5-6",
+        "work": "M2 2h12v9H6l-4 3z M4 5h8 M4 8h5",
+        "attachment": "M2 1h6l3 3v5 M8 1v4h3 M2 1v14h5 M11 8v7 M8 11.5h6",
+        "return": "M6 3L2 7l4 4 M2 7h7a4 4 0 0 1 4 4v2",
+        "pending-filing": "M2 2h12v12H2z M4 8l3 3 5-6",
+        "filed": "M2 2h12v3H2z M3 5v9h10V5 M6 8h4",
+        "removal": "M2 4h12 M6 2h4 M4 4l1 10h6l1-10 M7 6v6 M9 6v6",
+        "access": "M8 1l6 2v5c0 4-6 7-6 7S2 12 2 8V3z M6 8l2 2 3-4",
+        "neutral": "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1 M8 4v4l3 2",
+    }
+    return {"token": token, "icon": icon, "label": label, "path": paths[token]}
