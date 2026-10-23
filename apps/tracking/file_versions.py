@@ -16,11 +16,11 @@ def _new_version(record, file_group_id, uploaded_file, *, user, expected_version
     if not summary or len(summary) > 1000:
         raise ValidationError("Describe the change in 1 to 1000 characters.")
     group_model = model._meta.get_field("file_group").remote_field.model
-    group = group_model.objects.select_for_update().filter(pk=file_group_id, record_id=record.pk).first()
+    group = group_model.objects.select_for_update().filter(pk=file_group_id, record_id=record.pk, discarded_at__isnull=True).first()
     if group is None:
         raise ValidationError("This file group does not belong to this record.")
     latest = group.latest_version
-    if latest is None or str(expected_version) != str(latest.version_number):
+    if latest is None or not latest.available_content or str(expected_version) != str(latest.version_number):
         raise ValidationError("This file changed. Reload it before uploading a new version.")
     validate_upload(uploaded_file)
     digest = checksum_of(uploaded_file)
@@ -55,6 +55,8 @@ def upload_attachment_version(record, file_group_id, uploaded_file, *, user, exp
         raise PermissionDenied("Only the office holding the document can upload a file version.")
     attachment = _new_version(record, file_group_id, uploaded_file, user=user, expected_version=expected_version,
         change_summary=change_summary, model=Attachment)
+    from apps.core.file_lifecycle import retire_excess_versions
+    retire_excess_versions(attachment.file_group, policy_actor=user)
     add_activity(record, RecordActivity.Event.ATTACHMENT,
         f"{user.display_name} uploaded version {attachment.version_number} of {attachment.original_name}"[:255],
         actor=user, detail=attachment.change_summary)
@@ -71,6 +73,8 @@ def upload_external_attachment_version(record, file_group_id, uploaded_file, *, 
         raise PermissionDenied("Only the confirmed custodian can upload a file version.")
     attachment = _new_version(record, file_group_id, uploaded_file, user=user, expected_version=expected_version,
         change_summary=change_summary, model=ExternalAttachment)
+    from apps.core.file_lifecycle import retire_excess_versions
+    retire_excess_versions(attachment.file_group, policy_actor=user)
     if record.status != Status.DRAFT and record.current_office_id:
         record.status = Status.IN_PROCESS
     _event(record, user, "ATTACHMENT", "File version uploaded", detail=attachment.change_summary,

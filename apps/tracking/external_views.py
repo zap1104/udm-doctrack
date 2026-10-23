@@ -595,6 +595,12 @@ class ExternalAttachmentDownloadView(AppLoginRequiredMixin, View):
         )
         if unsign_download(request.GET.get("token", "")) != f"external-attachment:{attachment.pk}:{request.user.pk}":
             raise PermissionDenied("This download link has expired or is invalid. Open the record to get a new link.")
+        from apps.core.file_views import private
+        from apps.core.storage import storage_identity
+        if not attachment.available_content:
+            return private(HttpResponse("This file content is no longer available.", status=410))
+        if attachment.storage_identity and attachment.storage_identity != storage_identity(attachment.file.storage):
+            return private(HttpResponse("This file's storage configuration changed. Contact an administrator.", status=410))
         log_action(
             AuditLog.Action.DOWNLOAD,
             f"Downloaded external attachment {attachment.original_name}",

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import F
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -835,6 +835,12 @@ class AttachmentDownloadView(AppLoginRequiredMixin, View):
             raise PermissionDenied("You do not have access to this document.")
         if unsign_download(request.GET.get("token", "")) != f"attachment:{attachment.pk}:{request.user.pk}":
             raise PermissionDenied("This download link has expired or is invalid. Open the record to get a new link.")
+        from apps.core.file_views import private
+        from apps.core.storage import storage_identity
+        if not attachment.available_content:
+            return private(HttpResponse("This file content is no longer available.", status=410))
+        if attachment.storage_identity and attachment.storage_identity != storage_identity(attachment.file.storage):
+            return private(HttpResponse("This file's storage configuration changed. Contact an administrator.", status=410))
         log_action(
             AuditLog.Action.DOWNLOAD,
             f"Downloaded {attachment.original_name} from {attachment.record.tracking_number}",

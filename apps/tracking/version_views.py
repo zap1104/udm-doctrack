@@ -2,6 +2,7 @@
 
 from django import forms
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -22,7 +23,7 @@ class VersionUploadForm(BootstrapFormMixin, forms.Form):
 
 
 def version_rows(versions, kind, user):
-    return [dict(item=item, entry_id=f"file-version-{kind}-{item.pk}", preview_url=file_url(kind, item.pk, user), download_url=file_url(kind, item.pk, user, "download")) for item in versions]
+    return [dict(item=item, entry_id=f"file-version-{kind}-{item.pk}", preview_url=file_url(kind, item.pk, user) if item.available_content else "", download_url=file_url(kind, item.pk, user, "download") if item.available_content else "") for item in versions]
 
 
 def tracking_file_rows(record, user, *, external=False, request=None):
@@ -67,3 +68,44 @@ class UploadVersionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
             return recovery.response
         messages.success(request, "New file version saved.")
         return redirect(result.redirect)
+
+
+class DiscardFileForm(BootstrapFormMixin, forms.Form):
+    reason = forms.CharField(max_length=2000, widget=forms.Textarea(attrs={"rows": 2}))
+    confirm = forms.BooleanField(label="Discard this draft file and its saved versions")
+    expected_version = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    expected_revision = forms.IntegerField(required=False, min_value=0, widget=forms.HiddenInput)
+
+
+class DiscardFileView(AppLoginRequiredMixin, View):
+    external = False
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        model = ExternalTrackingRecord if self.external else TrackingRecord
+        self.record = get_object_or_404(model.objects.visible_to(request.user), pk=kwargs["pk"])
+        self.group = get_object_or_404(self.record.file_groups, pk=kwargs["group_pk"], discarded_at__isnull=True)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, **kwargs):
+        form = DiscardFileForm(initial={"expected_version": self.group.latest_version.version_number,
+            "expected_revision": getattr(self.record, "revision", None)})
+        return self.page(request, form)
+
+    def post(self, request, **kwargs):
+        from apps.core.file_lifecycle import discard_draft_group
+        form = DiscardFileForm(request.POST)
+        if form.is_valid():
+            try:
+                discard_draft_group(self.record, self.group.pk, user=request.user, **{
+                    key: value for key, value in form.cleaned_data.items() if key != "confirm"})
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, "Draft file discarded. Its audit history is preserved.")
+                return redirect(self.record.get_absolute_url())
+        return self.page(request, form)
+
+    def page(self, request, form):
+        return render(request, "tracking/file_discard.html", {"record": self.record, "group": self.group, "form": form})

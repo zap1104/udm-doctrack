@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Discard draft file · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form"><h1>Discard draft file</h1><div class="card-udm"><div class="card-udm-body">
+<p><strong class="text-break">{{ group.latest_version.original_name }}</strong></p>
+<p>{{ group.versions.count }} saved version{{ group.versions.count|pluralize }} will become unavailable. The audit history stays.</p>
+<form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
+{% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}
+<div class="form-actions"><button class="btn btn-danger" type="submit">Discard file</button><a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Cancel</a></div></form>
+</div></div></div>
+{% endblock %}

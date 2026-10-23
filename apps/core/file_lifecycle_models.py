@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 _lifecycle_write = ContextVar("file_lifecycle_write", default=False)
-LIFECYCLE_FIELDS = frozenset({"storage_identity", "retired_at", "retirement_reason"})
+LIFECYCLE_FIELDS = frozenset({"storage_identity", "retired_at", "retirement_reason", "discarded_at", "discarded_by", "discarded_by_id", "discard_reason"})
 
 
 @contextmanager
@@ -42,7 +42,7 @@ class VersionLifecycleModel(models.Model):
 
                 self.storage_identity = storage_identity(self.file.storage)
         elif not _lifecycle_write.get():
-            old = type(self)._base_manager.filter(pk=self.pk).values(*LIFECYCLE_FIELDS).first()
+            old = type(self)._base_manager.filter(pk=self.pk).values("storage_identity", "retired_at", "retirement_reason").first()
             if old and any(getattr(self, name) != value for name, value in old.items()):
                 raise ValidationError("File availability can only be changed by the file lifecycle service.")
         return super().save(*args, **kwargs)

@@ -81,11 +81,34 @@ class AttachmentVersionMixin(ImmutableFileMixin, VersionLifecycleModel):
             return super().save(*args, **kwargs)
 
 
-class AttachmentGroup(models.Model):
+class GroupLifecycleMixin:
+    def save(self, *args, **kwargs):
+        fields = ("discarded_at", "discarded_by_id", "discard_reason")
+        if self.pk:
+            previous = type(self)._base_manager.filter(pk=self.pk).values(*fields).first()
+            if previous:
+                check_lifecycle_update([key for key in fields if getattr(self, key) != previous[key]])
+        elif self.discarded_at or self.discarded_by_id or self.discard_reason:
+            check_lifecycle_update(fields)
+        return super().save(*args, **kwargs)
+
+
+class GroupLifecycleQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        check_lifecycle_update(kwargs)
+        return super().update(**kwargs)
+
+    def bulk_update(self, objs, fields, **kwargs):
+        check_lifecycle_update(fields)
+        return super().bulk_update(objs, fields, **kwargs)
+
+
+class AttachmentGroup(GroupLifecycleMixin, models.Model):
     record = models.ForeignKey("tracking.TrackingRecord", on_delete=models.CASCADE, related_name="file_groups")
     discarded_at = models.DateTimeField(null=True, blank=True, editable=False)
     discarded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="discarded_file_groups", editable=False)
     discard_reason = models.CharField(max_length=2000, blank=True, editable=False)
+    objects = GroupLifecycleQuerySet.as_manager()
 
     class Meta:
         ordering = ["pk"]
@@ -101,11 +124,12 @@ class AttachmentGroup(models.Model):
         return self.versions.order_by("-version_number").first()
 
 
-class ExternalAttachmentGroup(models.Model):
+class ExternalAttachmentGroup(GroupLifecycleMixin, models.Model):
     record = models.ForeignKey("tracking.ExternalTrackingRecord", on_delete=models.CASCADE, related_name="file_groups")
     discarded_at = models.DateTimeField(null=True, blank=True, editable=False)
     discarded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="discarded_external_file_groups", editable=False)
     discard_reason = models.CharField(max_length=2000, blank=True, editable=False)
+    objects = GroupLifecycleQuerySet.as_manager()
 
     class Meta:
         ordering = ["pk"]
