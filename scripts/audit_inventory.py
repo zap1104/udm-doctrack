@@ -42,8 +42,8 @@ DOMAINS = {
     },
     "external_tracking": {
         "behavior": "Separate external-office directory and record lifecycle: create, dispatch/return, internal/external receipt, work/remarks/files, complete/reopen, corrections, slips, exports and reports.",
-        "role_policy": "Managing-office ADMIN or SYSTEM_ADMIN controls directory changes, historical/external actions, reopen and filing. Active USER/ADMIN at the current internal holder may perform permitted custody actions; only the pending recipient office confirms internal receipt. VIEWER cannot mutate. Visibility, current revision and record state are rechecked for every action; external entries must not expand OVPA populations.",
-        "scenarios": "Revision conflicts; source/destination ownership; actual-time ordering; external custody/receipt wait separation; correction audit trail; external attachment signatures; collection-separated reports and filing.",
+        "role_policy": "Responsible-office ADMIN or SYSTEM_ADMIN controls manual external actions, corrections, reopen and filing. Responsibility follows confirmed internal custody, retains the last internal holder during external custody and falls back to the recording office before any internal receipt. Directory changes remain restricted to the registering-office ADMIN or SYSTEM_ADMIN; active directory entries are shared choices. Active USER/ADMIN at the current internal holder may perform permitted custody actions; only the pending recipient office confirms internal receipt. VIEWER cannot mutate. Visibility, revision and record state are rechecked for every action; external entries must not expand OVPA populations.",
+        "scenarios": "Revision conflicts; confirmed-custody authority transfer; shared directory and protected editing; actual-time ordering; external custody/receipt wait separation; correction audit trail; external attachment signatures; collection-separated reports and filing.",
     },
     "documents": {
         "behavior": "OVPA repository/upload/review/edit/files, extraction/retry/status, private downloads, tags, pending filing and deletion review/recovery/purge.",
@@ -51,8 +51,8 @@ DOMAINS = {
         "scenarios": "Metadata/tag isolation; duplicate uploads; retained text after OCR failure; rollback of newly created storage only; queue failure after commit; reversed retry completion; review concurrency and purge failures.",
     },
     "external_repository": {
-        "behavior": "External repository/upload/report/deletion queue and filing from external tracking, with separate collection and managing-office metadata.",
-        "role_policy": "External collection remains separate from legacy OVPA documents. Read and mutation authority follow the managing office and explicit document rules. SYSTEM_ADMIN alone is global; VIEWER remains read-only.",
+        "behavior": "External repository/upload/report/deletion queue and filing from external tracking, with separate collection and filing-office metadata.",
+        "role_policy": "External collection remains separate from legacy OVPA documents. New filings use the responsible office; existing filed ownership remains unchanged. Repository read and mutation authority retain explicit document rules. SYSTEM_ADMIN alone is global; VIEWER remains read-only.",
         "scenarios": "Mixed-collection expected IDs; concurrent filing once; external directories; private files; inherited extraction/deletion rules; no legacy OVPA count or tag leakage.",
     },
     "search": {
