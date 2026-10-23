@@ -54,6 +54,29 @@ def test_source_ui_is_safe_scoped_and_current(client, users, readable_source):
     assert client.get(detail).status_code == 404
 
 
+@pytest.mark.parametrize("collection", ["OVPA", "EXTERNAL"])
+def test_source_unit_detail_renders_in_both_collections(client, users, settings, tmp_path, collection):
+    settings.ENABLE_SOURCE_UNIT_EXTRACTION = True
+    settings.ENABLE_BACKGROUND_TASKS = False
+    settings.MEDIA_ROOT = tmp_path
+    actor = users["med_admin"]
+    document = Document.objects.create(title="Source text round trip", collection=collection,
+        office=actor.office, year=2026, uploaded_by=actor)
+    DocumentFile.objects.create(document=document, original_name="source.txt",
+        file=SimpleUploadedFile("source.txt", b"Readable source <script>never execute</script>"))
+    run = request_processing(document, user=actor)[0]
+    process_run(run.pk, expected_generation=run.generation)
+    unit = run.units.get()
+    client.force_login(actor)
+    response = client.get(reverse("documents:source_unit", args=[document.pk, unit.pk]), {"office": actor.office_id})
+    assert response.status_code == 200
+    assert b"&lt;script&gt;never execute&lt;/script&gt;" in response.content
+    assert "no-store" in response["Cache-Control"]
+    if collection == "EXTERNAL":
+        back = reverse("documents:source_units", args=[document.pk]) + f"?office={actor.office_id}"
+        assert back.encode() in response.content
+
+
 def test_existing_document_predictions_require_explicit_authorized_post(client, users, readable_source, settings):
     from apps.documents.ml.lifecycle import activate_model
     from tests.ml_fixtures import make_candidate

@@ -83,12 +83,15 @@ def review_samples(*, user, collection, seed, office_id=None):
             **extra,
         }
         token = signing.dumps(receipt, salt=SALT, compress=True)
+        query = {"review_sample": token}
+        if collection == Collection.EXTERNAL and office_id is not None:
+            query["office"] = office_id
         samples.append(
             {
                 "document": doc,
                 "method": method,
                 "token": token,
-                "url": reverse("documents:source_units", args=[doc.pk]) + "?" + urlencode({"review_sample": token}),
+                "url": reverse("documents:source_units", args=[doc.pk]) + "?" + urlencode(query),
                 **extra,
             }
         )

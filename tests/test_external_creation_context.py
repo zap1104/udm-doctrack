@@ -254,6 +254,13 @@ def test_external_review_source_deletion_and_actions_keep_request_office(client,
     assert response.status_code == 302
     assert parse_qs(urlsplit(response.url).query).get("office") == [selected]
 
+    samples = client.get(reverse("documents:tag_review_queue"), {"collection": "EXTERNAL", "office": selected})
+    assert samples.status_code == 200
+    sample = next(row for row in samples.context["samples"] if row["document"].pk == document.pk)
+    assert parse_qs(urlsplit(sample["url"]).query).get("office") == [selected]
+    assert parse_qs(urlsplit(sample["url"]).query).get("review_sample") == [sample["token"]]
+    assert client.get(sample["url"]).status_code == 200
+
 
 def test_office_context_preserves_existing_query_repeats_and_fragment():
     from apps.core.utils import office_context_url

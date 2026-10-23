@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.utils import timezone
 
 from apps.documents.models import AccessLevel, Collection, Document, DocumentFile
@@ -27,6 +28,7 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
     settings.CSRF_COOKIE_SECURE = False
     settings.CSRF_TRUSTED_ORIGINS = [live_server.url]
     settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+    call_command("init_db", verbosity=0)
     seeded = {}
     for name in ("Pending", "Received", "Processing"):
         record = create_draft_record(user=users["sup"], subject=f"Browser {name}", instructions="Review this paper", document_type=memo_type)
@@ -75,12 +77,15 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
         external, user=users["med_admin"], expected_revision=external.revision,
         uploaded_file=SimpleUploadedFile("evidence.txt", b"Private browser audit file"),
     )
+    evidence = Path(os.environ.get("LIVE_BROWSER_EVIDENCE_DIR", str(tmp_path / "evidence"))).resolve()
+    evidence.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "origin": live_server.url, "root": str(settings.BASE_DIR), "output": str(tmp_path / "browser-report.json"),
+        "origin": live_server.url, "root": str(settings.BASE_DIR), "output": str(evidence / "live-browser.json"),
         "offices": {key: value.pk for key, value in offices.items()}, "seeded": seeded,
         "today": timezone.localdate().isoformat(), "sessionCookie": settings.SESSION_COOKIE_NAME,
         "external": external.pk, "externalDraftUrl": external.get_absolute_url(),
         "past": timezone.localtime(timezone.now() - timezone.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M"),
+        "screenshotDir": str(evidence / "screenshots"),
     }
     manifest_file = tmp_path / "manifest.json"
     manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
@@ -89,12 +94,7 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
         [node, str(Path(settings.BASE_DIR) / "scripts/check_systemwide_live.cjs"), str(manifest_file)],
         cwd=settings.BASE_DIR, env=os.environ.copy(), capture_output=True, text=True, timeout=1200,
     )
-    evidence = Path(os.environ.get("LIVE_BROWSER_EVIDENCE_DIR", str(tmp_path / "evidence")))
-    evidence.mkdir(parents=True, exist_ok=True)
     (evidence / "live-browser-output.txt").write_text(completed.stdout + completed.stderr, encoding="utf-8")
-    report_path = Path(manifest["output"])
-    if report_path.exists():
-        (evidence / "live-browser.json").write_bytes(report_path.read_bytes())
     assert completed.returncode == 0, completed.stdout + completed.stderr
     created = TrackingRecord.objects.get(subject="Browser created and filed")
     assert created.status == Status.COMPLETED

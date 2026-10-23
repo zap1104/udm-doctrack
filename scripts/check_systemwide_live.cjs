@@ -94,7 +94,10 @@ async function verifySwap(page, callback, label) {
     callback(),
   ]);
   assert.ok(response.ok(), label + ': HTTP ' + response.status());
-  await page.waitForFunction(url => location.href === url, response.url());
+  await page.waitForFunction(url => {
+    const current=new URL(location.href), requested=new URL(url);
+    return current.pathname===requested.pathname && current.search===requested.search;
+  }, response.url());
   await page.waitForFunction(() => !document.querySelector('#main-content[aria-busy=true]'));
   assert.equal(await page.evaluate(() => window.__auditMarker),marker,label + ': full reload');
   const ordinary = await page.context().request.get(response.url());
@@ -315,6 +318,26 @@ async function checkExpiredSession(page) {
   assert.equal(await page.locator('[name=password]').count(),1);
   record('Expired real server session redirects filter request to usable sign-in page');
 }
+async function checkNoJavaScript(browser) {
+  const context=await browser.newContext({baseURL:manifest.origin,javaScriptEnabled:false});
+  await configure(context);
+  const page=await context.newPage();
+  try {
+    await page.goto(manifest.origin+'/accounts/login/');
+    await page.locator('[name=username]').fill('med');
+    await page.locator('[name=password]').fill('TestPass123!');
+    await Promise.all([page.waitForURL(url=>url.pathname==='/'),page.getByRole('button',{name:'Sign In',exact:true}).click()]);
+    await page.goto(manifest.origin+'/documents/');
+    const form=page.locator('[data-auto-filter]').filter({has:page.locator('input[name=q]')}).first();
+    await form.locator('input[name=q]').fill('Browser Repository Alpha');
+    await Promise.all([page.waitForNavigation(),form.locator('button[type=submit]').first().click()]);
+    assert.equal(new URL(page.url()).searchParams.get('q'),'Browser Repository Alpha');
+    assert.ok((await page.locator('#main-content').innerText()).includes('Browser Repository Alpha'));
+    await page.goto(manifest.origin+'/');
+    assert.equal(await page.locator('#turnaround-panel button[data-filter-fallback]').isVisible(),true);
+    record('JavaScript-disabled authentication, explicit Search and Dashboard Apply fallback work');
+  } finally { await context.close(); }
+}
 
 async function run() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Users/USER/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe';
@@ -381,6 +404,13 @@ async function run() {
           await page.keyboard.press('Tab');
           assert.ok(await page.evaluate(()=>document.activeElement!==document.body));
           record('Responsive page and keyboard focus',{role,theme,width,route});
+          if(role==='admin' && [320,390,1366].includes(width) && manifest.screenshotDir) {
+            fs.mkdirSync(manifest.screenshotDir,{recursive:true});
+            const filename=theme+'-'+width+'-'+route.replace(/\W/g,'_')+'.png';
+            const screenshot=path.join(manifest.screenshotDir,filename);
+            await page.screenshot({path:screenshot,fullPage:true});
+            report.screenshots.push(screenshot);
+          }
         }
       }
       await page.setViewportSize({width:1366,height:950});
@@ -392,6 +422,7 @@ async function run() {
     await checkDashboardScroll(admin);
     await checkDelayedResponseAndRetry(med);
     await checkExpiredSession(sessions.viewer.page);
+    await checkNoJavaScript(browser);
     assert.deepEqual(report.errors,[]);
     assert.deepEqual(report.httpErrors,[]);
     console.log(JSON.stringify({checks:report.checks.length,liveFilterRequests:report.filterRequests.length,errors:report.errors.length}));
