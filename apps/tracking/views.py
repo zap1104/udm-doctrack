@@ -482,7 +482,7 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
         file_rows = tracking_file_rows(record, request.user, request=request)
         attachments = [row["current"]["item"] for row in file_rows]
         archived_document = getattr(record, "archived_document", None)
-        can_archive_now = archived_document is None and record.can_user_file_when_completed(request.user)
+        can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
         # Filing a record handled by this office does not grant access to the
         # originating office's repository. Keep the tracking history usable.
         if archived_document is not None and not archived_document.can_user_view(request.user):
@@ -526,20 +526,16 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                 "attachments": attachments,
                 "file_rows": file_rows,
                 "receipt_form": ConfirmReceiptForm(),
-                "remark_form": UploadFormRecovery(request, "tracking-remark", target_id=record.pk).form if can_act and record.status != Status.PENDING_RECEIPT else RemarkForm(),
+                "remark_form": UploadFormRecovery(request, "tracking-remark", target_id=record.pk).form if can_act else RemarkForm(),
                 # Distinct IDs from RemarkForm's attachments; POST field names
                 # remain unchanged for the existing route endpoint.
-                "route_form": UploadFormRecovery(request, "tracking-route", target_id=record.pk).form if can_act and record.status != Status.PENDING_RECEIPT else RouteForm(record=record, user=request.user, auto_id="route_%s"),
+                "route_form": UploadFormRecovery(request, "tracking-route", target_id=record.pk).form if can_act else RouteForm(record=record, user=request.user, auto_id="route_%s"),
                 "complete_form": CompleteForm(user=request.user, record=record),
                 "grant_form": GrantAccessForm(actor=request.user),
                 "pending_offices": record.awaiting_receipt_offices,
                 "can_act": can_act,
                 "can_complete": can_complete,
-                "can_complete_and_file": request.user.is_system_admin or (
-                    request.user.is_office_admin and request.user.office_id in {
-                        record.originating_office_id, record.current_office_id,
-                    }
-                ),
+                "can_complete_and_file": record.can_user_file_when_completed(request.user),
                 "can_confirm": record.can_user_confirm_receipt(request.user),
                 "can_archive_now": can_archive_now,
                 "can_reopen": can_reopen,

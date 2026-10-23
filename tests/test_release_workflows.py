@@ -188,6 +188,8 @@ def test_authorized_completion_remains_available_after_receipt(client, users, re
     response = client.get(received_record.get_absolute_url())
 
     assert response.status_code == 200
+    assert response.context["show_filing_panel"] is False, "Active work must not be described as completed"
+    assert response.context["can_archive_now"] is False
     assert 'id="tab-complete-button"' in response.content.decode()
     assert 'action="' + reverse("tracking:complete", args=[received_record.pk]) + '"' in response.content.decode()
 

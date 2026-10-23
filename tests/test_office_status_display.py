@@ -175,6 +175,8 @@ def test_remark_return_keeps_the_selected_office_on_success_or_validation_error(
     assert shared_work.activities.filter(event=RecordActivity.Event.REMARK).count() == (
         remarks_before + bool(remark)
     )
+    if not remark:
+        assert response.context["remark_form"].is_bound and response.context["remark_form"].errors
     if remark:
         assert shared_work.activities.filter(
             event=RecordActivity.Event.REMARK, actor=users["admin"], detail=remark,

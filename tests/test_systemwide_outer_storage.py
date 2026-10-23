@@ -115,7 +115,7 @@ def test_smoke_checks_exercise_signed_downloads_for_seeded_files(users, settings
     settings.MEDIA_ROOT = tmp_path
     record = create_draft_record(user=users["med"], subject="Smoke file", instructions="Review")
     route_record(record, [users["sup"].office], user=users["med"])
-    Attachment.objects.create(record=record, file=upload(), original_name="proof.pdf", uploaded_by=users["med"])
+    attachment = Attachment.objects.create(record=record, file=upload(), original_name="proof.pdf", uploaded_by=users["med"])
     document = Document.objects.create(title="Smoke repository", year=2026, office=users["med"].office, uploaded_by=users["med"])
     DocumentFile.objects.create(document=document, file=upload(), original_name="proof.pdf")
     # The smoke command samples one user per role. Keep its staff sample in MED,
@@ -136,4 +136,17 @@ def test_smoke_checks_exercise_signed_downloads_for_seeded_files(users, settings
     assert smoke_pages._run() == 0
     downloads = [url for url in requests if "/attachment/" in url or "/documents/file/" in url]
     assert len(downloads) == 8  # Both file kinds are visible to all four fixture roles.
+
+    from django.utils import timezone
+
+    from apps.core.file_lifecycle_models import lifecycle_write
+    with lifecycle_write():
+        Attachment.objects.filter(pk=attachment.pk).update(retired_at=timezone.now(), retirement_reason="Smoke fixture")
+    requests.clear()
+    def observe_retired(self, client, url, who, expected=(200, 302)):
+        if "/attachment/" in url:
+            assert expected == (410,), "Smoke must distinguish deliberate retirement from a broken retained download"
+        return original(self, client, url, who, expected=expected)
+    monkeypatch.setattr(smoke_pages.Smoke, "get", observe_retired)
+    assert smoke_pages._run() == 0
     assert all("token=" in url for url in downloads)

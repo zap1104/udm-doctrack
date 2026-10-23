@@ -251,7 +251,8 @@ def _run() -> int:
             if attachment:
                 token = sign_download(f"attachment:{attachment.pk}:{person.pk}")
                 smoke.named(client, "tracking:attachment_download", (attachment.pk,), who=label,
-                            suffix="?" + urlencode({"token": token}), expected=(200, 404))
+                            suffix="?" + urlencode({"token": token}),
+                            expected=(200, 404) if attachment.available_content else (410,))
 
             documents = list(Document.objects.visible_to(person)[:4])
             for document in documents:

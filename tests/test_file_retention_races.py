@@ -1,6 +1,6 @@
 """Actual PostgreSQL serialization for discard, versions and dispatch."""
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from apps.core.file_lifecycle import discard_draft_group
 from apps.tracking.file_versions import upload_attachment_version
@@ -37,5 +37,10 @@ def test_discard_serializes_against_upload_and_first_dispatch(users, offices, ac
         # draft metadata; it cannot revive the discarded content.
         assert not record.attachments.filter(retired_at__isnull=True).exists()
     else:
-        assert sum(isinstance(row, ValidationError) for row in results) == 1
+        # A completed first dispatch can revoke the sender's custody before
+        # discard reaches its draft-state check. Either deliberate refusal is
+        # valid; database errors and failed dispatches are not.
+        assert sum(isinstance(row, (ValidationError, PermissionDenied)) for row in results) == 1, results
         assert record.routing_steps.exists()
+        assert attached.file_group.discarded_at is None
+        assert record.attachments.filter(retired_at__isnull=True).count() == 1
