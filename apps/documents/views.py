@@ -763,5 +763,6 @@ class DeletionReviewView(AdminRequiredMixin, View):
                 if document.is_active:
                     return _document_redirect(request, document)
                 queue = "documents:external_deletion_queue" if document.is_external else "documents:deletion_queue"
-                return redirect(core_filters.link(reverse(queue), status="deleted"))
+                url = core_filters.link(reverse(queue), status="deleted")
+                return redirect(office_context_url(url, request.GET) if document.is_external else url)
         return self._render(request, document, form)

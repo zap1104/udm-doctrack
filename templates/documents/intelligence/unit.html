@@ -3,8 +3,9 @@
 {% block title %}Source text · {{ document.title }}{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{% static 'css/intelligence.css' %}">{% endblock %}
 {% block content %}
+{% if document.is_external %}{% external_office_query as external_query %}{% endif %}
 <div class="workspace-page">
-  <div class="page-head"><div><a href="{% url 'documents:source_units' document.pk %}">Back to source coverage</a><h1>Source text</h1><p class="sub text-break">{{ unit.run.file_version.original_name }} · file version {{ unit.run.file_version.version_number }} · {{ unit.locator_key }}</p></div>
+  <div class="page-head"><div><a href="{% url 'documents:source_units' document.pk %}{{ external_query }}">Back to source coverage</a><h1>Source text</h1><p class="sub text-break">{{ unit.run.file_version.original_name }} · file version {{ unit.run.file_version.version_number }} · {{ unit.locator_key }}</p></div>
     <div class="page-actions"><a class="btn btn-udm-outline" href="{{ file.preview_url }}">Preview original version</a><a class="btn btn-udm-outline" href="{{ file.download_url }}">Download original version</a></div>
   </div>
   <p>Reading status: <strong>{{ unit.get_state_display }}</strong> · Coverage: <strong>{{ unit.get_coverage_display }}</strong> · Method: {{ unit.method|default:"Not yet read" }}.</p>

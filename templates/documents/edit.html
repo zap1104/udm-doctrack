@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load doctrack %}
 {% block title %}Edit Metadata · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 {% if document.is_external %}{% external_office_query as external_query %}{% endif %}

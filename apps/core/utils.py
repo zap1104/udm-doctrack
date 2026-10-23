@@ -9,7 +9,7 @@ import unicodedata
 import zipfile
 from datetime import date, datetime
 from functools import lru_cache
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import segno
 from django.conf import settings
@@ -29,7 +29,9 @@ def office_context_url(url, query):
     """Carry request-local perspective without changing authorization or session state."""
     values = query.getlist("office")
     if values:
-        url += ("&" if "?" in url else "?") + urlencode([("office", value) for value in values])
+        parts = urlsplit(url)
+        params = parts.query + ("&" if parts.query else "") + urlencode([("office", value) for value in values])
+        url = urlunsplit(parts._replace(query=params))
     return url
 
 

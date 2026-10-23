@@ -3,9 +3,10 @@
 {% block title %}Source coverage · {{ document.title }}{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{% static 'css/intelligence.css' %}">{% endblock %}
 {% block content %}
+{% if document.is_external %}{% external_office_query as external_query %}{% endif %}
 <div class="workspace-page">
   <div class="page-head">
-    <div><a href="{{ document.get_absolute_url }}">Back to document</a><h1>Source coverage</h1><p class="sub">{{ document.title }}</p></div>
+    <div><a href="{{ document.get_absolute_url }}{{ external_query }}">Back to document</a><h1>Source coverage</h1><p class="sub">{{ document.title }}</p></div>
   </div>
   <section class="card-udm mb-4" aria-labelledby="coverage-title">
     <div class="card-udm-head"><h2 id="coverage-title">Published source text</h2><span class="pill pill-muted">{{ coverage.coverage|capfirst }}</span></div>
@@ -23,7 +24,7 @@
     <div class="table-responsive" tabindex="0" role="region" aria-label="Source units, scroll horizontally on smaller screens">
       <table class="table mb-0 source-unit-table"><caption class="visually-hidden">Current file source units and their reading coverage</caption>
         <thead><tr><th scope="col">File</th><th scope="col">Location</th><th scope="col">Reading status</th><th scope="col">Coverage</th><th scope="col">Action</th></tr></thead>
-        <tbody>{% for unit in units %}<tr><td class="text-break">{{ unit.run.file_version.original_name }}<span class="d-block text-muted small">File version {{ unit.run.file_version.version_number }}</span></td><td>{{ unit.locator_key }}</td><td>{{ unit.get_state_display }}</td><td>{{ unit.get_coverage_display }}{% if unit.truncated %} · truncated{% endif %}</td><td><a href="{% url 'documents:source_unit' document.pk unit.pk %}">Read text<span class="visually-hidden"> from {{ unit.locator_key }}</span></a></td></tr>{% empty %}<tr><td colspan="5">No version-bound source text has been published. Original previews and downloads remain available on the document page.</td></tr>{% endfor %}</tbody>
+        <tbody>{% for unit in units %}<tr><td class="text-break">{{ unit.run.file_version.original_name }}<span class="d-block text-muted small">File version {{ unit.run.file_version.version_number }}</span></td><td>{{ unit.locator_key }}</td><td>{{ unit.get_state_display }}</td><td>{{ unit.get_coverage_display }}{% if unit.truncated %} · truncated{% endif %}</td><td><a href="{% url 'documents:source_unit' document.pk unit.pk %}{{ external_query }}">Read text<span class="visually-hidden"> from {{ unit.locator_key }}</span></a></td></tr>{% empty %}<tr><td colspan="5">No version-bound source text has been published. Original previews and downloads remain available on the document page.</td></tr>{% endfor %}</tbody>
       </table>
     </div>
     <div class="card-udm-body">{% pager %}</div>
@@ -34,17 +35,17 @@
     <div class="card-udm-head"><h2 id="tag-review-title" tabindex="-1">Review topic tags</h2></div>
     <div class="card-udm-body">
       <p>Confirm a relevant topic, reject an incorrect one, or choose <strong>Not sure</strong>. An unreviewed tag stays unknown.</p>
-      <p><a href="{% url 'documents:tag_review_queue' %}?collection={{ document.collection }}">Open the topic review queue</a></p>
+      <p><a href="{% url 'documents:tag_review_queue' %}?collection={{ document.collection }}{% if external_query %}&amp;{{ external_query|cut:"?" }}{% endif %}">Open the topic review queue</a></p>
       {% if review_form.initial.review_sample %}<p class="small">This decision will retain the queue’s signed sampling provenance.</p>{% endif %}
-      {% if can_generate %}<form method="post" action="{% url 'documents:tag_predict' document.pk %}" class="mb-3">{% csrf_token %}<input type="hidden" name="input_revision" value="{{ input_revision }}"><input type="hidden" name="vocabulary" value="{{ review_form.initial.vocabulary }}"><button type="submit" class="btn btn-udm-outline">Generate current topic proposals</button><p class="small text-muted mt-2">Uses existing published text. Does not rerun OCR or assign tags.</p></form>{% endif %}
-      {% if predictions %}<details><summary>Current local model proposals</summary><ul>{% for prediction in predictions %}<li><strong>{{ prediction.tag.name }}</strong> · model score {{ prediction.score|floatformat:3 }}<ul>{% for evidence in prediction.evidence.features %}<li>{{ evidence.zone|capfirst }}: “{{ evidence.term }}”{% if evidence.source %} · <a href="{% url 'documents:source_unit' document.pk evidence.source.unit_id %}">{{ evidence.source.filename }} · {{ evidence.source.locator }}</a>{% endif %}</li>{% endfor %}</ul></li>{% endfor %}</ul><p class="small text-muted">A model score is not a guarantee of correctness. Automatic qualification and human decisions are checked separately.</p></details>{% endif %}
-      <form method="post" action="{% url 'documents:tag_review' document.pk %}" data-tag-review>{% csrf_token %}{{ review_form.as_p }}<button class="btn btn-udm" type="submit">Save tag decision</button></form>
-      <details class="mt-4"><summary>Review a defined set of tags</summary><p>Choose the exact tags covered. Tags in that set that you do not confirm will be recorded as rejected.</p><form method="post" action="{% url 'documents:tag_review_complete' document.pk %}" data-tag-review>{% csrf_token %}{{ complete_form.as_p }}<button class="btn btn-udm-outline" type="submit">Save this complete review</button></form></details>
+      {% if can_generate %}<form method="post" action="{% url 'documents:tag_predict' document.pk %}{{ external_query }}" class="mb-3">{% csrf_token %}<input type="hidden" name="input_revision" value="{{ input_revision }}"><input type="hidden" name="vocabulary" value="{{ review_form.initial.vocabulary }}"><button type="submit" class="btn btn-udm-outline">Generate current topic proposals</button><p class="small text-muted mt-2">Uses existing published text. Does not rerun OCR or assign tags.</p></form>{% endif %}
+      {% if predictions %}<details><summary>Current local model proposals</summary><ul>{% for prediction in predictions %}<li><strong>{{ prediction.tag.name }}</strong> · model score {{ prediction.score|floatformat:3 }}<ul>{% for evidence in prediction.evidence.features %}<li>{{ evidence.zone|capfirst }}: “{{ evidence.term }}”{% if evidence.source %} · <a href="{% url 'documents:source_unit' document.pk evidence.source.unit_id %}{{ external_query }}">{{ evidence.source.filename }} · {{ evidence.source.locator }}</a>{% endif %}</li>{% endfor %}</ul></li>{% endfor %}</ul><p class="small text-muted">A model score is not a guarantee of correctness. Automatic qualification and human decisions are checked separately.</p></details>{% endif %}
+      <form method="post" action="{% url 'documents:tag_review' document.pk %}{{ external_query }}" data-tag-review>{% csrf_token %}{{ review_form.as_p }}<button class="btn btn-udm" type="submit">Save tag decision</button></form>
+      <details class="mt-4"><summary>Review a defined set of tags</summary><p>Choose the exact tags covered. Tags in that set that you do not confirm will be recorded as rejected.</p><form method="post" action="{% url 'documents:tag_review_complete' document.pk %}{{ external_query }}" data-tag-review>{% csrf_token %}{{ complete_form.as_p }}<button class="btn btn-udm-outline" type="submit">Save this complete review</button></form></details>
     </div>
   </section>
   {% endif %}
   {% if can_set_eligibility %}
-  <details id="training-eligibility" class="card-udm p-3 mb-4"><summary>Local topic training permission</summary><p class="mt-3">This is off by default. Only reviewed, eligible, nonrestricted records may enter a private model for this office and collection. Changing permission does not reactivate an old model.</p><form method="post" action="{% url 'documents:training_eligibility' document.pk %}">{% csrf_token %}{{ eligibility_form.as_p }}<button type="submit" class="btn btn-udm-outline">Save training permission</button></form></details>
+  <details id="training-eligibility" class="card-udm p-3 mb-4"><summary>Local topic training permission</summary><p class="mt-3">This is off by default. Only reviewed, eligible, nonrestricted records may enter a private model for this office and collection. Changing permission does not reactivate an old model.</p><form method="post" action="{% url 'documents:training_eligibility' document.pk %}{{ external_query }}">{% csrf_token %}{{ eligibility_form.as_p }}<button type="submit" class="btn btn-udm-outline">Save training permission</button></form></details>
   {% endif %}
 </div>
 {% endblock %}

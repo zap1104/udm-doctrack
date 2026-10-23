@@ -16,13 +16,21 @@ class Links(HTMLParser):
     def __init__(self, content):
         super().__init__()
         self.hrefs = []
+        self.posts = []
+        self.explicit_resets = set()
         self.feed(content)
 
     def handle_starttag(self, tag, attrs):
+        if tag == "form":
+            values = dict(attrs)
+            if values.get("method", "").lower() == "post" and values.get("action"):
+                self.posts.append(values["action"])
         if tag == "a":
             values = dict(attrs)
             if values.get("href"):
                 self.hrefs.append(values["href"])
+                if "data-filter-discard" in values:
+                    self.explicit_resets.add(values["href"])
 
 
 @pytest.fixture
@@ -203,3 +211,53 @@ def test_directory_navigation_and_save_preserve_selected_office(client, users, o
     saved = client.post(url, {"name": "Office context survives saving", "code": "CTX"})
     assert saved.status_code == 302
     assert parse_qs(urlsplit(saved.url).query).get("office") == [selected]
+
+
+@pytest.mark.parametrize("collection", ["OVPA", "EXTERNAL"])
+def test_metadata_edit_renders_for_both_collections(client, users, offices, collection):
+    from apps.documents.models import Document
+
+    document = Document.objects.create(title="Metadata remains editable", office=offices["MED"], collection=collection)
+    client.force_login(users["med_admin"])
+    response = client.get(reverse("documents:edit", args=[document.pk]), {"office": offices["MED"].pk})
+    assert response.status_code == 200
+    assert response.context["form"].instance.pk == document.pk
+
+
+def test_external_review_source_deletion_and_actions_keep_request_office(client, users, offices):
+    from unittest.mock import patch
+
+    from django.core.exceptions import ValidationError
+
+    from apps.documents.models import Document
+
+    document = Document.objects.create(title="Scoped external review", office=offices["SUP"], collection="EXTERNAL")
+    client.force_login(users["admin"])
+    selected = str(offices["SUP"].pk)
+    paths = {reverse(name, args=[document.pk]) for name in (
+        "documents:detail", "documents:edit", "documents:source_units", "documents:deletion_review",
+    )}
+    repository = reverse("documents:external_repository")
+    queue = reverse("documents:external_deletion_queue")
+    for path in paths | {queue + "?status=unscheduled"}:
+        response = client.get(path + ("&" if "?" in path else "?") + "office=" + selected)
+        assert response.status_code == 200
+        links = Links(response.content.decode())
+        for href in links.hrefs + links.posts:
+            if href in links.explicit_resets:
+                continue
+            target = urlsplit(href)
+            if target.path in paths | {repository, queue} or target.path.startswith(f"/documents/{document.pk}/"):
+                assert parse_qs(target.query).get("office") == [selected], (path, href)
+    with patch("apps.documents.views.services.re_extract_document", side_effect=ValidationError("No extraction input")):
+        response = client.post(reverse("documents:re_extract", args=[document.pk]) + "?office=" + selected)
+    assert response.status_code == 302
+    assert parse_qs(urlsplit(response.url).query).get("office") == [selected]
+
+
+def test_office_context_preserves_existing_query_repeats_and_fragment():
+    from apps.core.utils import office_context_url
+
+    url = office_context_url("/documents/1/source/?review_sample=a#tag-review", QueryDict("office=2&office=3"))
+    assert urlsplit(url).fragment == "tag-review"
+    assert parse_qs(urlsplit(url).query) == {"review_sample": ["a"], "office": ["2", "3"]}

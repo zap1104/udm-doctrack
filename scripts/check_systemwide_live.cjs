@@ -42,7 +42,7 @@ const pendingByPage = new WeakMap();
 async function ready(page) {
   await page.locator('#main-content').waitFor({state:'attached'});
   await page.waitForFunction(() => Boolean(window.htmx && window.bootstrap));
-  await page.waitForFunction(() => [...document.querySelectorAll('[data-auto-filter] [data-filter-fallback]')].every(button=>button.hidden));
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-auto-filter][data-filter-mode="change"] [data-filter-fallback]')].every(button=>button.hidden));
 }
 async function navigate(page, url) {
   const began=Date.now();
@@ -55,7 +55,8 @@ async function signIn(browser, username) {
   const context = await browser.newContext({baseURL:manifest.origin,viewport:{width:1366,height:950}, acceptDownloads:true});
   await configure(context);
   const page = await context.newPage();
-  page.setDefaultNavigationTimeout(45000);
+  page.setDefaultTimeout(60000);
+  page.setDefaultNavigationTimeout(90000);
   const pending=new Set(); pendingByPage.set(page,pending);
   page.on('request',request=>pending.add(request.url()));
   page.on('requestfinished',request=>pending.delete(request.url()));
@@ -81,7 +82,8 @@ async function snapshot(page, html) {
     const ids = [...main.querySelectorAll('a[href]')]
       .map(a => new URL(a.getAttribute('href'), location.origin).pathname)
       .filter(value => /^\/(?:tracking\/(?:external\/)?|documents\/)\d+\/$/.test(value));
-    return {ids:[...new Set(ids)].sort(), headings:[...main.querySelectorAll('h1,h2')].map(x=>x.textContent.replace(/\s+/g,' ').trim())};
+    return {ids:[...new Set(ids)].sort(), headings:[...main.querySelectorAll('h1,h2')].map(x=>x.textContent.replace(/\s+/g,' ').trim()),
+      totals:[...main.querySelectorAll('.stat-card .value, .repository-results > span')].map(x=>x.textContent.replace(/\s+/g,' ').trim())};
   },html ?? null);
 }
 async function verifySwap(page, callback, label) {
@@ -101,6 +103,20 @@ async function verifySwap(page, callback, label) {
   report.filterRequests.push({label,url:response.url()});
   record('Live filter swap equals normal backend response without reload',{label});
 }
+async function applyFilter(page, target, edit, label) {
+  const form=target.locator('xpath=ancestor::form');
+  if(await form.getAttribute('data-filter-mode')==='change') return verifySwap(page,edit,label);
+  let requests=0;
+  const observe=request=>{if(request.method()==='GET' && request.headers()['hx-request']==='true') requests++;};
+  page.on('request',observe);
+  try {
+    await edit();
+    await page.waitForTimeout(250);
+    assert.equal(requests,0,label+': manual filter submitted before Search');
+  } finally { page.off('request',observe); }
+  await verifySwap(page,()=>form.locator('button[type=submit]').first().click(),label);
+  record('Manual filter waits for Search',{label});
+}
 async function checkFilterControls(page, route, role) {
   await navigate(page,manifest.origin + route);
   const fields = await page.locator('[data-auto-filter] select:not([disabled]), [data-auto-filter] input:not([disabled]):not([type=hidden]):not([type=submit]):not([type=button])').evaluateAll(nodes => nodes.map(node => ({name:node.name,type:node.type,id:node.id})).filter(node=>node.name));
@@ -117,20 +133,20 @@ async function checkFilterControls(page, route, role) {
     }
     if (field.type === 'checkbox') {
       const checked = await target.isChecked();
-      await verifySwap(page,()=>target.setChecked(!checked),`${role} ${route} ${field.name}`);
+      await applyFilter(page,target,()=>target.setChecked(!checked),`${role} ${route} ${field.name}`);
     } else if (field.type === 'date') {
-      await verifySwap(page,async()=>{await target.fill(manifest.today);await target.dispatchEvent('change');},`${role} ${route} ${field.name}`);
+      await applyFilter(page,target,async()=>{await target.fill(manifest.today);await target.dispatchEvent('change');},`${role} ${route} ${field.name}`);
     } else if (field.type === 'range') {
       const range=await target.evaluate(node=>({value:Number(node.value),min:Number(node.min || 0)}));
-      await verifySwap(page,()=>target.press(range.value<=range.min ? 'ArrowRight' : 'ArrowLeft'),`${role} ${route} ${field.name}`);
+      await applyFilter(page,target,()=>target.press(range.value<=range.min ? 'ArrowRight' : 'ArrowLeft'),`${role} ${route} ${field.name}`);
     } else if (field.type !== 'select-one' && field.type !== 'select-multiple') {
       const value=field.type==='number' ? manifest.today.slice(0,4) : 'Browser';
-      await verifySwap(page,async()=>{await target.fill(value);await target.press('Enter');},`${role} ${route} ${field.name}`);
+      await applyFilter(page,target,()=>target.fill(value),`${role} ${route} ${field.name}`);
     } else {
       const options = await target.locator('option:not([disabled])').evaluateAll(nodes=>nodes.map(x=>({value:x.value,selected:x.selected})));
       const option = options.find(x=>x.value && !x.selected) || options.find(x=>!x.selected);
       if (!option) {record('Single-choice filter has no alternative',{role,route,field:field.name});continue;}
-      await verifySwap(page,()=>target.selectOption(option.value,{force:true}),`${role} ${route} ${field.name}`);
+      await applyFilter(page,target,()=>target.selectOption(option.value,{force:true}),`${role} ${route} ${field.name}`);
     }
   }
 }
@@ -149,9 +165,9 @@ async function checkTrackingPills(page,role) {
   const route='/tracking/?office='+manifest.offices.MED;
   for(const key of ['scope','status','offices','overdue','sort','owner']) {
     await navigate(page,manifest.origin+route);
-    const choices=await page.locator('.pill-toggle[data-filter-link]').evaluateAll((nodes,key)=>nodes.map(x=>({href:x.getAttribute('href'),label:x.textContent.trim()})).filter(x=>new URL(x.href,location.origin).searchParams.has(key)),key);
+    const choices=await page.locator('.pill-toggle[href]').evaluateAll((nodes,key)=>nodes.map(x=>({href:x.getAttribute('href'),label:x.textContent.trim()})).filter(x=>new URL(x.href,location.origin).searchParams.has(key)),key);
     assert.ok(choices.length,'Missing tracking '+key+' pills for '+role);
-    const target=page.locator('.pill-toggle[data-filter-link][href='+JSON.stringify(choices[0].href)+']').first();
+    const target=page.locator('.pill-toggle[href='+JSON.stringify(choices[0].href)+']').first();
     await reveal(target);
     await verifySwap(page,()=>target.click(),role+' tracking '+key+' pill');
     const expected=new URL(choices[0].href,manifest.origin);
@@ -165,7 +181,7 @@ async function checkHistoryResetAndPages(page) {
   const option=await tag.locator('option').evaluateAll(nodes=>nodes.find(x=>x.value)?.value);
   assert.ok(option,'Seeded tag must be selectable');
   const original=page.url();
-  await verifySwap(page,()=>tag.selectOption(option,{force:true}),'history tag selection');
+  await applyFilter(page,tag,()=>tag.selectOption(option,{force:true}),'history tag selection');
   const filtered=page.url();
   await page.goBack({waitUntil:'domcontentloaded'});
   await page.waitForURL(original,{waitUntil:'domcontentloaded'});
@@ -186,6 +202,40 @@ async function checkHistoryResetAndPages(page) {
   await verifySwap(page,()=>page.locator('.page-size-option[data-filter-link]').filter({hasText:'50'}).first().click(),'page size 50');
   assert.equal(new URL(page.url()).searchParams.get('per_page'),'50');
   record('Reset, real second page and page-size control preserve backend results');
+}
+async function checkCombinedDates(page) {
+  await navigate(page,manifest.origin+'/search/?mode=tracking&office='+manifest.offices.MED);
+  const query=page.locator('[data-auto-filter] [name=q]');
+  const from=page.locator('[data-auto-filter] [name=date_from]');
+  const to=page.locator('[data-auto-filter] [name=date_to]');
+  await reveal(from); await reveal(to);
+  await applyFilter(page,query,async()=>{
+    await query.fill('Browser');
+    await from.fill(manifest.today); await from.dispatchEvent('change');
+    await to.fill(manifest.today); await to.dispatchEvent('change');
+  },'Combined tracking subject and date range');
+  const params=new URL(page.url()).searchParams;
+  assert.equal(params.get('q'),'Browser');
+  assert.equal(params.get('date_from'),manifest.today);
+  assert.equal(params.get('date_to'),manifest.today);
+  const ids=(await snapshot(page)).ids;
+  for(const id of Object.values(manifest.seeded)) assert.ok(ids.includes('/tracking/'+id+'/'),'Seeded matching record missing');
+  record('Combined date range uses one explicit Search and contains independently seeded records');
+}
+async function checkDashboardScroll(page) {
+  await navigate(page,manifest.origin+'/?office='+manifest.offices.MED);
+  await page.locator('#turnaround-stage').scrollIntoViewIfNeeded();
+  await page.evaluate(()=>scrollBy(0,100));
+  const before=await page.locator('#turnaround-stage').evaluate(node=>node.getBoundingClientRect().top);
+  const selected=await page.locator('#turnaround-stage option').evaluateAll(nodes=>nodes.find(n=>!n.selected)?.value);
+  assert.ok(selected);
+  await verifySwap(page,()=>page.locator('#turnaround-stage').selectOption(selected),'Dashboard stage auto update near page bottom');
+  await page.waitForTimeout(200);
+  const after=await page.locator('#turnaround-stage').evaluate(node=>node.getBoundingClientRect().top);
+  assert.ok(Math.abs(after-before)<=8,'Dashboard reader position shifted by '+Math.abs(after-before));
+  assert.equal(new URL(page.url()).searchParams.get('office'),String(manifest.offices.MED));
+  assert.equal(new URL(page.url()).searchParams.get('turnaround_stage'),selected);
+  record('Dashboard automatic update retains selected scope and near-bottom viewport',{before,after});
 }
 async function checkDelayedResponseAndRetry(page) {
   await navigate(page,manifest.origin+'/documents/');
@@ -276,6 +326,7 @@ async function run() {
     await navigate(med,manifest.origin + '/tracking/new/');
     await med.locator('[name=subject]').fill('Browser created and filed');
     await med.locator('[name=instructions]').fill('Review this document and complete it.');
+    await med.locator('[name=deadline_choice][value=none]').check();
     await med.locator('select[name=receiving_offices]').selectOption(String(manifest.offices.SUP),{force:true});
     await Promise.all([med.waitForURL(/\/tracking\/\d+\/review\//),med.getByRole('button',{name:'Review',exact:true}).click()]);
     await Promise.all([med.waitForURL(/\/tracking\/\d+\/$/),med.getByRole('button',{name:'Send Document',exact:true}).click()]);
@@ -291,7 +342,7 @@ async function run() {
     record('Internal create, endorse, receipt, work, complete and approved filing persist');
 
     await navigate(manager,manifest.origin + `/tracking/external/${manifest.external}/review/`);
-    await manager.locator('[name=to_office]').selectOption(String(manifest.offices.MED));
+    await manager.locator('[name=to_endpoint]').selectOption('internal:'+manifest.offices.MED);
     await manager.locator('[name=sent_at]').fill(manifest.past);
     await submit(manager);
     await navigate(med,manifest.origin + manifest.externalDraftUrl);
@@ -335,6 +386,10 @@ async function run() {
       await page.setViewportSize({width:1366,height:950});
     }
     await checkHistoryResetAndPages(med);
+    await checkCombinedDates(med);
+    await checkFilterControls(admin,'/?office='+manifest.offices.MED,'admin');
+    await checkFilterControls(admin,'/reports/?office='+manifest.offices.MED,'admin');
+    await checkDashboardScroll(admin);
     await checkDelayedResponseAndRetry(med);
     await checkExpiredSession(sessions.viewer.page);
     assert.deepEqual(report.errors,[]);

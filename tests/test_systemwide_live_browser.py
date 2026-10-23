@@ -89,7 +89,7 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
         [node, str(Path(settings.BASE_DIR) / "scripts/check_systemwide_live.cjs"), str(manifest_file)],
         cwd=settings.BASE_DIR, env=os.environ.copy(), capture_output=True, text=True, timeout=1200,
     )
-    evidence = Path(settings.BASE_DIR) / "docs/verification/systemwide-audit-2026-10-17"
+    evidence = Path(os.environ.get("LIVE_BROWSER_EVIDENCE_DIR", str(tmp_path / "evidence")))
     evidence.mkdir(parents=True, exist_ok=True)
     (evidence / "live-browser-output.txt").write_text(completed.stdout + completed.stderr, encoding="utf-8")
     report_path = Path(manifest["output"])

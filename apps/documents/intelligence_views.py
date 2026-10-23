@@ -13,6 +13,7 @@ from django.views.decorators.cache import never_cache
 
 from apps.core.mixins import AppLoginRequiredMixin, SystemAdminRequiredMixin
 from apps.core.pagination import paginate
+from apps.core.utils import office_context_url
 
 from .file_versions import DocumentFileVersion
 from .intelligence_forms import (
@@ -36,6 +37,11 @@ from .tagging import (
     vocabulary_digest,
 )
 from .views import _get_document
+
+
+def _source_redirect(request, document, fragment):
+    url = reverse("documents:source_units", args=[document.pk]) + fragment
+    return redirect(office_context_url(url, request.GET) if document.is_external else url)
 
 
 def current_units(document):
@@ -215,7 +221,7 @@ class TagPredictView(AppLoginRequiredMixin, View):
             messages.info(request, "Shadow predictions recorded. They do not change visible suggestions or tags.")
         else:
             messages.success(request, "Current topic proposals generated. Review them before assigning tags.")
-        return redirect(reverse("documents:source_units", args=[pk]) + "#tag-review")
+        return _source_redirect(request, document, "#tag-review")
 
 
 class TagReviewView(AppLoginRequiredMixin, View):
@@ -249,7 +255,7 @@ class TagReviewView(AppLoginRequiredMixin, View):
                 else:
                     review_tag(document, tag_id=data["tag"].pk, decision=data["decision"], **common)
                 messages.success(request, "Topic review saved. Unreviewed tags remain unknown.")
-                return redirect(reverse("documents:source_units", args=[pk]) + "#tag-review")
+                return _source_redirect(request, document, "#tag-review")
             except ValidationError as exc:
                 form.add_error(None, exc)
                 status = 409
@@ -277,7 +283,7 @@ class TrainingEligibilityView(AppLoginRequiredMixin, View):
                 messages.success(
                     request, "Training eligibility saved. Existing models are not reactivated automatically."
                 )
-                return redirect(reverse("documents:source_units", args=[pk]) + "#training-eligibility")
+                return _source_redirect(request, document, "#training-eligibility")
             except ValidationError as exc:
                 form.add_error(None, exc)
                 status = 409
