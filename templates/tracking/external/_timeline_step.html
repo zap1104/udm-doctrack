@@ -22,6 +22,6 @@
     </table>
   </details>
   {% if can_manage and not is_filed %}
-    {% if step.from_external_office_id or step.to_external_office_id %}<a class="btn btn-sm btn-udm-outline no-print" href="{% url 'tracking:external_correct' record.pk step.pk %}">Correct external facts<span class="visually-hidden"> for movement {{ step.sequence }}</span></a>{% endif %}
+    {% if step.from_external_office_id or step.to_external_office_id %}<a class="btn btn-sm btn-udm-outline no-print" href="{% url 'tracking:external_correct' record.pk step.pk %}{{ external_query }}">Correct external facts<span class="visually-hidden"> for movement {{ step.sequence }}</span></a>{% endif %}
   {% endif %}
 </li>

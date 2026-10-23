@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Edit Metadata · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+{% if document.is_external %}{% external_office_query as external_query %}{% endif %}
 <div class="workspace-page workspace-form workspace-edit">
 <div class="page-head"><div>
   <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository</div>
@@ -36,7 +37,7 @@
       {% endfor %}
 
       <div class="form-actions"><button class="btn btn-udm" type="submit">Save and Re-index</button>
-      <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}">Cancel</a></div>
+      <a class="btn btn-udm-outline" href="{{ document.get_absolute_url }}{{ external_query }}">Cancel</a></div>
     </div></div></div>
 
     <div class="col-lg-4 workspace-support">

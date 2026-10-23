@@ -20,7 +20,7 @@ from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.upload_context import resolve_upload_context
 from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
-from apps.core.utils import log_action, sign_download, unsign_download
+from apps.core.utils import log_action, office_context_url, sign_download, unsign_download
 
 from . import external_services as services
 from .external_analytics import summarize, timing_for_record
@@ -69,10 +69,7 @@ def _context(**kwargs):
 
 def _scoped_redirect(request, target):
     response = redirect(target)
-    values = request.GET.getlist("office")
-    if values:
-        separator = "&" if "?" in response.url else "?"
-        response["Location"] += separator + urlencode([("office", value) for value in values])
+    response["Location"] = office_context_url(response.url, request.GET)
     return response
 
 

@@ -154,7 +154,10 @@ def test_repeated_legacy_owner_cannot_override_context(client, users, offices, c
 
 
 @pytest.mark.parametrize("assigned", [True, False])
-def test_repository_upload_link_preserves_selected_filing_context(client, users, offices, assigned):
+def test_repository_upload_link_preserves_selected_filing_context(client, users, offices, assigned, counterpart, settings, tmp_path):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    settings.MEDIA_ROOT = tmp_path
     admin = users["admin"]
     admin.office = offices["MED"] if assigned else None
     admin.save(update_fields=["office"])
@@ -167,6 +170,26 @@ def test_repository_upload_link_preserves_selected_filing_context(client, users,
     upload = client.get(href)
     assert upload.status_code == 200
     assert upload.context["form"].recording_office.pk == offices["SUP"].pk
+    saved = client.post(href, {"source": "UPLOAD", "ocr_language": "auto", "external_offices": [counterpart.pk],
+        "file": SimpleUploadedFile("context.txt", b"Context preserved")})
+    assert saved.status_code == 302
+    assert parse_qs(urlsplit(saved.url).query).get("office") == [selected]
+    review = client.get(saved.url)
+    assert review.status_code == 200
+    document = review.context["document"]
+    assert document.office_id == offices["SUP"].pk
+    reviewed = client.post(saved.url, {"title": "Reviewed context", "year": 2026,
+        "access_level": "OFFICE", "ocr_language": "auto"})
+    assert reviewed.status_code == 302
+    assert parse_qs(urlsplit(reviewed.url).query).get("office") == [selected]
+    detail = client.get(reviewed.url)
+    back = next(link for link in Links(detail.content.decode()).hrefs
+                if urlsplit(link).path == reverse("documents:external_repository"))
+    assert parse_qs(urlsplit(back).query).get("office") == [selected]
+    repository = client.get(back)
+    upload_again = next(link for link in Links(repository.content.decode()).hrefs
+                        if urlsplit(link).path == reverse("documents:external_upload"))
+    assert client.get(upload_again).context["form"].recording_office.pk == offices["SUP"].pk
 
 
 def test_directory_navigation_and_save_preserve_selected_office(client, users, offices):

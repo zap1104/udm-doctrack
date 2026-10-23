@@ -107,7 +107,10 @@ def _persist_upload(
 
         office = recording_office(user, office)
         supplied = {getattr(entry, "pk", entry) for entry in (external_offices or [])}
-        counterparts = list(lock_external_offices(supplied).values())
+        try:
+            counterparts = list(lock_external_offices(supplied).values())
+        except ValidationError as exc:
+            raise ValidationError("Choose at least one active external office from the shared directory.") from exc
         if not supplied or len(counterparts) != len(supplied):
             raise ValidationError("Choose at least one active external office from the shared directory.")
 

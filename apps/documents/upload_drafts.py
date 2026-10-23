@@ -3,6 +3,7 @@ from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 
 from apps.accounts.models import Office
+from apps.core.filters import link
 from apps.core.upload_drafts import UploadResult
 
 from .services import ingest_upload
@@ -16,4 +17,7 @@ def finalize_repository_upload(context, data, files, *, user):
         collection=context.collection, external_offices=data.get("external_offices"),
         ocr_language=data.get("ocr_language", "auto"), allow_external_ocr=bool(data.get("allow_external_ocr", False)),
         defer_extraction=True)
-    return UploadResult(context.workflow, "repository", document.pk, reverse("documents:review", args=[document.pk]))
+    url = reverse("documents:review", args=[document.pk])
+    if context.collection == "EXTERNAL":
+        url = link(url, office=context.creation_office_id)
+    return UploadResult(context.workflow, "repository", document.pk, url)

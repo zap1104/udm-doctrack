@@ -2,13 +2,14 @@
 {% load doctrack %}
 {% block title %}Review Extracted Details · {{ SITE_NAME }}{% endblock %}
 {% block content %}
+{% if document.is_external %}{% external_office_query as external_query %}{% endif %}
 <div class="workspace-page workspace-form workspace-review">
 <div class="page-head">
   <div>
     <div class="eyebrow">{% if document.is_external %}External {% endif %}Document Repository · Step 2</div>
     <h1>Review Extracted Document Details</h1>
     <p class="sub">The file is already saved. Check the suggested metadata before saving your corrections.</p>
-    <p><a href="{% url 'documents:source_units' document.pk %}">Inspect source coverage and topic reviews</a></p>
+    <p><a href="{% url 'documents:source_units' document.pk %}{{ external_query }}">Inspect source coverage and topic reviews</a></p>
     <div class="step-indicator mt-2">
       <span class="step"><span class="num">1</span> Choose File</span>
       <span aria-hidden="true">›</span>
@@ -105,7 +106,7 @@
 
           <div class="form-actions">
             <button class="btn btn-udm" type="submit">Save to the {% if document.is_external %}External {% endif %}Document Repository</button>
-            <a class="btn btn-udm-outline" href="{{ document.repository_url }}">Back</a>
+            <a class="btn btn-udm-outline" href="{{ document.repository_url }}{{ external_query }}">Back</a>
           </div>
         </div>
       </div>

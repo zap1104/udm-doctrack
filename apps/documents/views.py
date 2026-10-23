@@ -20,7 +20,7 @@ from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, OfficeAs
 from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
 from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
-from apps.core.utils import log_action, unsign_download
+from apps.core.utils import log_action, office_context_url, unsign_download
 from apps.search.services import search_documents
 from apps.tracking.services import pending_upload_for
 
@@ -47,6 +47,11 @@ PAGE_SIZE = DEFAULT_PAGE_SIZE
 #: Was PENDING_FILING_SHOWN, which also sized the completed-but-unapproved
 #: queue until that moved to the Document Tracking page.
 RETENTION_DUE_SHOWN = 8
+
+
+def _document_redirect(request, document):
+    url = document.get_absolute_url()
+    return redirect(office_context_url(url, request.GET) if document.is_external else url)
 
 
 def _get_document(request, pk) -> Document:
@@ -517,7 +522,7 @@ class MetadataReviewView(OfficeAssignedMixin, View):
         )
         request.session.pop(f"suggestion_{document.pk}", None)
         messages.success(request, "Saved to the repository. It is searchable straight away.")
-        return redirect(document.get_absolute_url())
+        return _document_redirect(request, document)
 
 
 class DocumentDetailView(AppLoginRequiredMixin, View):
@@ -588,7 +593,7 @@ class DocumentEditView(OfficeAssignedMixin, View):
             metadata_values=form.metadata_cleaned(),
         )
         messages.success(request, "Metadata updated and re-indexed.")
-        return redirect(document.get_absolute_url())
+        return _document_redirect(request, document)
 
 
 class AddFilesView(OfficeAssignedMixin, View):
@@ -637,7 +642,7 @@ class ReExtractView(OfficeAssignedMixin, View):
             result = services.re_extract_document(document, user=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect(document.get_absolute_url())
+            return _document_redirect(request, document)
         document.refresh_from_db()
         if result["status"] == OcrStatus.PENDING and document.ocr_status == OcrStatus.FAILED:
             messages.warning(request, "Text extraction did not finish. See the extraction notes before retrying.")
@@ -652,7 +657,7 @@ class ReExtractView(OfficeAssignedMixin, View):
                 request,
                 f"Text extraction finished ({document.ocr_engine}): {result['characters']} characters. Search index refreshed.",
             )
-        return redirect(document.get_absolute_url())
+        return _document_redirect(request, document)
 
 
 class ExtractionStatusView(AppLoginRequiredMixin, View):
@@ -756,7 +761,7 @@ class DeletionReviewView(AdminRequiredMixin, View):
                     if not document.is_active else "The document is available in the repository with its next review date."
                 ))
                 if document.is_active:
-                    return redirect(document.get_absolute_url())
+                    return _document_redirect(request, document)
                 queue = "documents:external_deletion_queue" if document.is_external else "documents:deletion_queue"
                 return redirect(core_filters.link(reverse(queue), status="deleted"))
         return self._render(request, document, form)

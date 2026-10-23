@@ -9,6 +9,7 @@ import unicodedata
 import zipfile
 from datetime import date, datetime
 from functools import lru_cache
+from urllib.parse import urlencode
 
 import segno
 from django.conf import settings
@@ -22,6 +23,14 @@ from .middleware import get_current_request
 from .models import AuditLog
 
 _signer = TimestampSigner(salt="doctrack.download")
+
+
+def office_context_url(url, query):
+    """Carry request-local perspective without changing authorization or session state."""
+    values = query.getlist("office")
+    if values:
+        url += ("&" if "?" in url else "?") + urlencode([("office", value) for value in values])
+    return url
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 {% extends "tracking/external/base.html" %}
 {% block title %}External Routing Slip {{ record.display_tracking_number }} · {{ SITE_NAME }}{% endblock %}
 {% block external_content %}
-<div class="external-actions no-print mb-4"><button class="btn btn-udm" type="button" data-print-trigger>Print External Routing Slip</button><a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Back to record</a></div>
+<div class="external-actions no-print mb-4"><button class="btn btn-udm" type="button" data-print-trigger>Print External Routing Slip</button><a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}{{ external_query }}">Back to record</a></div>
 <article class="external-paper">
   <header class="external-paper-head"><p>Republic of the Philippines<br>City of Manila</p><h1>Universidad de Manila</h1><p>Office of the Vice President for Administration</p><h2>External Document Routing Slip</h2><p class="mono fw-bold">{{ record.tracking_number }}</p></header>
   <h2 class="h4">{{ record.title }}</h2>
