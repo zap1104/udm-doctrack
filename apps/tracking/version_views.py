@@ -30,6 +30,7 @@ def tracking_file_rows(record, user, *, external=False, request=None):
     from apps.core.file_history import history_url, retained_groups
     kind = "external" if external else "tracking"
     can_update = record.status not in (*COMPLETED_STATUSES, "PENDING_RECEIPT") and (record.can_act(user) if external else record.can_user_act(user))
+    can_discard = can_update and record.status == "DRAFT" and not record.routing_steps.exists()
     rows = []
     for group in retained_groups(record.file_groups.filter(discarded_at__isnull=True)).order_by("pk"):
         versions = group.retained_versions
@@ -39,6 +40,9 @@ def tracking_file_rows(record, user, *, external=False, request=None):
         if request is not None and can_update:
             version_form = UploadFormRecovery(request, "external-version" if external else "tracking-version", target_id=record.pk, group_id=group.pk).form
         rows.append(dict(
+            group_id=group.pk, available_count=len(versions), can_discard=can_discard,
+            expected_revision=getattr(record, "revision", None),
+            discard_url=reverse("tracking:external_file_discard" if external else "tracking:file_discard", args=[record.pk, group.pk]),
             current=version_rows(versions[:1], kind, user)[0], history=version_rows(versions[1:], kind, user),
             version_count=group.version_total, audit_count=group.audit_total, audit_url=history_url(group), can_update=can_update,
             upload_url=reverse("tracking:external_file_version" if external else "tracking:file_version", args=[record.pk, group.pk]),
@@ -109,4 +113,5 @@ class DiscardFileView(AppLoginRequiredMixin, View):
         return self.page(request, form)
 
     def page(self, request, form):
-        return render(request, "tracking/file_discard.html", {"record": self.record, "group": self.group, "form": form})
+        return render(request, "tracking/file_discard.html", {"record": self.record, "group": self.group, "form": form,
+            "available_count": self.group.versions.filter(retired_at__isnull=True).exclude(file="").count()})

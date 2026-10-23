@@ -63,6 +63,10 @@ class AttachmentVersionMixin(ImmutableFileMixin, VersionLifecycleModel):
     class Meta:
         abstract = True
 
+    @property
+    def extension(self):
+        return (self.original_name.rsplit(".", 1)[-1] if "." in self.original_name else "").upper()
+
     def save(self, *args, **kwargs):
         self._check_immutable()
         with transaction.atomic():

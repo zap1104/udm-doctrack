@@ -166,7 +166,7 @@ def test_upload_version_post_conflicts_and_preserves_logical_count(client, users
     assert attachment.file_group.versions.count() == 2
     detail = client.get(attachment.record.get_absolute_url())
     assert len(detail.context['attachments']) == 1
-    assert b'Version history (1 earlier)' in detail.content
+    assert b'Older versions (1)' in detail.content
     old_preview = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['med'])})
     assert b'Viewing Version 1 of 2' in old_preview.content
 

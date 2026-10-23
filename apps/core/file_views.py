@@ -50,6 +50,7 @@ class FilePreviewView(FileVersionView):
     def respond(self, request, resource):
         item = resource.item
         context = {
+            "is_saved_upload": resource.kind == "upload",
             "file": item, "preview_kind": preview_kind(item.original_name),
             "version_number": item.version_number, "current_number": resource.current_number,
             "content_url": file_url(resource.kind, item.pk, request.user, "content"),

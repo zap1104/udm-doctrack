@@ -120,12 +120,7 @@
           <h3 class="section-heading">Activity and annotations</h3>
           <ol class="timeline">
             {% for activity in activities %}
-              <li>
-                <div class="t-title">{{ activity.message }}</div>
-                <div class="t-meta">{{ activity.actor_name_snapshot }} · {{ activity.actor_office_snapshot }}</div>
-                <div class="t-meta">Actual time: {{ activity.actual_at|date:'d M Y, g:i A'|default:'Unknown / annotation' }} · Recorded: {{ activity.recorded_at|date:'d M Y, g:i A' }}</div>
-                {% if activity.detail %}<div class="t-detail">{{ activity.detail }}</div>{% endif %}
-              </li>
+              {% include 'tracking/external/_timeline_activity.html' %}
             {% empty %}
               <li class="is-muted"><div class="t-meta">No activity recorded.</div></li>
             {% endfor %}

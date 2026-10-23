@@ -52,3 +52,32 @@ STATUS_COLOURS = {status: f"var(--status-{token})" for status, token in STATUS_T
 
 #: The pill class per status.
 STATUS_PILLS = {status: f"pill-{token}" for status, token in STATUS_TOKENS.items()}
+
+
+ACTIVITY_PRESENTATIONS = {
+    "CREATED": ("draft", "bi-file-earmark", "Draft created"),
+    "SENT": ("endorsement", "bi-send", "Endorsed"),
+    "FORWARDED": ("endorsement", "bi-send", "Endorsed"),
+    "RECEIVED": ("receipt", "bi-check-circle", "Receipt confirmed"),
+    "REMARK": ("work", "bi-chat-left-text", "Work update"),
+    "EXTERNAL_WORK": ("work", "bi-chat-left-text", "External work update"),
+    "ATTACHMENT": ("attachment", "bi-file-earmark-plus", "File update"),
+    "RETURNED": ("return", "bi-arrow-return-left", "Returned"),
+    "REOPENED": ("return", "bi-arrow-counterclockwise", "Returned to tracking"),
+    "COMPLETED": ("pending-filing", "bi-check2-square", "Pending filing"),
+    "ARCHIVED": ("filed", "bi-archive", "Filed in Repository"),
+    "FILED": ("filed", "bi-archive", "Filed in Repository"),
+    "ACCESS": ("access", "bi-shield-lock", "Access changed"),
+    "RETIRED": ("removal", "bi-file-earmark-minus", "Content retired"),
+    "DISCARDED": ("removal", "bi-trash", "Draft file discarded"),
+    "VIEWED": ("neutral", "bi-eye", "Opened"),
+    "PRINTED": ("neutral", "bi-printer", "Printed"),
+    "CORRECTED": ("neutral", "bi-pencil-square", "External facts corrected"),
+    "ANNOTATION": ("neutral", "bi-journal-text", "Annotation"),
+}
+
+
+def activity_presentation(event):
+    value = str(getattr(event, "event", event) or "").upper()
+    token, icon, label = ACTIVITY_PRESENTATIONS.get(value, ("neutral", "bi-clock-history", "Activity"))
+    return {"token": token, "icon": icon, "label": label}

@@ -334,3 +334,9 @@ def relevance_bar(score) -> str:
 @register.filter
 def field_type_is(field, widget_name: str) -> bool:
     return field.field.widget.__class__.__name__.lower() == str(widget_name).lower()
+
+
+@register.simple_tag
+def activity_style(event):
+    from apps.core.colors import activity_presentation
+    return activity_presentation(event)

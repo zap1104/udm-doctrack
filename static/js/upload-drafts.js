@@ -252,6 +252,16 @@
         const next = new URL(recoveryUrl(global.location.href, data.id, region.dataset.uploadSlot));
         if (data.form_url) {const canonical = new URL(data.form_url, global.location.href); if (canonical.searchParams.has('office')) next.searchParams.set('office', canonical.searchParams.get('office'));}
         global.history.replaceState(global.history.state, '', next.href);
+        for (const name of ['office', 'managing_office']) {
+          const scope = field(name);
+          if (scope?.tagName === 'SELECT' && !scope.disabled) {
+            const fixed = document.createElement('input');
+            fixed.type = 'hidden'; fixed.name = name; fixed.value = scope.value;
+            form.append(fixed); scope.disabled = true;
+            const note = document.createElement('small'); note.className = 'text-muted d-block';
+            note.textContent = 'Office is fixed for this saved form.'; scope.after(note);
+          }
+        }
       }, readValues: () => {
         const values = {};
         for (const [name, value] of new FormData(form)) if (typeof value === 'string') (values[name] ||= []).push(value);

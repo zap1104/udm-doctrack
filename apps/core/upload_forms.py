@@ -156,6 +156,7 @@ class UploadFormRecovery:
         self.nonce = one_value(request.POST, "upload_form_nonce") if request.method == "POST" else None
         self.nonce = self.nonce or form_nonce_for(request.user, self.context)
         self.batch_id = str(uuid4())
+        self.had_saved_manifest = self.draft is not None
         if request.method == "POST":
             self._post()
         else:
@@ -174,6 +175,15 @@ class UploadFormRecovery:
             if name in self.form.fields:
                 self.form.fields[name].initial = self.context.creation_office_id
                 self.form.initial[name] = self.context.creation_office_id
+                if self.draft and (self.request.method != "POST" or self.had_saved_manifest):
+                    supplied = self.form.data.get(self.form.add_prefix(name)) if self.form.is_bound else None
+                    if supplied and str(supplied) != str(self.context.creation_office_id):
+                        # Keep the original validation error readable. A valid
+                        # neighboring file must not silently accept bad input.
+                        self.form.fields[name].queryset = self.form.fields[name].queryset.filter(pk=self.context.creation_office_id)
+                    else:
+                        self.form.fields[name].disabled = True
+                    self.form.fields[name].help_text = "Office is fixed for this saved form. Start a new form to change it."
 
     def _post(self):
         if self.draft is None:
