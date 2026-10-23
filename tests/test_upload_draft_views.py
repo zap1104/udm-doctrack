@@ -306,6 +306,11 @@ def test_two_inline_forms_keep_their_own_saved_files_on_refresh(client, users, o
     returned = client.get(preview.context["back_url"])
     assert len(returned.context["remark_form"].recovery["files"]) == 1
     assert len(returned.context["file_rows"][0]["form"].recovery["files"]) == 1
+    version_preview = restored.context["file_rows"][0]["form"].recovery["files"][0]["preview_url"]
+    preview = client.get(version_preview)
+    returned = client.get(preview.context["back_url"])
+    assert len(returned.context["remark_form"].recovery["files"]) == 1
+    assert len(returned.context["file_rows"][0]["form"].recovery["files"]) == 1
 
 
 def recovery_fields_for(form):

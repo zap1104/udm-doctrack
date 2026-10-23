@@ -57,8 +57,13 @@ class FilePreviewView(FileVersionView):
             from .upload_context import UploadContext
             from .upload_forms import authorized_form_slots, form_url, url_with_slots
             context_binding = UploadContext(**resource.parent.binding)
-            back_url = url_with_slots(form_url(context_binding, resource.parent.pk),
-                authorized_form_slots(request.user, context_binding, request.GET))
+            base_url = form_url(context_binding, resource.parent.pk)
+            if context_binding.workflow.endswith("-version"):
+                # The record contains the same saved version form and any
+                # neighboring unfinished forms. Keep their authorized slots.
+                base_url = reverse("tracking:external_detail" if context_binding.target_kind == "external" else "tracking:detail",
+                    args=[context_binding.target_id])
+            back_url = url_with_slots(base_url, authorized_form_slots(request.user, context_binding, request.GET))
         context = {
             "is_saved_upload": resource.kind == "upload",
             "file": item, "preview_kind": preview_kind(item.original_name),
