@@ -537,7 +537,10 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
         for file in retained_groups(document.files.all()):
             versions = file.retained_versions
             if versions:
-                file_rows.append({"current": version_rows(versions[:1], "repository", request.user)[0], "history": version_rows(versions[1:], "repository", request.user), "page_count": file.page_count, "audit_count": file.audit_total, "audit_url": history_url(file)})
+                file_rows.append({"current": version_rows(versions[:1], "repository", request.user, request=request, external=document.is_external)[0],
+                    "history": version_rows(versions[1:], "repository", request.user, request=request, external=document.is_external),
+                    "page_count": file.page_count, "audit_count": file.audit_total,
+                    "audit_url": office_context_url(history_url(file), request.GET) if document.is_external else history_url(file)})
         return render(
             request,
             self.template_name,

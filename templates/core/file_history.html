@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}File audit history · {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="workspace-page"><h1>File audit history</h1><p><a href="{{ history.record.get_absolute_url }}">Back to record</a></p>
+<div class="workspace-page"><h1>File audit history</h1><p><a href="{{ history.back_url }}">Back to record</a></p>
 <div class="card-udm"><div class="card-udm-body">
 {% for row in history.entries %}<div class="file-audit-entry text-break">
 {% if row.type == "version" %}<strong>V{{ row.item.version_number }} · {{ row.item.original_name }}</strong>
@@ -11,6 +11,6 @@
 {% if row.preview_url %}<a href="{{ row.preview_url }}">Preview V{{ row.item.version_number }}</a> <a href="{{ row.download_url }}">Download</a>{% else %}<span>Audit only · File unavailable</span>{% endif %}
 {% else %}<strong>{{ row.item.action|capfirst }}</strong> · {{ row.item.created_at }}<p>{{ row.item.reason }} · {{ row.item.actor_name_snapshot }}</p>{% endif %}
 </div>{% empty %}<p>No file history.</p>{% endfor %}
-{% if history.next_cursor %}<a class="btn btn-udm-outline" href="?cursor={{ history.next_cursor|urlencode }}">Older entries</a>{% endif %}
+{% if history.next_cursor %}<a class="btn btn-udm-outline" href="{{ history.next_url }}">Older entries</a>{% endif %}
 </div></div></div>
 {% endblock %}

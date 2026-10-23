@@ -195,7 +195,7 @@ class SourceUnitView(AppLoginRequiredMixin, View):
                 "unit": unit,
                 "text": text,
                 "display_truncated": len(unit.normalized_text) > len(text),
-                "file": version_rows([unit.run.file_version], "repository", request.user)[0],
+                "file": version_rows([unit.run.file_version], "repository", request.user, request=request, external=document.is_external)[0],
             },
         )
 

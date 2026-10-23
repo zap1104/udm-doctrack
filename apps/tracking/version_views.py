@@ -11,6 +11,7 @@ from apps.core.file_access import file_url
 from apps.core.forms import BootstrapFormMixin
 from apps.core.mixins import AppLoginRequiredMixin
 from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
+from apps.core.utils import office_context_url
 
 from .models import COMPLETED_STATUSES, ExternalTrackingRecord, TrackingRecord
 
@@ -22,8 +23,19 @@ class VersionUploadForm(BootstrapFormMixin, forms.Form):
     expected_revision = forms.IntegerField(min_value=0, required=False, widget=forms.HiddenInput)
 
 
-def version_rows(versions, kind, user):
-    return [dict(item=item, entry_id=f"file-version-{kind}-{item.pk}", preview_url=file_url(kind, item.pk, user) if item.available_content else "", download_url=file_url(kind, item.pk, user, "download") if item.available_content else "") for item in versions]
+def version_rows(versions, kind, user, *, request=None, external=False):
+    def link(item, purpose):
+        if not item.available_content:
+            return ""
+        url = file_url(kind, item.pk, user, purpose)
+        return office_context_url(url, request.GET) if external and request is not None else url
+    return [dict(item=item, entry_id=f"file-version-{kind}-{item.pk}",
+        preview_url=link(item, "preview"), download_url=link(item, "download")) for item in versions]
+
+
+def record_url(record, request, external):
+    url = record.get_absolute_url()
+    return office_context_url(url, request.GET) if external else url
 
 
 def tracking_file_rows(record, user, *, external=False, request=None):
@@ -39,13 +51,16 @@ def tracking_file_rows(record, user, *, external=False, request=None):
         version_form = VersionUploadForm(initial={"expected_version": versions[0].version_number, "expected_revision": getattr(record, "revision", None)}, prefix=f"version-{group.pk}")
         if request is not None and can_update:
             version_form = UploadFormRecovery(request, "external-version" if external else "tracking-version", target_id=record.pk, group_id=group.pk).form
+        def scoped(url):
+            return office_context_url(url, request.GET) if external and request is not None else url
         rows.append(dict(
             group_id=group.pk, available_count=len(versions), can_discard=can_discard,
             expected_revision=getattr(record, "revision", None),
-            discard_url=reverse("tracking:external_file_discard" if external else "tracking:file_discard", args=[record.pk, group.pk]),
-            current=version_rows(versions[:1], kind, user)[0], history=version_rows(versions[1:], kind, user),
-            version_count=group.version_total, audit_count=group.audit_total, audit_url=history_url(group), can_update=can_update,
-            upload_url=reverse("tracking:external_file_version" if external else "tracking:file_version", args=[record.pk, group.pk]),
+            discard_url=scoped(reverse("tracking:external_file_discard" if external else "tracking:file_discard", args=[record.pk, group.pk])),
+            current=version_rows(versions[:1], kind, user, request=request, external=external)[0],
+            history=version_rows(versions[1:], kind, user, request=request, external=external),
+            version_count=group.version_total, audit_count=group.audit_total, audit_url=scoped(history_url(group)), can_update=can_update,
+            upload_url=scoped(reverse("tracking:external_file_version" if external else "tracking:file_version", args=[record.pk, group.pk])),
             form=version_form,
         ))
     return rows
@@ -58,7 +73,9 @@ class UploadVersionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
         model = ExternalTrackingRecord if self.external else TrackingRecord
         record = get_object_or_404(model.objects.visible_to(request.user), pk=pk)
         recovery = UploadFormRecovery(request, "external-version" if self.external else "tracking-version", target_id=pk, group_id=group_pk)
-        return render(request, "tracking/version_upload.html", {"record": record, "form": recovery.form})
+        return render(request, "tracking/version_upload.html", {"record": record, "form": recovery.form,
+            "record_title": record.title if self.external else record.subject,
+            "back_url": record_url(record, request, self.external)})
 
     def post(self, request, pk, group_pk):
         model = ExternalTrackingRecord if self.external else TrackingRecord
@@ -109,9 +126,10 @@ class DiscardFileView(AppLoginRequiredMixin, View):
                 form.add_error(None, exc)
             else:
                 messages.success(request, "Draft file discarded. Its audit history is preserved.")
-                return redirect(self.record.get_absolute_url())
+                return redirect(record_url(self.record, request, self.external))
         return self.page(request, form)
 
     def page(self, request, form):
         return render(request, "tracking/file_discard.html", {"record": self.record, "group": self.group, "form": form,
+            "back_url": record_url(self.record, request, self.external),
             "available_count": self.group.versions.filter(retired_at__isnull=True).exclude(file="").count()})

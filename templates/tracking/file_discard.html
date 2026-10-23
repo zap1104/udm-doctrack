@@ -6,6 +6,6 @@
 <p>{{ available_count }} saved version{{ available_count|pluralize }} will become unavailable. The audit history stays.</p>
 <form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}
 {% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}
-<div class="form-actions"><button class="btn btn-danger" type="submit">Discard file</button><a class="btn btn-udm-outline" href="{{ record.get_absolute_url }}">Cancel</a></div></form>
+<div class="form-actions"><button class="btn btn-danger" type="submit">Discard file</button><a class="btn btn-udm-outline" href="{{ back_url }}">Cancel</a></div></form>
 </div></div></div>
 {% endblock %}

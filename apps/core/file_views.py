@@ -1,4 +1,5 @@
 import io
+from urllib.parse import urlencode
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, HttpResponse
@@ -21,7 +22,7 @@ from apps.core.file_previews import (
 from apps.core.mixins import AppLoginRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.storage import storage_identity
-from apps.core.utils import file_extension, log_action, unsign_download
+from apps.core.utils import file_extension, log_action, office_context_url, unsign_download
 
 
 def private(response):
@@ -53,6 +54,9 @@ class FilePreviewView(FileVersionView):
     def respond(self, request, resource):
         item = resource.item
         back_url = resource.parent.get_absolute_url()
+        external = resource.kind == "external" or (resource.kind == "repository" and resource.parent.is_external)
+        if external:
+            back_url = office_context_url(back_url, request.GET)
         if resource.kind == "upload":
             from .upload_context import UploadContext
             from .upload_forms import authorized_form_slots, form_url, url_with_slots
@@ -63,6 +67,8 @@ class FilePreviewView(FileVersionView):
                 # neighboring unfinished forms. Keep their authorized slots.
                 base_url = reverse("tracking:external_detail" if context_binding.target_kind == "external" else "tracking:detail",
                     args=[context_binding.target_id])
+                if context_binding.target_kind == "external" and context_binding.creation_office_id != context_binding.actor_office_id:
+                    base_url += "?" + urlencode({"office": context_binding.creation_office_id})
             back_url = url_with_slots(base_url, authorized_form_slots(request.user, context_binding, request.GET))
         context = {
             "is_saved_upload": resource.kind == "upload",
@@ -72,6 +78,7 @@ class FilePreviewView(FileVersionView):
             "download_url": file_url(resource.kind, item.pk, request.user, "download"),
             "frame_url": reverse("core:file_preview_frame"),
             "back_url": back_url + f"#file-version-{resource.kind}-{item.pk}",
+            "preview_fields": [(key, value) for key, values in request.GET.lists() if key != "worksheet" for value in values],
         }
         try:
             if context["preview_kind"] in {"txt", "table"}:
@@ -138,6 +145,16 @@ class FileHistoryView(AppLoginRequiredMixin, View):
             history = file_history_rows(group, user=request.user, cursor=request.GET.get("cursor"))
         except ValidationError as exc:
             return private(HttpResponse(" ".join(exc.messages), status=400))
+        external = kind == "external" or (kind == "repository" and history["record"].is_external)
+        def scoped(url):
+            return office_context_url(url, request.GET) if external else url
+        history["back_url"] = scoped(history["record"].get_absolute_url())
+        history["next_url"] = scoped(request.path + "?" + urlencode({"cursor": history["next_cursor"]})) if history["next_cursor"] else ""
+        if external:
+            for row in history["entries"]:
+                for key in ("preview_url", "download_url"):
+                    if row.get(key):
+                        row[key] = scoped(row[key])
         return private(render(request, "core/file_history.html", {"group": group, "history": history}))
 
 
