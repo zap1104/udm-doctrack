@@ -17,6 +17,7 @@ from apps.accounts.models import User
 from apps.tracking.models import Attachment, Status, TrackingRecord
 from apps.tracking.services import confirm_receipt, create_draft_record, route_record
 from apps.tracking.views import RecordCreateView
+from tests.upload_helpers import follow_upload_recovery
 
 pytestmark = pytest.mark.django_db
 
@@ -335,14 +336,15 @@ def test_draft_upload_content_rejection_rolls_back_metadata_and_keeps_existing_f
     history = list(record.activities.values())
     data = _payload(offices, memo_type, subject="Must not survive rejected upload", due_time="15:30")
     data["receiving_offices"] = [offices["HR"].pk]
-    # FileField accepts this nonempty file; the real signature validator refuses
-    # its contents later in attach_files, after metadata would have been saved.
+    # Private staging now checks signatures before publishing draft metadata.
     data["attachments"] = SimpleUploadedFile("pretend.pdf", b"This is not a PDF.", content_type="application/pdf")
 
     response = client.post(f"/tracking/new/?draft={record.pk}", data)
 
+    response = follow_upload_recovery(client, response)
     assert response.status_code == 200
-    assert response.context["form"].is_valid()
+    assert not response.context["form"].is_valid()
+    assert "attachments" in response.context["form"].errors
     assert "do not match" in response.content.decode()
     assert TrackingRecord.objects.values().get(pk=record.pk) == before
     assert list(record.activities.values()) == history
@@ -378,6 +380,7 @@ def test_tracking_attachment_picker_links_its_validation_error(client, users, of
 
     response = client.post(url, data)
 
+    response = follow_upload_recovery(client, response)
     assert response.status_code == 200
     assert "attachments" in response.context["form"].errors
     body = response.content.decode()
@@ -414,6 +417,7 @@ def test_invalid_draft_edit_leaves_the_persisted_record_untouched(client, users,
 
     response = client.post(f"/tracking/new/?draft={record.pk}", _payload(offices, memo_type, subject="x"))
 
+    response = follow_upload_recovery(client, response)
     assert response.status_code == 200
     assert "subject" in response.context["form"].errors
     record.refresh_from_db()

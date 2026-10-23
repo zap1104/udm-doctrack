@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.tracking.external_models import ExternalOffice, ExternalTrackingRecord
 from apps.tracking.models import Status
+from tests.upload_helpers import follow_upload_recovery
 
 pytestmark = pytest.mark.django_db
 
@@ -68,7 +69,8 @@ def test_required_destination_error_preserves_source(client, users, offices):
     response = client.post(reverse("tracking:external_create"), {
         "title": "Recipient missing", "from_endpoint": source, "to_endpoint": "",
     })
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert "to_endpoint" in response.context["form"].errors
     assert response.context["form"]["from_endpoint"].value() == source
     assert not ExternalTrackingRecord.objects.exists()
@@ -79,7 +81,8 @@ def test_validation_redisplay_retains_both_offices(client, users, offices, paper
     source = f"external:{paper_offices['own'].pk}"
     destination = f"internal:{offices['HR'].pk}"
     response = client.post(reverse("tracking:external_create"), {"from_endpoint": source, "to_endpoint": destination})
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert response.context["form"]["from_endpoint"].value() == source
     assert response.context["form"]["to_endpoint"].value() == destination
     assert not ExternalTrackingRecord.objects.exists()
@@ -92,7 +95,8 @@ def test_invalid_external_destination_does_not_create_a_draft(client, users, off
         "title": "Invalid recipient", "from_endpoint": f"internal:{offices['MED'].pk}",
         "to_endpoint": f"external:{paper_offices[entry].pk}",
     })
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert "to_endpoint" in response.context["form"].errors
     assert not ExternalTrackingRecord.objects.exists()
 
@@ -104,7 +108,8 @@ def test_initial_recipient_cannot_already_be_the_source(client, users, offices, 
     response = client.post(reverse("tracking:external_create"), {
         "title": "Same source and recipient", "from_endpoint": endpoint, "to_endpoint": endpoint,
     })
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert "to_endpoint" in response.context["form"].errors
     assert not ExternalTrackingRecord.objects.exists()
 

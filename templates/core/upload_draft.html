@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Saved upload · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form"><h1>Saved upload</h1><div class="card-udm"><div class="card-udm-body">
+<ul class="list-unstyled">{% for row in saved_files %}<li class="py-2 text-break" id="file-version-upload-{{ row.item.pk }}"><strong>{{ row.item.original_name }}</strong> · Saved <a class="btn btn-udm-outline btn-sm" href="{{ row.preview_url }}">Preview</a></li>{% empty %}<li>No saved files.</li>{% endfor %}</ul>
+<a class="btn btn-udm" href="{{ continue_url }}">Continue form</a>
+</div></div></div>
+{% endblock %}

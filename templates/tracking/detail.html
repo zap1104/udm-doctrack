@@ -114,25 +114,29 @@
         <div class="card-udm-head"><h2>Act on this document</h2></div>
         <div class="card-udm-body">
           <ul class="nav nav-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-remark-button" data-bs-toggle="tab" data-bs-target="#tab-remark" type="button" role="tab" aria-controls="tab-remark" aria-selected="true">Add remark</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-route-button" data-bs-toggle="tab" data-bs-target="#tab-route" type="button" role="tab" aria-controls="tab-route" aria-selected="false" tabindex="-1">Forward or return</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link{% if not route_form.is_bound %} active{% endif %}" id="tab-remark-button" data-bs-toggle="tab" data-bs-target="#tab-remark" type="button" role="tab" aria-controls="tab-remark" aria-selected="{% if route_form.is_bound %}false{% else %}true{% endif %}"{% if route_form.is_bound %} tabindex="-1"{% endif %}>Add remark</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link{% if route_form.is_bound %} active{% endif %}" id="tab-route-button" data-bs-toggle="tab" data-bs-target="#tab-route" type="button" role="tab" aria-controls="tab-route" aria-selected="{% if route_form.is_bound %}true{% else %}false{% endif %}"{% if not route_form.is_bound %} tabindex="-1"{% endif %}>Forward or return</button></li>
             {% if can_complete %}<li class="nav-item" role="presentation"><button class="nav-link" id="tab-complete-button" data-bs-toggle="tab" data-bs-target="#tab-complete" type="button" role="tab" aria-controls="tab-complete" aria-selected="false" tabindex="-1">Complete</button></li>{% endif %}
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-share-button" data-bs-toggle="tab" data-bs-target="#tab-share" type="button" role="tab" aria-controls="tab-share" aria-selected="false" tabindex="-1">Share access</button></li>
           </ul>
 
           <div class="tab-content">
-            <div class="tab-pane fade show active" id="tab-remark" role="tabpanel" aria-labelledby="tab-remark-button">
+            <div class="tab-pane fade{% if not route_form.is_bound %} show active{% endif %}" id="tab-remark" role="tabpanel" aria-labelledby="tab-remark-button">
               <form method="post" action="{{ record_action_urls.add_remark }}" enctype="multipart/form-data">
                 {% csrf_token %}
+                {% include "partials/_upload_draft.html" with form=remark_form %}
+                {% include "partials/_form_errors.html" with form=remark_form %}
                 {% include "partials/_field.html" with field=remark_form.remark %}
                 {% include "partials/_field.html" with field=remark_form.attachments %}
                 <button class="btn btn-udm" type="submit">Save remark</button>
               </form>
             </div>
 
-            <div class="tab-pane fade" id="tab-route" role="tabpanel" aria-labelledby="tab-route-button">
+            <div class="tab-pane fade{% if route_form.is_bound %} show active{% endif %}" id="tab-route" role="tabpanel" aria-labelledby="tab-route-button">
               <form method="post" action="{{ record_action_urls.route }}" enctype="multipart/form-data">
                 {% csrf_token %}
+                {% include "partials/_upload_draft.html" with form=route_form %}
+                {% include "partials/_form_errors.html" with form=route_form %}
                 <div class="mb-3">
                   <label class="form-label">Requested Action</label>
                   {% for radio in route_form.action %}

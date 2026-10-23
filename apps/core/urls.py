@@ -1,11 +1,18 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from . import file_views, views
+from . import file_views, upload_views, views
 
 app_name = "core"
 
 urlpatterns = [
+    path("uploads/drafts/", upload_views.UploadDraftCreateView.as_view(), name="upload_draft_create"),
+    path("uploads/drafts/<uuid:draft_id>/", upload_views.UploadDraftView.as_view(), name="upload_draft"),
+    path("uploads/drafts/<uuid:draft_id>/files/", upload_views.StageUploadView.as_view(), name="upload_draft_files"),
+    path("uploads/drafts/<uuid:draft_id>/files/<uuid:file_id>/remove/", upload_views.RemoveStagedUploadView.as_view(), name="upload_draft_remove"),
+    path("files/preview/upload/<uuid:pk>/", file_views.FilePreviewView.as_view(), {"kind": "upload"}, name="upload_file_preview"),
+    path("files/content/upload/<uuid:pk>/", file_views.FileContentView.as_view(), {"kind": "upload"}, name="upload_file_content"),
+    path("files/download/upload/<uuid:pk>/", file_views.FileVersionDownloadView.as_view(), {"kind": "upload"}, name="upload_file_download"),
     path("files/preview-frame/", file_views.PreviewFrameView.as_view(), name="file_preview_frame"),
     path("files/preview/<slug:kind>/<int:pk>/", file_views.FilePreviewView.as_view(), name="file_preview"),
     path("files/content/<slug:kind>/<int:pk>/", file_views.FileContentView.as_view(), name="file_content"),

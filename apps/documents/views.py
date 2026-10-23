@@ -19,6 +19,7 @@ from apps.core.document_types import document_type_counts, document_type_match, 
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog, Tag
 from apps.core.pagination import DEFAULT_PAGE_SIZE, paginate
+from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
 from apps.core.utils import log_action, unsign_download
 from apps.search.services import search_documents
 from apps.tracking.services import pending_upload_for
@@ -30,7 +31,6 @@ from .forms import (
     DeletionReviewForm,
     DocumentMetadataForm,
     RepositoryFilterForm,
-    UploadForm,
 )
 from .models import COMPLETED_SOURCE, HISTORICAL_FILTER, Collection, Document, DocumentFile, OcrStatus
 from .suggestions import Suggestion
@@ -384,41 +384,34 @@ class RepositoryView(AppLoginRequiredMixin, View):
         )
 
 
-class UploadView(OfficeAssignedMixin, View):
+class UploadView(RecoverableUploadMixin, OfficeAssignedMixin, View):
     """Upload or scan — step 1. Text is extracted immediately, then reviewed."""
 
     template_name = "documents/upload.html"
 
     def get(self, request):
-        return render(request, self.template_name, {"form": UploadForm(user=request.user)})
+        return render(request, self.template_name, {"form": UploadFormRecovery(request, "repository-upload").form})
 
     def post(self, request):
-        form = UploadForm(request.POST, request.FILES, user=request.user)
-        if not form.is_valid():
-            messages.error(request, "Choose a file and an owning office.")
-            return render(request, self.template_name, {"form": form})
-
-        uploaded = form.cleaned_data["file"]
-        duplicate = services.duplicate_of(uploaded[0], user=request.user)
-        try:
-            document, suggestion = services.ingest_upload(
-                user=request.user,
-                uploaded_files=uploaded,
-                office=form.cleaned_data["office"],
-                source=form.cleaned_data["source"],
-                ocr_language=form.cleaned_data["ocr_language"],
-                allow_external_ocr=form.cleaned_data["allow_external_ocr"],
-            )
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-            return render(request, self.template_name, {"form": form})
-
+        recovery = UploadFormRecovery(request, "repository-upload")
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
+        document = Document.objects.get(pk=result.parent_id)
+        checksums = recovery.draft.files.exclude(state="removed").values("checksum")
+        duplicate_file = DocumentFile.objects.filter(checksum__in=checksums,
+            document__in=Document.objects.visible_to(request.user).in_collection(Collection.OVPA)).exclude(document=document).select_related("document").first()
+        duplicate = duplicate_file.document if duplicate_file else None
         if duplicate:
             messages.warning(
                 request,
                 f"The same file is already archived as “{duplicate.title}”. Continue only if this copy is different.",
             )
-        request.session[f"suggestion_{document.pk}"] = suggestion.as_dict()
+        suggestion = document.suggestions.first()
+        request.session[f"suggestion_{document.pk}"] = suggestion.suggested if suggestion else Suggestion().as_dict()
         return redirect("documents:review", pk=document.pk)
 
 

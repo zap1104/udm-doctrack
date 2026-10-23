@@ -74,5 +74,5 @@ def upload_external_attachment_version(record, file_group_id, uploaded_file, *, 
     if record.status != Status.DRAFT and record.current_office_id:
         record.status = Status.IN_PROCESS
     _event(record, user, "ATTACHMENT", "File version uploaded", detail=attachment.change_summary,
-        actual_at=timezone.now() if record.current_office_id else None)
+        actual_at=timezone.now() if record.current_office_id and record.status != Status.DRAFT else None)
     return attachment

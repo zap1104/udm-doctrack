@@ -1,0 +1,19 @@
+{% load doctrack %}
+{% if form.recovery %}
+<div data-upload-draft data-upload-workflow="{{ form.recovery.workflow }}" data-upload-target="{{ form.recovery.target_id|default:'' }}" data-upload-group="{{ form.recovery.group_id|default:'' }}" data-upload-field="{{ form.recovery.file_field }}">
+  <input type="hidden" name="upload_form_nonce" value="{{ form.recovery.nonce }}">
+  <input type="hidden" name="upload_batch_id" value="{{ form.recovery.batch_id }}">
+  <input type="hidden" name="upload_draft" value="{{ form.recovery.draft_id|default:'' }}">
+  <input type="hidden" name="upload_revision" value="{{ form.recovery.revision }}">
+  <div data-upload-status role="status" aria-live="polite" class="small text-muted"></div>
+  <ul class="list-unstyled" data-upload-file-list>
+    {% for row in form.recovery.files %}
+    <li class="file-chip my-2" data-saved-upload="{{ row.item.pk }}">
+      <div class="flex-grow-1 text-break"><strong>{{ row.item.original_name }}</strong> <span class="badge text-bg-success">Saved</span><span class="d-block small text-muted">{{ row.item.size|human_size }}</span></div>
+      <a class="btn btn-udm-outline btn-sm" href="{{ row.preview_url }}">Preview</a>
+      <button class="btn btn-udm-outline btn-sm" type="submit" name="remove_upload" value="{{ row.item.pk }}" formnovalidate>Remove<span class="visually-hidden"> {{ row.item.original_name }}</span></button>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -23,6 +24,20 @@ class FileResource:
 
 
 def resource_for(kind, pk, user):
+    if kind == "upload":
+        from apps.core.models import StagedUpload
+        from apps.core.upload_context import UploadContext
+        from apps.core.upload_drafts import read_draft
+
+        item = get_object_or_404(StagedUpload.objects.select_related("draft"), pk=pk, draft__owner=user)
+        parent = item.draft
+        try:
+            read_draft(parent.pk, user=user, context=UploadContext(**parent.binding))
+        except ValidationError:
+            # The parent was authorized before its closed/expired state was
+            # reported. Return metadata only so the view can issue private 410.
+            pass
+        return FileResource(item, parent, kind, 1)
     if kind == "tracking":
         from apps.tracking.models import Attachment
 
@@ -56,4 +71,5 @@ def resource_for(kind, pk, user):
 
 def file_url(kind, pk, user, purpose="preview"):
     token = sign_download(f"file-version:{purpose}:{kind}:{pk}:{user.pk}")
-    return reverse(f"core:file_{purpose}", args=[kind, pk]) + "?" + urlencode({"token": token})
+    route = reverse(f"core:upload_file_{purpose}", args=[pk]) if kind == "upload" else reverse(f"core:file_{purpose}", args=[kind, pk])
+    return route + "?" + urlencode({"token": token})

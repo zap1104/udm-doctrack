@@ -16,6 +16,7 @@ from django.views import View
 from apps.accounts.models import Office
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.models import AuditLog
+from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
 from apps.core.utils import log_action, sign_download, unsign_download
 
 from . import external_services as services
@@ -24,7 +25,6 @@ from .external_forms import (
     ExternalAttachmentForm,
     ExternalCompleteForm,
     ExternalCorrectionForm,
-    ExternalCreateForm,
     ExternalMessageForm,
     ExternalNoteForm,
     ExternalOfficeForm,
@@ -338,37 +338,32 @@ class ExternalOfficeDeactivateView(AdminRequiredMixin, View):
         return _form_page(request, form, title="Deactivate external office", status=400)
 
 
-class ExternalCreateView(AdminRequiredMixin, View):
+class ExternalCreateView(RecoverableUploadMixin, AdminRequiredMixin, View):
     def get(self, request):
         return _form_page(
             request,
-            ExternalCreateForm(user=request.user),
+            UploadFormRecovery(request, "external-create").form,
             title="New external tracking draft",
             submit_label="Create draft and review",
         )
 
     def post(self, request):
-        form = ExternalCreateForm(request.POST, user=request.user)
-        if form.is_valid():
-            data = dict(form.cleaned_data)
-            recipient = data.pop("to_office", None)
-            external_recipient = data.pop("to_external_office", None)
-            try:
-                record = services.create_record(user=request.user, **data)
-            except ValidationError as exc:
-                _form_error(form, exc)
-            else:
-                if recipient or external_recipient:
-                    request.session[f"external_draft_recipient_{record.pk}"] = (
-                        f"internal:{recipient.pk}" if recipient else f"external:{external_recipient.pk}"
-                    )
-                return redirect("tracking:external_review", pk=record.pk)
-        return _form_page(
-            request, form, title="New external tracking draft", status=400, submit_label="Create draft and review"
-        )
+        recovery = UploadFormRecovery(request, "external-create")
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
+        recipient = recovery.form.cleaned_data.get("to_office")
+        external_recipient = recovery.form.cleaned_data.get("to_external_office")
+        if recipient or external_recipient:
+            request.session[f"external_draft_recipient_{result.parent_id}"] = (
+                f"internal:{recipient.pk}" if recipient else f"external:{external_recipient.pk}")
+        return redirect(result.redirect)
 
 
-class ExternalDetailView(AppLoginRequiredMixin, View):
+class ExternalDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
     def get(self, request, pk):
         from .version_views import tracking_file_rows
 
@@ -391,7 +386,7 @@ class ExternalDetailView(AppLoginRequiredMixin, View):
                 activities=record.activities.all(),
                 corrections=record.revisions.all(),
                 attachments=attachments,
-                file_rows=tracking_file_rows(record, request.user, external=True),
+                file_rows=tracking_file_rows(record, request.user, external=True, request=request),
                 can_manage=record.can_manage(request.user),
                 can_act=record.can_act(request.user),
                 can_receipt=record.can_confirm_receipt(request.user),
@@ -444,7 +439,7 @@ ACTION_FORMS = {
 }
 
 
-class ExternalActionView(AppLoginRequiredMixin, View):
+class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
     def _prepare(self, request, pk, action):
         if action not in ACTION_FORMS:
             raise Http404
@@ -475,7 +470,7 @@ class ExternalActionView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk, action):
         record, form_class, kwargs, title, label = self._prepare(request, pk, action)
-        form = form_class(**kwargs)
+        form = UploadFormRecovery(request, "external-attachment", target_id=pk).form if action == "attachment" else form_class(**kwargs)
         if action == "route" and record.status == Status.DRAFT:
             remembered = form.initial.get("to_endpoint")
             if remembered and not form.fields["to_endpoint"].valid_value(remembered):
@@ -486,6 +481,16 @@ class ExternalActionView(AppLoginRequiredMixin, View):
 
     def post(self, request, pk, action):
         record, form_class, kwargs, title, label = self._prepare(request, pk, action)
+        if action == "attachment":
+            recovery = UploadFormRecovery(request, "external-attachment", target_id=pk)
+            response = recovery.validation_response()
+            if response:
+                return response
+            result = recovery.finish()
+            if result is None:
+                return recovery.response
+            messages.success(request, "Attachment saved.")
+            return redirect(result.redirect)
         form = form_class(request.POST, request.FILES, **kwargs)
         if form.is_valid():
             data = dict(form.cleaned_data)

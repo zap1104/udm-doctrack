@@ -20,6 +20,7 @@ from apps.core.file_previews import (
 )
 from apps.core.mixins import AppLoginRequiredMixin
 from apps.core.models import AuditLog
+from apps.core.storage import storage_identity
 from apps.core.utils import file_extension, log_action, unsign_download
 
 
@@ -38,6 +39,10 @@ class FileVersionView(AppLoginRequiredMixin, View):
         expected = f"file-version:{self.purpose}:{kind}:{pk}:{request.user.pk}"
         if unsign_download(request.GET.get("token", "")) != expected:
             raise PermissionDenied("This file link has expired. Open its record for a fresh link.")
+        if not resource.item.available_content:
+            return private(HttpResponse("This file content is no longer available. Return to its record or saved form.", status=410))
+        if resource.item.storage_identity and resource.item.storage_identity != storage_identity(resource.item.file.storage):
+            return private(HttpResponse("This file's storage configuration changed. Contact an administrator.", status=410))
         return self.respond(request, resource)
 
 
@@ -91,12 +96,18 @@ class FileVersionDownloadView(FileVersionView):
             stream = item.file.open("rb")
         except OSError:
             return private(HttpResponse("The stored file is unavailable. Contact an administrator.", status=404))
+        if resource.kind != "upload":
+            self.log_download(request, resource)
+        return private(FileResponse(stream, as_attachment=True, filename=item.original_name, content_type=MIME_TYPES.get(file_extension(item.original_name), "application/octet-stream")))
+
+    @staticmethod
+    def log_download(request, resource):
+        item = resource.item
         log_action(
             AuditLog.Action.DOWNLOAD, f"Downloaded {item.original_name} (Version {item.version_number})",
             actor=request.user, target=resource.parent, request=request,
             extra={"file_version_id": item.pk, "file_resource_kind": resource.kind, "version_number": item.version_number},
         )
-        return private(FileResponse(stream, as_attachment=True, filename=item.original_name, content_type=MIME_TYPES.get(file_extension(item.original_name), "application/octet-stream")))
 
 
 class PreviewFrameView(AppLoginRequiredMixin, View):

@@ -177,3 +177,21 @@ def test_every_initial_supporting_file_defers_extraction_and_joins_the_job(users
     assert Document.objects.get(pk=result.parent_id).files.count() == 2
     queued.assert_called_once()
     assert queued.call_args.kwargs["file_ids"] is None, "The post-commit job must process every initial file"
+
+
+def test_external_draft_file_uploads_do_not_invent_actual_work_times(users, offices):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.tracking.file_versions import upload_external_attachment_version
+    finalize()
+    draft, context = prepare(users["med_admin"], "external-create")
+    result = finish(draft, context, users["med_admin"], {"title": "Historical packet",
+        "from_office": offices["MED"], "actual_at": timezone.now() - timedelta(days=3)})
+    record = ExternalTrackingRecord.objects.get(pk=result.parent_id)
+    assert record.activities.get(event="ATTACHMENT").actual_at is None, "Uploading a draft file is a recorded upload, not actual historical work"
+    first = record.attachments.get()
+    upload_external_attachment_version(record, first.file_group_id, SimpleUploadedFile("signed.txt", b"Signed copy", "text/plain"),
+        user=users["med_admin"], expected_revision=record.revision, expected_version=1, change_summary="Signed outside DocTrack")
+    assert not record.activities.filter(event="ATTACHMENT", actual_at__isnull=False).exists()

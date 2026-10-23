@@ -1,11 +1,7 @@
 """External repository browsing, upload and reporting share permission rules."""
 
 import csv
-from contextlib import nullcontext
 
-from django.conf import settings
-from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -14,11 +10,10 @@ from django.views import View
 from apps.core.document_types import document_type_match
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.pagination import paginate
-from apps.core.storage import cleanup_new_files
+from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
 from apps.search.services import search_documents
 
-from . import services
-from .external_forms import ExternalRepositoryFilterForm, ExternalUploadForm
+from .external_forms import ExternalRepositoryFilterForm
 from .models import Collection, Document
 from .views import DeletionQueueView
 
@@ -70,26 +65,19 @@ class ExternalRepositoryView(AppLoginRequiredMixin, View):
         return render(request, "documents/external/repository.html", context)
 
 
-class ExternalUploadView(AdminRequiredMixin, View):
+class ExternalUploadView(RecoverableUploadMixin, AdminRequiredMixin, View):
     def get(self, request):
-        return render(request, "documents/external/upload.html", {"form": ExternalUploadForm(user=request.user)})
+        return render(request, "documents/external/upload.html", {"form": UploadFormRecovery(request, "external-repository-upload").form})
 
     def post(self, request):
-        form = ExternalUploadForm(request.POST, request.FILES, user=request.user)
-        if form.is_valid():
-            try:
-                with (nullcontext() if settings.ENABLE_SOURCE_UNIT_EXTRACTION else cleanup_new_files()), (nullcontext() if settings.ENABLE_SOURCE_UNIT_EXTRACTION else transaction.atomic()):
-                    document, suggestion = services.ingest_upload(
-                        user=request.user, uploaded_files=form.cleaned_data["file"], office=form.cleaned_data["office"],
-                        source=form.cleaned_data["source"], collection=Collection.EXTERNAL,
-                        external_offices=form.cleaned_data["external_offices"],
-                        ocr_language=form.cleaned_data["ocr_language"], allow_external_ocr=form.cleaned_data["allow_external_ocr"],
-                    )
-                request.session[f"suggestion_{document.pk}"] = suggestion.as_dict()
-                return redirect("documents:review", pk=document.pk)
-            except ValidationError as exc:
-                form.add_error(None, exc)
-        return render(request, "documents/external/upload.html", {"form": form})
+        recovery = UploadFormRecovery(request, "external-repository-upload")
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
+        return redirect(result.redirect)
 
 
 class ExternalRepositoryReportView(AppLoginRequiredMixin, View):

@@ -19,6 +19,7 @@
     <div class="card-udm"><div class="card-udm-body">
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
+        {% include "partials/_upload_draft.html" %}
         {% include "partials/_form_errors.html" %}
         <div class="form-field mb-3{% if form.file.errors %} form-field--error{% endif %}">
           <label class="form-label" for="{{ form.file.id_for_label }}">Document files <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span></label>

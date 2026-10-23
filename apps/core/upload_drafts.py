@@ -55,11 +55,11 @@ def _touch(draft):
     draft.revision += 1
     draft.expires_at = _expiry()
     draft.updated_at = timezone.now()
-    draft.save(update_fields=["revision", "expires_at", "updated_at", "form_state"])
+    draft.save(update_fields=["revision", "expires_at", "updated_at", "form_state", "validation_errors"])
 
 
 @transaction.atomic
-def open_draft(*, user, context, form_nonce):
+def open_draft(*, user, context, form_nonce, allow_consumed=False):
     actor = active_writer(user)
     _fresh_context(actor, context, lock_parent=True)
     try:
@@ -67,12 +67,22 @@ def open_draft(*, user, context, form_nonce):
         nonce = UUID(signed["nonce"])
     except (signing.BadSignature, KeyError, ValueError, TypeError) as exc:
         raise PermissionDenied("This upload form expired. Reload it to start again.") from exc
-    if signed.get("actor") != actor.pk or signed.get("context") != context.as_dict():
+    issued = signed.get("context")
+    matches = issued == context.as_dict()
+    if actor.is_system_admin and context.workflow in {"tracking-create", "external-create", "repository-upload", "external-repository-upload"} and isinstance(issued, dict):
+        # No manifest exists yet: a system administrator can select a permitted
+        # office on the initial form before choosing files. Existing bindings
+        # below remain exact and cannot be moved by replaying this nonce.
+        matches = {key: value for key, value in issued.items() if key != "creation_office_id"} == {
+            key: value for key, value in context.as_dict().items() if key != "creation_office_id"}
+    if signed.get("actor") != actor.pk or not matches:
         raise PermissionDenied("This upload form belongs to another user or action.")
     previous = UploadDraft.objects.select_for_update().filter(form_nonce=nonce).first()
     if previous is not None:
         if previous.owner_id != actor.pk or previous.binding != context.as_dict():
             raise PermissionDenied("This saved upload belongs to another form.")
+        if previous.state == "consumed" and allow_consumed:
+            return previous
         if previous.state != "open" or previous.expires_at <= timezone.now():
             raise ValidationError("This saved upload expired or was already submitted.")
         return previous
@@ -203,7 +213,7 @@ def stage_files(draft_id, files, *, user, expected_revision, client_upload_ids):
         return result
 
 
-def save_form_state(draft_id, values, *, user, expected_revision):
+def save_form_state(draft_id, values, *, user, expected_revision, errors=None):
     # View adapters supply only declared normal form fields. This public service
     # independently strips dangerous names and bounds all values as defense in depth.
     forbidden = {"csrfmiddlewaretoken", "password", "form_nonce", "upload_draft", "collection", "target_id", "action"}
@@ -220,6 +230,8 @@ def save_form_state(draft_id, values, *, user, expected_revision):
     with locked_draft(draft_id, user=user) as (_, draft, _):
         _check_revision(draft, expected_revision)
         draft.form_state = safe
+        if errors is not None:
+            draft.validation_errors = errors
         _touch(draft)
         return draft
 

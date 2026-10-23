@@ -32,6 +32,7 @@ class UploadDraft(models.Model):
     revision = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField()
     form_state = models.JSONField(default=dict)
+    validation_errors = models.JSONField(default=dict)
     result = models.JSONField(default=dict)
     consumed_fingerprint = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -51,6 +52,10 @@ class UploadDraft(models.Model):
 
     def __str__(self):
         return f"{self.workflow}: {self.state}"
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse("core:upload_draft", args=[self.pk])
 
     def clean(self):
         super().clean()

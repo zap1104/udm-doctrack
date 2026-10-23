@@ -11,7 +11,9 @@
     {% if row.history %}<details class="fold mb-2"><summary>Version history ({{ row.history|length }} earlier)</summary><ul class="list-unstyled mt-2">
       {% for version in row.history %}<li class="p-2 border-bottom"><strong>Version {{ version.item.version_number }}</strong> · <span class="text-break">{{ version.item.original_name }}</span><p class="small mb-1">{{ version.item.change_summary }}{% if version.item.uploader_name_snapshot %} · {{ version.item.uploader_name_snapshot }}{% endif %}{% if version.item.uploader_office_snapshot %} ({{ version.item.uploader_office_snapshot }}){% endif %}{% if version.item.uploaded_at %} · {{ version.item.uploaded_at|date:"d M Y, g:i A" }}{% elif version.item.created_at %} · {{ version.item.created_at|date:"d M Y, g:i A" }}{% endif %}</p><a id="{{ version.entry_id }}" href="{{ version.preview_url }}">Preview Version {{ version.item.version_number }}</a> · <a href="{{ version.download_url }}">Download</a></li>{% endfor %}
     </ul></details>{% endif %}
-    {% if row.can_update %}<details class="fold"><summary>Upload new version</summary><form method="post" action="{{ row.upload_url }}" enctype="multipart/form-data" class="p-2" novalidate>{% csrf_token %}{% for field in row.form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}<button class="btn btn-udm btn-sm mt-2">Upload new version</button></form></details>{% endif %}
+    {% if row.can_update %}<details class="fold"><summary>Upload new version</summary><form method="post" action="{{ row.upload_url }}" enctype="multipart/form-data" class="p-2" novalidate>{% csrf_token %}
+      {% include "partials/_upload_draft.html" with form=row.form %}
+      {% for field in row.form %}{% if field.is_hidden %}{{ field }}{% else %}{% include "partials/_field.html" with field=field %}{% endif %}{% endfor %}<button class="btn btn-udm btn-sm mt-2">Upload new version</button></form></details>{% endif %}
   </li>
 {% empty %}<li class="text-muted">No files attached.</li>{% endfor %}
 </ul>

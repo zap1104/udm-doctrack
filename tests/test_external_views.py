@@ -10,6 +10,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
+from tests.upload_helpers import follow_upload_recovery
+
 pytestmark = pytest.mark.django_db
 
 
@@ -146,7 +148,8 @@ def test_create_preserves_multiple_types_and_requires_selected_main(client, user
     client.force_login(users["med_admin"])
     data = {"title": "Mixed packet", "from_office": offices["MED"].pk, "document_types": [memo_type.pk, second.pk]}
     response = client.post(reverse("tracking:external_create"), data)
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert not ExternalTrackingRecord.objects.filter(title="Mixed packet").exists()
     data["document_type"] = second.pk
     response = client.post(reverse("tracking:external_create"), data)

@@ -16,6 +16,7 @@
 
 <form method="post" action="{% url 'tracking:create' %}{% if record %}?draft={{ record.pk }}{% endif %}" enctype="multipart/form-data" class="workspace-form" novalidate>
   {% csrf_token %}
+  {% include "partials/_upload_draft.html" %}
   {% include "partials/_form_errors.html" %}
   <div class="row g-4 workspace-form-layout">
     <div class="col-lg-8 workspace-form-main">

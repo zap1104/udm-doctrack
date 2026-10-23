@@ -6,6 +6,8 @@ from html.parser import HTMLParser
 import pytest
 from django.urls import reverse
 
+from tests.upload_helpers import follow_upload_recovery
+
 
 class Controls(HTMLParser):
     def __init__(self, html):
@@ -44,7 +46,8 @@ def test_external_create_connects_the_shared_document_type_picker(client, users,
 def test_external_invalid_creation_has_linkable_field_errors(client, users):
     client.force_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {})
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     controls = Controls(response.content.decode())
     assert any(attrs.get("id") == "id_title_error" and attrs.get("role") == "alert"
                for _, attrs in controls.elements)

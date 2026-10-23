@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}Upload needs attention · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form"><h1>Upload needs attention</h1><div class="alert alert-danger" role="alert">{% for error in upload_errors %}<p class="mb-1">{{ error }}</p>{% endfor %}</div><a class="btn btn-udm-outline" href="{% url 'core:dashboard' %}">Return to Dashboard</a></div>
+{% endblock %}

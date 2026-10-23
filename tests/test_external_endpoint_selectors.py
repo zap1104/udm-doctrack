@@ -11,6 +11,7 @@ from apps.tracking.external_forms import ExternalCreateForm, ExternalRouteForm
 from apps.tracking.external_models import ExternalOffice, ExternalTrackingRecord
 from apps.tracking.external_services import create_record
 from apps.tracking.models import Status
+from tests.upload_helpers import follow_upload_recovery
 
 pytestmark = pytest.mark.django_db
 
@@ -94,7 +95,8 @@ def test_invalid_creation_keeps_the_selected_source(client, users, counterparts)
     client.force_login(users["med_admin"])
     token = f"external:{counterparts['own'].pk}"
     response = client.post(reverse("tracking:external_create"), {"from_endpoint": token})
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     assert response.context["form"]["from_endpoint"].value() == token
     assert f'value="{token}" selected'.encode() in response.content
 
@@ -148,7 +150,8 @@ def test_error_redisplay_can_change_source_without_javascript(client, users, off
 
     client.force_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {"from_office": offices["MED"].pk})
-    assert response.status_code == 400
+    response = follow_upload_recovery(client, response)
+    assert response.status_code == 200
     controls = Controls(response.content.decode())
     assert controls.names["from_office"] == controls.names["from_external_office"] == 0
     response = client.post(reverse("tracking:external_create"), {

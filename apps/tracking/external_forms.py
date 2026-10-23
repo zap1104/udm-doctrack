@@ -5,7 +5,7 @@ from django.db.models import Q
 
 from apps.accounts.models import Office
 from apps.core.document_types import resolve_document_types
-from apps.core.forms import BootstrapFormMixin
+from apps.core.forms import BootstrapFormMixin, MultipleFileField
 from apps.core.models import DocumentType
 
 from .external_models import ExternalOffice
@@ -127,6 +127,7 @@ class EndpointMixin:
 
 
 class ExternalCreateForm(EndpointMixin, BootstrapFormMixin, forms.Form):
+    attachments = MultipleFileField(required=False, label="Attachments")
     managing_office = forms.ModelChoiceField(queryset=Office.objects.none())
     title = forms.CharField(max_length=255)
     description = forms.CharField(required=False, max_length=5000, widget=forms.Textarea(attrs={"rows": 3}))

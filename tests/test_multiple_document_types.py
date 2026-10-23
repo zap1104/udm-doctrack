@@ -19,6 +19,7 @@ from apps.search.services import search_documents
 from apps.tracking import services
 from apps.tracking.forms import DEADLINE_NONE, CreateRecordForm
 from apps.tracking.models import RoutingSLA
+from tests.upload_helpers import follow_upload_recovery
 
 
 @pytest.fixture
@@ -158,6 +159,7 @@ def test_invalid_extra_type_is_rejected_without_changing_draft(client, users, of
     data.setlist("document_types", [str(memo_type.pk), str(letter_type.pk if invalid == "inactive" else 999999999)])
     client.force_login(users["med"])
     response = client.post(f"/tracking/new/?draft={record.pk}", dict(data.lists()))
+    response = follow_upload_recovery(client, response)
     assert response.status_code == 200 and "document_types" in response.context["form"].errors
     record.refresh_from_db()
     assert record.subject == "Protected draft"

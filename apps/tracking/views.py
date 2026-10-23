@@ -5,7 +5,6 @@ from datetime import datetime
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
 from django.db.models import F
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,8 +19,7 @@ from apps.core.business_time import office_hours_caveat
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
-from apps.core.permissions import active_writer
-from apps.core.storage import cleanup_new_files
+from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
 from apps.core.utils import log_action, qr_svg, unsign_download
 
 from . import services
@@ -300,7 +298,7 @@ class RecordListView(AppLoginRequiredMixin, View):
         )
 
 
-class RecordCreateView(OfficeAssignedMixin, View):
+class RecordCreateView(RecoverableUploadMixin, OfficeAssignedMixin, View):
     """Step 1 of 2 — capture details and save a draft (nothing is routed yet)."""
 
     template_name = "tracking/create.html"
@@ -332,71 +330,24 @@ class RecordCreateView(OfficeAssignedMixin, View):
                 **_draft_deadline_initial(record),
                 "receiving_offices": [office.pk for office in _draft_offices(request, record)],
             }
-        form = CreateRecordForm(user=request.user, instance=record, initial=initial)
+        recovery = UploadFormRecovery(request, "tracking-edit" if record else "tracking-create", target_id=record.pk if record else None,
+            factory=lambda data=None, files=None: CreateRecordForm(data, files, user=request.user, instance=record, initial=initial))
+        form = recovery.form
         return self._render_form(request, form, record)
 
     def post(self, request):
-        if "draft" in request.GET:
-            return self._edit_draft(request)
-        form = CreateRecordForm(request.POST, request.FILES, user=request.user)
-        if not form.is_valid():
-            messages.error(request, "Check the highlighted fields.")
-            return self._render_form(request, form)
-
-        deadline = form.deadline_datetime()
-        try:
-            with cleanup_new_files(), transaction.atomic():
-                record = services.create_draft_record(
-                    user=request.user,
-                    subject=form.cleaned_data["subject"],
-                    instructions=form.cleaned_data["instructions"],
-                    document_type=form.cleaned_data.get("document_type"),
-                    document_types=form.cleaned_data.get("document_types"),
-                    classification=form.cleaned_data.get("classification"),
-                    priority=form.cleaned_data.get("priority"),
-                    requested_action=form.cleaned_data.get("requested_action", ""),
-                    due_at=deadline,
-                )
-                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-            return self._render_form(request, form)
-
-        request.session[f"draft_offices_{record.pk}"] = [
-            office.pk for office in form.cleaned_data["receiving_offices"]
-        ]
-        return redirect("tracking:review", pk=record.pk)
-
-    def _edit_draft(self, request):
-        with cleanup_new_files(), transaction.atomic():
-            request.user = active_writer(request.user)
-            visible = self._draft(request)
-            record = TrackingRecord.objects.select_for_update().get(pk=visible.pk)
-            if record.status != Status.DRAFT:
-                return redirect(record.get_absolute_url())
-            if not record.can_user_act(request.user):
-                raise PermissionDenied("You cannot edit this draft.")
-
-            form = CreateRecordForm(request.POST, request.FILES, user=request.user, instance=record)
-            if not form.is_valid():
-                messages.error(request, "Check the highlighted fields.")
-                return self._render_form(request, form, record)
-            try:
-                with cleanup_new_files(), transaction.atomic():
-                    record = form.save(commit=False)
-                    record.due_at = form.deadline_datetime()
-                    record.save(update_fields=[field for field in form.Meta.fields if field != "document_types"] + ["due_at", "updated_at"])
-                    form.save_m2m()
-                    services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
-                    log_action(AuditLog.Action.UPDATE, f"Updated draft “{record.subject}”", actor=request.user, target=record)
-            except ValidationError as exc:
-                messages.error(request, "; ".join(exc.messages))
-                return self._render_form(request, form, record)
-
-            request.session[f"draft_offices_{record.pk}"] = [
-                office.pk for office in form.cleaned_data["receiving_offices"]
-            ]
-            return redirect("tracking:review", pk=record.pk)
+        record = self._draft(request)
+        if record is not None and record.status != Status.DRAFT:
+            return redirect(record.get_absolute_url())
+        recovery = UploadFormRecovery(request, "tracking-edit" if record else "tracking-create", target_id=record.pk if record else None)
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
+        request.session[f"draft_offices_{result.parent_id}"] = [office.pk for office in recovery.form.cleaned_data["receiving_offices"]]
+        return redirect(result.redirect)
 
 
 class RecordReviewView(OfficeAssignedMixin, View):
@@ -490,7 +441,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
 TIMELINE_VISIBLE = 5
 
 
-class RecordDetailView(AppLoginRequiredMixin, View):
+class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
     template_name = "tracking/detail.html"
 
     def get(self, request, pk):
@@ -526,7 +477,7 @@ class RecordDetailView(AppLoginRequiredMixin, View):
             .exclude(event__in=QUIET_EVENTS)
             .order_by("created_at", "id")
         )
-        file_rows = tracking_file_rows(record, request.user)
+        file_rows = tracking_file_rows(record, request.user, request=request)
         attachments = [row["current"]["item"] for row in file_rows]
         archived_document = getattr(record, "archived_document", None)
         can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
@@ -573,10 +524,10 @@ class RecordDetailView(AppLoginRequiredMixin, View):
                 "attachments": attachments,
                 "file_rows": file_rows,
                 "receipt_form": ConfirmReceiptForm(),
-                "remark_form": RemarkForm(),
+                "remark_form": UploadFormRecovery(request, "tracking-remark", target_id=record.pk).form if can_act and record.status != Status.PENDING_RECEIPT else RemarkForm(),
                 # Distinct IDs from RemarkForm's attachments; POST field names
                 # remain unchanged for the existing route endpoint.
-                "route_form": RouteForm(record=record, user=request.user, auto_id="route_%s"),
+                "route_form": UploadFormRecovery(request, "tracking-route", target_id=record.pk).form if can_act and record.status != Status.PENDING_RECEIPT else RouteForm(record=record, user=request.user, auto_id="route_%s"),
                 "complete_form": CompleteForm(),
                 "grant_form": GrantAccessForm(actor=request.user),
                 "pending_offices": record.awaiting_receipt_offices,
@@ -660,53 +611,34 @@ class ConfirmReceiptView(OfficeAssignedMixin, View):
         return redirect(_record_return_url(request, record))
 
 
-class AddRemarkView(OfficeAssignedMixin, View):
+class AddRemarkView(RecoverableUploadMixin, OfficeAssignedMixin, View):
     def post(self, request, pk):
         record = _get_record(request, pk)
         if not record.can_user_act(request.user):
             raise PermissionDenied("Confirm receipt before adding remarks to this document.")
-        form = RemarkForm(request.POST, request.FILES)
-        if not form.is_valid():
-            messages.error(request, "Write the remark before saving.")
-            return redirect(_record_return_url(request, record))
-        try:
-            with cleanup_new_files(), transaction.atomic():
-                services.add_remark(record, user=request.user, remark=form.cleaned_data["remark"])
-                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-            return redirect(_record_return_url(request, record))
+        recovery = UploadFormRecovery(request, "tracking-remark", target_id=record.pk)
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
         messages.success(request, "Remark added to the routing history.")
         return redirect(_record_return_url(request, record))
 
 
-class RouteRecordView(OfficeAssignedMixin, View):
+class RouteRecordView(RecoverableUploadMixin, OfficeAssignedMixin, View):
     def post(self, request, pk):
         record = _get_record(request, pk)
         if not record.can_user_act(request.user):
             raise PermissionDenied("Only the office that currently holds the document can forward it.")
-        form = RouteForm(request.POST, request.FILES, record=record, user=request.user)
-        if not form.is_valid():
-            # The deadline can fail validation too, so report what actually
-            # broke instead of always blaming the office selection.
-            messages.error(request, "; ".join(
-                f"{field}: {error}" for field, errors in form.errors.items() for error in errors
-            ))
-            return redirect(_record_return_url(request, record))
-        try:
-            with cleanup_new_files(), transaction.atomic():
-                services.attach_files(record, form.cleaned_data.get("attachments") or [], user=request.user)
-                services.route_record(
-                    record,
-                    list(form.cleaned_data["offices"]),
-                    user=request.user,
-                    instructions=form.cleaned_data.get("instructions", ""),
-                    action=form.cleaned_data["action"],
-                    due_at=form.deadline_datetime(),
-                )
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-            return redirect(_record_return_url(request, record))
+        recovery = UploadFormRecovery(request, "tracking-route", target_id=record.pk)
+        response = recovery.validation_response()
+        if response:
+            return response
+        result = recovery.finish()
+        if result is None:
+            return recovery.response
         messages.success(request, "Document routed. The receiving office must confirm receipt.")
         return redirect(_record_return_url(request, record))
 

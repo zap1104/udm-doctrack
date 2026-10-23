@@ -406,7 +406,7 @@ def add_attachment(record, *, user, uploaded_file, description=""):
         "ATTACHMENT",
         "File attached",
         detail=attachment.original_name,
-        actual_at=timezone.now() if record.current_office_id else None,
+        actual_at=timezone.now() if record.current_office_id and record.status != Status.DRAFT else None,
     )
     return attachment
 

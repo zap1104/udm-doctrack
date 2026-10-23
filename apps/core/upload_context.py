@@ -37,6 +37,8 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     creation_office_id = actor.office_id
     if query is not None and "office" in query:
         choices = query.getlist("office") if hasattr(query, "getlist") else [query["office"]]
+        if choices == ["all"] and actor.is_system_admin and workflow not in CREATION_WORKFLOWS:
+            choices = [actor.office_id]  # Valid viewing perspective; never impersonate a custodian.
         if len(choices) != 1 or not str(choices[0]).isascii() or not str(choices[0]).isdecimal():
             raise ValidationError("Choose one valid office view.")
         selected = Office.objects.filter(pk=int(choices[0]), is_active=True).first()
@@ -67,8 +69,10 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     if workflow == "tracking-edit" and record.status != Status.DRAFT:
         raise PermissionDenied("This record is no longer an editable draft.")
     if workflow.endswith("-version"):
-        if not record.file_groups.filter(pk=group_id, discarded_at__isnull=True).exists():
+        group = record.file_groups.filter(pk=group_id, discarded_at__isnull=True).first()
+        if group is None:
             raise PermissionDenied("This file is outside the record or is no longer available.")
+        group_id = group.pk
     elif group_id is not None:
         raise ValidationError("Choose a file group only when uploading a new version.")
     return UploadContext(workflow, "EXTERNAL" if external else "OVPA", actor.office_id,

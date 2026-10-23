@@ -10,6 +10,7 @@ from pypdf import PdfWriter
 from apps.core.utils import sign_download
 from apps.tracking.models import Attachment, RecordActivity
 from apps.tracking.services import create_draft_record
+from tests.upload_helpers import follow_upload_recovery
 
 pytestmark = pytest.mark.django_db
 
@@ -160,7 +161,8 @@ def test_upload_version_post_conflicts_and_preserves_logical_count(client, users
     def submit(content):
         return client.post(url, {f'version-{group}-file': SimpleUploadedFile('updated.txt', content), f'version-{group}-expected_version': 1, f'version-{group}-change_summary': 'Signed outside DocTrack'})
     assert submit(b'Updated copy').status_code == 302
-    assert submit(b'Stale copy').status_code == 409
+    stale = follow_upload_recovery(client, submit(b'Stale copy'))
+    assert 'This file changed' in ' '.join(stale.context['form'].non_field_errors())
     assert attachment.file_group.versions.count() == 2
     detail = client.get(attachment.record.get_absolute_url())
     assert len(detail.context['attachments']) == 1
@@ -275,6 +277,7 @@ def test_workbook_chartsheets_are_not_treated_as_cell_worksheets():
 def test_required_initial_multi_upload_rejects_empty_list(client, users):
     client.force_login(users['med'])
     response = client.post('/documents/upload/', {'office': users['med'].office_id, 'source': 'UPLOAD', 'ocr_language': 'auto'})
+    response = follow_upload_recovery(client, response)
     assert response.status_code == 200
     assert 'file' in response.context['form'].errors
 
