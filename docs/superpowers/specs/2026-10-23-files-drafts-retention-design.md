@@ -1,6 +1,6 @@
 # DocTrack: durable uploads, draft removal and five-version file history
 
-Date: 23 October 2026. Status: written design for user review. The user confirmed the five-version binary-retention policy; this document does not authorize implementation, migration or deletion of existing data.
+Date: 23 October 2026. Status: written design approved by the user on 23 October 2026. The five-version binary-retention policy is confirmed. The detailed implementation plan is at `docs/superpowers/plans/2026-10-23-files-drafts-retention.md`; original-data migration/pruning, pushing and deployment remain separate operations.
 
 **ONLY TRY TO FIX WHAT IS NEEDED AND DO NOT BREAK ANYTHING ELSE.**
 
@@ -206,4 +206,4 @@ Primary quality references:
 - [ISO/IEC 25010:2011, previous edition and replacement information](https://www.iso.org/standard/35733.html).
 - [WCAG 2.2](https://www.w3.org/TR/WCAG22/), particularly1.4.1,1.4.3,1.4.10,1.4.11,2.1.1,2.4.7,2.4.11,2.5.8,3.3.1,3.3.3 and4.1.3.
 
-Next gate: user review of this written specification, then a detailed implementation plan. No product code has been changed for this design.
+Written-spec approval is recorded. Next gate: review of the detailed implementation plan under the previously selected Native execution approach. No product code has been changed for this design.
