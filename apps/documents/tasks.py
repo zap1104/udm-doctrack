@@ -302,7 +302,7 @@ def purge_deleted_documents(*, now=None, limit=100):
     failed cleanup retains the expired row for an idempotent retry. Holding the
     document lock serializes cleanup with restore and duplicate workers.
     """
-    from apps.tracking.models import Attachment, ExternalAttachment
+    from apps.core.storage_references import locked_storage_key, referenced_storage_key, storage_for_identity
 
     now = now or timezone.now()
     cutoff = now - timedelta(days=DELETION_RECOVERY_DAYS)
@@ -335,14 +335,19 @@ def purge_deleted_documents(*, now=None, limit=100):
                     if not name or name in seen:
                         continue
                     seen.add(name)
-                    shared = DocumentFile.objects.filter(file=name).exclude(document_id=document.pk).exists()
-                    shared = shared or DocumentFileVersion.objects.filter(file=name).exclude(document_file__document_id=document.pk).exists()
-                    if shared or Attachment.objects.filter(file=name).exists() or ExternalAttachment.objects.filter(file=name).exists():
-                        continue
-                    storage = document_file.file.storage
-                    storage.delete(name)
-                    if storage.exists(name):
-                        raise OSError("Repository storage did not remove the object")
+                    identity = getattr(document_file, "storage_identity", "")
+                    if not identity:
+                        identity = DocumentFileVersion.objects.filter(document_file__document=document,
+                            file=name).exclude(storage_identity="").values_list("storage_identity", flat=True).first() or ""
+                    with locked_storage_key(identity, name):
+                        if referenced_storage_key(identity, name, excluding={"document": document.pk}, include_audit=True):
+                            continue
+                        storage = storage_for_identity(identity)
+                        if storage is None:
+                            raise OSError("Repository storage identity requires verified reconciliation")
+                        storage.delete(name)
+                        if storage.exists(name):
+                            raise OSError("Repository storage did not remove the object")
                 tag_ids = list(document.tags.values_list("pk", flat=True))
                 Tag.objects.filter(pk__in=tag_ids, usage_count__gt=0).update(usage_count=F("usage_count") - 1)
                 # SET_NULL would expose previously hidden document notices again.

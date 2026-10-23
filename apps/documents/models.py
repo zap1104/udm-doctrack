@@ -477,10 +477,12 @@ class DocumentFile(ImmutableFileMixin, TimeStampedModel):
     def save(self, *args, create_snapshot=True, **kwargs):
         from django.db import transaction
 
+        from apps.core.storage_references import guarded_file_reference
+
         from .file_versions import initial_snapshot
         self._check_immutable()
         creating = self._state.adding
-        with transaction.atomic():
+        with transaction.atomic(), guarded_file_reference(self.file):
             result = super().save(*args, **kwargs)
             if creating and create_snapshot:
                 initial_snapshot(self)

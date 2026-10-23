@@ -178,6 +178,8 @@ def stage_files(draft_id, files, *, user, expected_revision, client_upload_ids):
         changed = False
         for uploaded, identity in zip(files, identities, strict=True):
             try:
+                if not uploaded.size:
+                    raise ValidationError("The selected file is empty. Choose a file with content.")
                 validate_upload(uploaded)
                 checksum = checksum_of(uploaded)
                 prior = existing.get(identity)

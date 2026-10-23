@@ -72,7 +72,7 @@ def retire_excess_versions(group, *, policy_actor=None, limit=5):
     parent = type(parent).objects.select_for_update().get(pk=parent.pk)
     group = type(group).objects.select_for_update().get(pk=group.pk)
     if kind == "repository":
-        if getattr(parent, "deleted_at", None):
+        if not parent.is_active:
             return []
     elif group.discarded_at:
         return []

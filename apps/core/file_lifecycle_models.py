@@ -119,6 +119,7 @@ class StorageCleanupIntent(models.Model):
     last_error = models.CharField(max_length=1000, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
+    superseded_by = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="legacy_aliases", editable=False)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["storage_identity", "storage_key"], name="file_cleanup_exact_key_unique")]

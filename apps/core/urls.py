@@ -6,6 +6,8 @@ from . import file_views, upload_views, views
 app_name = "core"
 
 urlpatterns = [
+    path("uploads/saved/", upload_views.UploadDraftListView.as_view(), name="upload_drafts"),
+    path("uploads/drafts/<uuid:draft_id>/discard/", upload_views.DiscardUploadDraftView.as_view(), name="upload_draft_discard"),
     path("uploads/drafts/", upload_views.UploadDraftCreateView.as_view(), name="upload_draft_create"),
     path("uploads/drafts/<uuid:draft_id>/", upload_views.UploadDraftView.as_view(), name="upload_draft"),
     path("uploads/drafts/<uuid:draft_id>/files/", upload_views.StageUploadView.as_view(), name="upload_draft_files"),

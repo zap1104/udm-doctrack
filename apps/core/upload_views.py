@@ -3,7 +3,7 @@ import json
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from .file_access import file_url
@@ -87,3 +87,32 @@ class RemoveStagedUploadView(UploadAPIView):
         self.draft(request, draft_id)
         draft = discard_staged_file(draft_id, file_id, user=request.user, expected_revision=one_value(request.POST, "expected_revision"))
         return private(JsonResponse(serialized_draft(draft, request.user)))
+
+
+class UploadDraftListView(UploadAPIView):
+    def get(self, request):
+        from django.db import transaction
+
+        from .permissions import active_writer
+        with transaction.atomic():
+            actor = active_writer(request.user)
+            drafts = list(UploadDraft.objects.filter(owner=actor, owner_office_id_snapshot=actor.office_id,
+                state="open").order_by("-updated_at")[:50])
+        rows = []
+        for draft in drafts:
+            try:
+                self.draft(request, draft.pk)
+            except (PermissionDenied, ValidationError):
+                continue
+            rows.append({"draft": draft, "continue_url": form_url(UploadContext(**draft.binding), draft.pk)})
+        return private(render(request, "core/upload_drafts.html", {"saved_uploads": rows}))
+
+
+class DiscardUploadDraftView(UploadAPIView):
+    def post(self, request, draft_id):
+        from .file_maintenance import discard_manifest
+        self.draft(request, draft_id)
+        if one_value(request.POST, "confirm") != "on":
+            raise ValidationError("Confirm that you want to discard this saved form.")
+        discard_manifest(draft_id, user=request.user, expected_revision=one_value(request.POST, "revision"))
+        return redirect("core:upload_drafts")

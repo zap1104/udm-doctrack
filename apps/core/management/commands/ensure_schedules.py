@@ -22,6 +22,7 @@ class Command(BaseCommand):
             ("external-notification-chase", "apps.core.tasks.chase_external_followups"),
             ("security-throttle-pruning", "apps.core.tasks.prune_security_throttles"),
             ("deleted-document-purging", "apps.documents.tasks.purge_deleted_documents"),
+            ("private-file-maintenance", "apps.core.file_maintenance.cleanup_file_uploads"),
         ]
         for name, func in wanted:
             schedule, created = Schedule.objects.update_or_create(

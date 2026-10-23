@@ -6,6 +6,7 @@
   <input type="hidden" name="upload_draft" value="{{ form.recovery.draft_id|default:'' }}">
   <input type="hidden" name="upload_revision" value="{{ form.recovery.revision }}">
   <div data-upload-status role="status" aria-live="polite" class="small text-muted"></div>
+  <a class="small" href="{% url 'core:upload_drafts' %}">Saved upload forms</a>
   <ul class="list-unstyled" data-upload-file-list>
     {% for row in form.recovery.files %}
     <li class="file-chip my-2" data-saved-upload="{{ row.item.pk }}" data-client-upload-id="{{ row.item.client_upload_id }}" data-file-name="{{ row.item.original_name }}" data-file-size="{{ row.item.size }}">

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Saved upload forms · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="workspace-page workspace-form"><h1>Saved upload forms</h1><p>Your unfinished uploads. Files expire after 24 hours without a save.</p>
+{% for row in saved_uploads %}<div class="card-udm mb-3"><div class="card-udm-body">
+<strong>{{ row.draft.get_workflow_display }}</strong><p class="small text-muted">Saved {{ row.draft.updated_at }} · Expires {{ row.draft.expires_at }}</p>
+<a class="btn btn-udm" href="{{ row.continue_url }}">Continue form</a>
+<details class="mt-2"><summary>Discard saved form</summary><form method="post" action="{% url 'core:upload_draft_discard' row.draft.pk %}">{% csrf_token %}<input type="hidden" name="revision" value="{{ row.draft.revision }}"><label><input type="checkbox" name="confirm" required> Discard this form and its temporary files</label><button class="btn btn-danger btn-sm" type="submit">Discard</button></form></details>
+</div></div>{% empty %}<p>No saved upload forms.</p>{% endfor %}</div>
+{% endblock %}

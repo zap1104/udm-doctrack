@@ -35,10 +35,12 @@ class DocumentFileVersion(ImmutableFileMixin, VersionLifecycleModel):
         return f"{self.original_name} (version {self.version_number})"
 
     def save(self, *args, **kwargs):
+        from apps.core.storage_references import guarded_file_reference
         self._check_immutable()
         if self.version_number < 1:
             raise ValidationError("The version number must be positive.")
-        return super().save(*args, **kwargs)
+        with guarded_file_reference(self.file):
+            return super().save(*args, **kwargs)
 
     @property
     def extension(self):
