@@ -638,7 +638,9 @@
     var folds = document.querySelectorAll("details.fold");
     if (!folds.length) return;
 
-    folds.forEach(function (fold) { fold.open = false; });
+    folds.forEach(function (fold) {
+      if (!fold.hasAttribute("data-keep-open")) fold.open = false;
+    });
 
     window.addEventListener("beforeprint", function () {
       folds.forEach(function (fold) { fold.open = true; });
