@@ -40,7 +40,7 @@ def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(clien
     context = response.context
     expected_pending = 1 if role == "sup" else 3
     assert context["pending_receipt"] == expected_pending
-    assert context["partial_receipts"] == (2 if role == "sup" else 0)
+    assert context["partial_receipts"] == 2  # Mixed receipts are a batch fact, independent of the viewer's own stage.
     assert context["awaiting_receipt"] == 3
     listed = client.get(context["report_pending_receipt_url"]).context
     assert listed["total"] == context["pending_receipt"]

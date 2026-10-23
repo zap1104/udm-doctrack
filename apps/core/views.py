@@ -1600,7 +1600,8 @@ class ReportsView(AppLoginRequiredMixin, TemplateView):
         awaiting_qs = tracking_services.awaiting_receipt(records, user)
         awaiting_counts = awaiting_qs.aggregate(
             total=Count("pk", distinct=True),
-            partial=Count("pk", filter=~Q(stage=Status.PENDING_RECEIPT), distinct=True),
+            partial=Count("pk", filter=Q(pk__in=RoutingStep.objects.filter(
+                batch=F("record__current_batch"), received_at__isnull=False).values("record_id")), distinct=True),
         )
         awaiting = awaiting_counts["total"]
         # The rows the batch scope removes: an unconfirmed step, but not in the

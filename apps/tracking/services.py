@@ -1544,7 +1544,7 @@ def apply_scope(records, scope, user, office=None):
             to_office,
             routing_steps__received_at__isnull=True,
             routing_steps__batch=F("current_batch"),
-        )
+        ).exclude(status__in=COMPLETED_STATUSES)
     if scope == SCOPE_CUSTODY:
         if every_office:
             return records.filter(current_office__isnull=False)
@@ -1553,7 +1553,7 @@ def apply_scope(records, scope, user, office=None):
         from_office,
         routing_steps__received_at__isnull=True,
         routing_steps__batch=F("current_batch"),
-    )
+    ).exclude(status__in=COMPLETED_STATUSES)
 
 
 def awaiting_receipt(records, user):
