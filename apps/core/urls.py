@@ -14,6 +14,7 @@ urlpatterns = [
     path("files/content/upload/<uuid:pk>/", file_views.FileContentView.as_view(), {"kind": "upload"}, name="upload_file_content"),
     path("files/download/upload/<uuid:pk>/", file_views.FileVersionDownloadView.as_view(), {"kind": "upload"}, name="upload_file_download"),
     path("files/preview-frame/", file_views.PreviewFrameView.as_view(), name="file_preview_frame"),
+    path("files/history/<slug:kind>/<int:pk>/", file_views.FileHistoryView.as_view(), name="file_history"),
     path("files/preview/<slug:kind>/<int:pk>/", file_views.FilePreviewView.as_view(), name="file_preview"),
     path("files/content/<slug:kind>/<int:pk>/", file_views.FileContentView.as_view(), name="file_content"),
     path("files/download/<slug:kind>/<int:pk>/", file_views.FileVersionDownloadView.as_view(), name="file_download"),

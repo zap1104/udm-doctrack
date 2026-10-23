@@ -110,6 +110,21 @@ class FileVersionDownloadView(FileVersionView):
         )
 
 
+class FileHistoryView(AppLoginRequiredMixin, View):
+    def get(self, request, kind, pk):
+        from django.core.exceptions import ValidationError
+
+        from apps.core.file_history import file_history_rows, resolve_group
+        group = resolve_group(kind, pk, request.user)
+        try:
+            if len(request.GET.getlist("cursor")) > 1:
+                raise ValidationError("Open one history page at a time.")
+            history = file_history_rows(group, user=request.user, cursor=request.GET.get("cursor"))
+        except ValidationError as exc:
+            return private(HttpResponse(" ".join(exc.messages), status=400))
+        return private(render(request, "core/file_history.html", {"group": group, "history": history}))
+
+
 class PreviewFrameView(AppLoginRequiredMixin, View):
     @staticmethod
     @xframe_options_sameorigin

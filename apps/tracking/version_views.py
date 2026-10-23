@@ -27,11 +27,12 @@ def version_rows(versions, kind, user):
 
 
 def tracking_file_rows(record, user, *, external=False, request=None):
+    from apps.core.file_history import history_url, retained_groups
     kind = "external" if external else "tracking"
     can_update = record.status not in (*COMPLETED_STATUSES, "PENDING_RECEIPT") and (record.can_act(user) if external else record.can_user_act(user))
     rows = []
-    for group in record.file_groups.prefetch_related("versions").order_by("pk"):
-        versions = sorted(group.versions.all(), key=lambda item: item.version_number, reverse=True)
+    for group in retained_groups(record.file_groups.filter(discarded_at__isnull=True)).order_by("pk"):
+        versions = group.retained_versions
         if not versions:
             continue
         version_form = VersionUploadForm(initial={"expected_version": versions[0].version_number, "expected_revision": getattr(record, "revision", None)}, prefix=f"version-{group.pk}")
@@ -39,7 +40,7 @@ def tracking_file_rows(record, user, *, external=False, request=None):
             version_form = UploadFormRecovery(request, "external-version" if external else "tracking-version", target_id=record.pk, group_id=group.pk).form
         rows.append(dict(
             current=version_rows(versions[:1], kind, user)[0], history=version_rows(versions[1:], kind, user),
-            version_count=len(versions), can_update=can_update,
+            version_count=group.version_total, audit_count=group.audit_total, audit_url=history_url(group), can_update=can_update,
             upload_url=reverse("tracking:external_file_version" if external else "tracking:file_version", args=[record.pk, group.pk]),
             form=version_form,
         ))

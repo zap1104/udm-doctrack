@@ -18,7 +18,7 @@ def _parent(group):
         external = record._meta.model_name == "externaltrackingrecord"
         return record, "external" if external else "tracking", "EXTERNAL" if external else "OVPA", getattr(record, "managing_office_id", None) if external else record.originating_office_id
     document = group.document
-    return document, "repository", document.collection, document.owning_office_id
+    return document, "repository", document.collection, document.office_id
 
 
 def _receipt(group, *, actor, action, reason, version=None):
@@ -29,7 +29,7 @@ def _receipt(group, *, actor, action, reason, version=None):
         "change_summary": version.change_summary,
         "uploader_name": version.uploader_name_snapshot,
         "uploader_office": version.uploader_office_snapshot,
-        "uploaded_at": version.created_at.isoformat(),
+        "uploaded_at": (getattr(version, "created_at", None) or getattr(version, "uploaded_at", None)).isoformat() if (getattr(version, "created_at", None) or getattr(version, "uploaded_at", None)) else None,
     }
     return FileLifecycleEvent.objects.create(resource_kind=kind, parent_id=parent.pk,
         group_id=group.pk, version_id=version.pk if version else None, collection=collection,
@@ -46,6 +46,13 @@ def _retire(group, versions, *, actor, reason):
         with lifecycle_write():
             type(version).objects.filter(pk=version.pk, retired_at__isnull=True).update(
                 retired_at=timezone.now(), retirement_reason=reason[:255])
+        if kind == "repository":
+            # Historical source evidence must not act as an alternate copy.
+            from apps.documents.models import ExtractionRun, ExtractionUnit, SearchChunk
+            runs = ExtractionRun.objects.filter(file_version=version)
+            runs.update(is_current=False)
+            SearchChunk.objects.filter(unit__run__in=runs).delete()
+            ExtractionUnit.objects.filter(run__in=runs).update(raw_text="", native_raw_text="", ocr_raw_text="", normalized_text="")
         events.append(_receipt(group, actor=actor, action="retired", reason=reason, version=version))
         if version.file.name:
             StorageCleanupIntent.objects.get_or_create(storage_identity=version.storage_identity,

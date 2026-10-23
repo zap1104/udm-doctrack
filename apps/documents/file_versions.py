@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.core.file_lifecycle_models import VersionLifecycleModel
+from apps.core.file_lifecycle_models import VersionLifecycleModel, lifecycle_write
 from apps.tracking.file_version_models import ImmutableFileMixin, ImmutableFileQuerySet
 
 
@@ -87,11 +87,13 @@ def copy_tracking_history(record, document, created_files):
     """
     from .models import DocumentFile
     roots = []
-    for group in record.file_groups.prefetch_related("versions").all():
+    for group in record.file_groups.filter(discarded_at__isnull=True).prefetch_related("versions"):
         versions = sorted(group.versions.all(), key=lambda row: row.version_number)
         if not versions or [row.version_number for row in versions] != list(range(1, len(versions) + 1)):
             raise ValidationError("Filing stopped because this file's version history is incomplete.")
         latest = versions[-1]
+        if not latest.available_content:
+            raise ValidationError("Filing stopped because the current file is unavailable.")
         root = DocumentFile(document=document, original_name=latest.original_name, content_type=latest.content_type,
             size=latest.size, checksum=latest.checksum, is_primary=not roots,
             uploaded_by=latest.uploaded_by)
@@ -105,7 +107,10 @@ def copy_tracking_history(record, document, created_files):
                 checksum=source.checksum, change_summary=source.change_summary, uploaded_by=source.uploaded_by,
                 uploader_name_snapshot=source.uploader_name_snapshot, uploader_office_snapshot=source.uploader_office_snapshot,
                 uploaded_at=source.created_at)
-            if source.pk == latest.pk:
+            if source.retired_at is not None:
+                snapshot.retired_at = source.retired_at
+                snapshot.retirement_reason = source.retirement_reason
+            elif source.pk == latest.pk:
                 snapshot.file = root.file.name
                 snapshot.size = root.size
                 snapshot.checksum = root.checksum
@@ -113,6 +118,7 @@ def copy_tracking_history(record, document, created_files):
                 size, checksum = _copy_source_version(source, snapshot, created_files)
                 snapshot.size = source.size or size
                 snapshot.checksum = source.checksum or checksum
-            snapshot.save()
+            with lifecycle_write():
+                snapshot.save()
         roots.append(root)
     return roots

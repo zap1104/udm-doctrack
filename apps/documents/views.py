@@ -270,7 +270,7 @@ class RepositoryView(AppLoginRequiredMixin, View):
         pending_count = pending.count()
         if pending_view:
             pending = self._filter_pending(pending, data)
-        pending = pending.annotate(file_count=Count("file_groups", distinct=True)).order_by("completed_at", "pk")
+        pending = pending.annotate(file_count=Count("file_groups", filter=Q(file_groups__discarded_at__isnull=True), distinct=True)).order_by("completed_at", "pk")
         if pending_view:
             page_context = paginate(request, pending, PAGE_SIZE)
             page = page_context["page_obj"]
@@ -528,13 +528,14 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         document = _get_document(request, pk)
+        from apps.core.file_history import history_url, retained_groups
         from apps.tracking.version_views import version_rows
 
         file_rows = []
-        for file in document.files.prefetch_related("versions"):
-            versions = sorted(file.versions.all(), key=lambda version: version.version_number, reverse=True)
+        for file in retained_groups(document.files.all()):
+            versions = file.retained_versions
             if versions:
-                file_rows.append({"current": version_rows(versions[:1], "repository", request.user)[0], "history": version_rows(versions[1:], "repository", request.user), "page_count": file.page_count})
+                file_rows.append({"current": version_rows(versions[:1], "repository", request.user)[0], "history": version_rows(versions[1:], "repository", request.user), "page_count": file.page_count, "audit_count": file.audit_total, "audit_url": history_url(file)})
         return render(
             request,
             self.template_name,

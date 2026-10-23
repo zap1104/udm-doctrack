@@ -16,6 +16,7 @@ from apps.accounts.models import Office
 from apps.core import analytics
 from apps.core import filters as core_filters
 from apps.core.business_time import office_hours_caveat
+from apps.core.file_history import current_tracking_files
 from apps.core.mixins import AppLoginRequiredMixin, OfficeAssignedMixin
 from apps.core.models import AuditLog
 from apps.core.pagination import paginate
@@ -316,7 +317,7 @@ class RecordCreateView(RecoverableUploadMixin, OfficeAssignedMixin, View):
         return render(request, self.template_name, {
             "form": form,
             "record": record,
-            "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")] if record else [],
+            "attachments": current_tracking_files(record) if record else [],
             "originating_office": record.originating_office if record else request.user.office,
         })
 
@@ -369,7 +370,7 @@ class RecordReviewView(OfficeAssignedMixin, View):
             offices = list(form.cleaned_data.get("receiving_offices") or [])
         return {
             "record": record,
-            "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")],
+            "attachments": current_tracking_files(record),
             "form": form,
             "offices": offices,
             **_deadline_summary(form),
@@ -808,7 +809,7 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
                 "steps": record.routing_steps.select_related(
                     "from_office", "to_office", "sent_by", "received_by"
                 ).order_by("sequence"),
-                "attachments": [group.latest_version for group in record.file_groups.prefetch_related("versions")],
+                "attachments": current_tracking_files(record),
                 "printed_at": timezone.localtime(),
                 "printed_by": request.user,
                 # Printed on the slip so a paper copy can be matched to the

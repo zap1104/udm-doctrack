@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views import View
 
 from apps.accounts.models import Office
+from apps.core.file_history import current_tracking_files
 from apps.core.mixins import AdminRequiredMixin, AppLoginRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.upload_forms import RecoverableUploadMixin, UploadFormRecovery
@@ -369,7 +370,7 @@ class ExternalDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
 
         record = _record(request, pk)
         attachments = []
-        for attachment in record.attachments.all():
+        for attachment in current_tracking_files(record):
             token = sign_download(f"external-attachment:{attachment.pk}:{request.user.pk}")
             attachments.append(
                 (
@@ -417,7 +418,7 @@ class ExternalSlipView(AppLoginRequiredMixin, View):
             _context(
                 record=record,
                 steps=record.routing_steps.all(),
-                attachments=[group.latest_version for group in record.file_groups.prefetch_related("versions")],
+                attachments=current_tracking_files(record),
                 annotations=record.activities.filter(event="ANNOTATION"),
                 printed_at=timezone.localtime(),
                 print_reference=entry.pk,
