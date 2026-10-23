@@ -1,14 +1,17 @@
 """Private upload staging with serialized quotas, authority and retry identity."""
-from contextlib import contextmanager
-from dataclasses import dataclass, field
+import hashlib
+import json
+from contextlib import ExitStack, contextmanager
+from dataclasses import asdict, dataclass, field
 from datetime import timedelta
 from uuid import UUID
 
 from django.conf import settings
 from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Model, QuerySet, Sum
 from django.utils import timezone
 
 from .models import StagedUpload, StorageCleanupIntent, UploadDraft
@@ -23,6 +26,16 @@ class StageResult:
     revision: int
     accepted_ids: list = field(default_factory=list)
     errors: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class UploadResult:
+    workflow: str
+    parent_kind: str
+    parent_id: int
+    redirect: str
+    record_revision: int | None = None
+    version_number: int | None = None
 
 
 def _fresh_context(actor, context, *, lock_parent=False):
@@ -87,7 +100,17 @@ def locked_draft(draft_id, *, user, context=None, allow_consumed=False):
         binding = UploadContext(**preview.binding)
         if context is not None and binding != context:
             raise PermissionDenied("This saved upload belongs to another action.")
-        _fresh_context(actor, binding, lock_parent=True)
+        if allow_consumed and preview.state == "consumed" and binding.target_id:
+            # Replaying a committed route need not regain custody to read its
+            # result. This path performs no mutation and still requires access.
+            from apps.tracking.models import ExternalTrackingRecord, TrackingRecord
+
+            model = ExternalTrackingRecord if binding.target_kind == "external" else TrackingRecord
+            visible = model.objects.visible_to(actor).filter(pk=binding.target_id).values("pk")
+            if not model.objects.select_for_update().filter(pk__in=visible).exists():
+                raise PermissionDenied("The submitted record is no longer accessible.")
+        else:
+            _fresh_context(actor, binding, lock_parent=True)
         draft = UploadDraft.objects.select_for_update().get(pk=preview.pk)
         if draft.binding != preview.binding or draft.owner_id != actor.pk:
             raise PermissionDenied("This saved upload changed. Reload the form.")
@@ -214,3 +237,85 @@ def discard_staged_file(draft_id, file_id, *, user, expected_revision):
             queue_stage_cleanup(saved, reason="Removed from private upload")
             _touch(draft)
         return draft
+
+
+def _normalize(value):
+    if isinstance(value, Model):
+        return {"model": value._meta.label_lower, "id": value.pk}
+    if isinstance(value, dict):
+        return {str(key): _normalize(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, QuerySet)):
+        return [_normalize(item) for item in value]
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise ValidationError("This upload contains an unsupported form value.")
+
+
+def _submission_fingerprint(draft, data, expected_version):
+    ignored = {"file", "files", "attachments", "uploaded_file", "csrfmiddlewaretoken", "upload_draft", "form_nonce"}
+    values = {key: value for key, value in data.items() if key not in ignored}
+    files = [(str(row.pk), row.checksum) for row in draft.files.exclude(state="removed").order_by("pk")]
+    serialized = json.dumps(_normalize({"values": values, "files": files, "expected_version": expected_version}),
+                            sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _visible_result(result, actor):
+    if result.parent_kind == "repository":
+        from apps.documents.models import Document
+        model = Document
+    else:
+        from apps.tracking.models import ExternalTrackingRecord, TrackingRecord
+        model = ExternalTrackingRecord if result.parent_kind == "external" else TrackingRecord
+    if not model.objects.visible_to(actor).filter(pk=result.parent_id).exists():
+        raise PermissionDenied("The submitted record is no longer accessible.")
+    return result
+
+
+def finalize_upload(draft_id, *, user, context, cleaned_data, expected_revision, expected_version=None):
+    """Commit one business action and its saved-upload receipt together."""
+    with cleanup_new_files(), locked_draft(draft_id, user=user, context=context, allow_consumed=True) as (actor, draft, binding):
+        fingerprint = _submission_fingerprint(draft, cleaned_data, expected_version)
+        if draft.state == "consumed":
+            if fingerprint != draft.consumed_fingerprint:
+                raise ValidationError("This saved upload was already submitted with different values. Start a new form.")
+            return _visible_result(UploadResult(**draft.result), actor)
+        _check_revision(draft, expected_revision)
+        staged = list(draft.files.select_for_update().filter(state="saved").order_by("created_at", "pk"))
+        limit = 1 if binding.workflow.endswith("-version") else settings.MAX_UPLOAD_FILES
+        if len(staged) > limit:
+            raise ValidationError(f"This form accepts at most {limit} saved file(s).")
+        with ExitStack() as handles:
+            uploads = []
+            for saved in staged:
+                if saved.storage_identity != storage_identity(saved.file.storage):
+                    raise ValidationError("Saved-file storage changed. Contact an administrator before continuing.")
+                try:
+                    stream = handles.enter_context(saved.file.open("rb"))
+                    if checksum_of(stream) != saved.checksum:
+                        raise ValidationError("A saved file changed or failed its checksum. Upload it again.")
+                    stream.seek(0)
+                    uploaded = UploadedFile(stream, name=saved.original_name, content_type=saved.content_type, size=saved.size)
+                    validate_upload(uploaded)
+                    uploads.append(uploaded)
+                except OSError as exc:
+                    raise ValidationError("A saved file is unavailable. Retry its upload before submitting.") from exc
+            if binding.workflow in {"repository-upload", "external-repository-upload"}:
+                from apps.documents.upload_drafts import finalize_repository_upload
+                result = finalize_repository_upload(binding, cleaned_data, uploads, user=actor)
+            else:
+                from apps.tracking.upload_drafts import finalize_tracking_upload
+                result = finalize_tracking_upload(binding, cleaned_data, uploads, user=actor, expected_version=expected_version)
+        for saved in staged:
+            saved.state = "consumed"
+            saved.save(update_fields=["state"])
+            queue_stage_cleanup(saved, reason="Saved upload consumed into permanent files")
+        draft.state = "consumed"
+        draft.result = asdict(result)
+        draft.consumed_fingerprint = fingerprint
+        draft.revision += 1
+        draft.updated_at = timezone.now()
+        draft.save(update_fields=["state", "result", "consumed_fingerprint", "revision", "updated_at"])
+        return result

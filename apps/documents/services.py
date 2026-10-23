@@ -52,11 +52,11 @@ def suggested_tags_for(user, *, collection=Collection.OVPA):
 # ---------------------------------------------------------------------------
 def ingest_upload(
     *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
-    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
+    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None, defer_extraction=False,
 ) -> tuple[Document, object]:
     document, suggestion = _persist_upload(user=user, uploaded_file=uploaded_file, uploaded_files=uploaded_files,
         office=office, source=source, ocr_language=ocr_language, allow_external_ocr=allow_external_ocr,
-        collection=collection, external_offices=external_offices)
+        collection=collection, external_offices=external_offices, defer_extraction=defer_extraction)
     if settings.ENABLE_SOURCE_UNIT_EXTRACTION:
         from apps.accounts.models import User
 
@@ -73,7 +73,7 @@ def ingest_upload(
 @transaction.atomic
 def _persist_upload(
     *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
-    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None,
+    ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None, defer_extraction=False,
 ) -> tuple[Document, object]:
     """Create a document and either extract now or enqueue extraction after commit.
 
@@ -117,7 +117,7 @@ def _persist_upload(
             language_hint=ocr_language,
             allow_external_ocr=allow_external_ocr,
         )
-        if not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION
+        if not defer_extraction and not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION
         else None
     )
     document = Document.objects.create(
@@ -155,10 +155,12 @@ def _persist_upload(
         ExternalDocumentOffice.objects.create(document=document, external_office=counterpart, name_snapshot=counterpart.name, code_snapshot=counterpart.code)
 
     for initial_file in initial_files[1:]:
-        _append_initial_file(document, initial_file, user=user)
+        _append_initial_file(document, initial_file, user=user, run_extraction=not defer_extraction)
 
     if extraction is None:
-        _enqueue_extraction(document, user_id=user.pk, file_ids=None if settings.ENABLE_SOURCE_UNIT_EXTRACTION else [document_file.pk])
+        _enqueue_extraction(document, user_id=user.pk, file_ids=None if settings.ENABLE_SOURCE_UNIT_EXTRACTION or defer_extraction else [document_file.pk])
+        if defer_extraction and not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
+            transaction.on_commit(lambda: _extract_saved_upload(document.pk, user.pk), robust=True)
         suggestion = Suggestion()
     else:
         suggestion = suggest_metadata(
@@ -181,6 +183,16 @@ def _persist_upload(
         target=document,
     )
     return document, suggestion
+
+
+def _extract_saved_upload(document_id, actor_id):
+    """Legacy local extraction also waits until saved-upload consumption commits."""
+    from .tasks import extract_document_task
+
+    try:
+        extract_document_task(document_id, user_id=actor_id)
+    except Exception:
+        logger.exception("Saved upload extraction failed; the document remains available for retry")
 
 
 def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False, robust=False) -> None:
