@@ -52,6 +52,13 @@ class FileVersionView(AppLoginRequiredMixin, View):
 class FilePreviewView(FileVersionView):
     def respond(self, request, resource):
         item = resource.item
+        back_url = resource.parent.get_absolute_url()
+        if resource.kind == "upload":
+            from .upload_context import UploadContext
+            from .upload_forms import authorized_form_slots, form_url, url_with_slots
+            context_binding = UploadContext(**resource.parent.binding)
+            back_url = url_with_slots(form_url(context_binding, resource.parent.pk),
+                authorized_form_slots(request.user, context_binding, request.GET))
         context = {
             "is_saved_upload": resource.kind == "upload",
             "file": item, "preview_kind": preview_kind(item.original_name),
@@ -59,7 +66,7 @@ class FilePreviewView(FileVersionView):
             "content_url": file_url(resource.kind, item.pk, request.user, "content"),
             "download_url": file_url(resource.kind, item.pk, request.user, "download"),
             "frame_url": reverse("core:file_preview_frame"),
-            "back_url": resource.parent.get_absolute_url() + f"#file-version-{resource.kind}-{item.pk}",
+            "back_url": back_url + f"#file-version-{resource.kind}-{item.pk}",
         }
         try:
             if context["preview_kind"] in {"txt", "table"}:

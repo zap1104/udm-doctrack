@@ -98,7 +98,7 @@ def test_rejected_new_draft_attachment_does_not_leave_a_draft_or_creation_histor
     client.force_login(users["med"])
     before_audits = list(AuditLog.objects.values())
 
-    response = client.post(reverse("tracking:create"), _new_record_data(offices, attachments=_invalid_pdf()))
+    response = client.post(reverse("tracking:create"), _new_record_data(offices, attachments=_invalid_pdf()), follow=True)
 
     assert response.status_code == 200
     assert "do not match" in response.content.decode()
@@ -118,12 +118,13 @@ def test_rejected_remark_attachment_does_not_save_the_remark_or_promote_status(c
     })
 
     assert response.status_code == 302
-    assert response["Location"] == record.get_absolute_url()
-    assert any("do not match" in str(message) for message in response.wsgi_request._messages)
+    assert response["Location"].startswith(record.get_absolute_url() + "?")
     assert TrackingRecord.objects.values().get(pk=record.pk) == before_record
     assert list(record.activities.values()) == before_history
     assert list(AuditLog.objects.values()) == before_audits
     assert not record.attachments.exists()
+    restored = client.get(response["Location"])
+    assert "do not match" in restored.content.decode()
 
 
 def test_failed_forward_does_not_keep_its_attachment(client, users, offices, received_record, monkeypatch):
@@ -147,11 +148,12 @@ def test_failed_forward_does_not_keep_its_attachment(client, users, offices, rec
     })
 
     assert response.status_code == 302
-    assert any("active receiving office" in str(message) for message in response.wsgi_request._messages)
     assert not record.attachments.exists()
     assert TrackingRecord.objects.values().get(pk=record.pk) == before_record
     assert list(record.activities.values()) == before_history
     assert record.routing_steps.count() == 1
+    restored = client.get(response["Location"])
+    assert "active receiving office" in restored.content.decode()
 
 
 def test_administrator_completion_before_receipt_returns_a_validation_message(client, users, sent_record):

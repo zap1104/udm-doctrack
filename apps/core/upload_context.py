@@ -29,7 +29,11 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     if not getattr(user, "is_authenticated", False):
         raise PermissionDenied("Sign in to upload files.")
     actor = User.objects.select_related("office").filter(pk=user.pk, is_active=True).first()
-    if actor is None or not actor.can_start_work or not actor.office_id or not actor.office.is_active:
+    if actor is None or not actor.can_start_work:
+        raise PermissionDenied("Your account cannot upload files.")
+    if not actor.is_system_admin and (not actor.office_id or not actor.office.is_active):
+        if workflow in CREATION_WORKFLOWS and query is not None and "office" in query:
+            raise ValidationError("Choose one active office available to your account.")
         raise PermissionDenied("Your account cannot upload files.")
     if workflow not in (*INTERNAL_WORKFLOWS, *EXTERNAL_WORKFLOWS):
         raise ValidationError("Choose a supported upload action.")
@@ -37,15 +41,27 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     creation_office_id = actor.office_id
     if query is not None and "office" in query:
         choices = query.getlist("office") if hasattr(query, "getlist") else [query["office"]]
-        if choices == ["all"] and actor.is_system_admin and workflow not in CREATION_WORKFLOWS:
-            choices = [actor.office_id]  # Valid viewing perspective; never impersonate a custodian.
-        if len(choices) != 1 or not str(choices[0]).isascii() or not str(choices[0]).isdecimal():
+        all_perspective = choices == ["all"] and actor.is_system_admin and workflow not in CREATION_WORKFLOWS
+        if len(choices) != 1:
             raise ValidationError("Choose one valid office view.")
-        selected = Office.objects.filter(pk=int(choices[0]), is_active=True).first()
-        if selected is None or (not actor.is_system_admin and selected.pk != actor.office_id):
-            raise PermissionDenied("This office view is not available to your account.")
-        creation_office_id = selected.pk
+        if not all_perspective:
+            value = str(choices[0])
+            if value.isascii() and value.isdecimal():
+                selected = Office.objects.filter(pk=int(value), is_active=True).first()
+            elif not external and workflow not in CREATION_WORKFLOWS:
+                # Existing internal detail URLs also accept office codes. The
+                # viewing perspective never replaces the actor's own custody.
+                selected = Office.objects.filter(code=value, is_active=True).first()
+            else:
+                raise ValidationError("Choose one valid office view.")
+            if selected is None or (not actor.is_system_admin and selected.pk != actor.office_id):
+                if external and workflow in CREATION_WORKFLOWS:
+                    raise ValidationError("Choose one active office available to your account.")
+                raise PermissionDenied("This office view is not available to your account.")
+            creation_office_id = selected.pk
     if workflow in CREATION_WORKFLOWS:
+        if not creation_office_id or not Office.objects.filter(pk=creation_office_id, is_active=True).exists():
+            raise PermissionDenied("Select an active office before creating an upload.")
         if target_id is not None or group_id is not None:
             raise ValidationError("A creation upload cannot target an existing record.")
         if external and not actor.is_office_admin:
@@ -64,7 +80,7 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     if record is None:
         raise PermissionDenied("This tracking record is outside your access.")
     allowed = record.can_act(actor) if external else record.can_user_act(actor)
-    if record.status in COMPLETED_STATUSES or not allowed or record.status == Status.PENDING_RECEIPT:
+    if record.status in COMPLETED_STATUSES or not allowed:
         raise PermissionDenied("Confirm receipt and return completed work to tracking before changing files.")
     if workflow == "tracking-edit" and record.status != Status.DRAFT:
         raise PermissionDenied("This record is no longer an editable draft.")

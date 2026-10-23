@@ -48,6 +48,22 @@ def test_discarded_groups_are_not_filed(users):
     assert copy_tracking_history(record, document, []) == []
 
 
+@pytest.mark.parametrize("external", [False, True])
+def test_filing_rejects_bytes_from_a_different_recorded_backend(users, external):
+    from apps.core.file_lifecycle_models import lifecycle_write
+    record, actor, versions = history(users, external, 1)
+    source = versions[0]
+    with lifecycle_write():
+        type(source).objects.filter(pk=source.pk).update(storage_identity="different-backend")
+    document = Document.objects.create(title="Do not guess backend", year=2026, office=actor.office,
+        collection="EXTERNAL" if external else "OVPA")
+    with patch.object(source.file.storage, "open", wraps=source.file.storage.open) as opening:
+        with pytest.raises(ValidationError, match="storage|backend"), transaction.atomic():
+            copy_tracking_history(record, document, [])
+        opening.assert_not_called()
+    assert not document.files.exists()
+
+
 def test_corrupt_retained_file_and_missing_metadata_still_refuse_filing(users):
     record, actor, versions = history(users, False, 7)
     document = Document.objects.create(title="Corrupt source", year=2026, office=actor.office)

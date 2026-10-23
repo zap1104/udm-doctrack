@@ -1,5 +1,6 @@
 """Request-level rollback and feedback across grouped file mutations."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -7,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from apps.core.models import UploadDraft
 from apps.documents.models import Document, DocumentFile, OcrStatus
 from apps.tracking.models import Attachment
 from apps.tracking.services import confirm_receipt, create_draft_record, route_record
@@ -36,7 +38,10 @@ def test_rejected_route_rolls_back_new_attachment_bytes(client, users, offices, 
     assert response.status_code == 302
     attempt.assert_called_once()
     assert not Attachment.objects.filter(record=record).exists()
-    assert files_under(tmp_path) == set()
+    saved = UploadDraft.objects.get(owner=users["sup"])
+    assert saved.state == "open" and saved.files.get().state == "saved"
+    assert files_under(tmp_path) == {Path(saved.files.get().file.name)}
+    assert "Cannot route now" in client.get(response.url).content.decode()
     record.refresh_from_db()
     assert record.current_office_id == offices["SUP"].pk
     assert record.current_batch == 1
@@ -46,17 +51,20 @@ def test_draft_edit_later_failure_rolls_back_bytes_and_metadata(client, users, o
     settings.MEDIA_ROOT = tmp_path
     record = create_draft_record(user=users["med"], subject="Original draft", instructions="Review")
     client.force_login(users["med"])
-    with patch("apps.tracking.views.log_action", side_effect=RuntimeError("later database failure")):
+    with patch("apps.tracking.upload_drafts.log_action", side_effect=RuntimeError("later database failure")) as failure:
         with pytest.raises(RuntimeError, match="later database failure"):
             client.post(reverse("tracking:create") + f"?draft={record.pk}", {
                 "subject": "Changed draft", "instructions": "Review safely", "priority": "NORMAL",
                 "classification": "INTERNAL", "receiving_offices": [offices["SUP"].pk],
                 "deadline_choice": "none", "attachments": upload(),
             })
+    failure.assert_called_once()
     record.refresh_from_db()
     assert record.subject == "Original draft"
     assert not record.attachments.exists()
-    assert files_under(tmp_path) == set()
+    saved = UploadDraft.objects.get(owner=users["med"])
+    assert saved.state == "open" and saved.files.get().state == "saved"
+    assert files_under(tmp_path) == {Path(saved.files.get().file.name)}
 
 
 def test_frozen_repository_rejects_added_file_without_success_feedback(client, users, settings, tmp_path):

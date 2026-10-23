@@ -13,6 +13,7 @@ Design rules that the rest of the code depends on:
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
@@ -28,7 +29,7 @@ from .file_version_models import AttachmentVersionMixin, ImmutableFileQuerySet
 
 def attachment_upload_path(instance, filename: str) -> str:
     record = instance.record
-    return f"tracking/{record.created_at:%Y/%m}/{record.tracking_number}/{filename}"
+    return f"tracking/{record.created_at:%Y/%m}/{record.tracking_number}/{uuid4().hex}/{filename}"
 
 
 class Status(models.TextChoices):

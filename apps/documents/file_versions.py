@@ -1,18 +1,24 @@
 """Immutable repository snapshots and copies of complete Tracking history."""
 import hashlib
+from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.core.file_lifecycle_models import VersionLifecycleModel, lifecycle_write
 from apps.tracking.file_version_models import ImmutableFileMixin, ImmutableFileQuerySet
 
 
+def repository_history_upload_path(instance, filename):
+    return f"documents/history/{timezone.now():%Y/%m}/{uuid4().hex}/{filename}"
+
+
 class DocumentFileVersion(ImmutableFileMixin, VersionLifecycleModel):
     document_file = models.ForeignKey("documents.DocumentFile", on_delete=models.CASCADE, related_name="versions")
     version_number = models.PositiveIntegerField(default=1)
-    file = models.FileField(upload_to="documents/history/%Y/%m/", max_length=400, blank=True)
+    file = models.FileField(upload_to=repository_history_upload_path, max_length=400, blank=True)
     original_name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=120, blank=True)
     size = models.PositiveBigIntegerField(default=0)
@@ -59,6 +65,9 @@ def initial_snapshot(document_file):
 
 def _copy_source_version(source, target, created_files):
     """Hash and copy one source in bounded chunks, retaining no payload bytes."""
+    from apps.core.storage import storage_identity
+    if source.storage_identity and source.storage_identity != storage_identity(source.file.storage):
+        raise ValidationError("Filing stopped because the recorded storage backend is not currently configured.")
     try:
         with source.file.open("rb") as stream:
             digest = hashlib.sha256()

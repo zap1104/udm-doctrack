@@ -93,7 +93,7 @@
         row.file = null;
         this.say('Files saved.');
       } catch (error) {
-        if (!this.disposed) {row.state = row.removeRequested && !row.id ? 'removed' : 'error'; row.message = error.message || 'File not saved. Retry.'; this.say(row.message);}
+        if (!this.disposed) {row.state = 'error'; row.message = error.message || 'File not saved. Retry.'; this.say(row.message);}
       }
       this.emit();
     }
@@ -111,6 +111,9 @@
     }
     async removeSaved(row) {
       try {
+        // A committed upload may have lost both its response and our first
+        // reconciliation. Resolve its identity before declaring it removed.
+        if (!row.id && this.id) this.accept(await this.transport('read', {id: this.id}));
         if (row.id) {
           try {
             this.accept(await this.transport('remove', {id: this.id, file_id: row.id, expected_revision: this.revision}));
@@ -225,6 +228,7 @@
       for (const row of rows.values()) {
         if (row.state === 'removed') continue;
         const item = document.createElement('li'); item.className = 'file-chip my-2 flex-wrap'; item.dataset.savedUpload = row.id || '';
+        if (row.id) {item.id = `file-version-upload-${row.id}`; item.tabIndex = -1;}
         const copy = document.createElement('div'); copy.className = 'flex-grow-1 text-break';
         const name = document.createElement('strong'); name.textContent = row.name;
         const label = document.createElement('span'); label.className = 'badge ms-2 ' + (row.state === 'saved' ? 'text-bg-success' : 'text-bg-secondary');
@@ -234,6 +238,9 @@
         item.append(copy);
         if (row.state === 'saved' && row.preview_url) {
           const preview = document.createElement('a'); const target = new URL(row.preview_url, global.location.href);
+          for (const [name, value] of new URL(global.location.href).searchParams) {
+            if (/^upload_draft_[a-z_]+_\d+$/.test(name)) target.searchParams.set(name, value);
+          }
           if (target.origin === global.location.origin) {preview.href = target.href; preview.textContent = 'Preview'; preview.className = 'btn btn-udm-outline btn-sm'; item.append(preview);}
         }
         if (row.state === 'error') item.append(button('Retry', 'uploadRetry', row.key));
@@ -286,7 +293,15 @@
       if (event.submitter?.name === 'remove_upload') return;
       event.preventDefault();
       if (selectionError) {announce(selectionError); input.focus(); return;}
-      const submitted = await queue.submit(() => HTMLFormElement.prototype.submit.call(form));
+      const submitted = await queue.submit(() => {
+        for (const [name, value] of new URL(global.location.href).searchParams) {
+          if (!/^upload_draft_[a-z_]+_\d+$/.test(name)) continue;
+          let hidden = form.elements.namedItem(name);
+          if (!hidden) {hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = name; form.append(hidden);}
+          hidden.value = value;
+        }
+        HTMLFormElement.prototype.submit.call(form);
+      });
       if (!submitted) {region.tabIndex = -1; region.focus({preventScroll: true}); region.scrollIntoView({block: 'center', behavior: 'instant'});}
     });
     paint(queue.rows, queue);

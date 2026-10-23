@@ -5,11 +5,12 @@
   <input type="hidden" name="upload_batch_id" value="{{ form.recovery.batch_id }}">
   <input type="hidden" name="upload_draft" value="{{ form.recovery.draft_id|default:'' }}">
   <input type="hidden" name="upload_revision" value="{{ form.recovery.revision }}">
+  {% for name, value in form.recovery.related_slots.items %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
   <div data-upload-status role="status" aria-live="polite" class="small text-muted"></div>
   <a class="small" href="{% url 'core:upload_drafts' %}">Saved upload forms</a>
   <ul class="list-unstyled" data-upload-file-list>
     {% for row in form.recovery.files %}
-    <li class="file-chip my-2" data-saved-upload="{{ row.item.pk }}" data-client-upload-id="{{ row.item.client_upload_id }}" data-file-name="{{ row.item.original_name }}" data-file-size="{{ row.item.size }}">
+    <li id="file-version-upload-{{ row.item.pk }}" tabindex="-1" class="file-chip my-2" data-saved-upload="{{ row.item.pk }}" data-client-upload-id="{{ row.item.client_upload_id }}" data-file-name="{{ row.item.original_name }}" data-file-size="{{ row.item.size }}">
       <div class="flex-grow-1 text-break"><strong>{{ row.item.original_name }}</strong> <span class="badge text-bg-success">Saved</span><span class="d-block small text-muted">{{ row.item.size|human_size }}</span></div>
       <a class="btn btn-udm-outline btn-sm" href="{{ row.preview_url }}">Preview</a>
       <button class="btn btn-udm-outline btn-sm" type="submit" name="remove_upload" value="{{ row.item.pk }}" formnovalidate>Remove<span class="visually-hidden"> {{ row.item.original_name }}</span></button>

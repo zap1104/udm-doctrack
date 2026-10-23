@@ -25,6 +25,18 @@ def maintenance():
     return importlib.import_module("apps.core.file_maintenance")
 
 
+def test_blocked_prefix_cannot_starve_new_actionable_cleanup(users):
+    worker = maintenance()
+    for number in range(3):
+        StorageCleanupIntent.objects.create(storage_identity="", storage_key=f"unknown/{number}",
+            state="blocked", reason="Unknown legacy storage")
+    _, _, versions = history(users, False, 6)
+    assert worker.maintain_file_uploads(limit=2)["blocked"] == 3
+    assert worker.maintain_file_uploads(limit=2, dry_run=False)["removed"] == 1
+    assert not versions[0].file.storage.exists(versions[0].file.name)
+    assert StorageCleanupIntent.objects.filter(state="blocked", attempts=0).count() == 3
+
+
 def test_dry_run_is_inert_then_cleanup_removes_only_retired_content(users):
     worker = maintenance()
     _, _, versions = history(users, False, 6)

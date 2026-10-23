@@ -1,4 +1,5 @@
 """Independent custody ledger for offices without DocTrack accounts."""
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
@@ -15,7 +16,7 @@ from .models import Status
 
 
 def external_attachment_path(instance, filename):
-    return f"external-tracking/{instance.record_id}/{filename}"
+    return f"external-tracking/{instance.record_id}/{uuid4().hex}/{filename}"
 
 
 class ExternalOfficeQuerySet(models.QuerySet):

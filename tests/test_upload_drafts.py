@@ -1,6 +1,7 @@
 """Saved uploads are private, bounded and independent of document creation."""
 import importlib
 from datetime import timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -63,6 +64,36 @@ def test_partial_valid_upload_survives_invalid_neighbor(users):
     assert len(result.accepted_ids) == len(result.errors) == 1
     assert draft.files.filter(state="saved").count() == 1
     assert "not accepted" in result.errors[0]["message"]
+
+
+def test_provider_error_on_second_file_keeps_first_selection_recoverable(users, tmp_path):
+    from botocore.exceptions import ClientError
+
+    from apps.core.models import StagedUpload
+    draft, _ = new_draft(users["med"])
+    storage = StagedUpload._meta.get_field("file").storage
+    original = storage.save
+    calls = 0
+    def failing_save(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Simulated provider refusal"}}, "PutObject")
+        return original(*args, **kwargs)
+    with patch.object(storage, "save", failing_save):
+        result = stage(draft, users["med"], [upload(name="keep.txt"), upload(name="retry.txt")])
+    assert len(result.accepted_ids) == len(result.errors) == 1
+    assert draft.files.get().original_name == "keep.txt"
+    assert len([path for path in tmp_path.rglob("*") if path.is_file()]) == 1
+
+
+def test_manifest_failure_after_staging_compensates_every_new_blob(users, tmp_path):
+    draft, _ = new_draft(users["med"])
+    with patch("apps.core.upload_drafts._touch", side_effect=RuntimeError("Manifest write failed")):
+        with pytest.raises(RuntimeError, match="Manifest write failed"):
+            stage(draft, users["med"], [upload(name="one.txt"), upload(name="two.txt")])
+    assert not draft.files.exists()
+    assert not [path for path in tmp_path.rglob("*") if path.is_file()]
 
 
 def test_open_manifest_and_byte_limits(users, settings):

@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from .models import StagedUpload, StorageCleanupIntent, UploadDraft
 from .permissions import active_writer
-from .storage import cleanup_new_files, create_stored_file, storage_identity
+from .storage import STORAGE_WRITE_ERRORS, cleanup_new_files, create_stored_file, storage_identity
 from .upload_context import UploadContext, resolve_upload_context
 from .utils import checksum_of, validate_upload
 
@@ -39,7 +39,7 @@ class UploadResult:
 
 
 def _fresh_context(actor, context, *, lock_parent=False):
-    query = {"office": context.creation_office_id}
+    query = {"office": context.creation_office_id} if context.creation_office_id is not None else None
     fresh = resolve_upload_context(actor, context.workflow, target_id=context.target_id,
         group_id=context.group_id, query=query, lock_parent=lock_parent)
     if fresh != context:
@@ -167,7 +167,7 @@ def stage_files(draft_id, files, *, user, expected_revision, client_upload_ids):
         raise ValidationError("Choose valid upload identities.") from exc
     if len(set(identities)) != len(identities):
         raise ValidationError("Each selected file needs its own upload identity.")
-    with locked_draft(draft_id, user=user) as (actor, draft, binding):
+    with cleanup_new_files(), locked_draft(draft_id, user=user) as (actor, draft, binding):
         existing = {row.client_upload_id: row for row in draft.files.filter(client_upload_id__in=identities)}
         if any(identity not in existing for identity in identities):
             _check_revision(draft, expected_revision)
@@ -206,7 +206,7 @@ def stage_files(draft_id, files, *, user, expected_revision, client_upload_ids):
             except ValidationError as exc:
                 result.errors.append({"client_upload_id": str(identity), "filename": uploaded.name[:255],
                                       "message": "; ".join(exc.messages)[:1000]})
-            except OSError:
+            except STORAGE_WRITE_ERRORS:
                 result.errors.append({"client_upload_id": str(identity), "filename": uploaded.name[:255],
                                       "message": "This file could not be saved. Retry the upload."})
         if changed:
@@ -231,6 +231,11 @@ def save_form_state(draft_id, values, *, user, expected_revision, errors=None):
         safe[name] = [str(value) for value in items]
     with locked_draft(draft_id, user=user) as (_, draft, _):
         _check_revision(draft, expected_revision)
+        if draft.workflow == "tracking-route" and values.get("action"):
+            action = values["action"]
+            action = action if isinstance(action, (list, tuple)) else [action]
+            if len(action) == 1 and action[0] in {"FORWARD", "RETURN"}:
+                safe["action"] = list(action)
         draft.form_state = safe
         if errors is not None:
             draft.validation_errors = errors

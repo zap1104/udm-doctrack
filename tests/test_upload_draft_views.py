@@ -184,7 +184,7 @@ def test_independent_record_action_forms_keep_their_own_saved_inputs(client, use
     state = form.recovery
     data = {"upload_form_nonce": state["nonce"], "upload_batch_id": state["batch_id"],
             "upload_revision": state["revision"], "attachments": file()}
-    data.update({"remark": ""} if action == "remark" else {"offices": [999999], "instructions": "Recover me", "deadline_choice": "none", "action": "SEND"})
+    data.update({"remark": ""} if action == "remark" else {"offices": [999999], "instructions": "Recover me", "deadline_choice": "none", "action": "RETURN"})
     invalid = client.post(f"/tracking/{record.pk}/{action}/", data)
     assert invalid.status_code == 302
     restored = client.get(invalid.url)
@@ -193,6 +193,7 @@ def test_independent_record_action_forms_keep_their_own_saved_inputs(client, use
     assert bound.is_bound and bound.errors and bound.recovery["files"]
     assert not other.is_bound and not record.attachments.exists()
     if action == "route":
+        assert bound["action"].value() == "RETURN", "The chosen movement must survive validation and refresh"
         assert b'class="tab-pane fade show active" id="tab-route"' in restored.content, "Recovered errors must be visible without JavaScript"
 
 
@@ -291,3 +292,62 @@ def test_two_inline_forms_keep_their_own_saved_files_on_refresh(client, users, o
     assert response.status_code == 200
     assert len(response.context["remark_form"].recovery["files"]) == 1
     assert len(response.context["file_rows"][0]["form"].recovery["files"]) == 1
+    data = {**recovery_fields_for(response.context["remark_form"]), "remark": "",
+        "upload_draft_tracking_remark_0": saved["tracking-remark"],
+        f"upload_draft_tracking_version_{current.file_group_id}": saved["tracking-version"]}
+    invalid = client.post(f"/tracking/{record.pk}/remark/", data)
+    assert invalid.status_code == 302
+    restored = client.get(invalid.url)
+    assert len(restored.context["remark_form"].recovery["files"]) == 1
+    assert len(restored.context["file_rows"][0]["form"].recovery["files"]) == 1
+    preview_url = restored.context["remark_form"].recovery["files"][0]["preview_url"]
+    preview = client.get(preview_url)
+    assert preview.status_code == 200
+    returned = client.get(preview.context["back_url"])
+    assert len(returned.context["remark_form"].recovery["files"]) == 1
+    assert len(returned.context["file_rows"][0]["form"].recovery["files"]) == 1
+
+
+def recovery_fields_for(form):
+    state = form.recovery
+    return {"upload_form_nonce": state["nonce"], "upload_batch_id": state["batch_id"],
+        "upload_draft": str(state["draft_id"]), "upload_revision": state["revision"]}
+
+
+def test_office_less_system_admin_can_still_edit_an_existing_draft(client, users, offices):
+    from apps.tracking.services import create_draft_record
+    record = create_draft_record(user=users["med"], subject="Original draft", instructions="Review")
+    type(users["admin"]).objects.filter(pk=users["admin"].pk).update(office=None)
+    client.force_login(users["admin"])
+    url = f"/tracking/new/?draft={record.pk}"
+    initial = client.get(url)
+    assert initial.status_code == 200
+    response = client.post(url, {**creation_data(offices), **recovery_fields(initial),
+        "subject": "Updated by actual system administrator", "attachments": file()})
+    assert response.status_code == 302 and response.url.endswith("/review/")
+    record.refresh_from_db()
+    assert record.originating_office_id == offices["MED"].pk and record.attachments.count() == 1
+
+
+def test_enhanced_route_state_keeps_return_choice_and_ignores_action_for_other_workflows(client, users, offices):
+    from apps.core.upload_drafts import open_draft, save_form_state
+    from apps.tracking.services import create_draft_record
+    record = create_draft_record(user=users["med"], subject="Return choice", instructions="Review")
+    for workflow, wanted in [("tracking-route", ["RETURN"]), ("tracking-remark", None)]:
+        context = resolve_upload_context(users["med"], workflow, target_id=record.pk)
+        draft = open_draft(user=users["med"], context=context, form_nonce=form_nonce_for(users["med"], context))
+        saved = save_form_state(draft.pk, {"action": ["RETURN"]}, user=users["med"], expected_revision=0)
+        assert saved.form_state.get("action") == wanted
+
+
+def test_navigation_slots_cannot_expose_another_users_saved_form(client, users):
+    from apps.core.upload_drafts import open_draft
+    from apps.tracking.services import confirm_receipt, create_draft_record, route_record
+    record = create_draft_record(user=users["sup"], subject="Private forms", instructions="Review")
+    route_record(record, [users["med"].office], user=users["sup"])
+    confirm_receipt(record, user=users["med"])
+    context = resolve_upload_context(users["admin"], "tracking-remark", target_id=record.pk)
+    foreign = open_draft(user=users["admin"], context=context, form_nonce=form_nonce_for(users["admin"], context))
+    client.force_login(users["med"])
+    response = client.get(record.get_absolute_url(), {"upload_draft_tracking_remark_0": str(foreign.pk)})
+    assert response.status_code == 403

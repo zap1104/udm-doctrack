@@ -76,6 +76,25 @@ test('an ambiguous upload response is reconciled using its client identity', asy
   assert.equal(server.calls.filter(([action]) => action === 'upload').length, 1);
   assert.ok(server.calls.some(([action]) => action === 'read'));
 });
+for (const withValues of [false, true]) test(`removing after a committed upload with both responses lost stays blocked (${withValues})`, async () => {
+  const server = backend(), started = deferred(), release = deferred(); let offline = true, submits = 0;
+  const queue = controller({readValues: withValues ? () => ({subject:['Keep']}) : undefined,
+    transport: async (action, payload) => {
+      if(action === 'read' && offline) throw new TypeError('Connection lost');
+      if(action === 'upload') {
+        const answer=await server.transport(action,payload); started.resolve(); await release.promise;
+        throw new TypeError('Acknowledgement lost');
+      }
+      if(action === 'save' && offline) throw new TypeError('Connection lost');
+      return server.transport(action,payload);
+    }});
+  const [key]=queue.add([file()]); await started.promise; queue.remove(key); release.resolve(); await queue.whenIdle();
+  assert.equal(server.saved.size,1);
+  assert.equal(await queue.submit(()=>submits++),false); assert.equal(submits,0);
+  offline=false; queue.retry(key); await queue.whenIdle();
+  assert.equal(server.saved.size,0); assert.equal(queue.rows.get(key).state,'removed');
+  assert.equal(await queue.submit(()=>submits++),true); assert.equal(submits,1);
+});
 test('explicit submission waits for uploads and runs only once', async () => {
   const server = backend(), started = deferred(), release = deferred(); let submits = 0;
   const queue = controller({transport: async (action, payload) => {if (action === 'upload') {started.resolve(); await release.promise;}

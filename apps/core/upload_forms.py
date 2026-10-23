@@ -1,5 +1,5 @@
 """Ordinary form recovery shared by both collections and progressive uploads."""
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID, uuid4, uuid5
 
 from django import forms
@@ -114,6 +114,42 @@ def as_querydict(values):
     return data
 
 
+def authorized_form_slots(user, context, values):
+    """Validate opaque navigation context without accepting a return URL."""
+    if not context.target_id:
+        return {}
+    names = [name for name in values if name.startswith("upload_draft_")]
+    if len(names) > 50:
+        raise ValidationError("Too many saved upload forms.")
+    slots = {}
+    for name in names:
+        value = one_value(values, name)
+        try:
+            candidate = UploadDraft.objects.filter(pk=value).first()
+        except (ValueError, ValidationError) as exc:
+            raise ValidationError("Choose a valid saved upload.") from exc
+        if candidate is None or candidate.owner_id != user.pk:
+            raise PermissionDenied("This saved upload is outside your account.")
+        bound = UploadContext(**candidate.binding)
+        expected = f"upload_draft_{bound.workflow.replace('-', '_')}_{bound.group_id or 0}"
+        if name != expected or (bound.target_id, bound.target_kind) != (context.target_id, context.target_kind):
+            raise PermissionDenied("This saved upload belongs to another form or record.")
+        if candidate.state == "open":
+            try:
+                read_draft(candidate.pk, user=user, context=bound)
+            except (PermissionDenied, ValidationError):
+                continue
+            slots[name] = str(candidate.pk)
+    return slots
+
+
+def url_with_slots(url, slots):
+    parts = urlsplit(url)
+    params = dict(parse_qsl(parts.query))
+    params.update(slots)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
+
+
 class UploadFormRecovery:
     def __init__(self, request, workflow, *, target_id=None, group_id=None, factory=None):
         self.request, self.draft = request, None
@@ -123,6 +159,10 @@ class UploadFormRecovery:
         if target_id and request.user.is_system_admin and query.getlist("office") == ["all"]:
             query.pop("office")
         self.context = resolve_upload_context(request.user, workflow, target_id=target_id, group_id=group_id, query=query)
+        self.perspective_office = None
+        if target_id and "office" in request.GET:
+            self.perspective_office = "all" if request.GET.getlist("office") == ["all"] else self.context.creation_office_id
+        self.related_slots = self._related_slots()
         supplied = one_value(request.POST, "upload_draft") if request.method == "POST" else None
         self.slot = f"upload_draft_{workflow.replace('-', '_')}_{self.context.group_id or 0}"
         legacy = one_value(request.GET, "upload_draft")
@@ -167,6 +207,23 @@ class UploadFormRecovery:
                 self.form.is_valid()
                 self._saved_errors()
         self._attach()
+
+    def _related_slots(self):
+        """Carry only private, freshly authorized forms for this exact parent."""
+        values = self.request.GET.copy()
+        for name in self.request.POST:
+            if name.startswith("upload_draft_"):
+                values.setlist(name, self.request.POST.getlist(name))
+        return authorized_form_slots(self.request.user, self.context, values)
+
+    def recovery_url(self):
+        parts = urlsplit(form_url(self.context, self.draft.pk))
+        params = dict(parse_qsl(parts.query))
+        params.update(self.related_slots)
+        params[self.slot] = str(self.draft.pk)
+        if self.perspective_office is not None:
+            params["office"] = self.perspective_office
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
 
     def _configure_form(self):
         if self.draft and self.draft.files.exclude(state="removed").exists():
@@ -225,7 +282,7 @@ class UploadFormRecovery:
         removed = one_value(self.request.POST, "remove_upload")
         if removed:
             self.draft = discard_staged_file(self.draft.pk, removed, user=self.request.user, expected_revision=self.draft.revision)
-            self.response = redirect(form_url(self.context, self.draft.pk))
+            self.response = redirect(self.recovery_url())
         self._configure_form()
         self.form.is_valid()
         self._saved_errors()
@@ -238,20 +295,22 @@ class UploadFormRecovery:
     def _attach(self):
         files = []
         if self.draft and self.draft.state == "open":
+            slots = {**self.related_slots, self.slot: str(self.draft.pk)} if self.context.target_id else {}
             for saved in self.draft.files.filter(state="saved").order_by("created_at", "pk"):
-                files.append({"item": saved, "preview_url": file_url("upload", saved.pk, self.request.user),
+                files.append({"item": saved, "preview_url": url_with_slots(file_url("upload", saved.pk, self.request.user), slots),
                               "download_url": file_url("upload", saved.pk, self.request.user, "download")})
         self.form.recovery = {"nonce": self.nonce, "batch_id": self.batch_id, "draft_id": self.draft.pk if self.draft else None,
             "revision": self.draft.revision if self.draft else 0, "files": files,
             "workflow": self.context.workflow, "target_id": self.context.target_id, "group_id": self.context.group_id,
             "file_field": self.form.add_prefix(self.file_field), "slot": self.slot,
+            "related_slots": self.related_slots,
             "limit": 1 if self.context.workflow.endswith("-version") or self.context.workflow == "external-attachment" else settings.MAX_UPLOAD_FILES}
 
     def validation_response(self):
         if self.response:
             return self.response
         if not self.form.is_valid():
-            return redirect(form_url(self.context, self.draft.pk))
+            return redirect(self.recovery_url())
         return None
 
     def finish(self):
@@ -267,5 +326,5 @@ class UploadFormRecovery:
                     expected_revision=self.draft.revision, errors={"__all__": exc.messages})
             else:
                 messages.error(self.request, "; ".join(exc.messages))
-            self.response = redirect(form_url(self.context, self.draft.pk))
+            self.response = redirect(self.recovery_url())
             return None

@@ -16,6 +16,7 @@ Rebuild with `Document.rebuild_index()` or `manage.py reindex_documents`.
 from __future__ import annotations
 
 from datetime import date, timedelta
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
@@ -33,7 +34,7 @@ from apps.tracking.file_version_models import ImmutableFileMixin, ImmutableFileQ
 def document_upload_path(instance, filename: str) -> str:
     document = instance.document
     office_code = document.office.code if document.office_id else "GENERAL"
-    return f"documents/{office_code}/{document.year or timezone.now().year}/{document.pk or 'new'}/{filename}"
+    return f"documents/{office_code}/{document.year or timezone.now().year}/{document.pk or 'new'}/{uuid4().hex}/{filename}"
 
 
 class Source(models.TextChoices):

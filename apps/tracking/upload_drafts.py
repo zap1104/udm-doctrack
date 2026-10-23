@@ -20,7 +20,7 @@ def finalize_tracking_upload(context, data, files, *, user, expected_version):
     external = context.collection == "EXTERNAL"
     model = ExternalTrackingRecord if external else TrackingRecord
     record = model.objects.get(pk=context.target_id) if context.target_id else None
-    office = Office.objects.get(pk=context.creation_office_id, is_active=True)
+    office = Office.objects.get(pk=context.creation_office_id, is_active=True) if workflow in {"tracking-create", "external-create"} else None
     version = None
     if workflow == "tracking-create":
         record = services.create_draft_record(user=user, originating_office=office,

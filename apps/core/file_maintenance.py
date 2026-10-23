@@ -82,7 +82,7 @@ def _locked_owner(intent):
 def _claim(pk, now):
     with transaction.atomic():
         intent = StorageCleanupIntent.objects.select_for_update(skip_locked=True).filter(pk=pk).first()
-        if intent is None or intent.state == "complete":
+        if intent is None or intent.state in {"complete", "blocked"} or intent.superseded_by_id:
             return None
         if intent.state == "running" and intent.lease_until and intent.lease_until > now:
             return None
@@ -137,13 +137,15 @@ def maintain_file_uploads(*, now=None, limit=100, dry_run=True):
                 if draft.state == "open" and draft.expires_at <= now:
                     _close_manifest(draft, "expired")
                     result["expired"] += 1
-    due = StorageCleanupIntent.objects.filter(superseded_by__isnull=True).exclude(state="complete").filter(
+    # Unknown backend identities require verified reconciliation or explicit
+    # operator retry. They must not monopolize every oldest-first batch.
+    due = StorageCleanupIntent.objects.filter(superseded_by__isnull=True).exclude(state__in=["complete", "blocked"]).filter(
         Q(retry_at__isnull=True) | Q(retry_at__lte=now)).filter(
         ~Q(state="running") | Q(lease_until__lte=now) | Q(lease_until__isnull=True))
     ids = list(due.order_by("created_at", "pk").values_list("pk", flat=True)[:limit])
     result["candidates"] += len(ids)
     if dry_run:
-        result["blocked"] = due.filter(pk__in=ids, state="blocked").count()
+        result["blocked"] = StorageCleanupIntent.objects.filter(state="blocked", superseded_by__isnull=True).count()
         return result
     for pk in ids:
         claimed = _claim(pk, now)

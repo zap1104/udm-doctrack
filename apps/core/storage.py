@@ -10,6 +10,20 @@ from functools import wraps
 logger = logging.getLogger("doctrack")
 _new_files = ContextVar("new_storage_files", default=None)
 
+# Azure is an optional deployment extra. These are provider write failures,
+# not database/programming errors that should escape and roll back the batch.
+STORAGE_WRITE_ERRORS = (OSError,)
+try:
+    from botocore.exceptions import BotoCoreError, ClientError
+    STORAGE_WRITE_ERRORS += (BotoCoreError, ClientError)
+except ImportError:
+    pass
+try:
+    from azure.core.exceptions import AzureError
+    STORAGE_WRITE_ERRORS += (AzureError,)
+except ImportError:
+    pass
+
 
 def storage_identity(storage):
     """Bind exact-object cleanup to a backend/location without persisting secrets."""

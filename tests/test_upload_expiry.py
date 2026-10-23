@@ -47,6 +47,7 @@ def test_recovery_list_is_owner_only_and_full_discard_is_confirmed(client, users
 
 def test_saved_form_pages_preserve_same_origin_for_native_csrf_posts(client, users):
     from django.http import HttpResponse
+
     from apps.core.file_views import private
     client.force_login(users["med"])
     response = client.get(reverse("core:upload_drafts"))
