@@ -5,7 +5,6 @@
 <div class="repository-page workspace-page workspace-repository">
   <div class="page-head">
     <div><div class="eyebrow">Office records</div><h1>Document Repository</h1><p class="sub">Find filed documents by office, or review completed records waiting to be filed.</p></div>
-    {% if not pending_view and not folders_view %}<a class="btn btn-udm-outline" href="{{ save_filters_url }}">Save these filters</a>{% endif %}
     {% if can_start_work %}<a class="btn btn-udm" href="{% url 'documents:upload' %}">Upload a document</a>{% endif %}
   </div>
   {% if folders_view %}{% include "documents/_subtabs.html" with active="folders" %}{% else %}{% include "documents/_subtabs.html" with active="repository" %}{% endif %}

@@ -186,7 +186,7 @@ calculation, interaction, permission, and responsive checks and their limits.
 - **[docs/TEAM_CHECKLIST.md](docs/TEAM_CHECKLIST.md)** — who does what, in order
 - **[docs/METADATA_GUIDE.md](docs/METADATA_GUIDE.md)** — why metadata decides whether search works
 - **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)** — the relevance formula, written out
-- **[docs/document-intelligence.md](docs/document-intelligence.md)** — source coverage, local topic models, review, recovery and rollout
+- **[docs/document-intelligence.md](docs/document-intelligence.md)** — source coverage, topic tagging, review, recovery and rollout
 - **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — implemented AI capabilities and remaining evidence requirements
 - **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — a ten-minute walkthrough for the defence
 - **[docs/APPLYING_UPDATES.md](docs/APPLYING_UPDATES.md)** — updating an existing checkout

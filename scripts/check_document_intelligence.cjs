@@ -29,7 +29,7 @@ async function visit(page, path) {
   try {
     const admin = await browser.newContext();
     const state = await login(admin, 'admin');
-    const paths = [`/documents/${fixture.documents.OVPA}/extraction/units/`, `/documents/${fixture.documents.EXTERNAL}/extraction/units/`, '/documents/intelligence/models/', '/documents/intelligence/vocabulary/', '/documents/views/', '/documents/', '/documents/external/', '/documents/intelligence/review-queue/'];
+    const paths = [`/documents/${fixture.documents.OVPA}/extraction/units/`, `/documents/${fixture.documents.EXTERNAL}/extraction/units/`, '/documents/intelligence/vocabulary/', '/documents/', '/documents/external/', '/documents/intelligence/review-queue/'];
     for (const width of [320,390,768,900,901,1366]) for (const theme of ['light','dark']) {
       const context = await browser.newContext({storageState:state,viewport:{width,height:900}});
       await context.addInitScript(theme => localStorage.setItem('doctrack-theme',theme),theme);
@@ -45,7 +45,7 @@ async function visit(page, path) {
       }
       await context.close();
     }
-    report.checks.push('Both themes, six required widths, eight real pages: no document-level horizontal overflow.');
+    report.checks.push('Both themes, six required widths, six real pages: no document-level horizontal overflow.');
     const page = await admin.newPage();
     await visit(page,paths[0]);
     await page.getByRole('button',{name:'Generate current topic proposals',exact:true}).click();
@@ -65,12 +65,10 @@ async function visit(page, path) {
     const preview = await page.getByRole('link',{name:'Preview original version',exact:true}).getAttribute('href');
     assert.equal((await page.goto(new URL(preview,base).href)).status(),200);
     report.checks.push('Real CSRF-protected proposal and human-review POSTs, stale409, signed preview and original download.');
-    await visit(page,'/documents/views/?collection=OVPA&filters=year%3D2026');
-    await page.locator('[name=name]').fill('Authored browser saved view '+Date.now());
-    await page.getByRole('button',{name:'Save private view',exact:true}).click();
-    await page.locator('a[href*="/documents/views/"]').filter({hasText:'Authored browser saved view'}).last().click();
-    assert.equal(new URL(page.url()).searchParams.get('year'),'2026');
-    report.checks.push('Saved filter view submitted and reopened with the applied year.');
+    for (const removed of ['/documents/views/', '/documents/intelligence/models/']) {
+      assert.equal((await page.request.get(new URL(removed,base).href)).status(),404);
+    }
+    report.checks.push('Removed saved-view and local-model screens are unavailable.');
     await visit(page,'/search/?mode=tracking');
     let requests=0;
     page.on('request',request => {if(new URL(request.url()).pathname==='/search/' && request.method()==='GET') requests++;});

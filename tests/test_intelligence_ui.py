@@ -100,7 +100,7 @@ def test_tag_review_post_is_explicit_and_stale_revision_conflicts(client, users,
     assert set(doc.tags.values_list("pk", flat=True)) == {tag.pk}
 
 
-def test_training_eligibility_and_models_have_separate_authority(client, users, readable_source):
+def test_training_eligibility_keeps_existing_office_authority(client, users, readable_source):
     doc, _ = readable_source
     endpoint = reverse("documents:training_eligibility", args=[doc.pk])
     client.force_login(users["med"])
@@ -114,12 +114,6 @@ def test_training_eligibility_and_models_have_separate_authority(client, users, 
     )
     doc.refresh_from_db()
     assert doc.training_eligible
-    assert client.get(reverse("documents:tag_models")).status_code == 403
-    client.force_login(users["admin"])
-    models = client.get(reverse("documents:tag_models"))
-    assert models.status_code == 200
-    assert "Local topic models" in models.content.decode()
-    assert "source evidence" not in models.content.decode()
 
 
 def test_legacy_done_status_does_not_claim_verified_coverage(client, users):
@@ -164,7 +158,7 @@ def test_review_forms_have_distinct_ids_and_real_csrf_protection(users, readable
     assert doc.tags.filter(pk=tag.pk).exists()
 
 
-def test_forged_unit_parent_and_invalid_model_scopes_fail_closed(client, users, readable_source):
+def test_forged_unit_parent_fails_closed(client, users, readable_source):
     doc, unit = readable_source
     other = Document.objects.create(
         title="Other office", year=2026, access_level="OFFICE", office=users["hr"].office, uploaded_by=users["hr"]
@@ -173,10 +167,6 @@ def test_forged_unit_parent_and_invalid_model_scopes_fail_closed(client, users, 
     response = client.get(reverse("documents:source_unit", args=[other.pk, unit.pk]))
     assert response.status_code == 404
     assert "source evidence" not in response.content.decode()
-    client.force_login(users["admin"])
-    for query in ("collection=invalid", "collection=OVPA&collection=EXTERNAL", "office=one", "office=1&office=2"):
-        response = client.get(reverse("documents:tag_models") + "?" + query)
-        assert response.status_code == 400
 
 
 def test_only_system_administrator_can_approve_aliases(client, users):

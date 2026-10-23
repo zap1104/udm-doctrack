@@ -52,9 +52,7 @@ def test_saved_office_filter_revalidates_after_transfer(users):
         service.open_saved_view(view.pk, user=users["med_admin"])
 
 
-def test_external_saved_view_and_rendered_labels_stay_private(client, users):
-    from django.urls import reverse
-
+def test_existing_external_saved_view_data_stays_private_after_screen_removal(client, users):
     from apps.documents.models import SavedDocumentView
 
     service = api()
@@ -73,11 +71,11 @@ def test_external_saved_view_and_rendered_labels_stay_private(client, users):
     )
     assert service.open_saved_view(view.pk, user=users["med_admin"]).startswith("/documents/external/?q=alpha")
     client.force_login(users["med_admin"])
-    page = client.get(reverse("documents:saved_views"))
-    assert page.status_code == 200
-    assert "&lt;script&gt;private-label&lt;/script&gt;" in page.content.decode()
+    page = client.get("/documents/views/")
+    assert page.status_code == 404
+    assert "private-label" not in page.content.decode()
     assert "<script>private-label</script>" not in page.content.decode()
     client.force_login(users["hr"])
-    assert client.get(reverse("documents:open_saved_view", args=[view.pk])).status_code == 404
-    assert client.post(reverse("documents:delete_saved_view", args=[view.pk])).status_code == 404
+    assert client.get(f"/documents/views/{view.pk}/").status_code == 404
+    assert client.post(f"/documents/views/{view.pk}/delete/").status_code == 404
     assert SavedDocumentView.objects.filter(pk=view.pk).exists()

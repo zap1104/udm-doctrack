@@ -80,10 +80,3 @@ def delete_saved_view(view_id, *, user):
     if view is None:
         raise PermissionDenied("This saved view belongs to another account or is unavailable.")
     view.delete()
-
-
-def save_filters_url(request, *, collection):
-    params = request.GET.copy()
-    for key in ("page", "per_page", "page_size", "view"):
-        params.pop(key, None)
-    return reverse("documents:saved_views") + "?" + urlencode({"collection": collection, "filters": params.urlencode()})

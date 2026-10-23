@@ -31,7 +31,7 @@ Every transport attempt invokes a fresh authorization callback. Overall and per-
 
 OCR.space is configured to English in this adapter; Filipino/Taglish quality remains unmeasured. The adapter is wired into the opt-in unit pipeline and remains off by default. Live provider, real-data tagging/search quality and deployment checks remain unverified. Disposable-data browser checks are recorded separately in the verification report.
 
-## Scoped local topic models
+## Optional operator-managed topic inference
 
 Install the optional CPU profile with `.venv\Scripts\python.exe -m pip install -r requirements-ml.txt`. It is separate from the base web requirements. Model artifacts pin Python major/minor and exact NumPy/SciPy/scikit-learn versions; incompatible bundles fail closed. No pickle, public document service or new API key is used.
 
@@ -43,7 +43,7 @@ Snapshots contain bounded text and review provenance in private PostgreSQL table
 
 The shared vectorizers fit only training families; per-topic classifiers use only known labels. Calibration, threshold selection and final evaluation use separate family partitions. Automatic qualification requires calibrated real-data evaluation, independent support, both precision gates and explicit enablement. Authored fixtures test mechanics and cannot qualify production automation. Uncalibrated scores are labelled suggestions, not confidence percentages.
 
-New candidates record final-test document/family identities and overlap with earlier candidates in the same office/collection. Evaluation, model activation screens and the activation command disclose reuse or untracked older history. Overlapping evaluations are not fresh final tests. Candidate publication serializes this history within the office scope. Retuning against reused results does not establish independently validated generalization.
+New candidates record final-test document/family identities and overlap with earlier candidates in the same office/collection. Evaluation and the activation command disclose reuse or untracked older history. Overlapping evaluations are not fresh final tests. Candidate publication serializes this history within the office scope. Retuning against reused results does not establish independently validated generalization.
 
 Evaluation reports ordinary document-level metrics separately from the one-representative-per-family qualification metrics. Both include office/length slices. Document-language annotations are currently unavailable: new dataset rows say `language=unknown` and retain the OCR language setting only as a hint. Language evaluation explicitly remains unavailable; a provider setting is not language ground truth. Reviewed language annotation requires a future workflow before multilingual accuracy can be claimed.
 
@@ -55,19 +55,19 @@ Automatic application has a third durable stage. The same recovery command inven
 
 `manage.py rollback_auto_tags MODEL_ID --actor USER_ID` inventories affected document IDs. Add `--apply` to remove that release's automatic contributions. Human confirmations and unrelated contributions remain. These commands require system-administrator authority and are not run on original records during implementation. A human rejection or uncertainty blocks reapplication across later content processing until a later explicit decision changes it.
 
-## Review screens and private repository views
+## Review screens
 
 Open **Source text and topic review** from a document. Coverage uses actual semantic units, with unknown expected counts preserved. Read normalized text beside the original-version preview/download. The original file remains authoritative for exact layout and signatures. A legacy DONE status is not evidence of complete source coverage.
 
 Authorized editors can confirm, reject, add or leave a topic unsure. The optional complete-review panel labels only its explicitly covered tags. The assignment list distinguishes human confirmations, automatic contributions and legacy assignments with unknown provenance. New reviews snapshot their topic label, actor name and office at recording time; existing unknown history is not reconstructed.
 
-**Topic review queue** is available from source review and Local topic models at `/documents/intelligence/review-queue/`. It uses up to 10 reproducible random documents from the complete authorized collection, then up to 10 additional uncertain proposals. Uncertainty is distance from the recorded topic threshold within a repeatable, bounded sample of at most 200 existing prediction rows, not an exhaustive ranking. Unused spaces use random audit documents. The sample label, population, model and current content determine repeatability; the queue is not a model-accuracy estimate and runs no OCR or inference.
+**Topic review queue** is available from source review at `/documents/intelligence/review-queue/`. It uses up to 10 reproducible random documents from the complete authorized collection, then up to 10 additional uncertain proposals. Uncertainty is distance from the recorded topic threshold within a repeatable, bounded sample of at most 200 existing prediction rows, not an exhaustive ranking. Unused spaces use random audit documents. The sample label, population, model and current content determine repeatability; the queue is not a model-accuracy estimate and runs no OCR or inference.
 
 Review links carry signed actor/document/content/vocabulary-bound sampling receipts, expiring after seven days. Submitted reviews retain random/uncertainty provenance; direct reviews record manual provenance. Older reviews retain unknown sampling history. Stale, forged and cross-user receipts are rejected. External review remains office-admin scoped. Topic merging rejects a concurrent new assignment before retiring a topic; retrying reconciles the newly affected document without changing historical decisions.
 
-Office administrators can grant or withdraw training eligibility for their own editable records in the collapsed training-permission panel. System administrators manage candidates under **Local topic models**. Document eligibility and model activation are protected service actions, not ordinary Django-admin field edits. Changing eligibility/family invalidates affected models and does not reactivate an old model on regrant.
+Office administrators can grant or withdraw training eligibility for their own editable records in the collapsed training-permission panel. Optional candidate operation remains available through the protected management commands above. Document eligibility and model activation are protected service actions, not ordinary Django-admin field edits. Changing eligibility/family invalidates affected models and does not reactivate an old model on regrant.
 
-**Save these filters** keeps the currently applied repository filters in a private named view. Opening it revalidates the filters and current access, including office transfers, grants and collection. Invalid/stale views display an error rather than widening the search. A saved view stores filters only; it does not copy, move or reclassify files. Ordinary explicit forms and authorized downloads remain available without JavaScript.
+The private saved-repository-view and local-model administration pages have been removed, including their navigation, filter-saving controls and HTTP actions. Existing saved-view data and model records are preserved without a schema/data migration. Repository filters, OCR, topic review, tagging and search continue to use their existing services. Ordinary explicit forms and authorized downloads remain available without JavaScript.
 
 ## Opt-in processing and recovery
 

@@ -59,9 +59,6 @@ class ExternalRepositoryView(AppLoginRequiredMixin, View):
         )
         context.update(form=form, documents=context["page_obj"].object_list, total=context["page_obj"].paginator.count,
                        all_count=visible.count(), can_upload=request.user.can_start_work and request.user.is_office_admin)
-        from .saved_views import save_filters_url
-
-        context["save_filters_url"] = save_filters_url(request, collection=Collection.EXTERNAL)
         return render(request, "documents/external/repository.html", context)
 
 

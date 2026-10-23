@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block title %}My repository views · {{ SITE_NAME }}{% endblock %}
-{% block content %}
-<div class="workspace-page"><div class="page-head"><div><h1>My repository views</h1><p class="sub">Private shortcuts to repository filters. They always use your current access and do not copy documents.</p></div></div>
-  <section class="card-udm mb-4"><div class="card-udm-head"><h2>Save selected filters</h2></div><div class="card-udm-body"><p>Open this screen from a repository’s <strong>Save these filters</strong> link to keep its applied filters. Saving here without that link creates a view of the selected collection.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="btn btn-udm">Save private view</button></form></div></section>
-  <section class="card-udm"><div class="card-udm-head"><h2>Your saved views</h2></div><div class="card-udm-body"><ul class="list-unstyled">{% for saved in saved_views %}<li class="d-flex flex-wrap align-items-center gap-3 py-3 border-bottom"><div class="flex-grow-1"><a href="{% url 'documents:open_saved_view' saved.pk %}">{{ saved.name }}</a><span class="d-block text-muted small">{{ saved.collection }} repository</span></div><form method="post" action="{% url 'documents:delete_saved_view' saved.pk %}">{% csrf_token %}<button class="btn btn-udm-outline" type="submit">Delete<span class="visually-hidden"> saved view {{ saved.name }}</span></button></form></li>{% empty %}<li>No private views saved yet.</li>{% endfor %}</ul></div></section>
-</div>
-{% endblock %}

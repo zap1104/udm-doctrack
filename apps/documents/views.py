@@ -142,8 +142,6 @@ class RepositoryView(AppLoginRequiredMixin, View):
 
     def get(self, request):
         documents = Document.objects.visible_to(request.user).in_collection().filter(is_active=True).with_related()
-        from .saved_views import save_filters_url
-
         visible = Document.objects.visible_to(request.user).in_collection().filter(is_active=True)
         pending_visible = pending_upload_for(request.user)
         if request.user.is_office_admin and not request.user.is_system_admin:
@@ -341,7 +339,6 @@ class RepositoryView(AppLoginRequiredMixin, View):
             self.template_name,
             {
                 "form": form,
-                "save_filters_url": save_filters_url(request, collection=Collection.OVPA),
                 "selected_filters": selected_filters,
                 "more_filters_open": bool(any(data.get(name) for name in ("tag", "source", "retention", "date_from", "date_to")) or data.get("q") or form.errors),
                 "repository_search": repository_search,

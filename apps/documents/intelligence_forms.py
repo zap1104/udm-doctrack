@@ -3,7 +3,6 @@ from django import forms
 from apps.core.forms import BootstrapFormMixin
 from apps.core.models import Tag
 
-from .models import Collection
 from .tagging import reviewable_tags
 
 
@@ -49,12 +48,6 @@ class TrainingEligibilityForm(BootstrapFormMixin, forms.Form):
         help_text="Use the same label for close copies or templates so they stay in one training partition.",
     )
     input_revision = forms.CharField(widget=forms.HiddenInput)
-
-
-class SavedViewForm(BootstrapFormMixin, forms.Form):
-    name = forms.CharField(max_length=80, label="View name")
-    collection = forms.ChoiceField(choices=Collection.choices)
-    filters = forms.CharField(required=False, max_length=4000, widget=forms.HiddenInput)
 
 
 class AliasApprovalForm(BootstrapFormMixin, forms.Form):

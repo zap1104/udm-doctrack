@@ -1,13 +1,10 @@
 """Small explicit review screens over existing repository permissions."""
 
-from urllib.parse import urlencode
-
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.db.models import OuterRef, Subquery
-from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -21,17 +18,14 @@ from .file_versions import DocumentFileVersion
 from .intelligence_forms import (
     AliasApprovalForm,
     CompleteTagReviewForm,
-    SavedViewForm,
     TagMergeForm,
     TagReviewForm,
     TrainingEligibilityForm,
 )
 from .ml.eligibility import set_training_eligibility
-from .ml.lifecycle import activate_model, rollback_model
 from .ml.models import TagModel
-from .models import Collection, ExtractionUnit, SavedDocumentView, TagAlias
+from .models import Collection, ExtractionUnit, TagAlias
 from .processing_contracts import coverage_summary
-from .saved_views import create_saved_view, delete_saved_view, open_saved_view
 from .tagging import (
     approve_alias,
     complete_review,
@@ -292,78 +286,6 @@ class TrainingEligibilityView(AppLoginRequiredMixin, View):
         return render(request, "documents/intelligence/units.html", context, status=status)
 
 
-class TagModelsView(SystemAdminRequiredMixin, View):
-    def get(self, request):
-        collection = request.GET.get("collection", Collection.OVPA)
-        if (
-            len(request.GET.getlist("collection")) > 1
-            or collection not in Collection.values
-            or len(request.GET.getlist("office")) > 1
-        ):
-            return render(
-                request,
-                "documents/intelligence/models.html",
-                {"models": [], "scope_error": "Select one valid model scope."},
-                status=400,
-            )
-        models = (
-            TagModel.objects.filter(collection=collection)
-            .defer("artifact", "snapshot__payload")
-            .select_related("office", "snapshot")
-            .order_by("-created_at", "-pk")
-        )
-        if request.GET.get("office"):
-            from apps.accounts.models import Office
-
-            try:
-                office_id = int(request.GET["office"])
-            except ValueError:
-                return render(
-                    request,
-                    "documents/intelligence/models.html",
-                    {"models": [], "scope_error": "Select a valid internal office."},
-                    status=400,
-                )
-            office = get_object_or_404(Office, pk=office_id, is_active=True)
-            models = models.filter(office=office)
-        context = paginate(request, models)
-        context.update(models=context["page_obj"].object_list, collection=collection)
-        return render(request, "documents/intelligence/models.html", context)
-
-    def post(self, request):
-        if request.POST.get("action") not in {"activate", "disable"} or any(
-            len(request.POST.getlist(key)) != 1 for key in request.POST
-        ):
-            return render(
-                request,
-                "documents/intelligence/models.html",
-                {"models": [], "scope_error": "Choose one valid model action."},
-                status=400,
-            )
-        target_collection = request.POST.get("collection", Collection.OVPA)
-        target_office = None
-        try:
-            if request.POST.get("action") == "disable":
-                target_office = int(request.POST["office"])
-                rollback_model(user=request.user, office_id=target_office, collection=request.POST["collection"])
-            else:
-                model = activate_model(
-                    int(request.POST["model"]), user=request.user, mode=request.POST.get("mode", "shadow")
-                )
-                target_collection, target_office = model.collection, model.office_id
-        except (ValidationError, ValueError, KeyError, TagModel.DoesNotExist) as exc:
-            messages.error(
-                request,
-                "; ".join(exc.messages) if isinstance(exc, ValidationError) else "Choose a valid model and scope.",
-            )
-        else:
-            messages.success(request, "Model configuration saved.")
-        params = {"collection": target_collection if target_collection in Collection.values else Collection.OVPA}
-        if target_office is not None:
-            params["office"] = target_office
-        return redirect(reverse("documents:tag_models") + "?" + urlencode(params))
-
-
 class VocabularyView(SystemAdminRequiredMixin, View):
     def get(self, request):
         return self.render(request)
@@ -404,59 +326,3 @@ class VocabularyView(SystemAdminRequiredMixin, View):
             merge_form=merge_form or TagMergeForm(auto_id="merge_%s"),
         )
         return render(request, "documents/intelligence/vocabulary.html", context, status=status)
-
-
-class SavedViewsView(AppLoginRequiredMixin, View):
-    def get(self, request):
-        form = SavedViewForm(
-            initial={
-                "collection": request.GET.get("collection", Collection.OVPA),
-                "filters": request.GET.get("filters", ""),
-            }
-        )
-        return self.render(request, form)
-
-    def post(self, request):
-        form = SavedViewForm(request.POST)
-        if form.is_valid():
-            try:
-                create_saved_view(
-                    user=request.user,
-                    name=form.cleaned_data["name"],
-                    collection=form.cleaned_data["collection"],
-                    params=QueryDict(form.cleaned_data["filters"]),
-                )
-                messages.success(request, "Private repository view saved.")
-                return redirect("documents:saved_views")
-            except ValidationError as exc:
-                form.add_error(None, exc)
-        return self.render(request, form, status=400)
-
-    @staticmethod
-    def render(request, form, status=200):
-        return render(
-            request,
-            "documents/intelligence/saved_views.html",
-            {"form": form, "saved_views": SavedDocumentView.objects.filter(owner=request.user)},
-            status=status,
-        )
-
-
-class OpenSavedView(AppLoginRequiredMixin, View):
-    def get(self, request, view_id):
-        get_object_or_404(SavedDocumentView, pk=view_id, owner=request.user)
-        try:
-            target = open_saved_view(view_id, user=request.user)
-        except ValidationError as exc:
-            form = SavedViewForm(initial={"collection": Collection.OVPA})
-            messages.error(request, "; ".join(exc.messages))
-            return SavedViewsView.render(request, form, status=400)
-        return HttpResponseRedirect(target)
-
-
-class DeleteSavedView(AppLoginRequiredMixin, View):
-    def post(self, request, view_id):
-        get_object_or_404(SavedDocumentView, pk=view_id, owner=request.user)
-        delete_saved_view(view_id, user=request.user)
-        messages.success(request, "Private saved view deleted.")
-        return redirect("documents:saved_views")
