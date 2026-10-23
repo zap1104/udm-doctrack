@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from django.conf import settings
@@ -481,7 +482,7 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
         file_rows = tracking_file_rows(record, request.user, request=request)
         attachments = [row["current"]["item"] for row in file_rows]
         archived_document = getattr(record, "archived_document", None)
-        can_archive_now = archived_document is None and record.can_user_approve_upload(request.user)
+        can_archive_now = archived_document is None and record.can_user_file_when_completed(request.user)
         # Filing a record handled by this office does not grant access to the
         # originating office's repository. Keep the tracking history usable.
         if archived_document is not None and not archived_document.can_user_view(request.user):
@@ -529,7 +530,7 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                 # Distinct IDs from RemarkForm's attachments; POST field names
                 # remain unchanged for the existing route endpoint.
                 "route_form": UploadFormRecovery(request, "tracking-route", target_id=record.pk).form if can_act and record.status != Status.PENDING_RECEIPT else RouteForm(record=record, user=request.user, auto_id="route_%s"),
-                "complete_form": CompleteForm(),
+                "complete_form": CompleteForm(user=request.user, record=record),
                 "grant_form": GrantAccessForm(actor=request.user),
                 "pending_offices": record.awaiting_receipt_offices,
                 "can_act": can_act,
@@ -649,7 +650,7 @@ class CompleteRecordView(OfficeAssignedMixin, View):
         record = _get_record(request, pk)
         if not record.can_user_act(request.user):
             raise PermissionDenied("Only the office holding the document can mark it completed.")
-        form = CompleteForm(request.POST)
+        form = CompleteForm(request.POST, user=request.user, record=record)
         if not form.is_valid():
             messages.error(request, "Could not read the completion note.")
             return redirect(_record_return_url(request, record))
@@ -671,11 +672,11 @@ class CompleteRecordView(OfficeAssignedMixin, View):
                 message += " It has been filed in the Document Repository."
                 messages.success(request, message)
                 return redirect(document.get_absolute_url() if document.can_user_view(request.user) else record.get_absolute_url())
-            except (ValidationError, PermissionDenied) as exc:
+            except Exception:
+                logging.getLogger("doctrack").exception("Optional filing failed after completion for tracking record %s", record.pk)
                 messages.warning(
                     request,
-                    f"Completed, but approving it into the repository failed: "
-                    f"{'; '.join(getattr(exc, 'messages', [str(exc)]))}",
+                    "Completed, but filing failed. Retry approval from Pending Filing.",
                 )
                 return redirect(_record_return_url(request, record))
 

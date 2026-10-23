@@ -393,9 +393,14 @@ class CompleteForm(BootstrapFormMixin, forms.Form):
     )
     archive_now = forms.BooleanField(
         required=False,
-        initial=True,
-        label="Approve it into the Document Repository right away",
+        initial=False,
+        label="Approve into Repository now",
     )
+
+    def __init__(self, *args, user=None, record=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None and record is not None and not record.can_user_file_when_completed(user):
+            self.fields.pop("archive_now")
 
 
 class ReopenForm(BootstrapFormMixin, forms.Form):

@@ -1,6 +1,7 @@
 """External workspace. Start with visibility, then narrow every filter and write."""
 
 import csv
+import logging
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -467,6 +468,7 @@ class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                     kwargs["initial"]["to_endpoint"] = remembered
         if action == "complete":
             kwargs["record"] = record
+            kwargs["user"] = request.user
         return record, form_class, kwargs, title, label
 
     def get(self, request, pk, action):
@@ -496,6 +498,7 @@ class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
         if form.is_valid():
             data = dict(form.cleaned_data)
             revision = data.pop("revision")
+            archive_now = data.pop("archive_now", False) if action == "complete" else False
             functions = {
                 "route": services.route_record,
                 "receipt": services.confirm_receipt,
@@ -515,6 +518,16 @@ class ExternalActionView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                     messages.success(request, "Filed into the External repository.")
                     return redirect(document.get_absolute_url())
                 functions[action](record, user=request.user, expected_revision=revision, **data)
+                if action == "complete" and archive_now and record.can_manage(request.user):
+                    from apps.documents.external_services import archive_external_record
+                    try:
+                        document = archive_external_record(record, user=request.user, expected_revision=record.revision)
+                    except Exception:
+                        logging.getLogger("doctrack").exception("Optional filing failed after completion for external record %s", record.pk)
+                        messages.warning(request, "Completed, but filing failed. Retry approval from Pending Filing.")
+                        return redirect(record)
+                    messages.success(request, "Filed into the External repository.")
+                    return redirect(document.get_absolute_url())
             except ValidationError as exc:
                 _form_error(form, exc)
             else:

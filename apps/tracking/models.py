@@ -624,6 +624,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
             return False
         if self.status != Status.COMPLETED_PENDING_UPLOAD:
             return False
+        return self.can_user_file_when_completed(user)
+
+    def can_user_file_when_completed(self, user) -> bool:
+        """Offer optional filing without pretending the work is completed yet."""
+        if not user.is_authenticated or not user.can_start_work:
+            return False
         if user.is_system_admin:
             return True
         if not user.is_office_admin:

@@ -264,11 +264,14 @@ class ExternalWorkForm(ExternalMessageForm):
 
 class ExternalCompleteForm(ExternalNoteForm):
     completed_at = actual_time("Actual external completion time", required=True)
+    archive_now = forms.BooleanField(required=False, initial=False, label="Approve into Repository now")
 
-    def __init__(self, *args, record, **kwargs):
+    def __init__(self, *args, record, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if not record.current_external_office_id:
             self.fields.pop("completed_at")
+        if user is None or not record.can_manage(user):
+            self.fields.pop("archive_now")
 
 
 class ExternalAttachmentForm(RevisionForm):
