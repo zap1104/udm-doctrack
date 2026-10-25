@@ -1,0 +1,81 @@
+{
+  "tested_program_revision": "540b9029f207f74bab147d12b0c3f6190f413e36",
+  "verification_finished_at": "2026-10-25T14:18:28.872902+00:00",
+  "python_version": "3.13.7",
+  "postgresql_major": 18,
+  "full_postgresql_suite": {
+    "revision": "540b9029f207f74bab147d12b0c3f6190f413e36",
+    "total": 8150,
+    "outcomes": {
+      "passed": 8144,
+      "failed": 0,
+      "skipped": 6,
+      "errors": 0
+    },
+    "failed_ids": [],
+    "skipped_ids": [
+      "tests/test_filter_agreement.py::test_every_routed_row_carries_a_direction[scope=incoming-med_admin]",
+      "tests/test_deletion_purge.py::test_background_schedule_is_registered_once",
+      "tests/test_file_maintenance_controls.py::test_background_maintenance_schedule_is_registered_once",
+      "tests/test_systemwide_live_browser.py::test_real_browser_filters_workflows_and_responsive_views[core]",
+      "tests/test_security_maintenance.py::test_worker_schedules_register_security_cleanup_without_duplicates",
+      "tests/test_systemwide_live_browser.py::test_real_browser_filters_workflows_and_responsive_views[tail]"
+    ],
+    "exact_ids_verified": true,
+    "worker_exit_codes": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "finished_at": "2026-10-25T14:17:27.010256+00:00"
+  },
+  "line_coverage": {
+    "covered_lines": 14653,
+    "num_statements": 16799,
+    "percent_covered": 87.22543008512412
+  },
+  "background_regressions": {
+    "distinct_passed_ids": 131,
+    "first_run_passed": 129,
+    "setup_interrupted_ids_retried_successfully": 2,
+    "note": "Two database connection setup interruptions were rerun separately; the original errors remain recorded in local evidence."
+  },
+  "live_browser": {
+    "core": {
+      "recorded_checks": 451,
+      "filter_requests": 181,
+      "javascript_errors": 0,
+      "unexpected_http_errors": 0,
+      "screenshots": 12
+    },
+    "tail": {
+      "recorded_checks": 34,
+      "filter_requests": 14,
+      "javascript_errors": 0,
+      "unexpected_http_errors": 0,
+      "screenshots": 0
+    }
+  },
+  "javascript": {
+    "passed": 194,
+    "failed": 0,
+    "skipped": 0
+  },
+  "static_templates": 124,
+  "dependencies": {
+    "installed": {
+      "packages": 85,
+      "known_vulnerabilities": 0
+    },
+    "requirements": {
+      "packages": 43,
+      "known_vulnerabilities": 0
+    }
+  },
+  "isolation": "Disposable loopback PostgreSQL databases and temporary files; real OCR/storage/email providers disabled or simulated.",
+  "limits": [
+    "Not a guarantee that every possible bug is absent.",
+    "Physical devices, screen readers, real cloud credentials and providers, physical printers and production deployment remain unverified."
+  ]
+}

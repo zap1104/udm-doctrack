@@ -28,7 +28,7 @@ Use disposable demonstration records. Never rehearse deletion, seeding, account 
 2. **Filing:** complete the case, approve filing using an authorized administrator, and open the single repository document. Show its version history and that file contents are locked while authorized metadata corrections remain available.
 3. **External workflow:** use its separate Tracking and Repository pages. Show shared external office choices, manual external receipt/work evidence and control following confirmed internal custody. External offices have no accounts.
 4. **Counts and filters:** demonstrate a populated Incoming/Outgoing stage filter, selected-office perspective, Dashboard totals and its corresponding list or report. Explain that overdue can overlap a stage; it is not another partition to add to the total.
-5. **Search and files:** demonstrate an identifier search, a combined filter and an older version preview. Explain that relevance is a ranking score and search may deliberately show only its disclosed top results.
+5. **Search and files:** demonstrate an identifier search, a combined filter and an older version preview. Explain that relevance is a ranking score and search may deliberately show only its disclosed top results. Advanced Search starts at 75%; a title/body match can fall below that setting. Use its lower-threshold option or slider when needed. Repository search starts at zero.
 6. **Administration:** use disposable records to show deletion review and recovery. The normal 30-day recovery period is followed by permanent repository cleanup. Do not change the clock or purge real records for the demonstration.
 
 ## Claims to keep accurate
