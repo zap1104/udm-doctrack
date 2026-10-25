@@ -48,9 +48,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          # Patched LTS for CVE-2026-111497 (Node2Shell).
+          node-version-file: ".node-version"
+          check-latest: true
+          package-manager-cache: false
 
       - name: Browser security and interaction tests
         run: node --test tests/js/*.cjs

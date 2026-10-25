@@ -153,6 +153,27 @@ neither leaves anything behind.
 No `make` on Windows? Every command is just `python manage.py <thing>` (or
 `python scripts/<thing>.py`) — see the `Makefile`.
 
+### Node.js for JavaScript checks
+
+Node.js is used for JavaScript tests and optional browser-verification tools;
+the web application runs on Python/Django. Use the patched Node.js 24 LTS
+version recorded in [`.node-version`](.node-version), currently `24.22.1`.
+CI reads that same file through `actions/setup-node@v7`.
+
+Node.js 24.22.1 includes the fix for **CVE-2026-111497 (Node2Shell)**, a
+Brotli-decoder vulnerability. See the [official security advisory](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+Keep this version file updated when newer Node.js 24 security releases become
+available. It selects the CI/tooling version; it does not replace Node binaries
+bundled inside an editor or managed hosting platform.
+
+Check the active version with `node --version`. On Windows, run the JavaScript
+suite from PowerShell:
+
+```powershell
+$jsTests = @(Get-ChildItem -LiteralPath tests/js -Filter *.cjs -File | Select-Object -ExpandProperty FullName)
+node --test @jsTests
+```
+
 To preview an already configured Windows checkout without rerunning setup:
 
 ```powershell
