@@ -224,7 +224,7 @@ def test_a_migrated_secretary_can_still_forward_and_share(
     record.refresh_from_db()
 
     # 3. may share it while their office holds the record.
-    client.force_login(secretary)
+    client.force_verified_login(secretary)
     response = client.post(
         f"/tracking/{record.pk}/share/", {"office": offices["HR"].pk, "reason": "fyi"}
     )
@@ -256,7 +256,7 @@ def test_a_migrated_secretary_still_sees_the_office_columns(apps_registry, offic
     role_migration.forwards(apps_registry, None)
     secretary = User.objects.get(username="legacy-secretary")
 
-    client.force_login(secretary)
+    client.force_verified_login(secretary)
     response = client.get("/")
 
     assert response.status_code == 200
@@ -274,7 +274,7 @@ def test_a_secretary_gains_no_administration_access(apps_registry, offices, clie
     )
     role_migration.forwards(apps_registry, None)
 
-    client.force_login(User.objects.get(username="legacy-secretary"))
+    client.force_verified_login(User.objects.get(username="legacy-secretary"))
     assert client.get("/accounts/users/").status_code == 403
     assert client.get("/administration/").status_code == 403
 

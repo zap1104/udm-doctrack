@@ -177,7 +177,7 @@ def test_an_admin_with_no_office_sees_combined_stages_without_zeroed_directions(
     admin = users["admin"]
     admin.office = None
     admin.save(update_fields=["office"])
-    client.force_login(admin)
+    client.force_verified_login(admin)
 
     response = client.get(REPORTS)
     body = response.content.decode()
@@ -198,7 +198,7 @@ def test_an_admins_assigned_office_does_not_narrow_the_combined_chart(
     """An admin's own office is not a direction or filter for All offices."""
     admin = users["admin"]
     assert admin.office is not None, "the point of the test: they do have one"
-    client.force_login(admin)
+    client.force_verified_login(admin)
 
     response = client.get(REPORTS)
 
@@ -218,7 +218,7 @@ def test_an_account_without_the_picker_keeps_its_own_point_of_view(
 ):
     """Their report is their office, so that is what direction is measured
     from — there is nothing for them to pick."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     response = client.get(REPORTS)
 
@@ -242,7 +242,7 @@ def test_the_longest_status_label_is_not_clipped():
 def test_picking_an_office_gives_the_page_a_point_of_view(
     client, med_to_sup_and_hr, users, offices
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(f"{REPORTS}?office={offices['SUP'].pk}")
 
@@ -299,7 +299,7 @@ def test_an_office_that_forwarded_a_document_is_waiting_on_the_next_one(
     received step from the first batch matched the office, HR's step matched the
     other two, and the record was excluded as though SUP owed its own receipt.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     context = client.get(f"{REPORTS}?office={offices['SUP'].pk}").context
 
@@ -312,7 +312,7 @@ def test_the_office_it_was_forwarded_to_still_owes_the_receipt(
     client, sup_forwarded_to_hr, users, offices
 ):
     """The other side of the same record, so the fix cannot count it twice."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     context = client.get(f"{REPORTS}?office={offices['HR'].pk}").context
 

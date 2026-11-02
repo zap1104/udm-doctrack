@@ -63,8 +63,13 @@ def current_units(document):
 
 
 def review_context(request, document):
+    from apps.accounts.capabilities import area_for, require_capability
+
     from .reconciliation import index_status
 
+    # Invalid POSTs also render this screen. Its extraction/model evidence is
+    # file content even when the requested mutation only edits topic metadata.
+    require_capability(request.user, area_for(document), 'view_content')
     revision, vocabulary = input_revision(document), vocabulary_digest()
     initial = {"input_revision": revision, "vocabulary": vocabulary}
     sample = request.GET.get("review_sample", "")

@@ -13,6 +13,13 @@ from tests.test_tracking_export_agreement import export_records as export_record
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def enrolled_diagnostic_accounts(users):
+    from tests.auth_helpers import prepare_verified_user
+    for user in users.values():
+        prepare_verified_user(user)
+
+
 @pytest.fixture
 def diagnostic_documents(users, offices, memo_type, tag_urgent):
     made = {}
@@ -60,7 +67,7 @@ def test_filter_diagnostic_accepts_collection_isolation_and_retired_office_choic
 
 def test_repository_report_diagnostic_handles_unclassified_without_drilldown(client, users, offices):
     document = Document.objects.create(title="Unclassified", office=offices["MED"], year=2026)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     audit = Audit()
     audit.client, audit.user = client, users["admin"]
     rows = list(Document.objects.filter(pk=document.pk).values("pk", "office_id", "source", "created_at"))
@@ -114,7 +121,7 @@ def test_filter_diagnostic_never_samples_an_inactive_tag(client, users, offices)
     tagged = Document.objects.create(title="Inactive tag", office=offices["MED"], year=2026)
     Document.objects.create(title="No tag", office=offices["MED"], year=2026)
     tagged.tags.add(Tag.objects.create(name="retired-tag", is_active=False))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     audit = FilterAudit()
     audit.user, audit.client = users["admin"], client
     audit.repository(Document.objects.filter(collection="OVPA", is_active=True))
@@ -137,7 +144,7 @@ def test_filter_diagnostic_walks_every_page_past_show_all_cap(client, users, off
             )
             for n in range(501)
         ])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     audit = FilterAudit()
     audit.user, audit.client = users["admin"], client
     audit.repository(Document.objects.filter(collection="OVPA", is_active=True))

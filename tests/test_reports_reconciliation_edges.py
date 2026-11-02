@@ -43,7 +43,7 @@ def test_overdue_records_without_accountable_offices_do_not_show_all_clear(clien
     """An unattributed overdue record must not appear beside 'Nothing is overdue'."""
     record = create_draft_record(user=users["med"], subject="Unattributed deadline", instructions="")
     TrackingRecord.objects.filter(pk=record.pk).update(due_at=timezone.now() - timedelta(days=1))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/tracking/reports/")
 
@@ -55,7 +55,7 @@ def test_overdue_records_without_accountable_offices_do_not_show_all_clear(clien
 
 @pytest.mark.django_db
 def test_report_still_shows_all_clear_when_no_records_are_overdue(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/tracking/reports/")
 

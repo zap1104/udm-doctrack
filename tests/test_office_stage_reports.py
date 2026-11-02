@@ -42,7 +42,7 @@ def _csv_records(response):
 def test_each_office_stage_matches_dashboard_reports_memo_and_export(
     client, users, offices, partial_office_work, office_code, direction, stage,
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = offices[office_code]
     dashboard = client.get(f"/?office={office.pk}")
     reports = client.get(f"/tracking/reports/?office={office.pk}")
@@ -91,7 +91,7 @@ def test_each_office_stage_matches_dashboard_reports_memo_and_export(
 
 @pytest.mark.django_db
 def test_all_offices_counts_a_partial_batch_once_as_pending(client, users, partial_office_work):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard = client.get("/?office=all")
     reports = client.get("/tracking/reports/?office=all")
     memo = client.get("/memo/print/?office=all")
@@ -115,7 +115,7 @@ def test_all_offices_counts_a_partial_batch_once_as_pending(client, users, parti
 def test_non_admin_stage_uses_own_office_even_with_a_foreign_office_parameter(
     client, users, offices, partial_office_work, role,
 ):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     for query in ("", f"?office={offices['HR'].pk}"):
         dashboard = client.get("/" + query)
         reports = client.get("/tracking/reports/" + query)
@@ -131,7 +131,7 @@ def test_non_admin_stage_uses_own_office_even_with_a_foreign_office_parameter(
 @pytest.mark.django_db
 def test_late_recipient_receipt_does_not_inherit_hr_work_in_reports(client, users, offices, partial_office_work):
     services.confirm_receipt(partial_office_work, user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for code, expected in (("HR", Status.IN_PROCESS), ("MED", Status.RECEIVED), ("REC", Status.IN_PROCESS)):
         response = client.get(f"/tracking/reports/?office={offices[code].pk}")
         assert response.status_code == 200
@@ -145,7 +145,7 @@ def test_legacy_whole_record_stage_cannot_hide_pending_recipient_from_report(
     client, users, offices, partial_office_work, stored_stage,
 ):
     TrackingRecord.objects.filter(pk=partial_office_work.pk).update(status=stored_stage)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for office in (offices["MED"].pk, "all"):
         report = client.get(f"/tracking/reports/?office={office}")
         assert report.status_code == 200
@@ -158,7 +158,7 @@ def test_legacy_whole_record_stage_cannot_hide_pending_recipient_from_report(
 def test_every_confirmed_recipient_owes_its_current_overdue_work(client, users, offices, partial_office_work):
     services.confirm_receipt(partial_office_work, user=users["med"])
     TrackingRecord.objects.filter(pk=partial_office_work.pk).update(due_at=timezone.now() - timedelta(days=2))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for code in ("HR", "MED"):
         response = client.get(f"/tracking/reports/?office={offices[code].pk}")
         assert response.status_code == 200

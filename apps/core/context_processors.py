@@ -48,7 +48,9 @@ def site_context(request):
     unread_notifications = SimpleLazyObject(badge_count)
     notification_in_app_enabled = SimpleLazyObject(in_app_preference)
     idle_seconds = idle_seconds_for_request(request)
+    from apps.accounts.capabilities import permission_snapshot
     return {
+        'access': SimpleLazyObject(lambda: permission_snapshot(request.user)),
         "nav_active": _nav_active(request.path or "/"),
         "unread_notifications": unread_notifications,
         "notification_in_app_enabled": notification_in_app_enabled,

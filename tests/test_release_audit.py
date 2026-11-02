@@ -21,7 +21,7 @@ def test_audit_office_filter_preserves_attribution_after_actor_transfer(client, 
     entry = log_action(AuditLog.Action.UPDATE, "Work before office transfer", actor=actor)
     actor.office = offices["SUP"]
     actor.save(update_fields=["office"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert entry.pk in entries_for_office(client, offices["MED"])
     assert entry.pk not in entries_for_office(client, offices["SUP"])
@@ -31,7 +31,7 @@ def test_audit_office_filter_preserves_attribution_after_actor_deletion(client, 
     actor = users["med"]
     entry = log_action(AuditLog.Action.UPDATE, "Work before account deletion", actor=actor)
     actor.delete()
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert entry.pk in entries_for_office(client, offices["MED"])
 
@@ -41,7 +41,7 @@ def test_audit_office_filter_leaves_unknown_legacy_attribution_unassigned(client
         actor=users["med"], actor_label="Old MED account", action=AuditLog.Action.UPDATE,
         summary="Legacy event without an office snapshot",
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert entry.pk not in entries_for_office(client, offices["MED"])
     assert entry.pk in {entry.pk for entry in client.get(AUDIT_URL).context["entries"]}
@@ -50,7 +50,7 @@ def test_audit_office_filter_leaves_unknown_legacy_attribution_unassigned(client
 def test_office_admin_audit_scope_cannot_be_changed_by_office_filter(client, users, offices):
     own_entry = log_action(AuditLog.Action.UPDATE, "Own office work", actor=users["med"])
     other_entry = log_action(AuditLog.Action.UPDATE, "Other office work", actor=users["sup"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     entries = entries_for_office(client, offices["SUP"])
     assert own_entry.pk in entries

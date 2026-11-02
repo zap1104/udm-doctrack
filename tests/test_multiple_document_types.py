@@ -53,7 +53,7 @@ def test_tracking_form_accepts_multiple_types_and_requires_selected_main(users, 
 
 @pytest.mark.django_db
 def test_create_review_edit_keeps_all_types(client, users, offices, memo_type, letter_type):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.post("/tracking/new/", dict(create_data(offices, memo_type, letter_type).lists()))
     assert response.status_code == 302
     record = services.active_for(users["med"]).get(subject="Mixed document packet")
@@ -70,7 +70,7 @@ def test_create_review_edit_keeps_all_types(client, users, offices, memo_type, l
 def test_draft_edit_replaces_selections_and_main_without_changing_identity(client, users, offices, memo_type, letter_type):
     record = services.create_draft_record(user=users["med"], subject="Draft packet", instructions="For action",
                                          document_type=memo_type)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     data = create_data(offices, memo_type, letter_type)
     data["document_type"] = str(letter_type.pk)
     response = client.post(f"/tracking/new/?draft={record.pk}", dict(data.lists()))
@@ -124,7 +124,7 @@ def test_secondary_type_filter_does_not_duplicate_or_leak_documents(client, user
     hidden = Document.objects.create(title="Other office private packet", office=offices["HR"],
                                      document_type=letter_type, access_level="RESTRICTED", uploaded_by=users["hr"])
     hidden.document_types.set([letter_type])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get("/documents/", {"document_type": letter_type.pk})
     assert response.context["total"] == 1
     assert {doc.pk for doc in response.context["page_obj"]} == {visible.pk}
@@ -157,7 +157,7 @@ def test_invalid_extra_type_is_rejected_without_changing_draft(client, users, of
         letter_type.save(update_fields=["is_active"])
     data = create_data(offices, memo_type, letter_type)
     data.setlist("document_types", [str(memo_type.pk), str(letter_type.pk if invalid == "inactive" else 999999999)])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.post(f"/tracking/new/?draft={record.pk}", dict(data.lists()))
     response = follow_upload_recovery(client, response)
     assert response.status_code == 200 and "document_types" in response.context["form"].errors
@@ -183,7 +183,7 @@ def test_main_report_counts_match_destinations_for_mixed_packets(client, users, 
     mixed = Document.objects.create(title="Mixed memorandum", office=offices["MED"], document_type=memo_type, uploaded_by=users["med"])
     mixed.document_types.set([memo_type, letter_type])
     single = Document.objects.create(title="Plain letter", office=offices["MED"], document_type=letter_type, uploaded_by=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/documents/reports/", {"office": offices["MED"].pk}).context
     rows = {row["document_type_id"]: row for row in context["document_types"]}
     assert sum(row["total"] for row in rows.values()) == context["total_documents"] == 2

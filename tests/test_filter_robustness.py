@@ -22,7 +22,7 @@ from apps.documents.models import Document, DocumentFile, Source
 
 @pytest.fixture
 def admin_client(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     return client
 
 

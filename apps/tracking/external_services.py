@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
 from apps.accounts.models import Office
 from apps.core.permissions import active_writer
 from apps.core.storage import compensate_storage, create_stored_file
@@ -175,6 +176,7 @@ def save_external_office(office, *, user, expected_revision, **fields):
 
 
 @transaction.atomic
+@requires_capability('external_tracking', 'create')
 def create_record(
     *,
     user,
@@ -237,6 +239,7 @@ def _number(record):
 
 
 @_mutation
+@requires_capability('external_tracking', 'endorse')
 def route_record(
     record,
     *,
@@ -346,16 +349,19 @@ def _receive(record, user, *, received_at=None, note="", external=False):
 
 
 @_mutation
+@requires_capability('external_tracking', 'receive')
 def confirm_receipt(record, *, user, note=""):
     _receive(record, user, note=note)
 
 
 @_mutation
+@requires_capability('external_tracking', 'receive')
 def record_external_receipt(record, *, user, received_at=None, note=""):
     _receive(record, user, received_at=received_at, note=note, external=True)
 
 
 @_mutation
+@requires_capability('external_tracking', 'work')
 def add_remark(record, *, user, message):
     _open(record)
     if not record.can_act(user):
@@ -376,6 +382,7 @@ def add_remark(record, *, user, message):
 
 
 @_mutation
+@requires_capability('external_tracking', 'work')
 def record_external_work(record, *, user, actual_at=None, message=""):
     _open(record)
     _manager(user, record.responsible_office_id)
@@ -398,6 +405,7 @@ def record_external_work(record, *, user, actual_at=None, message=""):
 
 @compensate_storage
 @_mutation
+@requires_capability('external_tracking', 'edit_files')
 def add_attachment(record, *, user, uploaded_file, description=""):
     _open(record)
     if not record.can_act(user):
@@ -428,6 +436,7 @@ def add_attachment(record, *, user, uploaded_file, description=""):
 
 
 @_mutation
+@requires_capability('external_tracking', 'complete')
 def complete_record(record, *, user, note="", completed_at=None):
     _open(record)
     if record.status == Status.DRAFT or not record.can_act(user):
@@ -451,6 +460,7 @@ def complete_record(record, *, user, note="", completed_at=None):
 
 
 @_mutation
+@requires_capability('external_tracking', 'reopen')
 def reopen_record(record, *, user, note=""):
     _manager(user, record.responsible_office_id)
     if record.status != Status.COMPLETED_PENDING_UPLOAD:
@@ -464,6 +474,7 @@ def reopen_record(record, *, user, note=""):
 
 
 @_mutation
+@requires_capability('external_tracking', 'work')
 def annotate_record(record, *, user, message):
     _manager(user, record.responsible_office_id)
     message = _text(message)
@@ -473,6 +484,7 @@ def annotate_record(record, *, user, message):
 
 
 @_mutation
+@requires_capability('external_tracking', 'edit_metadata')
 def correct_step(record, *, step, user, reason, changes):
     _manager(user, record.responsible_office_id)
     if record.status == Status.COMPLETED:

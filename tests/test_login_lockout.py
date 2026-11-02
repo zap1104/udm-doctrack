@@ -183,7 +183,21 @@ def sign_in(client, username="mallory", password="RealPass123!", **extra):
     ValueError, which ``authenticate()`` does not swallow) when the request is
     missing. Going through the view is also what exercises our signal handlers.
     """
-    return client.post("/accounts/login/", {"username": username, "password": password}, **extra)
+    import re
+
+    from django.core import mail
+
+    from tests.auth_helpers import prepare_verified_user
+
+    account = User.objects.filter(username=username).first()
+    if account:
+        prepare_verified_user(account)
+    with override_settings(EMAIL_CONFIGURED=True, EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+        response = client.post('/accounts/login/', {'username': username, 'password': password}, **extra)
+        if response.status_code == 302 and response.url.startswith('/accounts/otp/'):
+            code = re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
+            return client.post('/accounts/otp/', {'code': code}, **extra)
+        return response
 
 
 @override_settings(AXES_FAILURE_LIMIT=3, AXES_ESCALATION_RESET_ON_LOGIN=True)
@@ -219,7 +233,7 @@ def test_a_forced_password_change_is_what_completes_the_sign_in(client, db):
     User.objects.filter(pk=user.pk).update(must_change_password=True)
     _record_lockout(USERNAME, "mallory", timezone.now() - timedelta(days=1))
 
-    client.force_login(User.objects.get(pk=user.pk))
+    client.force_verified_login(User.objects.get(pk=user.pk))
     assert current_stage("mallory", None) == 1, "still stuck at the password change"
 
     client.post(

@@ -43,7 +43,7 @@ def test_external_review_initial_does_not_replace_managing_office():
 def test_external_collection_does_not_enter_legacy_repository_or_search(client, users, offices):
     ordinary = Document.objects.create(title="Shared phrase ordinary", office=offices["MED"], year=2026)
     external = Document.objects.create(title="Shared phrase external", office=offices["MED"], year=2026, collection="EXTERNAL")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:repository"))
     assert response.status_code == 200
     assert ordinary in response.context["documents"]
@@ -72,7 +72,7 @@ def test_external_shared_mutation_requires_admin_and_rechecks_actor(users, offic
 @pytest.mark.django_db
 def test_external_repository_filter_failure_never_widens(client, users, offices):
     Document.objects.create(title="External", office=offices["MED"], year=2026, collection="EXTERNAL")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:external_repository"), {"external_office": "999999"})
     assert response.status_code == 200
     assert response.context["total"] == 0
@@ -228,7 +228,7 @@ def test_external_metadata_review_keeps_filing_office_when_ocr_suggests_another(
 
     document = Document.objects.create(title="External document", office=offices["MED"], collection="EXTERNAL")
     MetadataSuggestion.objects.create(document=document, suggested={"office_id": offices["SUP"].pk})
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:review", args=[document.pk]))
     assert response.status_code == 200
     assert "office" not in response.context["form"].fields
@@ -250,7 +250,7 @@ def test_pure_internal_case_cannot_be_filed_as_external(external_case, users):
 def test_external_reports_export_and_related_scope(client, users, offices):
     ordinary = Document.objects.create(title="Ordinary", office=offices["MED"], year=2026)
     external = Document.objects.create(title="External", office=offices["MED"], year=2026, collection="EXTERNAL")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     report = client.get(reverse("documents:external_reports"))
     assert report.status_code == 200 and report.context["total"] == 1
     exported = client.get(reverse("documents:external_reports"), {"export": "csv"})
@@ -268,7 +268,7 @@ def test_external_deletion_has_same_recovery_period_and_own_queue(client, users,
     assert document.deletion_recovery_open
     assert document.deletion_purge_at == document.deleted_at + timedelta(days=30)
     assert DocumentFile.objects.filter(pk=file.pk).exists()
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get(reverse("documents:deletion_queue"), {"status": "deleted"}).context["total"] == 0
     assert client.get(reverse("documents:external_deletion_queue"), {"status": "deleted"}).context["total"] == 1
     review_document_deletion(document, user=users["med_admin"], decision="RESTORE", reason="Still needed", next_review_date=timezone.localdate() + timedelta(days=60), expected_state=deletion_review_state(document))
@@ -295,7 +295,7 @@ def test_legacy_dashboard_report_and_facet_population_parity(client, users, offi
     from apps.core.views import DashboardMemoMixin
 
     ordinary = Document.objects.create(title="Ordinary population", office=offices["MED"], year=2026)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     before = client.get(reverse("core:repository_reports")).context["total_documents"]
     external = Document.objects.create(title="External population", office=offices["MED"], year=2099, collection="EXTERNAL", document_type=memo_type)
     external.tags.add(Tag.objects.create(name="external-only-facet"))
@@ -313,7 +313,7 @@ def test_external_shared_detail_download_permissions(client, users, offices, set
     settings.MEDIA_ROOT = tmp_path
     document = Document.objects.create(title="External readable document", office=offices["MED"], collection="EXTERNAL")
     file = DocumentFile.objects.create(document=document, file=ContentFile(b"External evidence", name="read.txt"), original_name="read.txt")
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     detail = client.get(document.get_absolute_url())
     assert detail.status_code == 200
     assert detail.context["can_edit"] == (role in {"med_admin", "admin"})

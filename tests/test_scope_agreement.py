@@ -27,7 +27,7 @@ def _office(code):
 @pytest.mark.django_db
 def test_every_office_reconciles_for_a_system_administrator(client, users, agreement):  # noqa: F811
     """Every Action Centre chip and every ring segment, for every office."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for code in CODES:
         response = client.get(f"/?office={_office(code).pk}")
         context = response.context
@@ -44,7 +44,7 @@ def test_every_office_reconciles_for_a_system_administrator(client, users, agree
 def test_no_list_repeats_a_row(client, users, agreement, role):  # noqa: F811
     """Joins through routing steps multiply rows unless the query says
     otherwise; a list that shows a document twice counts it twice."""
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     pages = {
         "tracking": client.get("/tracking/?per_page=100").context["records"],
         "repository": client.get("/documents/?per_page=100").context["documents"],
@@ -74,7 +74,7 @@ def test_naming_another_office_never_widens_what_an_account_sees(
     client, users, offices, agreement, office_accounts, role  # noqa: F811
 ):
     account = users.get(role) or office_accounts.get(role) or get_user_model().objects.get(username=role)
-    client.force_login(account)
+    client.force_verified_login(account)
 
     baseline = {
         "tracking": client.get("/tracking/").context["total"],

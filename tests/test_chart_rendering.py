@@ -116,7 +116,7 @@ def test_every_column_carries_its_own_value(client, users, charted, page):
     """One number per bar, not one per month. A single number said nothing
     about the two columns it did not sit on, and on a phone there is no hover,
     so a value only in a title attribute could not be read at all."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
 
     drawn = [group for group in groups if 'class="column column--' in group]
@@ -131,7 +131,7 @@ def test_every_column_carries_its_own_value(client, users, charted, page):
 @pytest.mark.django_db
 @pytest.mark.parametrize("page", ["/", "/documents/reports/"])
 def test_an_empty_month_has_no_columns_and_no_labels(client, users, charted, page):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     groups = _column_groups(client.get(page).content.decode())
 
     empty = [group for group in groups if 'class="column column--' not in group]
@@ -167,7 +167,7 @@ def test_endorsements_are_drawn_and_named_as_endorsements(client, users, charted
     one document endorsed four times is four endorsements — so the bar is there,
     labelled with its own number, and the legend and the note say what it
     counts rather than leaving the reader to assume documents."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/").content.decode()
     chart = body[body.index('class="column-chart"'):body.index('class="chart-table"')]
     text = " ".join(body.split())
@@ -180,7 +180,7 @@ def test_endorsements_are_drawn_and_named_as_endorsements(client, users, charted
 
 @pytest.mark.django_db
 def test_the_repository_chart_labels_both_of_its_bars(client, users, charted):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     rows = client.get("/documents/reports/").context["document_months"]["rows"]
 
@@ -206,7 +206,7 @@ def _axis_values(body):
 def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
     client, users, charted, page, charts
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(page)
     body = response.content.decode()
 
@@ -228,7 +228,7 @@ def test_every_column_chart_has_a_labelled_axis_topped_by_its_ceiling(
 @pytest.mark.django_db
 def test_the_axis_and_the_scale_line_agree(client, users, charted):
     """The prose stays; it must name the same top the axis does."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/")
 
     ceiling = response.context["monthly"]["ceiling"]
@@ -270,7 +270,7 @@ def test_every_column_chart_is_sized_by_its_own_width(client, users, charted, pa
     """Each chart, its scale line and its table sit inside one frame, because
     the frame is what the width queries measure and what the narrow tier opens
     the table inside."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(page).content.decode()
 
     import re
@@ -311,7 +311,7 @@ def test_a_chart_table_is_not_held_to_the_record_list_minimum_width():
 
 @pytest.mark.django_db
 def test_the_narrow_table_has_a_short_month_to_switch_to(client, users, charted):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/documents/reports/").content.decode()
 
     # One monthly table since Reports stopped repeating the dashboard's chart.
@@ -395,7 +395,7 @@ def test_one_record_is_one_slice_that_closes_the_ring(client, users, offices, me
         user=users["med"], subject="Alone", instructions="x", document_type=memo_type,
     )
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/")
     (ring,) = [ring["status"] for ring in response.context["tracking_rings"]["rings"]]
@@ -413,7 +413,7 @@ def test_no_page_carries_an_inline_event_handler(client, users, charted, page):
     none: the browser refuses it and the control does nothing."""
     import re
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(page)
 
     assert response.status_code == 200
@@ -473,7 +473,7 @@ def test_every_slice_has_a_title_and_the_figures_its_tooltip_shows(client, users
     itself: a touch screen never shows one, which is why the data is there."""
     import re
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/")
     body = response.content.decode()
 
@@ -502,7 +502,7 @@ def test_a_slice_follows_the_same_link_as_its_legend_row(client, users, charted)
     import html
     import re
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/").content.decode()
 
     for attributes, _inner in _slices(body):
@@ -543,7 +543,7 @@ def test_the_ring_listener_is_delegated_and_writes_text_not_markup():
 def test_an_empty_database_draws_every_chart_as_empty(client, users, who, page):
     """No records and no documents: no ZeroDivisionError, no max() of nothing,
     and the rings say they are empty rather than drawing a blank circle."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(page)
 
     assert response.status_code == 200
@@ -563,7 +563,7 @@ def test_an_empty_database_draws_every_chart_as_empty(client, users, who, page):
 def test_the_dashboard_context_names_no_ring_it_does_not_draw(client, users, charted):
     """The old single-ring key is gone for good, and the rings carry both views
     so the switch never has to ask the server."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     context = client.get("/").context
 
     assert "tracking_donut" not in context
@@ -616,7 +616,7 @@ def test_a_zero_is_said_rather_than_left_blank(client, users, charted):
     """No bar can be drawn for a zero, so without its "0" the series would
     simply be missing from the month. The fixture's month has a scan and no
     document filed from tracking."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/documents/reports/").content.decode()
 
     repository = body[body.index("Documents filed each month"):body.index("Documents by main type")]

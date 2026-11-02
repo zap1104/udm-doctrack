@@ -127,7 +127,7 @@ def slow_then_fast(users, offices, memo_type, monkeypatch):
 
 @pytest.mark.django_db
 def test_the_summary_shows_the_month_it_is_headed_with(client, users, slow_then_fast):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/")
     context = response.context
     latest = analytics.turnaround_by_month(TrackingRecord.objects.visible_to(users["admin"]))["latest"]
@@ -154,7 +154,7 @@ def test_a_stage_with_nothing_this_month_says_so(client, users, offices, memo_ty
     )
     route_record(record, [offices["SUP"]], user=users["med"])
     confirm_receipt(record, user=users["sup"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     body = client.get("/").content.decode()
 
@@ -195,7 +195,7 @@ def test_only_endorsements_that_can_still_be_confirmed_are_waiting(users, office
 
 @pytest.mark.django_db
 def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_fast):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/")
     figures = response.context["turnaround"]
     body = " ".join(response.content.decode().split())
@@ -219,7 +219,7 @@ def test_every_average_says_how_many_it_is_taken_over(client, users, slow_then_f
 def test_the_trend_rules_are_its_labelled_ticks(client, users, slow_then_fast):
     """Rules at 0, 2, 4, 6 working days, each labelled, instead of four
     unlabelled rules at quarters of the height."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/").context
     trend = context["turnaround_trend"]
     grid = context["turnaround_trend_geometry"]["grid"]
@@ -231,7 +231,7 @@ def test_the_trend_rules_are_its_labelled_ticks(client, users, slow_then_fast):
 
 # --- the line chart: readable, and something to point at ----------------------
 def _dashboard(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     return client.get("/")
 
 

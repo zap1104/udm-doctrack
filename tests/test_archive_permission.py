@@ -55,7 +55,7 @@ def test_read_only_grant_does_not_allow_approval(client, completed_record, users
     assert completed_record.can_user_view(users["hr"]) is True
     assert completed_record.can_user_approve_upload(users["hr"]) is False
 
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     response = client.post(f"/tracking/{completed_record.pk}/archive/")
 
     assert response.status_code == 403
@@ -72,7 +72,7 @@ def test_an_ordinary_user_cannot_approve_the_work_their_office_finished(
     than refused — but because an ordinary user has no approval right at all."""
     assert completed_record.can_user_approve_upload(users["sup"]) is False
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.post(f"/tracking/{completed_record.pk}/archive/")
 
     assert response.status_code == 403
@@ -93,7 +93,7 @@ def test_the_office_administrator_can_approve_their_own_offices_document(
     """SUP holds it, so SUP's administrator is the one who signs it off."""
     assert completed_record.can_user_approve_upload(users["sup_admin"]) is True
 
-    client.force_login(users["sup_admin"])
+    client.force_verified_login(users["sup_admin"])
     response = client.post(f"/tracking/{completed_record.pk}/archive/")
 
     assert response.status_code == 302
@@ -264,10 +264,10 @@ def test_the_button_is_hidden_from_a_reader_who_may_not_use_it(
     """A 403 the user could have been spared is still a bug in the page."""
     grant_access(completed_record, user=users["med"], office=offices["HR"], reason="fyi")
 
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     body = client.get(f"/tracking/{completed_record.pk}/").content.decode()
     assert "Approve into Document Repository" not in body
 
-    client.force_login(users["sup_admin"])
+    client.force_verified_login(users["sup_admin"])
     body = client.get(f"/tracking/{completed_record.pk}/").content.decode()
     assert "Approve into Document Repository" in body

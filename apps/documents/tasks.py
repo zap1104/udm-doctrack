@@ -29,7 +29,10 @@ def _extraction_actor(document, user_id):
     actor = User.objects.filter(pk=user_id, is_active=True).first()
     if actor is None or not actor.can_start_work:
         return actor, False
-    if document.can_user_edit(actor):
+    from apps.accounts.capabilities import area_for, capability_allowed
+    if not capability_allowed(actor, area_for(document), 'extract'):
+        return actor, False
+    if document.can_user_manage(actor, 'extract'):
         return actor, True
     # An office administrator can approve a record held by their office into
     # its originating office's repository. That authorized filing includes

@@ -45,7 +45,7 @@ def test_the_window_is_short_enough_to_matter():
 
 @pytest.mark.django_db
 def test_using_the_site_pushes_the_deadline_back(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     client.get("/")
     age_the_session(client, 60 * 20)
     before = expiry_of(client)
@@ -58,7 +58,7 @@ def test_using_the_site_pushes_the_deadline_back(client, users):
 @pytest.mark.django_db
 def test_an_idle_session_stops_working(client, users):
     """The server is the thing that enforces this — not the countdown on screen."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get("/").status_code == 200
 
     row = Session.objects.get(session_key=client.session.session_key)
@@ -75,7 +75,7 @@ def test_an_idle_session_stops_working(client, users):
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
 def test_keep_alive_extends_the_session_and_reports_the_new_window(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     client.get("/")
     age_the_session(client, 60 * 25)
     before = expiry_of(client)
@@ -90,7 +90,7 @@ def test_keep_alive_extends_the_session_and_reports_the_new_window(client, users
 @pytest.mark.django_db
 def test_keep_alive_refuses_a_get(client, users):
     """Extending is a state change; a prefetch must not decide somebody is present."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get(KEEP_ALIVE).status_code == 405
 
 
@@ -106,7 +106,7 @@ def test_keep_alive_works_while_a_password_change_is_being_forced(client, users)
     """That screen has a countdown too, and typing a new password sends nothing."""
     user = users["med"]
     type(user).objects.filter(pk=user.pk).update(must_change_password=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     response = client.post(KEEP_ALIVE)
 
@@ -119,7 +119,7 @@ def test_keep_alive_works_while_a_password_change_is_being_forced(client, users)
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
 def test_a_signed_in_page_carries_the_countdown_marker(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/").content.decode()
 
     assert f'data-session-timeout="{settings.SESSION_COOKIE_AGE}"' in body
@@ -132,7 +132,7 @@ def test_signing_out_really_ends_the_session(client, users):
     sign-in page. Visiting it does not sign anybody out — the view sends an
     already-authenticated visitor straight back to `next`, so the button
     returned the user to the page they were on, still signed in."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.session.get("_auth_user_id")
 
     client.post(reverse("accounts:logout"))
@@ -144,7 +144,7 @@ def test_signing_out_really_ends_the_session(client, users):
 def test_visiting_the_sign_in_page_does_not_sign_anyone_out(client, users):
     """Pins the behaviour that made the button wrong, so it cannot regress
     silently into looking like a working sign-out."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get(reverse("accounts:login") + "?timeout=1&next=/tracking/")
 
@@ -154,7 +154,7 @@ def test_visiting_the_sign_in_page_does_not_sign_anyone_out(client, users):
 
 @pytest.mark.django_db
 def test_the_countdown_marker_carries_a_logout_url(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/").content.decode()
     assert f'data-session-logout-url="{reverse("accounts:logout")}"' in body
 

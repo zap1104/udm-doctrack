@@ -22,7 +22,7 @@ def test_tracking_query_matches_search_and_export(client, users, offices, memo_t
     other = create_draft_record(user=users["med"], subject="Unrelated request", instructions="Review", document_type=memo_type)
     route_record(target, [offices["SUP"]], user=users["med"])
     route_record(other, [offices["SUP"]], user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"office": offices["SUP"].pk, "scope": "incoming", "q": target.tracking_number}
 
     tracking = client.get("/tracking/", params)
@@ -45,7 +45,7 @@ def test_tracking_search_and_export_share_deadline_order(client, users, offices,
         route_record(record, [offices["SUP"]], user=users["med"])
         TrackingRecord.objects.filter(pk=record.pk).update(due_at=timezone.now() + timedelta(days=offset) if offset else None)
         records.append(record)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"office": offices["SUP"].pk, "q": "Deadline parity", "sort": sort}
 
     tracking = client.get("/tracking/", params)
@@ -64,7 +64,7 @@ def test_repository_matches_search_relevance_and_date_filters(client, users, off
     strong = make_document(offices["MED"], "Campus turbine policy", document_date=date(2026, 3, 5))
     weak = make_document(offices["MED"], "Workshop log", text="Campus turbine policy", document_date=date(2026, 3, 6))
     make_document(offices["MED"], "Campus turbine policy old", document_date=date(2025, 3, 5))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"q": "Campus turbine policy", "office": offices["MED"].pk, "date_from": "2026-03-01", "date_to": "2026-03-31", "min_relevance": "0"}
 
     repository = client.get("/documents/", params)
@@ -84,7 +84,7 @@ def test_repository_matches_search_relevance_and_date_filters(client, users, off
 def test_repository_threshold_and_show_all_have_real_scores(client, users, offices):
     strong = make_document(offices["MED"], "Strong filing match", reference_number="UDM-OVPA-MED-2026-1234")
     weak = make_document(offices["MED"], "Office summary", text="UDM-OVPA-MED-2026-1234")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"q": strong.reference_number, "min_relevance": 100}
 
     filtered = client.get("/documents/", params)
@@ -101,7 +101,7 @@ def test_repository_threshold_and_show_all_have_real_scores(client, users, offic
 def test_repository_ranked_pagination_does_not_drop_rows_at_search_limit(client, users, offices, settings):
     settings.SEARCH_RESULT_LIMIT = 2
     documents = [make_document(offices["MED"], f"Exhaustive filing policy {index}") for index in range(13)]
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"q": "Exhaustive filing policy", "min_relevance": 0, "per_page": 10}
 
     first = client.get("/documents/", params)
@@ -116,7 +116,7 @@ def test_repository_ranked_pagination_does_not_drop_rows_at_search_limit(client,
 @pytest.mark.django_db
 def test_blank_query_relevance_does_not_hide_repository_browse(client, users, offices):
     document = Document.objects.create(title="Plain browse", office=offices["MED"], source=Source.UPLOAD)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get("/documents/", {"min_relevance": 100})
 
@@ -129,7 +129,7 @@ def test_blank_query_relevance_does_not_hide_repository_browse(client, users, of
 def test_repository_date_range_rejects_reversal_without_dropping_valid_source(client, users, offices):
     keep = make_document(offices["MED"], "Upload dated", document_date=date(2026, 3, 1))
     Document.objects.create(title="From tracking", office=offices["MED"], source=Source.DTS, document_date=date(2026, 3, 1))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/documents/", {"source": Source.UPLOAD, "date_from": "2026-04-01", "date_to": "2026-03-01"})
 
@@ -144,7 +144,7 @@ def test_repository_ranked_facet_counts_keep_metadata_filters(client, users, off
     target.tags.add(tag_urgent)
     target.rebuild_index()
     make_document(offices["MED"], "Faceted turbine request old", document_type=memo_type, document_date=date(2026, 9, 5))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/documents/", {"q": "Faceted turbine request", "min_relevance": 0, "month": 3, "tag": tag_urgent.pk})
 
@@ -159,7 +159,7 @@ def test_repository_ranked_facet_counts_keep_metadata_filters(client, users, off
 def test_repository_ranked_office_filter_keeps_permission_scope(client, users, offices, office_parameter):
     own = make_document(offices["MED"], "Permission turbine policy")
     foreign = make_document(offices["HR"], "Permission turbine policy")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     asked = offices["HR"].code if office_parameter == "code" else offices["HR"].pk
 
     response = client.get("/documents/", {"q": "Permission turbine policy", "office": asked, "min_relevance": 0})
@@ -177,7 +177,7 @@ def test_repository_preserves_plain_matches_before_full_text_indexing(client, us
     fields = {"title": "Ordinary legacy file", matching_field: "Legacy turbine policy"}
     document = Document.objects.create(office=offices["MED"], source=Source.UPLOAD, **fields)
     assert document.search_vector is None
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     params = {"q": "Legacy turbine", "min_relevance": 0}
 
     repository = client.get("/documents/", params)
@@ -189,7 +189,7 @@ def test_repository_preserves_plain_matches_before_full_text_indexing(client, us
 
 @pytest.mark.django_db
 def test_pending_filing_does_not_offer_irrelevant_search_controls(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/documents/", {"view": "pending", "min_relevance": 100, "date_from": "2026-03-01"})
 
@@ -228,7 +228,7 @@ def test_exhaustive_scoring_releases_large_text_after_calculating_the_score(user
 @pytest.mark.django_db
 def test_repository_existing_queries_include_weak_matches_until_a_minimum_is_selected(client, users, offices):
     document = Document.objects.create(title="Legacy turbine policy", office=offices["MED"], source=Source.UPLOAD)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/documents/", {"q": "Legacy turbine"})
 

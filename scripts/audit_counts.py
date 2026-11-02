@@ -38,6 +38,7 @@ from apps.core.notifications import unread_for  # noqa: E402
 from apps.documents.models import COMPLETED_SOURCE, HISTORICAL_FILTER, Document  # noqa: E402
 from apps.search.services import search_documents  # noqa: E402
 from apps.tracking.models import COMPLETED_STATUSES, RoutingStep, Status, TrackingRecord  # noqa: E402
+from scripts.audit_auth import diagnostic_login  # noqa: E402
 from scripts.audit_tracking_stages import loaded_records, manual_stage  # noqa: E402
 
 
@@ -312,7 +313,7 @@ class Audit:
         for user in filter(None, users):
             self.user = user
             self.client = Client()
-            self.client.force_login(user)
+            diagnostic_login(self.client, user)
             self.responses = {}
             self.stage_records = {record.pk: record for record in loaded_records(user)}
             records = list(TrackingRecord.objects.visible_to(user).values("pk", "status", "originating_office_id", "current_office_id", "created_at", "completed_at", "first_received_at", "current_batch", "due_at"))

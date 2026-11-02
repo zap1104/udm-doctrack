@@ -6,14 +6,13 @@ import pytest
 from django.contrib import admin
 from django.test import RequestFactory
 
-from apps.accounts.models import User
 from apps.documents.models import Document
 
 
 @pytest.fixture
-def maintenance_request():
+def maintenance_request(users):
     request = RequestFactory().get("/admin/documents/document/")
-    request.user = User(is_active=True, is_staff=True, is_superuser=True)
+    request.user = users['admin']
     return request
 
 

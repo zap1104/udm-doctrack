@@ -12,6 +12,10 @@ from django.test import Client
 
 from apps.accounts.models import Office
 from apps.core.models import DocumentType, Tag
+from tests.auth_helpers import force_verified_login
+
+# An additional, explicitly named shortcut, not a replacement for force_login.
+Client.force_verified_login = force_verified_login
 
 User = get_user_model()
 

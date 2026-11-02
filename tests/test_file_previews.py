@@ -34,7 +34,7 @@ def token(kind, pk, user, purpose='preview'):
 
 
 def test_private_pdf_preview_keeps_status_and_original_bytes(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     before_status = attachment.record.status
     before_activity = RecordActivity.objects.filter(record=attachment.record).count()
     response = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['med'])})
@@ -56,7 +56,7 @@ def test_private_pdf_preview_keeps_status_and_original_bytes(client, users, atta
 
 
 def test_preview_tokens_are_bound_to_kind_version_user_and_purpose(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     base = f'/files/preview/tracking/{attachment.pk}/'
     assert client.get(base).status_code == 403
     assert client.get(base, {'token': token('tracking', attachment.pk, users['sup'])}).status_code == 403
@@ -71,10 +71,10 @@ def test_preview_tokens_are_bound_to_kind_version_user_and_purpose(client, users
 
 
 def test_current_permissions_are_rechecked_on_each_content_request(client, users, attachment):
-    client.force_login(users['sup'])
+    client.force_verified_login(users['sup'])
     response = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['sup'])})
     assert response.status_code == 404
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     preview = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['med'])})
     assert preview.status_code == 200
     users['med'].is_active = False
@@ -84,7 +84,7 @@ def test_current_permissions_are_rechecked_on_each_content_request(client, users
 
 
 def test_sandbox_is_the_only_embeddable_preview_document(client, users):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.get('/files/preview-frame/')
     assert response.status_code == 200
     assert response['X-Frame-Options'] == 'SAMEORIGIN'
@@ -96,7 +96,7 @@ def test_sandbox_is_the_only_embeddable_preview_document(client, users):
 
 
 def test_content_url_is_not_a_storage_path_or_remote_url(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     preview = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['med'])})
     assert preview.status_code == 200
     parsed = urlparse(preview.context['content_url'])
@@ -106,7 +106,7 @@ def test_content_url_is_not_a_storage_path_or_remote_url(client, users, attachme
 
 
 def test_tracking_latest_file_has_preview_and_version_history(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.get(attachment.record.get_absolute_url())
     assert response.status_code == 200
     html = response.content.decode()
@@ -120,7 +120,7 @@ def test_repository_append_endpoint_always_denies_even_empty_requests(client, us
 
     settings.MEDIA_ROOT = tmp_path
     document = Document.objects.create(title='Frozen', office=users['med'].office, uploaded_by=users['med'])
-    client.force_login(users['admin'])
+    client.force_verified_login(users['admin'])
     response = client.post(f'/documents/{document.pk}/files/')
     assert response.status_code == 403
 
@@ -147,7 +147,7 @@ def test_docx_preview_removes_external_and_active_parts():
 
 def test_text_preview_escapes_html_and_discloses_truncation(client, users, attachment):
     item = Attachment.objects.create(record=attachment.record, uploaded_by=users['med'], original_name='notes.txt', file=SimpleUploadedFile('notes.txt', b'Notes <img src=x onerror=alert(1)>' + b'x' * 210000))
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.get(f'/files/preview/tracking/{item.pk}/', {'token': token('tracking', item.pk, users['med'])})
     assert response.status_code == 200
     assert b'&lt;img' in response.content
@@ -155,7 +155,7 @@ def test_text_preview_escapes_html_and_discloses_truncation(client, users, attac
 
 
 def test_upload_version_post_conflicts_and_preserves_logical_count(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     group = attachment.file_group_id
     url = f'/tracking/{attachment.record_id}/files/{group}/versions/'
     def submit(content):
@@ -176,7 +176,7 @@ def test_repository_initial_multi_upload_then_metadata_and_history(client, users
 
     settings.MEDIA_ROOT = tmp_path
     settings.ENABLE_BACKGROUND_TASKS = False
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.post('/documents/upload/', {'file': [SimpleUploadedFile('one.txt', b'Current one'), SimpleUploadedFile('two.txt', b'Current two')], 'office': users['med'].office_id, 'source': 'UPLOAD', 'ocr_language': 'auto'})
     assert response.status_code == 302
     document = Document.objects.get()
@@ -199,7 +199,7 @@ def test_malformed_docx_preview_is_readable_error_not_server_error(client, users
         archive.writestr('[Content_Types].xml', '<Types/>')
         archive.writestr('word/document.xml', '<broken')
     item = Attachment.objects.create(record=attachment.record, original_name='bad.docx', file=SimpleUploadedFile('bad.docx', output.getvalue()), uploaded_by=users['med'])
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     preview = client.get(f'/files/preview/tracking/{item.pk}/', {'token': token('tracking', item.pk, users['med'])})
     response = client.get(preview.context['content_url'])
     assert response.status_code == 422
@@ -222,7 +222,7 @@ def test_empty_workbook_has_safe_preview_fallback(client, users, attachment):
                 data = re.sub(b'<sheets>.*?</sheets>', b'<sheets/>', data)
             target.writestr(name, data)
     item = Attachment.objects.create(record=attachment.record, original_name='empty.xlsx', file=SimpleUploadedFile('empty.xlsx', malformed.getvalue()), uploaded_by=users['med'])
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.get(f'/files/preview/tracking/{item.pk}/', {'token': token('tracking', item.pk, users['med'])})
     assert response.status_code == 200
     assert b'Preview unavailable' in response.content
@@ -242,7 +242,7 @@ def test_malformed_workbook_xml_keeps_preview_fallback_and_original(client, user
             target.writestr(name, b'<broken' if name == broken_part else source.read(name))
     payload = malformed.getvalue()
     item = Attachment.objects.create(record=attachment.record, original_name='malformed.xlsx', file=SimpleUploadedFile('malformed.xlsx', payload), uploaded_by=users['med'])
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     before_status = attachment.record.status
     response = client.get(f'/files/preview/tracking/{item.pk}/', {'token': token('tracking', item.pk, users['med'])})
     assert response.status_code == 200
@@ -275,7 +275,7 @@ def test_workbook_chartsheets_are_not_treated_as_cell_worksheets():
 
 
 def test_required_initial_multi_upload_rejects_empty_list(client, users):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.post('/documents/upload/', {'office': users['med'].office_id, 'source': 'UPLOAD', 'ocr_language': 'auto'})
     response = follow_upload_recovery(client, response)
     assert response.status_code == 200
@@ -284,7 +284,7 @@ def test_required_initial_multi_upload_rejects_empty_list(client, users):
 
 def test_version_download_preserves_download_audit(client, users, attachment):
     from apps.core.models import AuditLog
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     preview = client.get(f'/files/preview/tracking/{attachment.pk}/', {'token': token('tracking', attachment.pk, users['med'])})
     response = client.get(preview.context['download_url'])
     assert response.status_code == 200
@@ -295,14 +295,14 @@ def test_image_preview_rejects_extreme_dimensions_before_browser_decode(client, 
     import struct
     payload = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\rIHDR' + struct.pack('>II', 100000, 100000) + b'\x08\x02\x00\x00\x00'
     item = Attachment.objects.create(record=attachment.record, original_name='huge.png', file=SimpleUploadedFile('huge.png', payload), uploaded_by=users['med'])
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     preview = client.get(f'/files/preview/tracking/{item.pk}/', {'token': token('tracking', item.pk, users['med'])})
     response = client.get(preview.context['content_url'])
     assert response.status_code == 422
 
 
 def test_version_upload_forms_keep_internal_revision_fields_hidden(client, users, attachment):
-    client.force_login(users['med'])
+    client.force_verified_login(users['med'])
     response = client.get(attachment.record.get_absolute_url())
     assert b'>Expected version' not in response.content
     assert b'>Expected revision' not in response.content

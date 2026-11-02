@@ -151,19 +151,19 @@ def _subjects(client, query=""):
 def test_the_default_order_is_unchanged(client, users, spread):
     """Most recently moved first. Adding a sort must not quietly re-order the
     page for everybody who never touches it."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     assert _subjects(client) == ["Unscheduled", "Far", "Soon", "Late"]
 
 
 def test_soonest_first_puts_the_most_urgent_at_the_top(client, users, spread):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     assert _subjects(client, "?sort=deadline")[:3] == ["Late", "Soon", "Far"]
 
 
 def test_latest_first_reverses_the_scheduled_ones(client, users, spread):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     assert _subjects(client, "?sort=deadline-desc")[:3] == ["Far", "Soon", "Late"]
 
@@ -176,7 +176,7 @@ def test_records_with_no_deadline_sort_last_in_both_directions(
     after everything that has been — on "latest first" as much as on "soonest
     first", where NULL sorting high would put unscheduled work above the
     genuinely distant."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     assert _subjects(client, query)[-1] == "Unscheduled"
 
@@ -184,7 +184,7 @@ def test_records_with_no_deadline_sort_last_in_both_directions(
 def test_an_unrecognised_sort_falls_back_rather_than_failing(client, users, spread):
     """The same lenient handling every other filter on this page gets: the form
     drops the value, and the page renders in its default order."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{TRACKING}?sort=nonsense")
 
     assert response.status_code == 200
@@ -192,7 +192,7 @@ def test_an_unrecognised_sort_falls_back_rather_than_failing(client, users, spre
 
 
 def test_the_sort_survives_paging(client, users, spread):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(f"{TRACKING}?sort=deadline&per_page=10").content.decode()
 
@@ -201,7 +201,7 @@ def test_the_sort_survives_paging(client, users, spread):
 
 def test_sorting_composes_with_a_filter(client, users, spread, offices):
     """A sort is not a filter and must not replace one."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get(f"{TRACKING}?sort=deadline&status=PENDING_RECEIPT")
 
@@ -213,7 +213,7 @@ def test_sorting_composes_with_a_filter(client, users, spread, offices):
 def test_the_row_carries_the_deadline_and_the_right_tag(client, users, spread):
     """Overdue and Due soon are one control with two states — mutually exclusive
     by construction, so a row can never wear both."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{TRACKING}?sort=deadline").content.decode()
 
     assert ">Overdue</span>" in body
@@ -232,7 +232,7 @@ def test_a_far_off_deadline_is_shown_without_a_warning(client, users, offices, m
     TrackingRecord.objects.filter(pk=record.pk).update(
         due_at=timezone.now() + timedelta(days=30)
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(TRACKING).content.decode()
 

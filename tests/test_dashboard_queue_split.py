@@ -22,7 +22,7 @@ def completed_traffic(traffic, users):  # noqa: F811
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "hr", "viewer"])
 def test_split_previews_match_visible_full_lists(client, users, offices, completed_traffic, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     path = f"/?office={offices['SUP'].pk}" if role == "admin" else "/"
     response = client.get(path)
     pending = response.context["pending_filing"]
@@ -47,7 +47,7 @@ def test_split_previews_match_visible_full_lists(client, users, offices, complet
 
 @pytest.mark.django_db
 def test_pending_preview_cannot_be_widened_by_office_user(client, users, offices, completed_traffic):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     own = client.get("/").context["pending_filing"]
     crafted = client.get(f"/?office={offices['HR'].pk}").context["pending_filing"]
     assert {r.pk for r in own["records"]} == {completed_traffic["received"].pk}
@@ -57,7 +57,7 @@ def test_pending_preview_cannot_be_widened_by_office_user(client, users, offices
 
 @pytest.mark.django_db
 def test_all_offices_and_selected_office_pending_counts_agree(client, users, offices, completed_traffic):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for office in ["all", offices["MED"].pk, offices["SUP"].pk, offices["HR"].pk]:
         pending = client.get(f"/?office={office}").context["pending_filing"]
         assert pending["count"] == len(page_records(client, pending["tracking_url"]))
@@ -77,7 +77,7 @@ def test_pending_card_includes_received_work_and_matches_its_destination(client,
         complete_record(record, user=receiver)
         if index < 10:
             expected.add(record.pk)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/", {"office": offices["HR"].pk})
     assert response.context["tracking_pending_filing_count"] == 10
     card = re.search(r'<a\b[^>]*\bid="dashboard-pending-filing"[^>]*>.*?</a>', response.content.decode(), re.S).group()
@@ -99,7 +99,7 @@ def test_workload_breakdown_matches_tracking_and_pending_lists(
 ):
     create_draft_record(user=users["med"], subject="Work still being prepared",
                         instructions="For review", document_type=memo_type)
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     params = {"office": "all" if office == "all" else offices[office].pk} if office else {}
     response = client.get("/", params)
     context = response.context
@@ -136,7 +136,7 @@ def test_workload_breakdown_handles_empty_drafts_and_completed_work(client, user
             complete_record(record, user=users["sup"])
         if stage == "filed":
             TrackingRecord.objects.filter(pk=record.pk).update(status=Status.COMPLETED)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/", {"office": "all"}).context
     assert context["tracking_current_count"] == (1 if stage == "draft" else 0)
     assert context["tracking_pending_filing_count"] == (1 if stage == "pending" else 0)
@@ -145,7 +145,7 @@ def test_workload_breakdown_handles_empty_drafts_and_completed_work(client, user
 
 @pytest.mark.django_db
 def test_old_pending_dashboard_link_keeps_both_panels_usable(client, users, completed_traffic):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get("/?desk=pending-upload")
     assert response.context["desk_queue"]["slug"] == "awaiting"
     assert response.context["pending_filing"]["count"] == 1
@@ -155,7 +155,7 @@ def test_old_pending_dashboard_link_keeps_both_panels_usable(client, users, comp
 
 @pytest.mark.django_db
 def test_pending_panel_is_outside_receipt_form_and_only_opens_records(client, users, completed_traffic):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/").content.decode()
     match = re.search(r'<aside[^>]*aria-labelledby="dashboard-filing-title"[^>]*>(.*?)</aside>', body, re.S)
     assert match
@@ -169,7 +169,7 @@ def test_pending_panel_is_outside_receipt_form_and_only_opens_records(client, us
 
 @pytest.mark.django_db
 def test_pending_preview_has_clear_empty_state(client, users, traffic):  # noqa: F811
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.get("/")
     assert response.context["pending_filing"]["count"] == 0
     assert "No completed records are waiting for filing." in response.content.decode()
@@ -185,7 +185,7 @@ def test_pending_preview_stops_at_five_and_keeps_full_count(client, users, offic
         confirm_receipt(record, user=users["sup"])
         complete_record(record, user=users["sup"])
         made.append(record.pk)
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     pending = client.get("/").context["pending_filing"]
     assert pending["count"] == 6
     assert [r.pk for r in pending["records"]] == list(reversed(made[1:]))

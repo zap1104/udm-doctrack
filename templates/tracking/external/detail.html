@@ -54,10 +54,10 @@
             {% if can_receipt %}
               <div class="mb-3">
                 <p class="text-muted body-copy">Confirm that your internal office has received this paper. The server records the receipt date and time.</p>
-                <a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'receipt' %}{{ external_query }}">Confirm receipt for your office</a>
+                {% if access.external_tracking.receive %}<a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'receipt' %}{{ external_query }}">Confirm receipt for your office</a>{% endif %}
               </div>
             {% endif %}
-            {% if record.status == 'DRAFT' and can_manage %}
+            {% if record.status == 'DRAFT' and can_manage and access.external_tracking.endorse %}
               <div class="mb-3">
                 <p class="text-muted body-copy">This record is still a draft. Review its details before sending the paper to its first recipient.</p>
                 <a class="btn btn-udm" href="{% url 'tracking:external_review' record.pk %}{{ external_query }}">Review and send draft</a>
@@ -68,7 +68,7 @@
                 {% if step.to_external_office_id and not step.received_at %}
                   <div class="mb-3">
                     <p class="text-muted body-copy">Record the actual receipt date and time reported by {{ step.to_name_snapshot }}. External office updates are entered manually by the managing administrator.</p>
-                    <a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'external-receipt' %}{{ external_query }}">Record external receipt</a>
+                    {% if access.external_tracking.receive %}<a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'external-receipt' %}{{ external_query }}">Record external receipt</a>{% endif %}
                   </div>
                 {% endif %}
               {% endwith %}
@@ -76,8 +76,8 @@
                 <div class="mb-3">
                   <p class="text-muted body-copy">The work is completed and waiting for filing approval.</p>
                   <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'file' %}{{ external_query }}">Approve filing</a>
-                    <a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'reopen' %}{{ external_query }}">Reopen work</a>
+                    {% if access.external_tracking.file %}<a class="btn btn-udm" href="{% url 'tracking:external_action' record.pk 'file' %}{{ external_query }}">Approve filing</a>{% endif %}
+                    {% if access.external_tracking.reopen %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'reopen' %}{{ external_query }}">Reopen work</a>{% endif %}
                   </div>
                 </div>
               {% endif %}
@@ -86,16 +86,16 @@
             {% if can_act and record.status != 'COMPLETED' and record.status != 'COMPLETED_PENDING_UPLOAD' %}
               <h3 class="section-heading">Act on this document</h3>
               <div class="d-flex flex-wrap gap-2 mb-3">
-                {% if record.status != 'DRAFT' %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'route' %}{{ external_query }}">Forward or return</a>{% endif %}
-                <a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'remark' %}{{ external_query }}">Add remark</a>
-                <a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'attachment' %}{{ external_query }}">Attach file</a>
-                {% if record.status != 'DRAFT' %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'complete' %}{{ external_query }}">Complete work</a>{% endif %}
-                {% if can_manage and record.current_external_office_id and record.status != 'DRAFT' %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'external-work' %}{{ external_query }}">Record external work</a>{% endif %}
+                {% if record.status != 'DRAFT' %}{% if access.external_tracking.endorse %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'route' %}{{ external_query }}">Forward or return</a>{% endif %}{% endif %}
+                {% if access.external_tracking.work %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'remark' %}{{ external_query }}">Add remark</a>{% endif %}
+                {% if access.external_tracking.edit_files %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'attachment' %}{{ external_query }}">Attach file</a>{% endif %}
+                {% if record.status != 'DRAFT' %}{% if access.external_tracking.complete %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'complete' %}{{ external_query }}">Complete work</a>{% endif %}{% endif %}
+                {% if can_manage and record.current_external_office_id and record.status != 'DRAFT' %}{% if access.external_tracking.work %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'external-work' %}{{ external_query }}">Record external work</a>{% endif %}{% endif %}
               </div>
             {% endif %}
             {% if can_manage %}
               <h3 class="section-heading">Historical notes</h3>
-              <a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'annotation' %}{{ external_query }}">Add historical annotation</a>
+              {% if access.external_tracking.work %}<a class="btn btn-udm-outline" href="{% url 'tracking:external_action' record.pk 'annotation' %}{{ external_query }}">Add historical annotation</a>{% endif %}
             {% endif %}
             {% if user.is_viewer %}<p class="text-muted mb-0">Your account has read-only access.</p>{% endif %}
             {% if is_filed %}<p class="text-muted mt-3 mb-0">Filed custody history is frozen. Administrators can add historical annotations.</p>{% endif %}

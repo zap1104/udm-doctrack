@@ -23,7 +23,7 @@ def partial_case(users, offices):
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "hr"])
 def test_partial_receipt_explanation_counts_mixed_current_batch_for_every_scope(client, users, offices, role):
     partial_case(users, offices)
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get("/tracking/reports/", {"office": "all"} if role == "admin" else {})
     assert response.status_code == 200
     assert response.context["partial_receipts"] == 1

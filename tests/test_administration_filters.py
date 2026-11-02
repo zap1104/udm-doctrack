@@ -35,7 +35,7 @@ def logged(users):
 def test_an_office_administrator_sees_only_their_office_in_latest_activity(
     client, users, logged
 ):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     summaries = [entry.summary for entry in client.get(HOME).context["recent_audit"]]
 
@@ -45,7 +45,7 @@ def test_an_office_administrator_sees_only_their_office_in_latest_activity(
 
 @pytest.mark.django_db
 def test_a_system_administrator_sees_every_office_in_latest_activity(client, users, logged):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     summaries = [entry.summary for entry in client.get(HOME).context["recent_audit"]]
 
@@ -54,7 +54,7 @@ def test_a_system_administrator_sees_every_office_in_latest_activity(client, use
 
 @pytest.mark.django_db
 def test_the_user_count_is_the_accounts_the_card_opens(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     home = client.get(HOME).context["user_count"]
     listed = client.get("/accounts/users/?per_page=100").context["page_obj"].paginator.count
 
@@ -65,7 +65,7 @@ def test_the_user_count_is_the_accounts_the_card_opens(client, users):
 def test_an_office_administrator_is_not_offered_the_offices_screen(client, users):
     """It is a system administrator's screen, and the card and tab that opened
     it answered an office administrator with a 403."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     for page in (HOME, "/accounts/users/"):
         assert 'href="/accounts/offices/"' not in client.get(page).content.decode(), page
@@ -74,7 +74,7 @@ def test_an_office_administrator_is_not_offered_the_offices_screen(client, users
 
 @pytest.mark.django_db
 def test_a_system_administrator_is_offered_the_offices_screen(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert 'href="/administration/offices/?status=active"' in client.get(HOME).content.decode()
     assert 'href="/accounts/offices/"' in client.get("/accounts/users/").content.decode()
@@ -91,7 +91,7 @@ def _listed(client, query=""):
 
 @pytest.mark.django_db
 def test_accounts_filter_by_role(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     listed, _ = _listed(client, "&role=ADMIN")
 
@@ -103,7 +103,7 @@ def test_accounts_filter_by_status(client, users):
     suspended = users["hr"]
     suspended.is_active = False
     suspended.save(update_fields=["is_active"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert _listed(client, "&status=suspended")[0] == {"hr"}
     assert "hr" not in _listed(client, "&status=active")[0]
@@ -114,7 +114,7 @@ def test_accounts_search_reaches_email(client, users):
     """The one detail an administrator is usually handed."""
     users["sup"].email = "j.cruz@udm.example"
     users["sup"].save(update_fields=["email"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert _listed(client, "&q=j.cruz")[0] == {"sup"}
 
@@ -122,7 +122,7 @@ def test_accounts_search_reaches_email(client, users):
 @pytest.mark.django_db
 def test_filters_compose_and_stay_inside_the_office(client, users):
     """An office administrator narrowing by role is still inside their office."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     listed, response = _listed(client, "&role=USER&status=active")
 
@@ -133,7 +133,7 @@ def test_filters_compose_and_stay_inside_the_office(client, users):
 
 @pytest.mark.django_db
 def test_an_unknown_role_is_dropped_and_said(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     listed, response = _listed(client, "&role=OVERLORD")
 
@@ -171,7 +171,7 @@ def test_the_audit_log_filters_by_date(client, users, dated_log):
 
     from django.utils import timezone
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     since = (timezone.localdate() - timedelta(days=7)).isoformat()
 
     summaries = _summaries(client, f"since={since}")
@@ -186,7 +186,7 @@ def test_dates_the_wrong_way_round_mean_the_same_range(client, users, dated_log)
 
     from django.utils import timezone
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     today = timezone.localdate()
     forwards = f"since={(today - timedelta(days=7)).isoformat()}&until={today.isoformat()}"
     backwards = f"since={today.isoformat()}&until={(today - timedelta(days=7)).isoformat()}"
@@ -196,7 +196,7 @@ def test_dates_the_wrong_way_round_mean_the_same_range(client, users, dated_log)
 
 @pytest.mark.django_db
 def test_a_system_administrator_filters_the_log_by_office(client, users, offices, dated_log):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     summaries = _summaries(client, f"office={offices['SUP'].pk}")
 
@@ -206,7 +206,7 @@ def test_a_system_administrator_filters_the_log_by_office(client, users, offices
 @pytest.mark.django_db
 def test_an_office_administrator_has_no_office_filter_to_widen_with(client, users, offices, dated_log):
     """Their log is their office already, and naming another changes nothing."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     response = client.get(f"{AUDIT}?office={offices['SUP'].pk}")
 
@@ -216,7 +216,7 @@ def test_an_office_administrator_has_no_office_filter_to_widen_with(client, user
 
 @pytest.mark.django_db
 def test_a_bad_date_is_dropped_and_said(client, users, dated_log):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(f"{AUDIT}?since=yesterday")
 
@@ -243,7 +243,7 @@ def opened_and_printed(users, offices, memo_type):
 
 @pytest.mark.django_db
 def test_record_access_filters_opens_from_prints(client, users, opened_and_printed):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     printed = client.get(f"{AUDIT}?event=PRINTED").context["access_entries"]
 
@@ -254,7 +254,7 @@ def test_record_access_filters_opens_from_prints(client, users, opened_and_print
 def test_filtering_one_trail_keeps_the_other_trails_filters(client, users, dated_log, opened_and_printed):
     """The system log's form carried nothing of the access panel's, so narrowing
     the log reset whatever the administrator had set on record access."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     body = client.get(f"{AUDIT}?event=PRINTED&who=med").content.decode()
     system_form = body[body.index('id="audit-q"') - 2000:body.index('id="audit-q"')]
@@ -270,7 +270,7 @@ def test_master_data_filters_retired_rows(client, users):
 
     Tag.objects.create(name="current", slug="current", is_active=True)
     Tag.objects.create(name="retired", slug="retired", is_active=False)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     active = {tag.name for tag in client.get("/administration/tags/?status=active").context["objects"]}
     retired = {tag.name for tag in client.get("/administration/tags/?status=inactive").context["objects"]}
@@ -285,7 +285,7 @@ def test_master_data_search_reaches_every_text_column(client, users):
     from apps.core.models import DocumentType
 
     DocumentType.objects.create(code="WRKORD", name="Work order", retention_years=5)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     found = client.get("/administration/document-types/?q=WRKORD").context["objects"]
 

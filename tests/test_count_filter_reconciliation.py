@@ -61,7 +61,7 @@ def ids(response):
 @pytest.mark.parametrize("path, key", [("/", "scope"), ("/tracking/reports/", "scope_office"),
                                        ("/tracking/", "resolved"), ("/search/?mode=tracking", "resolved")])
 def test_office_codes_have_same_perspective_as_ids(client, users, offices, traffic, path, key):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path + ("&" if "?" in path else "?") + "office=sUp")
     assert response.status_code == 200
     picked = response.context[key]
@@ -72,7 +72,7 @@ def test_office_codes_have_same_perspective_as_ids(client, users, offices, traff
 @pytest.mark.parametrize("path", ["/tracking/?", "/search/?mode=tracking&"])
 @pytest.mark.parametrize("mixed", [False, True])
 def test_originating_offices_use_valid_resolved_values(client, users, offices, traffic, path, mixed):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     query = f"offices={offices['MED'].pk}&offices=bogus" if mixed else "offices=med"
     response = client.get(path + query)
     expected = {traffic[key].pk for key in ("arriving", "received", "elsewhere")}
@@ -86,7 +86,7 @@ def test_originating_offices_use_valid_resolved_values(client, users, offices, t
 
 @pytest.mark.parametrize("path", ["/tracking/?", "/search/?mode=tracking&"])
 def test_invalid_admin_office_does_not_enable_own_office_direction(client, users, traffic, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path + "office=missing&scope=incoming")
     resolved = response.context["resolved"]
     assert resolved.all_offices and resolved.direction_dropped
@@ -98,7 +98,7 @@ def test_invalid_admin_office_does_not_enable_own_office_direction(client, users
 @pytest.mark.parametrize("legacy", ["status=OVERDUE", "scope=overdue"])
 @pytest.mark.parametrize("label, expected", [("All deadlines", ""), ("On time", "no")])
 def test_legacy_overdue_can_be_cleared_or_changed(client, users, traffic, path, legacy, label, expected):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path + legacy + "&status=RECEIVED&status=IN_PROCESS")
     link = next(url for url, text in controls(response).links if text == label)
     changed = client.get(path.split("?")[0] + link)
@@ -109,7 +109,7 @@ def test_legacy_overdue_can_be_cleared_or_changed(client, users, traffic, path, 
 def test_search_submit_preserves_every_selected_tracking_filter(client, users, offices, traffic):
     users["admin"].office = offices["SUP"]
     users["admin"].save(update_fields=["office"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pairs = [("mode", "tracking"), ("office", str(offices["SUP"].pk)), ("scope", "incoming"),
              ("status", "RECEIVED"), ("status", "IN_PROCESS"), ("offices", str(offices["MED"].pk)),
              ("offices", str(offices["HR"].pk)), ("owner", "custody"), ("overdue", "no")]
@@ -124,7 +124,7 @@ def test_search_submit_preserves_every_selected_tracking_filter(client, users, o
 
 
 def test_office_picker_preserves_translated_overdue(client, users, traffic):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/?status=OVERDUE")
     form = next(fields for attrs, fields in controls(response).forms if attrs.get("class") == "dashboard-scope")
     assert ("overdue", "yes") in form
@@ -132,7 +132,7 @@ def test_office_picker_preserves_translated_overdue(client, users, traffic):
 
 @pytest.mark.parametrize("role", ["admin", "med_admin", "med", "viewer"])
 def test_search_perspective_picker_only_for_system_admin(client, users, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     body = client.get("/search/?mode=tracking").content.decode()
     assert ('id="search-as-office"' in body) == (role == "admin")
 
@@ -146,7 +146,7 @@ def filed(users, offices, code, **kwargs):
 def test_review_count_link_keeps_due_filter(client, users, offices):
     due = filed(users, offices, "MED", retention_until=timezone.localdate())
     filed(users, offices, "HR", retention_until=timezone.localdate() + timedelta(days=120))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/documents/?retention=due")
     link = next(url for url, text in controls(response).links if text == "Review documents")
     assert ids(client.get(urljoin("/documents/", link))) == {due.pk}
@@ -156,7 +156,7 @@ def test_tag_count_link_keeps_selected_tag(client, users, offices, tag_urgent):
     tagged = filed(users, offices, "MED")
     tagged.tags.add(tag_urgent)
     filed(users, offices, "HR")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"/documents/?tag={tag_urgent.pk}")
     link = next(url for url, text in controls(response).links if text == "urgent 1")
     assert ids(client.get(urljoin("/documents/", link))) == {tagged.pk}
@@ -168,7 +168,7 @@ def test_retired_office_folder_and_search_match_visible_documents(client, users,
     filed(users, offices, "MED")
     offices["HR"].is_active = False
     offices["HR"].save(update_fields=["is_active"])
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get(f"/documents/?office={offices['HR'].pk}")
     assert ids(response) == {retired.pk}
     search = client.get(f"/search/?office={offices['HR'].pk}")
@@ -179,7 +179,7 @@ def test_retired_office_folder_and_search_match_visible_documents(client, users,
 @pytest.mark.parametrize("role", ["med_admin", "med", "viewer"])
 @pytest.mark.parametrize("path", ["/tracking/", "/search/?mode=tracking"])
 def test_foreign_perspective_cannot_expand_non_admin_tracking(client, users, offices, traffic, role, path):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     base = path + ("&" if "?" in path else "?") + "scope=incoming"
     expected = ids(client.get(base))
     response = client.get(base + f"&office={offices['HR'].pk}")
@@ -191,7 +191,7 @@ def test_foreign_perspective_cannot_expand_non_admin_tracking(client, users, off
 def test_repository_search_office_values_cannot_expand_office_admin(client, users, offices, office_value):
     filed(users, offices, "HR")
     filed(users, offices, "MED")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get("/search/", {"office": office_value})
     assert response.status_code == 200
     assert response.context["form"].errors
@@ -201,7 +201,7 @@ def test_repository_search_office_values_cannot_expand_office_admin(client, user
 def test_repository_search_understands_office_code(client, users, offices):
     target = filed(users, offices, "HR")
     filed(users, offices, "MED")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/search/?office=hr")
     assert not response.context["form"].errors
     assert response.context["response"].total_matches == 1

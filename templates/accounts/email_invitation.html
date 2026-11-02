@@ -1,0 +1,7 @@
+{% extends "accounts/access_base.html" %}
+{% block title %}Verify registered email · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="login-form-heading"><h1>{% if confirmed %}Email verified{% else %}Verify your email{% endif %}</h1></div>
+{% if confirmed %}<p>Your registered email is verified. You can now sign in using your password and an email code.</p>{% elif validlink %}<p>Confirm that this email address belongs to you. This step does not sign you in.</p><form method="post">{% csrf_token %}<button class="btn btn-udm" type="submit">Confirm my email</button></form>{% else %}<p>This invitation has expired or has already been used. Ask your administrator for a new invitation.</p>{% endif %}
+<a class="btn btn-udm-outline mt-3" href="{% url 'accounts:login' %}">Go to sign in</a>
+{% endblock %}

@@ -24,7 +24,7 @@ def test_repository_months_reconcile_older_current_and_future_documents(client, 
         document = Document.objects.create(title=f"Chart reconciliation {index}", office=offices[office],
                                            source=source, is_active=active)
         Document.objects.filter(pk=document.pk).update(created_at=now + timedelta(days=offset))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/documents/reports/", {"office": "all" if scope == "all" else offices[scope].pk})
 

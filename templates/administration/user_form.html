@@ -22,6 +22,7 @@
     <div class="col-lg-5 workspace-support"><div class="card-udm">
       <div class="card-udm-head"><h2>Set a new password</h2></div>
       <div class="card-udm-body">
+        <p><a class="btn btn-udm-outline" href="{% url 'accounts:email_security' edited_user.pk %}">Email security and verification</a></p>
         <p class="form-text">Use this when someone is locked out. They will be asked to change it at next sign-in.</p>
         <form method="post" novalidate>{% csrf_token %}
           {% include "partials/_form_errors.html" with form=password_form %}

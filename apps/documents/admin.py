@@ -2,6 +2,9 @@
 
 from django.contrib import admin
 
+from apps.accounts.permission_admin import ReadOnlyShareAdmin
+from apps.accounts.record_admin import RecordPolicyAdminMixin
+
 from .models import (
     DeletionReview,
     Document,
@@ -18,7 +21,8 @@ from .models import (
 class DocumentFileInline(admin.TabularInline):
     model = DocumentFile
     extra = 0
-    readonly_fields = tuple(field.name for field in DocumentFile._meta.fields)
+    readonly_fields = tuple(field.name for field in DocumentFile._meta.fields if field.name != 'file')
+    fields = readonly_fields
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
@@ -29,9 +33,12 @@ class DocumentFileInline(admin.TabularInline):
 
 
 @admin.register(DocumentFile, DocumentFileVersion)
-class ImmutableRepositoryFileAdmin(admin.ModelAdmin):
+class ImmutableRepositoryFileAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
-        return tuple(field.name for field in self.model._meta.fields)
+        return tuple(field.name for field in self.model._meta.fields if field.name != 'file')
+
+    def get_fields(self, request, obj=None):
+        return self.get_readonly_fields(request, obj)
 
     def has_add_permission(self, request):
         return False
@@ -49,7 +56,7 @@ class DocumentMetadataInline(admin.TabularInline):
 
 
 @admin.register(Document)
-class DocumentAdmin(admin.ModelAdmin):
+class DocumentAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     from apps.core.type_forms import DocumentTypeAdminForm
     form = DocumentTypeAdminForm
     list_display = ("title", "office", "document_type", "year", "source", "ocr_status", "created_at")
@@ -57,7 +64,8 @@ class DocumentAdmin(admin.ModelAdmin):
     search_fields = ("title", "description", "reference_number", "author_name", "recipient_name")
     date_hierarchy = "created_at"
     filter_horizontal = ("tags", "document_types")
-    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at", "is_active", "training_eligible", "training_family")
+    readonly_fields = ("index_title", "index_meta", "index_extra", "created_at", "updated_at", "is_active", "training_eligible", "training_family",
+                       "tracking_record", "external_tracking_record")
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
 
@@ -88,7 +96,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
 
 @admin.register(MetadataSuggestion)
-class MetadataSuggestionAdmin(admin.ModelAdmin):
+class MetadataSuggestionAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     """The labelled training set. Read-only on purpose — editing it would
     corrupt the record of what a human actually decided."""
 
@@ -127,7 +135,7 @@ class SearchResultClickAdmin(admin.ModelAdmin):
 
 
 @admin.register(DocumentAccessGrant)
-class DocumentAccessGrantAdmin(admin.ModelAdmin):
+class DocumentAccessGrantAdmin(ReadOnlyShareAdmin):
     list_display = ("document", "office", "user", "granted_by", "created_at")
     search_fields = ("document__title", "reason")
 

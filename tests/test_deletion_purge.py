@@ -164,7 +164,7 @@ def test_purged_document_extraction_exits_safely(removed_document):
 
 def test_expired_screen_has_no_restore_form_or_available_choice(removed_document, users, client):
     age(removed_document, timezone.now())
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:deletion_review", args=[removed_document.pk]))
     assert response.status_code == 200
     html = response.content.decode()
@@ -174,7 +174,7 @@ def test_expired_screen_has_no_restore_form_or_available_choice(removed_document
 
 
 def test_disappearing_record_during_review_post_returns_clear_not_found(removed_document, users, client):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     url = reverse("documents:deletion_review", args=[removed_document.pk])
     token = client.get(url).context["form"].initial["state_token"]
     with patch("apps.documents.views.services.review_document_deletion", side_effect=Document.DoesNotExist):

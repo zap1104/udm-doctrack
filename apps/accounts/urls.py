@@ -1,12 +1,19 @@
 from django.conf import settings
 from django.urls import path
 
-from . import views
+from . import otp_views, views
 
 app_name = "accounts"
 
 urlpatterns = [
     path("login/", views.SignInView.as_view(), name="login"),
+    path('otp/', otp_views.EmailCodeView.as_view(), name='otp'),
+    path('otp/resend/', otp_views.EmailCodeResendView.as_view(), name='otp_resend'),
+    path('otp/cancel/', otp_views.EmailCodeCancelView.as_view(), name='otp_cancel'),
+    path('reauthenticate/', otp_views.ReauthenticateView.as_view(), name='reauthenticate'),
+    path('email/invitation/<uuid:pk>/<str:token>/', otp_views.EmailInvitationView.as_view(), name='email_invitation'),
+    path('email/change/', otp_views.EmailChangeView.as_view(), name='email_change'),
+    path('users/<int:pk>/email/', otp_views.AccountEmailSecurityView.as_view(), name='email_security'),
     path("password-reset/", views.PasswordResetRequestView.as_view(), name="password_reset"),
     path("password-reset/done/", views.PasswordResetDonePage.as_view(), name="password_reset_done"),
     path("password-reset/<uidb64>/<token>/", views.PasswordResetConfirmPage.as_view(), name="password_reset_confirm"),

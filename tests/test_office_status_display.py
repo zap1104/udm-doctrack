@@ -38,7 +38,7 @@ def shared_work(users, offices, memo_type):
 def test_workspace_stage_filter_and_row_follow_office(
     client, users, shared_work, workspace, actor, office, stage,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     params = {"status": stage, "per_page": "all"}
     if office:
         params["office"] = office
@@ -57,7 +57,7 @@ def test_workspace_stage_filter_and_row_follow_office(
 @pytest.mark.parametrize("workspace", ["tracking", "search"])
 def test_receiving_med_does_not_inherit_hr_work(client, users, shared_work, workspace):
     services.confirm_receipt(shared_work, user=users["med"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     params = {"scope": "incoming", "status": Status.RECEIVED}
     if workspace == "search":
         params["mode"] = "tracking"
@@ -85,7 +85,7 @@ def test_receiving_med_does_not_inherit_hr_work(client, users, shared_work, work
 def test_detail_and_print_use_authorized_stage_perspective(
     client, users, shared_work, view, actor, office, stage,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.get(reverse(f"tracking:{view}", args=[shared_work.pk]), {"office": office} if office else {})
     assert response.status_code == 200
     assert response.context["record"].display_status == stage
@@ -97,7 +97,7 @@ def test_detail_and_print_use_authorized_stage_perspective(
 
 @pytest.mark.django_db
 def test_detail_and_print_keep_the_selected_office_linked(client, users, shared_work):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(reverse("tracking:detail", args=[shared_work.pk]), {"office": "HR"})
     slip_url = reverse("tracking:routing_slip", args=[shared_work.pk])
     assert f'href="{slip_url}?office=' in response.content.decode()
@@ -111,7 +111,7 @@ def test_default_stage_perspective_does_not_remove_shared_access(client, users, 
     record = services.create_draft_record(user=users["sup"], subject="Read by access grant", instructions="Review")
     services.route_record(record, [offices["HR"]], user=users["sup"])
     services.grant_access(record, user=users["sup"], office=offices["MED"], reason="For reference")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(reverse("tracking:list"))
     assert record.pk in {row.pk for row in response.context["records"]}
 
@@ -131,7 +131,7 @@ def test_detail_forms_keep_the_selected_office(
     users["admin"].save(update_fields=["office"])
     if state == "pending_filing":
         services.complete_record(shared_work, user=users["hr"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(reverse("tracking:detail", args=[shared_work.pk]), {"office": office})
     assert response.status_code == 200
@@ -156,7 +156,7 @@ def test_detail_forms_keep_the_selected_office(
 def test_remark_return_keeps_the_selected_office_on_success_or_validation_error(
     client, users, offices, shared_work, office, stage, remark,
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     detail_url = reverse("tracking:detail", args=[shared_work.pk])
     before = client.get(detail_url, {"office": office})
     assert before.context["record"].display_status == stage
@@ -194,7 +194,7 @@ def test_remark_return_keeps_the_selected_office_on_success_or_validation_error(
 def test_selected_office_does_not_authorize_an_unreceived_office_to_act(
     client, users, offices, shared_work, actor, action, payload,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     payload = dict(payload)
     if action == "route":
         payload["offices"] = str(offices["REC"].pk)

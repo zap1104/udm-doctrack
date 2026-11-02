@@ -4,6 +4,8 @@ This runbook is for the person responsible for keeping the Document Tracking and
 
 ## Production checks before release
 
+Complete [email OTP enrollment and activation](EMAIL_OTP_AND_PERMISSIONS.md) for every active account. Run `python manage.py check_otp_readiness`, verify actual code delivery, and keep `EMAIL_OTP_REQUIRED=True` for rollout. The read-only readiness check does not prove inbox delivery. The guide also covers audited recovery, per-user restrictions and read-only sharing.
+
 Set a random `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, a specific `DJANGO_ALLOWED_HOSTS` value, `ENABLE_CSP=True`, `SECURE_SSL_REDIRECT=True`, and a durable `STORAGE_BACKEND` such as `s3` or `azure`. Run `python manage.py check --deploy --fail-level ERROR`; the deployment must not be released while it reports an error. Set `ENABLE_BACKGROUND_TASKS=True` and run `python manage.py qcluster` as a separate worker process. Point the platform probe at `/healthz/`. The default probe checks the database, cache table, migrations, and storage. `/healthz/?deep=1` additionally checks for a recent successful django-q2 task.
 
 ## What to back up

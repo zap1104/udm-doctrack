@@ -42,7 +42,7 @@ def _listed(client, queue):
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "hr", "viewer"])
 def test_every_chip_counts_the_list_it_opens(client, users, offices, traffic, role):  # noqa: F811
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     office = "" if role != "admin" else f"?office={offices['SUP'].pk}"
     queues = _queues(client.get(f"{DASHBOARD}{office}"))
 
@@ -54,7 +54,7 @@ def test_every_chip_counts_the_list_it_opens(client, users, offices, traffic, ro
 
 @pytest.mark.django_db
 def test_across_every_office_direction_is_disabled_and_the_rest_still_agree(client, users, traffic):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{DASHBOARD}?office=all")
     queues = _queues(response)
     body = response.content.decode()
@@ -69,7 +69,7 @@ def test_across_every_office_direction_is_disabled_and_the_rest_still_agree(clie
 @pytest.mark.django_db
 @pytest.mark.parametrize("slug", QUEUES)
 def test_picking_a_queue_shows_its_rows_and_marks_its_chip(client, users, traffic, slug):  # noqa: F811
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(f"{DASHBOARD}?desk={slug}")
     queue = response.context["desk_queue"]
     body = response.content.decode()
@@ -99,7 +99,7 @@ def test_picking_a_queue_shows_its_rows_and_marks_its_chip(client, users, traffi
     ("/?office=all&desk=incoming", "needs an office"),
 ])
 def test_a_queue_that_cannot_be_opened_falls_back_with_a_note(client, users, traffic, path, reason):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path)
 
     assert response.status_code == 200
@@ -110,7 +110,7 @@ def test_a_queue_that_cannot_be_opened_falls_back_with_a_note(client, users, tra
 
 @pytest.mark.django_db
 def test_a_chip_clicked_with_htmx_gets_the_queue_alone(client, users, traffic):  # noqa: F811
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(
         f"{DASHBOARD}?desk=received", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="action-centre-queue",
     )
@@ -126,7 +126,7 @@ def test_a_chip_clicked_with_htmx_gets_the_queue_alone(client, users, traffic): 
 def test_the_chips_work_without_script(client, users, traffic):  # noqa: F811
     """Each chip is a real link to the same dashboard with the queue in the
     query string; HTMX only upgrades it."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     for slug in ("incoming-received", "incoming-in-process", "outgoing-received", "outgoing-in-process", "overdue"):
@@ -136,7 +136,7 @@ def test_the_chips_work_without_script(client, users, traffic):  # noqa: F811
 
 @pytest.mark.django_db
 def test_an_office_user_cannot_widen_the_queues_by_naming_an_office(client, users, offices, traffic):  # noqa: F811
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     own = _queues(client.get(DASHBOARD))
     other = _queues(client.get(f"{DASHBOARD}?office={offices['HR'].pk}"))
 

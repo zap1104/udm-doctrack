@@ -45,7 +45,7 @@ def test_explicit_filing_office_scope_matches_list_report_and_export(client, use
     record.save(update_fields=["status", "tracking_number"])
     Document.objects.create(title=record.title, collection="EXTERNAL", office=offices["HR"], year=2026,
                             external_tracking_record=record)
-    client.force_login(owner)
+    client.force_verified_login(owner)
     for route in ("tracking:external_list", "tracking:external_reports"):
         response = client.get(reverse(route), {"office": offices["HR"].pk, "status": Status.COMPLETED})
         assert response.status_code == 200
@@ -74,7 +74,7 @@ def test_repeated_external_filters_return_explicit_error_and_no_rows(client, use
     }
     params = QueryDict(mutable=True)
     params.setlist(field, values[field])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_list"), params)
     assert response.status_code == 400
     assert response.context["filter_errors"]

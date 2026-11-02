@@ -237,4 +237,9 @@ def prune_security_throttles():
     from .models import SecurityThrottle
 
     count, _ = SecurityThrottle.objects.filter(expires_at__lt=timezone.now()).delete()
+    from datetime import timedelta
+
+    from apps.accounts.security_models import EmailChallenge
+
+    EmailChallenge.objects.filter(pending_until__lt=timezone.now()-timedelta(days=1)).delete()
     return count

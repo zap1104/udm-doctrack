@@ -72,7 +72,7 @@ def test_delete_preserves_document_files_and_blocks_direct_access(due_document, 
     assert DocumentFile.objects.filter(pk=file.pk).exists()
     assert due_document.deletion_reviews.get().decision == "DELETE"
     for role in ("med", "med_admin", "admin", "viewer"):
-        client.force_login(users[role])
+        client.force_verified_login(users[role])
         assert not due_document.can_user_view(users[role])
         assert not due_document.can_user_edit(users[role])
         assert client.get(due_document.get_absolute_url()).status_code in (403, 404)
@@ -151,7 +151,7 @@ def test_repeat_submission_rejected_and_restore_reuses_same_document(due_documen
 
 @pytest.mark.django_db
 def test_review_form_uses_signed_state_and_explicit_post(due_document, users, client):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     url = reverse("documents:deletion_review", args=[due_document.pk])
     response = client.get(url)
     assert response.status_code == 200 and due_document.is_active
@@ -172,7 +172,7 @@ def test_review_form_uses_signed_state_and_explicit_post(due_document, users, cl
 def test_deletion_queue_is_scoped_to_administered_office(due_document, users, offices, client):
     other = Document.objects.create(title="Other office due document", office=offices["SUP"],
                                     access_level="OVPA", retention_until=timezone.localdate())
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     url = reverse("documents:deletion_queue")
     response = client.get(url, {"office": offices["SUP"].pk})
     assert other.title not in response.content.decode()
@@ -196,7 +196,7 @@ def test_upload_review_preserves_custom_schedule_even_when_older_form_omits_it(d
     due_document.retention_until = timezone.localdate() + timedelta(days=456)
     due_document.save()
     custom = due_document.retention_until
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(reverse("documents:review", args=[due_document.pk]))
     assert 'name="retention_until"' in response.content.decode()
     assert response.context["form"]["retention_until"].value() == custom
@@ -208,7 +208,7 @@ def test_upload_review_preserves_custom_schedule_even_when_older_form_omits_it(d
 
 @pytest.mark.django_db
 def test_metadata_edit_can_explicitly_clear_review_date(due_document, users, client):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     data = metadata_data(due_document)
     data["retention_until"] = ""
     response = client.post(reverse("documents:edit", args=[due_document.pk]), data)
@@ -232,7 +232,7 @@ def test_first_classification_preserves_automatic_schedule(users, offices, memo_
 def test_review_queue_date_boundaries_agree_with_report_and_repository(due_document, users, client, offset, status):
     due_document.retention_until = timezone.localdate() + timedelta(days=offset)
     due_document.save()
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     reports = client.get("/documents/reports/").context["retention"]
     for kind in ("due", "soon", "unscheduled"):
         expected = int(kind == status)
@@ -265,7 +265,7 @@ def test_invalid_calendar_year_does_not_crash_default_schedule(users, offices, m
 def test_current_queue_tab_keeps_its_status(due_document, users, client, status):
     from urllib.parse import parse_qs, urlsplit
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(reverse("documents:deletion_queue"), {"status": status, "q": "Document"})
     assert parse_qs(urlsplit(response.context["queue_links"][status]).query)["status"] == [status]
     assert parse_qs(urlsplit(response.context["queue_links"][status]).query)["q"] == ["Document"]

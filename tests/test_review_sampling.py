@@ -28,7 +28,7 @@ def population(users):
 
 def test_reproducible_random_audit_is_scoped_and_get_does_not_label(client, users, population):
     own, foreign, external = population
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     url = reverse("documents:tag_review_queue") + "?seed=defense-1"
     a, b = client.get(url), client.get(url)
     assert a.status_code == b.status_code == 200
@@ -42,9 +42,9 @@ def test_reproducible_random_audit_is_scoped_and_get_does_not_label(client, user
     for bad in ("?collection=BAD", "?collection=OVPA&collection=EXTERNAL", "?office=999999", "?seed=a&seed=b"):
         assert client.get(reverse("documents:tag_review_queue") + bad).status_code == 400
     for actor in (users["viewer"],):
-        client.force_login(actor)
+        client.force_verified_login(actor)
         assert client.get(url).status_code == 403
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     page = client.get(reverse("documents:tag_review_queue") + "?collection=EXTERNAL&seed=defense-1")
     assert [r["document"].pk for r in page.context["samples"]] == [external.pk]
 
@@ -114,7 +114,7 @@ def test_random_audits_already_covering_uncertainty_are_not_duplicated(users, po
 def test_signed_sampling_provenance_is_saved_not_trusted_from_post(client, users, population):
     own, _, _ = population
     tag = Tag.objects.create(name="Reviewed topic", globally_approved=True)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     page = client.get(reverse("documents:tag_review_queue") + "?seed=audit-proof")
     row = page.context["samples"][0]
     doc, token = row["document"], row["token"]
@@ -185,7 +185,7 @@ def test_complete_sample_review_and_expiry_are_enforced(client, users, populatio
     from apps.documents.review_sampling import SALT
 
     tag = Tag.objects.create(name="Complete review topic", globally_approved=True)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     row = client.get(reverse("documents:tag_review_queue"), {"seed": "complete"}).context["samples"][0]
     doc = row["document"]
     endpoint = reverse("documents:tag_review_complete", args=[doc.pk])

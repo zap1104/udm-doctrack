@@ -16,10 +16,10 @@
     </p>
   </div>
   <div class="page-actions">
-    <a class="btn btn-udm-outline" href="{% url 'documents:source_units' document.pk %}{{ external_query }}">Source text and topic review</a>
+    {% if file_access.view_content %}<a class="btn btn-udm-outline" href="{% url 'documents:source_units' document.pk %}{{ external_query }}">Source text and topic review</a>{% endif %}
     {% if can_edit %}<a class="btn btn-udm-outline" href="{% url 'documents:edit' document.pk %}{{ external_query }}">Edit Metadata</a>{% endif %}
     {% if can_review_deletion %}<a class="btn btn-udm-outline" href="{% url 'documents:deletion_review' document.pk %}{{ external_query }}">Deletion review</a>{% endif %}
-    {% if document.primary_file %}
+    {% if document.primary_file and file_access.download %}
       <a class="btn btn-udm" href="{% signed_download_url 'documents:file_download' document.primary_file.pk %}">Download</a>
     {% endif %}
   </div>
@@ -134,7 +134,7 @@
   </div>
 </div>
     {% include "documents/_deletion_review_history.html" %}
-    <div class="card-udm workspace-panel workspace-extracted-text mt-4">
+    {% if file_access.view_content %}<div class="card-udm workspace-panel workspace-extracted-text mt-4">
       <div class="card-udm-head">
         <h2>Extracted Text</h2>
         <span class="text-muted small">{{ document.ocr_engine|default:"none" }} · {{ document.get_ocr_status_display }}{% if document.ocr_confidence != None %} · {{ document.ocr_confidence|floatformat:2 }} confidence{% endif %}</span>
@@ -147,12 +147,12 @@
         {% endif %}
         <p class="small text-muted mt-2 mb-1">Language hint: {{ document.get_ocr_language_display }}. External OCR: {% if document.allow_external_ocr %}allowed when needed{% else %}disabled for this record{% endif %}.</p>
         {% if document.ocr_notes %}<div class="help-note mt-2" role="status">{{ document.ocr_notes|linebreaksbr }}</div>{% endif %}
-        {% if can_edit %}
+        {% if can_extract %}
           <form method="post" action="{% url 'documents:re_extract' document.pk %}{{ external_query }}" class="mt-2">{% csrf_token %}
             <button class="btn btn-udm-outline btn-sm" type="submit">Run text extraction again</button>
           </form>
         {% endif %}
       </div>
-    </div>
+    </div>{% endif %}
 </div>
 {% endblock %}

@@ -68,6 +68,11 @@ class ExternalOffice(TimeStampedModel):
 
 class ExternalRecordQuerySet(models.QuerySet):
     def visible_to(self, user):
+        from apps.accounts.capabilities import capability_allowed, current_actor
+
+        user = current_actor(user)
+        if user is None or not capability_allowed(user, 'external_tracking', 'view_record'):
+            return self.none()
         if (
             not getattr(user, "is_authenticated", False)
             or not user.is_active
@@ -80,7 +85,10 @@ class ExternalRecordQuerySet(models.QuerySet):
             return self.none()
         own = Q(managing_office_id=user.office_id) | Q(archived_document__office_id=user.office_id)
         involved = Q(routing_steps__from_office_id=user.office_id) | Q(routing_steps__to_office_id=user.office_id)
-        scope = self.filter(own | (involved & ~Q(status=Status.DRAFT))).distinct()
+        shared = Q(grants__user=user) | Q(grants__office_id=user.office_id)
+        # Existing office-admin reach and private drafts remain unchanged.
+        read = own | ((involved | (Q(pk__in=[]) if user.is_office_admin else shared)) & ~Q(status=Status.DRAFT))
+        scope = self.filter(read).distinct()
         return scope if user.is_office_admin else scope.exclude(status=Status.DRAFT)
 
     def with_related(self):
@@ -165,6 +173,12 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
         return Office.objects.get(pk=self.responsible_office_id)
 
     def can_manage(self, user):
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'external_tracking', 'view_record'):
+            return False
         return bool(
             getattr(user, "is_authenticated", False)
             and user.is_active
@@ -173,6 +187,12 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
         )
 
     def can_act(self, user):
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'external_tracking', 'view_record'):
+            return False
         if not getattr(user, "is_authenticated", False) or not user.is_active or not user.can_start_work:
             return False
         step = self.current_step
@@ -185,6 +205,12 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
         return bool(user.office_id and user.office_id == self.current_office_id)
 
     def can_confirm_receipt(self, user):
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'external_tracking', 'receive'):
+            return False
         step = self.current_step
         return bool(
             step
@@ -206,6 +232,25 @@ class ExternalTrackingRecord(DocumentTypesMixin, TimeStampedModel):
 
     def get_absolute_url(self):
         return reverse("tracking:external_detail", kwargs={"pk": self.pk})
+
+
+class ExternalRecordAccessGrant(models.Model):
+    record = models.ForeignKey(ExternalTrackingRecord, on_delete=models.CASCADE, related_name='grants')
+    office = models.ForeignKey('accounts.Office', null=True, blank=True, on_delete=models.CASCADE, related_name='external_record_grants')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name='external_record_grants')
+    granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=(Q(office__isnull=False, user__isnull=True) | Q(office__isnull=True, user__isnull=False)), name='external_grant_one_target'),
+            models.UniqueConstraint(fields=['record', 'office'], condition=Q(office__isnull=False), name='external_grant_office_unique'),
+            models.UniqueConstraint(fields=['record', 'user'], condition=Q(user__isnull=False), name='external_grant_user_unique'),
+        ]
+
+    def __str__(self):
+        return f'{self.record_id} → {self.office or self.user}'
 
 
 class ExternalNumberSequence(models.Model):

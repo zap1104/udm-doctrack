@@ -13,7 +13,7 @@ def test_an_unsent_draft_is_not_a_stale_receipt(client, users, memo_type, who):
         document_type=memo_type,
     )
     assert not draft.routing_steps.exists()
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     response = client.get("/tracking/reports/")
 
@@ -37,7 +37,7 @@ def test_only_superseded_receipts_remain_after_the_current_batch_is_received(
         user=users["med"], subject="Another unsent draft", instructions="Prepare",
         document_type=memo_type,
     )
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     waiting = client.get("/tracking/reports/")
 

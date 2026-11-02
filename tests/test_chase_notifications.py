@@ -252,7 +252,7 @@ def test_both_kinds_render_on_the_notifications_page(client, in_flight, users, o
     age_the_send(in_flight, settings.UNRECEIVED_NUDGE_DAYS + 1)
     chase_unreceived_and_overdue()
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/notifications/").content.decode()
 
     assert "Still not received" in body

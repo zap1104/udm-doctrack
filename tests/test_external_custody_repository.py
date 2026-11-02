@@ -106,7 +106,7 @@ def test_external_review_hides_owner_and_ignores_forged_owner(client, users, off
     from apps.documents.forms import DocumentMetadataForm
 
     document = Document.objects.create(title="External", collection="EXTERNAL", office=offices["MED"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:review", args=[document.pk]))
     assert 'name="office"' not in response.content.decode()
     form = DocumentMetadataForm({"title": "Corrected", "office": offices["SUP"].pk, "year": 2026,
@@ -116,7 +116,7 @@ def test_external_review_hides_owner_and_ignores_forged_owner(client, users, off
 
 
 def test_external_upload_view_uses_system_query_context(client, users, offices, counterpart, upload_settings):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.post(reverse("documents:external_upload") + f'?office={offices["SUP"].pk}',
         upload_data(counterpart, office=offices["MED"].pk, file=SimpleUploadedFile("proof.txt", b"Proof")))
     assert response.status_code == 302
@@ -125,7 +125,7 @@ def test_external_upload_view_uses_system_query_context(client, users, offices, 
 
 @pytest.mark.parametrize("query", ["office=bad", "office=999999", "office=1&office=2"])
 def test_invalid_upload_context_fails_before_mutation(client, users, counterpart, upload_settings, query):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.post(reverse("documents:external_upload") + "?" + query,
         upload_data(counterpart, file=SimpleUploadedFile("proof.txt", b"Proof")))
     assert response.status_code == 400
@@ -136,14 +136,14 @@ def test_office_less_system_upload_explains_required_context(client, users):
     actor = users["admin"]
     actor.office = None
     actor.save(update_fields=["office"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.get(reverse("documents:external_upload"))
     assert response.status_code == 400
     assert "perspective" in response.content.decode().lower()
 
 
 def test_upload_carries_context_and_has_no_owner_control(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(reverse("documents:external_upload"), {"office": offices["SUP"].pk})
     html = response.content.decode()
     assert 'name="office"' not in html
@@ -151,6 +151,6 @@ def test_upload_carries_context_and_has_no_owner_control(client, users, offices)
 
 
 def test_report_export_describes_filing_office(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:external_reports"), {"export": "csv"})
     assert "Filing office" in response.content.decode().splitlines()[0]

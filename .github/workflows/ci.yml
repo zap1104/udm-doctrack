@@ -103,6 +103,9 @@ jobs:
           python manage.py migrate --noinput
           python manage.py init_db
           python manage.py seed_demo
+          # Disposable CI fixtures only; real enrollment and mail are tested
+          # by the OTP tests. Keep mandatory OTP on for page diagnostics.
+          python manage.py shell -c "import os; assert os.environ.get('GITHUB_ACTIONS') == 'true'; from apps.accounts.models import User; from tests.auth_helpers import prepare_verified_user; [prepare_verified_user(user) for user in User.objects.filter(is_active=True)]"
 
       - name: Self-check
         run: python manage.py selfcheck

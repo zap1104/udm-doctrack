@@ -54,7 +54,8 @@ def test_staff_flag_does_not_bypass_office_scope(users):
     users["med_admin"].is_staff = True
     request.user = users["med_admin"]
     assert not admin.site.has_permission(request)
-    request.user = users["admin"]
+    from tests.auth_helpers import verified_request
+    request = verified_request(users['admin'])
     assert admin.site.has_permission(request)
 
 
@@ -62,7 +63,7 @@ def test_staff_flag_does_not_bypass_office_scope(users):
 def test_office_admin_cannot_reset_global_admin_in_same_office(client, users):
     users["admin"].office = users["med_admin"].office
     users["admin"].save()
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get(reverse("accounts:user_edit", args=[users["admin"].pk])).status_code == 404
 
 
@@ -168,15 +169,16 @@ def test_verified_email_required_for_recovery(users):
 
 
 @pytest.mark.django_db
-def test_email_verification_is_post_only_account_bound_and_single_use(client, users):
+def test_email_verification_is_post_only_account_bound_and_single_use(client, users, settings):
+    settings.EMAIL_OTP_REQUIRED = False  # Existing signed-in enrollment during setup.
     user = users["med"]
     user.email = "owner@example.edu"
     user.save()
     token = email_verification_token.make_token(user)
     url = reverse("accounts:verify_email_confirm", args=[user.pk, token])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     assert client.post(url).status_code == 400
-    client.force_login(user)
+    client.force_verified_login(user)
     assert client.get(url).status_code == 200
     user.refresh_from_db()
     assert not user.email_is_verified
@@ -202,12 +204,13 @@ def test_email_token_expires_and_cannot_verify_changed_address(users, settings):
 
 @pytest.mark.django_db
 def test_verification_delivery_and_throttle(client, users, settings, mailoutbox):
+    settings.EMAIL_OTP_REQUIRED = False  # Existing signed-in enrollment during setup.
     settings.EMAIL_CONFIGURED = True
     settings.SITE_BASE_URL = "https://doctrack.example.edu"
     user = users["med"]
     user.email = "owner@example.edu"
     user.save()
-    client.force_login(user)
+    client.force_verified_login(user)
     for _ in range(4):
         assert client.post(reverse("accounts:verify_email")).status_code == 302
     assert len(mailoutbox) == 3
@@ -248,7 +251,7 @@ def test_security_throttle_cannot_be_bypassed_by_parallel_requests():
 
 @pytest.mark.django_db
 def test_background_polling_does_not_refresh_idle_activity(client, users, settings):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     client.get("/")
     session = client.session
     last = time.time() - settings.SESSION_COOKIE_AGE + 10
@@ -265,7 +268,7 @@ def test_background_polling_does_not_refresh_idle_activity(client, users, settin
 
 @pytest.mark.django_db
 def test_private_pages_and_download_errors_are_not_cached(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert "no-store" in client.get("/tracking/")["Cache-Control"]
     assert "no-store" in client.get("/documents/file/999999/")["Cache-Control"]
 
@@ -273,16 +276,16 @@ def test_private_pages_and_download_errors_are_not_cached(client, users):
 @pytest.mark.django_db
 def test_public_health_does_not_expose_component_diagnostics(client, users):
     assert client.get("/healthz/?deep=1").json() == {"status": "ok"}
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get("/healthz/?deep=1").json() == {"status": "ok"}
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert "checks" in client.get("/healthz/").json()
 
 
 @pytest.mark.django_db
 def test_csrf_is_enforced_for_profile_changes(users):
     browser = Client(enforce_csrf_checks=True)
-    browser.force_login(users["med"])
+    browser.force_verified_login(users["med"])
     assert browser.post("/accounts/profile/", {"first_name": "Injected"}, secure=True).status_code == 403
 
 

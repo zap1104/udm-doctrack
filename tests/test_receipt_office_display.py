@@ -78,7 +78,7 @@ def test_receipt_columns_show_disjoint_current_batch_offices(
     client, users, receipt_record_factory, surface, received, confirmed, pending,
 ):
     record = receipt_record_factory(received=received)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = _page(client, surface, record)
     cells = _receipt_cells(response)
     confirmed_codes, _ = _one_cell(cells, "received")
@@ -102,7 +102,7 @@ def test_a_new_batch_excludes_old_confirmed_and_old_pending_recipients(
     services.route_record(record, [offices["SUP"]], user=users["hr"], action="FORWARD")
     record.refresh_from_db()
     assert record.current_office_id == offices["HR"].pk, "The cached sender is not a receipt."
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     cells = _receipt_cells(_page(client, surface, record))
     assert _one_cell(cells, "received")[0] == set()
@@ -115,7 +115,7 @@ def test_drafts_show_no_confirmed_office_or_receipt_task(
     client, users, receipt_record_factory, surface,
 ):
     record = receipt_record_factory(sent=False)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     cells = _receipt_cells(_page(client, surface, record))
 
     assert _one_cell(cells, "received")[0] == set()
@@ -134,7 +134,7 @@ def test_completed_pending_filing_does_not_display_an_outstanding_receipt_task(
     record.refresh_from_db()
     assert record.status == Status.COMPLETED_PENDING_UPLOAD
     assert record.current_step_queryset.filter(received_at__isnull=True).exists()
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     cells = _receipt_cells(_page(client, surface, record))
 
     assert _one_cell(cells, "received")[0] == {"HR"}
@@ -148,7 +148,7 @@ def test_dashboard_action_queue_only_names_the_unconfirmed_recipient(
     client, users, receipt_record_factory,
 ):
     record = receipt_record_factory(received=("hr",))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/", {"office": "all", "desk": "awaiting"},
                           HTTP_HX_REQUEST="true", HTTP_HX_TARGET="action-centre-queue")
     assert {item.pk for item in response.context["attention_records"]} == {record.pk}
@@ -163,7 +163,7 @@ def test_dashboard_received_queue_does_not_fall_back_to_all_destinations(
     client, users, offices, receipt_record_factory,
 ):
     record = receipt_record_factory(received=("hr", "med"))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/", {"office": offices["MED"].pk, "desk": "received"},
                           HTTP_HX_REQUEST="true", HTTP_HX_TARGET="action-centre-queue")
     assert {item.pk for item in response.context["attention_records"]} == {record.pk}

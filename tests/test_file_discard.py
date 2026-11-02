@@ -85,7 +85,7 @@ def test_discard_requires_reason_current_version_and_current_actor(users):
 def test_discard_requires_confirmed_post_with_reason(client, users, external):
     from django.urls import reverse
     actor, record, attached = draft_file(users, external)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     url = reverse("tracking:external_file_discard" if external else "tracking:file_discard", args=[record.pk, attached.file_group_id])
     assert client.get(url).status_code == 200
     payload = {"reason": "Wrong draft file", "expected_version": 1, "expected_revision": getattr(record, "revision", "")}

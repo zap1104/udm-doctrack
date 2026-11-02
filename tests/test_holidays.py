@@ -25,7 +25,7 @@ def _local(day, hour):
 
 @pytest.mark.django_db
 def test_a_system_administrator_adds_a_holiday(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.post(
         NEW, {"date": "2026-12-30", "name": "Rizal Day", "recurring": "on", "is_active": "on"}
     )
@@ -39,14 +39,14 @@ def test_a_system_administrator_adds_a_holiday(client, users):
 
 @pytest.mark.django_db
 def test_the_form_uses_the_browsers_date_picker(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert 'type="date"' in client.get(NEW).content.decode()
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["med_admin", "med", "viewer"])
 def test_nobody_else_can_open_or_change_them(client, users, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
 
     assert client.get(LIST).status_code in (302, 403)
     client.post(NEW, {"date": "2026-12-30", "name": "Sneaky", "is_active": "on"})
@@ -55,10 +55,10 @@ def test_nobody_else_can_open_or_change_them(client, users, role):
 
 @pytest.mark.django_db
 def test_the_tab_is_offered_only_to_system_administrators(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert LIST in client.get("/administration/document-types/").content.decode()
 
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert LIST not in client.get("/administration/document-types/").content.decode()
 
 

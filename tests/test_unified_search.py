@@ -124,7 +124,7 @@ def test_filter_records_leaves_scope_alone(med_to_sup, users):
 @pytest.mark.django_db
 def test_the_workspace_still_filters_the_same_way(client, med_to_sup, users, offices):
     """Group A was a refactor. The page it came out of must not have moved."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     by_office = client.get(f"/tracking/?offices={offices['MED'].pk}")
     assert med_to_sup in by_office.context["records"]
@@ -136,7 +136,7 @@ def test_the_workspace_still_filters_the_same_way(client, med_to_sup, users, off
 # --- Group B: repository mode is untouched ----------------------------------
 @pytest.mark.django_db
 def test_a_bare_search_url_is_still_the_repository(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(SEARCH)
 
     assert response.status_code == 200
@@ -147,7 +147,7 @@ def test_a_bare_search_url_is_still_the_repository(client, users):
 @pytest.mark.django_db
 def test_repository_mode_never_returns_tracking_records(client, med_to_sup, users):
     """The two corpora stay separate — this is not a union."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{SEARCH}?q=electrical")
 
     for result in response.context["results"]:
@@ -157,7 +157,7 @@ def test_repository_mode_never_returns_tracking_records(client, med_to_sup, user
 # --- Group B: tracking mode --------------------------------------------------
 @pytest.mark.django_db
 def test_tracking_mode_finds_a_record_by_subject(client, med_to_sup, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{TRACK}&q=electrical")
 
     assert med_to_sup in found(response)
@@ -165,7 +165,7 @@ def test_tracking_mode_finds_a_record_by_subject(client, med_to_sup, users):
 
 @pytest.mark.django_db
 def test_tracking_mode_finds_a_record_by_its_number(client, med_to_sup, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{TRACK}&q={med_to_sup.tracking_number}")
 
     assert med_to_sup in found(response)
@@ -176,7 +176,7 @@ def test_tracking_mode_agrees_with_the_workspace_for_the_same_querystring(
     client, med_to_sup, hr_record, users, offices
 ):
     """The acceptance criterion: same semantics, different page."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     query = f"status={Status.PENDING_RECEIPT}&offices={offices['HR'].pk}"
 
     from_search = found(client.get(f"{TRACK}&{query}"))
@@ -187,7 +187,7 @@ def test_tracking_mode_agrees_with_the_workspace_for_the_same_querystring(
 
 @pytest.mark.django_db
 def test_tracking_mode_applies_scope(client, med_to_sup, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     assert med_to_sup in found(client.get(f"{TRACK}&scope=outgoing"))
     assert med_to_sup not in found(client.get(f"{TRACK}&scope=incoming"))
@@ -196,7 +196,7 @@ def test_tracking_mode_applies_scope(client, med_to_sup, users):
 @pytest.mark.django_db
 def test_tracking_mode_respects_visibility(client, med_to_sup, users):
     """A search surface, not a new access path."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     response = client.get(f"{TRACK}&q=electrical")
 
     assert med_to_sup not in found(response), "HR had nothing to do with it"
@@ -213,7 +213,7 @@ def test_tracking_mode_shows_only_active_records(client, med_to_sup, users):
     archive_tracking_record(med_to_sup, user=users["sup_admin"])
     med_to_sup.refresh_from_db()
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert med_to_sup not in found(client.get(f"{TRACK}&q=electrical"))
 
 
@@ -228,7 +228,7 @@ def test_tracking_mode_paginates(client, users, offices, memo_type):
         )
         route_record(record, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{TRACK}&q=Bulk")
 
     assert len(response.context["results"]) == PAGE_SIZE
@@ -239,7 +239,7 @@ def test_tracking_mode_paginates(client, users, offices, memo_type):
 def test_an_empty_tracking_search_offers_the_prompt_rather_than_everything(
     client, med_to_sup, users
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(TRACK)
 
     assert response.context["has_searched"] is False
@@ -249,7 +249,7 @@ def test_an_empty_tracking_search_offers_the_prompt_rather_than_everything(
 # --- Group C/D: what each mode renders --------------------------------------
 @pytest.mark.django_db
 def test_tracking_mode_renders_status_pills_not_relevance(client, med_to_sup, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"{TRACK}&q=electrical").content.decode()
 
     assert med_to_sup.tracking_number in body
@@ -259,7 +259,7 @@ def test_tracking_mode_renders_status_pills_not_relevance(client, med_to_sup, us
 
 @pytest.mark.django_db
 def test_repository_mode_still_renders_its_own_filters(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(SEARCH).content.decode()
 
     assert "Minimum relevance" in body
@@ -269,7 +269,7 @@ def test_repository_mode_still_renders_its_own_filters(client, users):
 @pytest.mark.django_db
 def test_the_mode_pills_use_the_shared_pill_class(client, users):
     """One pill language across the app, not a third style for this page."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(SEARCH).content.decode()
 
     assert "pill-toggle" in body
@@ -278,7 +278,7 @@ def test_the_mode_pills_use_the_shared_pill_class(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("url", [SEARCH, TRACK, f"{SEARCH}?mode=bogus"])
 def test_every_mode_renders_without_error(client, med_to_sup, users, url):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(url).status_code == 200
 
 
@@ -292,7 +292,7 @@ def test_the_queue_row_offers_the_queues_the_workspace_offers(client, med_to_sup
     Each direction now has a parent and three stage links. Their shared
     navigation keeps the workspace and search aligned, while additional
     ownership and deadline filters stay below it."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{TRACK}&q=electrical")
     body = response.content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index('<div class="tracking-filters">')]
@@ -327,7 +327,7 @@ def test_a_dropped_queue_still_works_as_a_url(client, med_to_sup, users):
     and saved bookmarks link to the narrower cuts, and the invariant that keeps
     them working is the one this page has anyway: the same querystring means the
     same thing here as on the workspace."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     workspace = client.get("/tracking/?scope=custody")
     searched = client.get(f"{TRACK}&scope=custody")
@@ -343,7 +343,7 @@ def test_overdue_qualifies_a_queue_instead_of_replacing_it(client, med_to_sup, u
     """As a `scope` pill, Overdue replaced whichever queue you were in — so
     "incoming and overdue" could not be asked at all. The workspace moved it to
     `?overdue=`; this page had kept the old shape."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{TRACK}&q=electrical&scope=incoming").content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
@@ -365,7 +365,7 @@ def test_the_owner_filter_finally_has_a_control(client, med_to_sup, users):
     """`_tracking()` has always run `owner` through `apply_scope`, so
     `?owner=mine` narrowed the results — with nothing on the page to set it and
     nothing to say it was set."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(f"{TRACK}&q=electrical&owner=mine").content.decode()
 
@@ -378,7 +378,7 @@ def test_the_owner_filter_finally_has_a_control(client, med_to_sup, users):
 def test_clearing_the_filters_keeps_the_search(client, med_to_sup, users):
     """The words in the box are the search; the pills are what narrows it.
     Clearing one is not clearing the other."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(f"{TRACK}&q=electrical&scope=incoming&owner=mine").content.decode()
 
@@ -391,7 +391,7 @@ def test_the_queue_and_the_show_row_do_not_offer_the_same_words(client, med_to_s
     """`scope` and `owner` both had "All I can see" as their empty label. On the
     workspace only one of them is drawn, so it never showed; here both rows are
     pills, one above the other."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{TRACK}&q=electrical").content.decode()
 
     assert body.count(">All I can see</a>") == 1
@@ -401,7 +401,7 @@ def test_the_queue_and_the_show_row_do_not_offer_the_same_words(client, med_to_s
 def test_the_results_head_states_the_count_once(client, med_to_sup, users):
     """"3 active records matched" sat directly above "1–3 of 3" — one fact, two
     vocabularies, two rows."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{TRACK}&q=electrical").content.decode()
 
     assert "tracking record" in body

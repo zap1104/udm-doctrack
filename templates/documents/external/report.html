@@ -2,7 +2,7 @@
 {% block title %}External Repository Reports · {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="workspace-page workspace-reports">
-  <div class="page-head reports-page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Repository Reports</h1><p class="sub">{{ total }} matching filed document{{ total|pluralize }} of {{ all_count }} available. Totals respect your document and office permissions.</p></div><div class="page-actions"><a class="btn btn-udm-outline" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=csv">Export CSV</a></div></div>
+  <div class="page-head reports-page-head"><div><div class="eyebrow">External UDM offices</div><h1>External Repository Reports</h1><p class="sub">{{ total }} matching filed document{{ total|pluralize }} of {{ all_count }} available. Totals respect your document and office permissions.</p></div><div class="page-actions">{% if access.external_repository.export %}<a class="btn btn-udm-outline" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=csv">Export CSV</a>{% endif %}</div></div>
   {% include "documents/external/_nav.html" %}
   {% include "documents/external/_filters.html" %}
   <div id="external-repository-report-results" data-filter-region>

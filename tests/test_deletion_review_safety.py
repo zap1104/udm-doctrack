@@ -211,7 +211,7 @@ def test_repository_counts_charts_search_and_drilldowns_agree_after_removal(revi
         retention_until=timezone.localdate() + timedelta(days=30),
     )
     retained.rebuild_index()
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     assert client.get("/documents/reports/").context["total_documents"] == 2
     _remove(review_document, users["med_admin"])
 
@@ -246,7 +246,7 @@ def test_removed_document_notifications_do_not_leak_through_lists_badges_or_read
     )
     assert unread_count(actor) == 2
     _remove(review_document, users["med_admin"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.get("/notifications/")
     assert response.status_code == 200
     assert {row.pk for row in response.context["notifications"]} == {active_notice.pk}

@@ -172,7 +172,7 @@ def test_crafted_django_admin_content_posts_are_denied_to_system_admin(client, u
     args = [] if operation == "add" else [row.pk]
     before = {model: list(model.objects.order_by("pk").values()) for model in [Attachment, DocumentFile, DocumentFileVersion]}
     before_files = {path.relative_to(tmp_path) for path in tmp_path.rglob("*") if path.is_file()}
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     payload = {"original_name": "overwrite.txt", "file": upload(b"Injected replacement", "overwrite.txt"),
         "record": rows["attachment"].record_id, "document": document.pk, "document_file": rows["documentfile"].pk,
         "version_number": 99, "change_summary": "Bypass attempt", "post": "yes", "_save": "Save"}
@@ -188,7 +188,7 @@ def test_crafted_django_admin_content_posts_are_denied_to_system_admin(client, u
 
 def test_document_admin_metadata_post_keeps_file_history_unchanged(client, users, content_rows):
     document, rows = content_rows
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = reverse("admin:documents_document_change", args=[document.pk])
     response = client.get(url)
     assert response.status_code == 200

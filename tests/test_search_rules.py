@@ -70,7 +70,7 @@ def hr_document(db, users, offices, memo_type):
 # tracking search stays minimal" was actually drawing a line between.
 @pytest.mark.django_db
 def test_the_page_says_which_corpus_this_is(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(SEARCH).content.decode()
 
     assert "Document Repository" in body
@@ -80,7 +80,7 @@ def test_the_page_says_which_corpus_this_is(client, users):
 @pytest.mark.django_db
 def test_repository_is_the_default(client, users):
     """Every bookmark that predates the toggle has to keep working."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?q=inventory")
 
     assert response.context["mode"] == REPOSITORY
@@ -91,7 +91,7 @@ def test_repository_is_the_default(client, users):
 @pytest.mark.django_db
 def test_an_unrecognised_mode_falls_back_to_repository(client, users):
     """A stale link is not a reason to show an error page."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?mode=bogus&q=inventory")
 
     assert response.context["mode"] == REPOSITORY
@@ -100,7 +100,7 @@ def test_an_unrecognised_mode_falls_back_to_repository(client, users):
 @pytest.mark.django_db
 def test_tracking_mode_drops_every_relevance_control(client, users):
     """Nothing scores a tracking record, so none of this chrome applies."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?mode={TRACKING}")
     body = response.content.decode()
 
@@ -115,7 +115,7 @@ def test_tracking_mode_drops_every_relevance_control(client, users):
 def test_switching_mode_carries_no_filters_across(client, users, offices):
     """min_relevance means nothing to a record with no extracted text, so the
     pill starts that mode's search fresh rather than translating."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{SEARCH}?q=inventory&min_relevance=10").content.decode()
 
     assert f"?mode={TRACKING}\"" in body, "the tracking pill carries mode and nothing else"
@@ -123,7 +123,7 @@ def test_switching_mode_carries_no_filters_across(client, users, offices):
 
 @pytest.mark.django_db
 def test_the_repository_link_opens_the_repository_search(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/documents/").content.decode()
 
     assert f"mode={REPOSITORY}" in body
@@ -136,7 +136,7 @@ def test_search_finds_words_that_only_exist_inside_the_file(client, users, med_d
     extracted text and in no metadata field."""
     assert "turbine" not in med_document.title.lower()
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
 
     assert med_document.pk in found_pks(response)
@@ -150,7 +150,7 @@ def test_the_threshold_is_settings_driven_and_defaults_to_75():
 @pytest.mark.django_db
 def test_nothing_below_the_threshold_is_silently_dropped(client, users, med_document):
     """Hidden, and the page says how many — never discarded."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?mode=advanced&q=turbine&min_relevance=100")
     search = response.context["response"]
 
@@ -162,7 +162,7 @@ def test_nothing_below_the_threshold_is_silently_dropped(client, users, med_docu
 
 @pytest.mark.django_db
 def test_the_hidden_results_can_be_shown(client, users, med_document):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?mode=advanced&q=turbine&min_relevance=100&show_all=on")
     search = response.context["response"]
 
@@ -172,7 +172,7 @@ def test_the_hidden_results_can_be_shown(client, users, med_document):
 
 @pytest.mark.django_db
 def test_the_page_calls_it_relevance_and_never_accuracy(client, users, med_document):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"{SEARCH}?mode=advanced&q=turbine").content.decode().lower()
 
     assert "relevance" in body
@@ -186,7 +186,7 @@ def test_an_office_cannot_search_another_offices_documents(
 ):
     """Never HR seeing MED. Both files contain the same words, so only the
     scoping can be what separates them."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
     found = found_pks(response)
 
@@ -196,7 +196,7 @@ def test_an_office_cannot_search_another_offices_documents(
 
 @pytest.mark.django_db
 def test_the_same_query_the_other_way_round(client, users, med_document, hr_document):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
     found = found_pks(response)
 
@@ -208,7 +208,7 @@ def test_the_same_query_the_other_way_round(client, users, med_document, hr_docu
 def test_only_a_system_admin_searches_across_every_office(
     client, users, med_document, hr_document
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
     found = found_pks(response)
 
@@ -220,7 +220,7 @@ def test_an_office_admin_is_not_a_system_admin_for_search(
     client, users, med_document, hr_document
 ):
     """The role split must not have widened search by accident."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
     found = found_pks(response)
 
@@ -233,7 +233,7 @@ def test_filtering_by_another_office_still_returns_nothing(
     client, users, med_document, hr_document
 ):
     """The office filter narrows what you may see; it cannot widen it."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     response = client.get(
         f"{SEARCH}?{ALL}&q=turbine&office={med_document.office_id}"
     )
@@ -244,7 +244,7 @@ def test_filtering_by_another_office_still_returns_nothing(
 
 @pytest.mark.django_db
 def test_a_viewer_searches_only_their_own_office(client, users, med_document, hr_document):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.get(f"{SEARCH}?{ALL}&q=turbine")
     found = found_pks(response)
 
@@ -255,7 +255,7 @@ def test_a_viewer_searches_only_their_own_office(client, users, med_document, hr
 @pytest.mark.django_db
 def test_autocomplete_is_scoped_too(client, users, med_document, hr_document):
     """A suggestion list is a search result with fewer characters."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     body = client.get("/search/autocomplete/?q=pumphouse").content.decode().lower()
 
     assert "pumphouse" not in body, "a MED-only word must not be suggested to HR"

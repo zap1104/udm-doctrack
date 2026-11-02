@@ -2,6 +2,7 @@
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
 from apps.core.permissions import locked_mutation
 from apps.core.storage import compensate_storage, create_stored_file
 from apps.core.utils import checksum_of, validate_upload
@@ -45,6 +46,7 @@ def _new_version(record, file_group_id, uploaded_file, *, user, expected_version
 
 @compensate_storage
 @locked_mutation
+@requires_capability(None, 'edit_files')
 def upload_attachment_version(record, file_group_id, uploaded_file, *, user, expected_version, change_summary):
     refuse_viewers(user, "upload file versions")
     if record.status in COMPLETED_STATUSES:
@@ -67,6 +69,7 @@ def upload_attachment_version(record, file_group_id, uploaded_file, *, user, exp
 
 @compensate_storage
 @_mutation
+@requires_capability(None, 'edit_files')
 def upload_external_attachment_version(record, file_group_id, uploaded_file, *, user, expected_version, change_summary):
     _open(record)
     if not record.can_act(user):

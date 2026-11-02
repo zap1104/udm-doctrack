@@ -489,7 +489,12 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
             archived_document = None
         can_reopen = record.can_user_reopen(request.user)
         can_act = record.status != Status.DRAFT and record.can_user_act(request.user)
+        from apps.accounts.capabilities import permission_snapshot
+        allowed = permission_snapshot(request.user)['tracking']
         can_complete = can_act and record.current_step_queryset.filter(received_at__isnull=False).exists()
+        remark_form = UploadFormRecovery(request, 'tracking-remark', target_id=record.pk).form if can_act and allowed['work'] else RemarkForm()
+        route_form = UploadFormRecovery(request, 'tracking-route', target_id=record.pk).form if can_act and allowed['endorse'] else RouteForm(record=record, user=request.user, auto_id='route_%s')
+        action_tab = 'endorse' if route_form.is_bound and allowed['endorse'] else next((key for key in ('work','endorse','complete','share') if allowed.get(key)), '')
         return render(
             request,
             self.template_name,
@@ -526,15 +531,16 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
                 "attachments": attachments,
                 "file_rows": file_rows,
                 "receipt_form": ConfirmReceiptForm(),
-                "remark_form": UploadFormRecovery(request, "tracking-remark", target_id=record.pk).form if can_act else RemarkForm(),
+                "remark_form": remark_form,
                 # Distinct IDs from RemarkForm's attachments; POST field names
                 # remain unchanged for the existing route endpoint.
-                "route_form": UploadFormRecovery(request, "tracking-route", target_id=record.pk).form if can_act else RouteForm(record=record, user=request.user, auto_id="route_%s"),
+                "route_form": route_form,
                 "complete_form": CompleteForm(user=request.user, record=record),
                 "grant_form": GrantAccessForm(actor=request.user),
                 "pending_offices": record.awaiting_receipt_offices,
                 "can_act": can_act,
-                "can_complete": can_complete,
+                'action_tab': action_tab,
+                "can_complete": can_complete and allowed['complete'],
                 "can_complete_and_file": record.can_user_file_when_completed(request.user),
                 "can_confirm": record.can_user_confirm_receipt(request.user),
                 "can_archive_now": can_archive_now,
@@ -825,6 +831,8 @@ class RoutingSlipView(AppLoginRequiredMixin, View):
 
 class AttachmentDownloadView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
+        from apps.accounts.capabilities import require_capability
+        require_capability(request.user, 'tracking', 'download')
         attachments = Attachment.objects.select_related("record")
         if request.user.is_office_admin and not request.user.is_system_admin:
             attachments = attachments.filter(record__in=TrackingRecord.objects.visible_to(request.user))

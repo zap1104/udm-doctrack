@@ -37,12 +37,12 @@ def test_audit_history_is_parent_authorized_and_paginated(client, users):
     FileLifecycleEvent.objects.bulk_create([FileLifecycleEvent(resource_kind="tracking", parent_id=record.pk,
         group_id=group.pk, action="access", reason="Audit fixture") for _ in range(1000)])
     url = reverse("core:file_history", args=["tracking", group.pk])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     with CaptureQueriesContext(connection) as queries:
         response = client.get(url)
     assert response.status_code == 200
     assert len(response.context["history"]["entries"]) <= 25
     assert response.context["history"]["next_cursor"]
     assert len(queries) < 30
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     assert client.get(url).status_code in {403, 404}

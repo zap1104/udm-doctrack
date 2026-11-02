@@ -96,7 +96,7 @@ MED_VISIBLE = ALL_ACTIVE - {"draft-sup", "foreign"}
 def test_tracking_csv_link_exports_exact_filtered_population(
     client, users, offices, export_records, actor, params, expected,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     params = {
         key: [str(offices.get(value, value).pk) if value in offices else value for value in values]
         if isinstance(values, list) else str(offices[values].pk) if values in offices else values
@@ -118,7 +118,7 @@ def test_tracking_csv_link_exports_exact_filtered_population(
 def test_tracking_export_includes_every_page(client, users, offices):
     for n in range(31):
         services.create_draft_record(user=users["med"], subject=f"Draft {n}", instructions="Work")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(reverse("tracking:list"), {"per_page": "10", "page": "2", "owner": "mine"})
     assert len(response.context["records"]) == 10
     link = re.search(r'href="([^"]+)"[^>]*>Export CSV</a>', response.content.decode())
@@ -130,7 +130,7 @@ def test_tracking_export_includes_every_page(client, users, offices):
 
 @pytest.mark.django_db
 def test_legacy_export_keeps_filed_history_and_legacy_filters(client, users, export_records):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _rows, exported = csv_records(client.get(reverse("core:report_export"), {"record_status": "COMPLETED"}))
     assert [row[1] for row in exported] == ["filed"]
 
@@ -138,14 +138,14 @@ def test_legacy_export_keeps_filed_history_and_legacy_filters(client, users, exp
 @pytest.mark.django_db
 def test_native_tracking_export_keeps_csv_formula_escaping(client, users, offices):
     services.create_draft_record(user=users["med"], subject="=1+1", instructions="Work")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     _rows, exported = csv_records(client.get(reverse("core:report_export"), {"source": "tracking"}))
     assert [row[1] for row in exported] == ["'=1+1"]
 
 
 @pytest.mark.django_db
 def test_native_export_metadata_describes_applied_filters(client, users, export_records):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     rows, exported = csv_records(client.get(reverse("core:report_export"), {
         "source": "tracking", "status": "BOGUS", "scope": "BOGUS", "owner": "BOGUS",
         "overdue": "BOGUS", "=1+1": "unsafe",
@@ -166,7 +166,7 @@ def test_tracking_pages_partition_records_with_tied_sort_values(client, users, s
     TrackingRecord.objects.filter(pk__in=[record.pk for record in records]).update(
         due_at=timezone.now() + timedelta(days=1), last_movement_at=timezone.now(),
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     seen = []
     for page in range(1, 5):
         response = client.get(path.split("?")[0], {"mode": "tracking", "per_page": "10", "page": str(page), "sort": sort})

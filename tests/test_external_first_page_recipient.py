@@ -25,7 +25,7 @@ def paper_offices(offices):
 def test_first_page_displays_from_and_to_once(client, users):
     from tests.test_external_ui_contract import Controls
 
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_create"))
     controls = Controls(response.content.decode())
     assert controls.names["from_endpoint"] == controls.names["to_endpoint"] == 1
@@ -34,7 +34,7 @@ def test_first_page_displays_from_and_to_once(client, users):
 
 @pytest.mark.parametrize("external_source", [False, True])
 def test_recipient_survives_review_without_dispatching(client, users, offices, paper_offices, external_source):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     source = f"external:{paper_offices['own'].pk}" if external_source else f"internal:{offices['MED'].pk}"
     destination = f"internal:{offices['HR'].pk}" if external_source else f"external:{paper_offices['own'].pk}"
     response = client.post(reverse("tracking:external_create"), {
@@ -64,7 +64,7 @@ def test_recipient_survives_review_without_dispatching(client, users, offices, p
 
 
 def test_required_destination_error_preserves_source(client, users, offices):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     source = f"internal:{offices['MED'].pk}"
     response = client.post(reverse("tracking:external_create"), {
         "title": "Recipient missing", "from_endpoint": source, "to_endpoint": "",
@@ -77,7 +77,7 @@ def test_required_destination_error_preserves_source(client, users, offices):
 
 
 def test_validation_redisplay_retains_both_offices(client, users, offices, paper_offices):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     source = f"external:{paper_offices['own'].pk}"
     destination = f"internal:{offices['HR'].pk}"
     response = client.post(reverse("tracking:external_create"), {"from_endpoint": source, "to_endpoint": destination})
@@ -90,7 +90,7 @@ def test_validation_redisplay_retains_both_offices(client, users, offices, paper
 
 @pytest.mark.parametrize("entry", ["foreign", "inactive"])
 def test_shared_destination_creates_draft_but_inactive_destination_does_not(client, users, offices, paper_offices, entry):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {
         "title": "Invalid recipient", "from_endpoint": f"internal:{offices['MED'].pk}",
         "to_endpoint": f"external:{paper_offices[entry].pk}",
@@ -110,7 +110,7 @@ def test_shared_destination_creates_draft_but_inactive_destination_does_not(clie
 
 @pytest.mark.parametrize("external_source", [False, True])
 def test_initial_recipient_cannot_already_be_the_source(client, users, offices, paper_offices, external_source):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     endpoint = f"external:{paper_offices['own'].pk}" if external_source else f"internal:{offices['MED'].pk}"
     response = client.post(reverse("tracking:external_create"), {
         "title": "Same source and recipient", "from_endpoint": endpoint, "to_endpoint": endpoint,
@@ -122,7 +122,7 @@ def test_initial_recipient_cannot_already_be_the_source(client, users, offices, 
 
 
 def test_retired_remembered_recipient_requires_a_new_choice(client, users, offices, paper_offices):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {
         "title": "Recipient retired during review", "from_endpoint": f"internal:{offices['MED'].pk}",
         "to_endpoint": f"external:{paper_offices['own'].pk}",
@@ -138,7 +138,7 @@ def test_retired_remembered_recipient_requires_a_new_choice(client, users, offic
 
 
 def test_expired_recipient_memory_does_not_send_or_widen_choices(client, users, offices, paper_offices):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {
         "title": "Session lost before review", "from_endpoint": f"internal:{offices['MED'].pk}",
         "to_endpoint": f"external:{paper_offices['own'].pk}",

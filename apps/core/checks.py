@@ -34,6 +34,8 @@ def deployment_configuration(app_configs, **kwargs):
     if getattr(settings, "DEBUG", True):
         return [Error("DEBUG must be disabled for deployment.", hint="Set DJANGO_DEBUG=False.", id="doctrack.E013")]
     errors = []
+    if not getattr(settings, 'EMAIL_OTP_REQUIRED', True):
+        errors.append(Error('Mandatory email OTP is disabled.', hint='Finish verified-email enrollment, then set EMAIL_OTP_REQUIRED=True.', id='doctrack.E021'))
     if settings.SECRET_KEY == "dev-only-insecure-key-change-me" or len(settings.SECRET_KEY) < 50:
         errors.append(Error("DJANGO_SECRET_KEY is the development default or too short.", hint="Set DJANGO_SECRET_KEY to a random secret before deploying.", id="doctrack.E001"))
     if not settings.ALLOWED_HOSTS or "*" in settings.ALLOWED_HOSTS:

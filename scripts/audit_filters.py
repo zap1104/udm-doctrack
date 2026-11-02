@@ -30,6 +30,7 @@ from apps.core.models import Tag  # noqa: E402
 from apps.documents.models import Document  # noqa: E402
 from apps.tracking.models import Status, TrackingRecord  # noqa: E402
 from apps.tracking.services import pending_upload_for  # noqa: E402
+from scripts.audit_auth import diagnostic_login  # noqa: E402
 
 
 class Forms(HTMLParser):
@@ -86,7 +87,7 @@ class FilterAudit:
                 continue
             self.roles.append(role)
             self.client = Client()
-            self.client.force_login(self.user)
+            diagnostic_login(self.client, self.user)
             visible = Document.objects.visible_to(self.user).in_collection().filter(is_active=True)
             tracking = TrackingRecord.objects.visible_to(self.user)
             self.repository(visible)

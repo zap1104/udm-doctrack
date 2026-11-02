@@ -39,7 +39,7 @@ def _update_payload(user, **overrides):
 # --- the list --------------------------------------------------------------
 @pytest.mark.django_db
 def test_an_office_admin_sees_only_their_own_offices_accounts(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get("/accounts/users/").content.decode()
 
     assert "med" in body, "their own office's user"
@@ -50,7 +50,7 @@ def test_an_office_admin_sees_only_their_own_offices_accounts(client, users):
 
 @pytest.mark.django_db
 def test_a_system_admin_still_sees_everybody(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/accounts/users/").content.decode()
 
     for username in ("med", "sup", "hr", "viewer"):
@@ -64,7 +64,7 @@ def test_an_office_admin_with_no_office_administers_nobody(client, users):
     stray.office = None
     stray.save(update_fields=["office"])
 
-    client.force_login(stray)
+    client.force_verified_login(stray)
     body = client.get("/accounts/users/").content.decode()
 
     assert ">med<" not in body
@@ -74,7 +74,7 @@ def test_an_office_admin_with_no_office_administers_nobody(client, users):
 # --- the edit / reset / suspend endpoints ----------------------------------
 @pytest.mark.django_db
 def test_an_office_admin_cannot_open_another_offices_account(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(f"/accounts/users/{users['sup'].pk}/")
 
     assert response.status_code == 404
@@ -83,7 +83,7 @@ def test_an_office_admin_cannot_open_another_offices_account(client, users):
 @pytest.mark.django_db
 def test_an_office_admin_cannot_edit_another_offices_account(client, users):
     target = users["sup"]
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         f"/accounts/users/{target.pk}/", _update_payload(target, first_name="Hijacked")
     )
@@ -97,7 +97,7 @@ def test_an_office_admin_cannot_edit_another_offices_account(client, users):
 def test_an_office_admin_cannot_reset_another_offices_password(client, users):
     target = users["sup"]
     original = target.password
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         f"/accounts/users/{target.pk}/",
         {"set_password": "1", "new_password1": "AnotherPass456!", "new_password2": "AnotherPass456!"},
@@ -111,7 +111,7 @@ def test_an_office_admin_cannot_reset_another_offices_password(client, users):
 @pytest.mark.django_db
 def test_an_office_admin_cannot_suspend_another_offices_account(client, users):
     target = users["sup"]
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(f"/accounts/users/{target.pk}/toggle/")
 
     assert response.status_code == 404
@@ -122,7 +122,7 @@ def test_an_office_admin_cannot_suspend_another_offices_account(client, users):
 @pytest.mark.django_db
 def test_an_office_admin_can_still_do_all_of_that_in_their_own_office(client, users):
     target = users["med"]
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     assert client.get(f"/accounts/users/{target.pk}/").status_code == 200
     assert client.post(f"/accounts/users/{target.pk}/toggle/").status_code == 302
@@ -135,7 +135,7 @@ def test_a_reset_sets_a_new_password_and_never_shows_the_old_one(client, users):
     """Argon2 makes revealing one impossible; this guards the path around it."""
     target = users["med"]
     original = target.password
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         f"/accounts/users/{target.pk}/",
         {"set_password": "1", "new_password1": "BrandNewPass789!", "new_password2": "BrandNewPass789!"},
@@ -203,7 +203,7 @@ def test_a_system_admin_may_do_both(users):
 # --- offices are system-admin territory ------------------------------------
 @pytest.mark.django_db
 def test_an_office_admin_cannot_reach_the_office_screens(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     assert client.get("/accounts/offices/").status_code == 403
     assert client.get("/administration/offices/").status_code == 403
@@ -213,7 +213,7 @@ def test_an_office_admin_cannot_reach_the_office_screens(client, users):
 def test_a_system_admin_can_create_an_office_without_a_code_change(client, users):
     from apps.accounts.models import Office
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get("/administration/offices/").status_code == 200
 
     response = client.post(
@@ -230,7 +230,7 @@ def test_a_system_admin_can_create_an_office_without_a_code_change(client, users
 @pytest.mark.django_db
 def test_the_offices_tile_is_not_offered_to_an_office_admin(client, users):
     """Showing a tile that answers with a 403 is its own small bug."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get("/administration/").content.decode()
 
     assert "/administration/offices/" not in body

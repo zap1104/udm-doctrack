@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Change email · {{ SITE_NAME }}{% endblock %}
+{% block content %}<div class="page-head"><div><h1>Change email</h1><p class="sub">Your current address stays active until you confirm the replacement.</p></div></div><div class="card-udm"><div class="card-udm-body"><form method="post" novalidate>{% csrf_token %}{% include "partials/_form_errors.html" %}{% for field in form %}{% include "partials/_field.html" with field=field %}{% endfor %}<button class="btn btn-udm" type="submit">Send verification invitation</button><a class="btn btn-udm-outline" href="{% url 'accounts:profile' %}">Cancel</a></form></div></div>{% endblock %}

@@ -23,7 +23,7 @@ def test_event_pages_partition_tied_timestamps(client, users, offices, surface):
         ])
         user, url, key, extra = users["admin"], "/administration/audit-log/", "page_obj", {"q": "Pagination audit"}
     model.objects.filter(pk__in=[row.pk for row in rows]).update(created_at=timezone.now())
-    client.force_login(user)
+    client.force_verified_login(user)
     seen = []
     for page in range(1, 5):
         response = client.get(url, {**extra, "per_page": 10, "page": page})

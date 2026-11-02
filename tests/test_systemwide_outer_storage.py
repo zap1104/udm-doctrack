@@ -29,7 +29,7 @@ def test_rejected_route_rolls_back_new_attachment_bytes(client, users, offices, 
     record = create_draft_record(user=users["med"], subject="Route rollback", instructions="Review")
     route_record(record, [offices["SUP"]], user=users["med"])
     confirm_receipt(record, user=users["sup"])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     with patch("apps.tracking.views.services.route_record", side_effect=ValidationError("Cannot route now")) as attempt:
         response = client.post(reverse("tracking:route", args=[record.pk]), {
             "offices": [offices["HR"].pk], "action": "FORWARD", "instructions": "Next office",
@@ -50,7 +50,7 @@ def test_rejected_route_rolls_back_new_attachment_bytes(client, users, offices, 
 def test_draft_edit_later_failure_rolls_back_bytes_and_metadata(client, users, offices, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     record = create_draft_record(user=users["med"], subject="Original draft", instructions="Review")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     with patch("apps.tracking.upload_drafts.log_action", side_effect=RuntimeError("later database failure")) as failure:
         with pytest.raises(RuntimeError, match="later database failure"):
             client.post(reverse("tracking:create") + f"?draft={record.pk}", {
@@ -74,7 +74,7 @@ def test_frozen_repository_rejects_added_file_without_success_feedback(client, u
         title="Partial extraction", year=2026, office=users["med"].office,
         uploaded_by=users["med"], ocr_text="Original usable text", ocr_status=OcrStatus.DONE,
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     with patch("apps.documents.services.extract_document_text") as extractor:
         response = client.post(reverse("documents:add_files", args=[document.pk]), {"files": upload()}, follow=True)
     assert response.status_code == 403
@@ -98,7 +98,7 @@ def test_retry_queue_failure_is_not_reported_as_running(client, users, settings,
         uploaded_by=users["med"], ocr_text="Original usable text", ocr_status=OcrStatus.DONE,
     )
     DocumentFile.objects.create(document=document, file=upload(), original_name="proof.pdf")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     with patch("django_q.tasks.async_task", side_effect=ConnectionError("Simulated queue outage")):
         response = client.post(reverse("documents:re_extract", args=[document.pk]), follow=True)
     assert response.status_code == 200
@@ -111,6 +111,9 @@ def test_retry_queue_failure_is_not_reported_as_running(client, users, settings,
 
 def test_smoke_checks_exercise_signed_downloads_for_seeded_files(users, settings, tmp_path, monkeypatch):
     from scripts import smoke_pages
+    from tests.auth_helpers import prepare_verified_user
+    for user in users.values():
+        prepare_verified_user(user)
 
     settings.MEDIA_ROOT = tmp_path
     record = create_draft_record(user=users["med"], subject="Smoke file", instructions="Review")

@@ -54,7 +54,7 @@ def test_approval_option_is_available_to_authorized_actor_and_unchecked(users, o
 @pytest.mark.parametrize("choice", [None, "", "on"])
 def test_completion_option_controls_filing_and_replays_never_duplicate(client, users, offices, external, choice):
     record, actor = active_case(users, offices, external)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     data = {"note": "Complete", "revision": getattr(record, "revision", "")}
     if choice is not None:
         data["archive_now"] = choice
@@ -72,7 +72,7 @@ def test_completion_option_controls_filing_and_replays_never_duplicate(client, u
 def test_forged_staff_checkbox_cannot_approve_repository(client, users, offices, external):
     record, _ = active_case(users, offices, external)
     actor = users["med"]
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.post(completion_url(record, external), {"note": "Done", "archive_now": "on", "revision": getattr(record, "revision", "")})
     assert response.status_code == 302
     record.refresh_from_db()
@@ -83,7 +83,7 @@ def test_forged_staff_checkbox_cannot_approve_repository(client, users, offices,
 @pytest.mark.parametrize("failure", [OSError, RuntimeError])
 def test_filing_failure_preserves_completed_work_for_retry(client, users, offices, external, failure):
     record, actor = active_case(users, offices, external)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     target = "apps.documents.external_services.archive_external_record" if external else "apps.tracking.views.services.approve_upload"
     with patch(target, side_effect=failure("Simulated storage/queue outage")) as attempted:
         response = client.post(completion_url(record, external), {"note": "Done", "archive_now": "on", "revision": getattr(record, "revision", "")})
@@ -97,7 +97,7 @@ def test_filing_failure_preserves_completed_work_for_retry(client, users, office
 @pytest.mark.parametrize("external", [False, True])
 def test_approval_is_rechecked_after_completion_if_role_changes(client, users, offices, external):
     record, actor = active_case(users, offices, external)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     service = external_services if external else services
     original = service.complete_record
     def complete_then_revoke(*args, **kwargs):
@@ -114,7 +114,7 @@ def test_approval_is_rechecked_after_completion_if_role_changes(client, users, o
 @pytest.mark.parametrize("external", [False, True])
 def test_viewer_cannot_complete_or_approve_via_checkbox(client, users, offices, external):
     record, _ = active_case(users, offices, external)
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.post(completion_url(record, external), {"archive_now": "on", "revision": getattr(record, "revision", "")}).status_code == 403
     record.refresh_from_db()
     assert record.status == Status.RECEIVED and not Document.objects.exists()

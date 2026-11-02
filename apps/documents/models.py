@@ -97,6 +97,16 @@ class DocumentQuerySet(models.QuerySet):
         return self.filter(collection=collection)
 
     def visible_to(self, user):
+        from apps.accounts.capabilities import capability_allowed, current_actor
+
+        user = current_actor(user)
+        if user is None:
+            return self.none()
+        permitted = [collection for collection, area in [('OVPA', 'repository'), ('EXTERNAL', 'external_repository')]
+                     if capability_allowed(user, area, 'view_record')]
+        if not permitted:
+            return self.none()
+        self = self.filter(collection__in=permitted)
         if (not user.is_authenticated or not user.is_active
                 or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
             return self.none()
@@ -384,6 +394,16 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         return Document.objects.filter(pk=self.pk, is_active=True).visible_to(user).exists()
 
     def can_user_edit(self, user) -> bool:
+        return self.can_user_manage(user, 'edit_metadata')
+
+    def can_user_manage(self, user, action) -> bool:
+        """Apply an action's restriction independently of metadata editing."""
+        from apps.accounts.capabilities import area_for, capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, area_for(self), action):
+            return False
         if not self.is_active or not user.is_authenticated or not user.can_start_work:
             return False
         if user.is_system_admin:
@@ -397,6 +417,9 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         return bool(user.office_id) and user.office_id == self.office_id and user.is_records_staff
 
     def can_user_review_deletion(self, user, *, include_deleted=False) -> bool:
+        from apps.accounts.capabilities import area_for, capability_allowed
+        if not capability_allowed(user, area_for(self), 'deletion_review' if self.is_active else 'restore'):
+            return False
         if not user.is_authenticated or not user.can_start_work or not user.is_office_admin:
             return False
         if not include_deleted and not self.is_active:

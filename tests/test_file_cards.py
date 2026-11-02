@@ -40,7 +40,7 @@ def test_saved_upload_preview_is_labeled_as_saved_upload_not_version_one(client,
     from apps.core.file_access import file_url
     from tests.test_upload_draft_races import stage
     draft, _ = stage(users["med"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(file_url("upload", draft.files.get().pk, users["med"]))
     assert response.status_code == 200 and "Saved upload" in response.content.decode()
     assert "Viewing Version 1" not in response.content.decode()
@@ -49,7 +49,7 @@ def test_saved_upload_preview_is_labeled_as_saved_upload_not_version_one(client,
 def test_creation_office_is_clear_and_fixed_after_files_are_bound(client, users):
     from tests.test_upload_draft_races import stage
     draft, _ = stage(users["admin"], workflow="repository-upload")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/documents/upload/", {"upload_draft": draft.pk})
     assert response.status_code == 200
     assert response.context["form"].fields["office"].disabled

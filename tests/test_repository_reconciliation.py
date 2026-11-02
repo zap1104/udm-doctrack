@@ -36,7 +36,7 @@ def _breakdown(client, office):
 @pytest.mark.django_db
 @pytest.mark.parametrize("scope", ["all", "SUP"])
 def test_the_six_segments_add_up_to_the_total(client, users, offices, agreement, scanned, scope):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = "all" if scope == "all" else offices["SUP"].pk
     breakdown = _breakdown(client, office)
     totals = {row["key"]: row["total"] for row in breakdown["slices"]}
@@ -50,7 +50,7 @@ def test_the_six_segments_add_up_to_the_total(client, users, offices, agreement,
 @pytest.mark.django_db
 @pytest.mark.parametrize("scope", ["all", "SUP"])
 def test_every_segment_opens_a_page_listing_its_count(client, users, offices, agreement, scanned, scope):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = "all" if scope == "all" else offices["SUP"].pk
     for row in _breakdown(client, office)["slices"]:
         listed = client.get(row["url"]).context["total"]
@@ -59,7 +59,7 @@ def test_every_segment_opens_a_page_listing_its_count(client, users, offices, ag
 
 @pytest.mark.django_db
 def test_a_scanned_document_is_historical_on_the_ring_and_on_the_page(client, users, offices, scanned):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     historical = next(
         row for row in _breakdown(client, offices["SUP"].pk)["slices"] if row["key"] == "historical"
     )
@@ -71,7 +71,7 @@ def test_a_scanned_document_is_historical_on_the_ring_and_on_the_page(client, us
 
 @pytest.mark.django_db
 def test_an_office_user_sees_the_same_reconciliation(client, users, offices, agreement, scanned):  # noqa: F811
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     breakdown = client.get("/").context["breakdown"]
 
     assert sum(row["total"] for row in breakdown["slices"]) == breakdown["total"]

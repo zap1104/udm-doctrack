@@ -124,7 +124,7 @@ def test_a_password_request_loaded_before_an_administrator_reset_cannot_undo_it(
 def test_forced_password_change_rejects_reusing_the_administrator_password(client, users):
     user = users["med"]
     User.objects.filter(pk=user.pk).update(must_change_password=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     response = client.post(reverse("accounts:password_change"), {
         "old_password": OLD_PASSWORD,
@@ -142,7 +142,7 @@ def test_forced_password_change_rejects_reusing_the_administrator_password(clien
 def test_forced_password_change_accepts_a_different_password_and_preserves_the_session(client, users):
     user = users["med"]
     User.objects.filter(pk=user.pk).update(must_change_password=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     response = client.post(reverse("accounts:password_change"), {
         "old_password": OLD_PASSWORD,

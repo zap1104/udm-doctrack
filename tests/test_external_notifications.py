@@ -106,9 +106,9 @@ def test_external_case_print_audit_checks_record_access(client, users, offices):
 
     record = _case(users, offices)
     data = {"target_type": "ExternalTrackingRecord", "target_id": str(record.pk), "label": "external routing slip"}
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.post(reverse("core:log_print"), data).status_code == 200
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     assert client.post(reverse("core:log_print"), data).status_code == 404
 
 
@@ -120,7 +120,7 @@ def test_external_repository_print_audit_is_not_restricted_to_ovpa_collection(cl
 
     document = Document.objects.create(title="External paper", office=offices["MED"], year=2026,
                                        collection=Collection.EXTERNAL, uploaded_by=users["med_admin"])
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.post(reverse("core:log_print"), {"target_type": "Document", "target_id": str(document.pk)})
     assert response.status_code == 200
 

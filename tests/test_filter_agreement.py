@@ -113,7 +113,7 @@ def page_records(client, url):
 def test_every_stat_card_matches_the_page_it_opens(client, users, traffic, key, scope):
     """A count nobody can click through to is a claim; a count that disagrees
     with the page behind it is a wrong claim presented as a right one."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     counted = client.get(DASHBOARD).context[key]
 
     assert counted == len(page_records(client, f"{TRACKING}?scope={scope}"))
@@ -123,7 +123,7 @@ def test_every_stat_card_matches_the_page_it_opens(client, users, traffic, key, 
 def test_every_ring_slice_matches_the_page_it_opens(client, users, traffic):
     """Looped over the slices rather than written one test per slice, so a slice
     added later is covered without anybody remembering to cover it."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
 
     checked = 0
@@ -144,7 +144,7 @@ def test_the_counts_are_the_same_records_not_merely_the_same_number(client, user
     listed the two addressed to this one. Equal counts over different rows is
     the shape most likely to survive review.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     listed = page_records(client, f"{TRACKING}?scope=incoming")
     scoped = set(
         apply_scope(active_for(users["sup"]), SCOPE_INCOMING, users["sup"])
@@ -171,7 +171,7 @@ def test_the_minimal_reported_case(client, users, offices, memo_type):
     )
     route_record(record, [offices["HR"]], user=users["sup"])
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
     slice_row = next(
         row for row in response.context["breakdown"]["slices"] if row["key"] == "pending_receipt"
@@ -189,7 +189,7 @@ def test_pending_receipt_answers_in_both_directions(client, users, traffic):
     The outgoing half was missing, so the one queue whose whole job is "who has
     not confirmed" could not answer it for the office doing the asking.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     listed = page_records(client, f"{TRACKING}?scope=pending-receipt")
 
     assert traffic["arriving"].pk in listed, "addressed to us, unconfirmed"
@@ -202,7 +202,7 @@ def test_pending_receipt_answers_in_both_directions(client, users, traffic):
 def test_only_the_incoming_half_can_be_confirmed(client, users, traffic):
     """Both directions share the queue; only one of them owes an act. The button
     is gated by annotate_can_confirm, which checks to_office_id on its own."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(f"{TRACKING}?scope=pending-receipt")
     confirmable = {r.pk for r in response.context["page_obj"].object_list if r.can_confirm_now}
 
@@ -271,7 +271,7 @@ def test_the_same_record_reads_both_ways_at_once(users, traffic):
 
 @pytest.mark.django_db
 def test_the_tag_renders_on_both_listing_pages(client, users, traffic):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     for url in (f"{TRACKING}?scope=incoming", "/search/?mode=tracking&scope=incoming"):
         body = client.get(url).content.decode()
@@ -333,7 +333,7 @@ def test_nothing_links_to_a_legacy_alias():
 def test_the_status_of_a_slice_and_its_page_agree(client, users, traffic):
     """Received and In process are split by status out of one scope, so each
     slice links with `&status=` and must list only that status."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
 
     for key, status in (("received", Status.RECEIVED), ("in_process", Status.IN_PROCESS)):
@@ -360,7 +360,7 @@ def _ring_totals(context):
 def test_each_direction_ring_is_the_card_above_it_and_the_page_it_opens(
     client, users, traffic, direction
 ):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     context = client.get(DASHBOARD).context
 
     ring = _ring_totals(context)[direction]
@@ -372,7 +372,7 @@ def test_each_direction_ring_is_the_card_above_it_and_the_page_it_opens(
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", ["MED", "SUP", "HR"])
 def test_the_rings_answer_for_the_picked_office(client, users, offices, traffic, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pk = offices[code].pk
     context = client.get(f"{DASHBOARD}?office={pk}").context
 
@@ -410,7 +410,7 @@ def test_every_direction_slice_opens_exactly_what_it_counted(
 ):
     """Looped over the slices, like the ring test above, so a stage added to
     the rings later is covered without anybody remembering to cover it."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     query = f"?office={offices[picked].pk}" if picked else ""
     context = client.get(DASHBOARD + query).context
 
@@ -423,7 +423,7 @@ def test_every_direction_slice_opens_exactly_what_it_counted(
 def test_no_record_is_in_both_rings(client, users, offices, traffic, who, picked):
     """Compared as records, not as counts. Two rings of 3 and 2 could share a
     record and still add up to five of something."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     query = f"?office={offices[picked].pk}" if picked else ""
     context = client.get(DASHBOARD + query).context
 
@@ -436,12 +436,12 @@ def test_no_record_is_in_both_rings(client, users, offices, traffic, who, picked
 def test_a_slice_link_names_the_office_only_when_one_was_picked(client, users, offices, traffic):
     """An ordinary account's own office is implied, and naming it anyway puts
     "your account may not filter by office" on every slice it clicks."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     for ring in client.get(DASHBOARD).context["tracking_rings"]["rings"]:
         for row in ring["status"]["slices"]:
             assert "office=" not in row["url"], row["url"]
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pk = offices["SUP"].pk
     for ring in client.get(f"{DASHBOARD}?office={pk}").context["tracking_rings"]["rings"]:
         for row in ring["status"]["slices"]:
@@ -485,7 +485,7 @@ def _opened(client, context, view):
 def test_every_overdue_slice_opens_exactly_what_it_counted(
     client, users, offices, late_traffic, who, picked
 ):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     query = f"?office={offices[picked].pk}" if picked else ""
     context = client.get(DASHBOARD + query).context
 
@@ -505,7 +505,7 @@ def test_the_overdue_rings_are_a_subset_of_the_status_rings(
     """Same slices, overdue documents only: the switch changes which documents
     are counted and nothing else, so every overdue slice is inside the status
     slice of the same stage."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     query = f"?office={offices[picked].pk}" if picked else ""
     context = client.get(DASHBOARD + query).context
 
@@ -526,7 +526,7 @@ def test_the_overdue_note_says_how_the_rings_relate_to_the_card(
     """The rings count what is moving in or out now; the card, every overdue
     document the office has touched. Never more in the rings than on the card,
     and the page says which is which rather than leaving the reader to add."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     query = f"?office={offices[picked].pk}" if picked else ""
     response = client.get(DASHBOARD + query)
     context = response.context
@@ -541,7 +541,7 @@ def test_the_overdue_note_says_how_the_rings_relate_to_the_card(
 def test_the_view_is_in_the_address_and_survives_a_change_of_office(
     client, users, offices, late_traffic
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pk = offices["SUP"].pk
 
     default = client.get(f"{DASHBOARD}?office={pk}")
@@ -568,7 +568,7 @@ def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffi
     """Under every office Incoming and Outgoing are the same records, so two
     rings would be two identical rings. One ring for the university, a caption
     describing the scope, and no empty direction cards."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
     rings = response.context["tracking_rings"]
     body = " ".join(response.content.decode().split())
@@ -584,7 +584,7 @@ def test_every_office_shows_one_ring_and_no_direction(client, users, late_traffi
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["sup", "med_admin"])
 def test_an_office_is_never_shown_the_every_office_view(client, users, traffic, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(DASHBOARD)
 
     assert response.context["tracking_rings"]["split"] is True
@@ -595,10 +595,10 @@ def test_an_office_is_never_shown_the_every_office_view(client, users, traffic, 
 def test_only_a_system_administrator_is_offered_all_offices(client, users, offices, traffic):
     """For an office administrator the empty choice means their own office, so
     an "All offices" option claimed a scope the page never showed."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert '<option value="">All offices</option>' not in client.get(DASHBOARD).content.decode()
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert '<option value="">All offices</option>' in client.get(DASHBOARD).content.decode()
 
 
@@ -611,7 +611,7 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     office, so an administrator looking at MED was reading their own desk under
     MED's heading — the same figures whichever office they named.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     own = client.get(DASHBOARD).context
     picked = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context
@@ -621,7 +621,7 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
     assert own["incoming_count"] is None and own["outgoing_count"] is None
     assert picked["incoming_count"] is not None, "the picker did nothing"
     # SUP's desk, as SUP sees it.
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     theirs = client.get(DASHBOARD).context
     assert picked["incoming_count"] == theirs["incoming_count"]
     assert picked["outgoing_count"] == theirs["outgoing_count"]
@@ -635,7 +635,7 @@ def test_the_picker_moves_the_cards_to_that_office(client, users, offices, traff
 def test_a_picked_office_travels_to_the_page_the_card_opens(client, users, offices, traffic):
     """Half a fix is worse than none here: counting the picked office while
     linking to the viewer's would put the disagreement back."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}")
     body = unescape(response.content.decode())
 
@@ -650,7 +650,7 @@ def test_a_picked_office_travels_to_the_page_the_card_opens(client, users, offic
 def test_an_ordinary_user_cannot_read_another_office_by_url(client, users, offices, traffic):
     """`?office=` is gated by the same `is_office_admin` test as the picker
     itself, so the queue param cannot become a way around it."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     own = page_records(client, f"{TRACKING}?scope=incoming")
     forged = page_records(client, f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}")
@@ -665,7 +665,7 @@ def test_no_office_picked_does_not_narrow_the_queues_that_have_no_office(
     """Overdue is not a per-office queue, so nothing should narrow it until
     somebody asks. Falling back to the viewer's own office here took an
     administrator's Overdue from 32 records to 3."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     unpicked = page_records(client, f"{TRACKING}?scope=overdue")
     everything = page_records(client, TRACKING)
@@ -688,7 +688,7 @@ def test_tracking_and_search_answer_identically(client, users, traffic, query):
     """Two pages, one question. They shared `filter_records` and `apply_scope`
     and still disagreed — 3 records against 0 — because the *office resolution*
     was never shared. Looped so a filter added later is covered the same day."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     listed = {r.pk for r in client.get(f"{TRACKING}?{query}").context["page_obj"].object_list}
     searched = {
@@ -702,7 +702,7 @@ def test_tracking_and_search_answer_identically(client, users, traffic, query):
 @pytest.mark.parametrize("query", ["", "scope=incoming", "scope=overdue", "scope=awaiting"])
 def test_the_two_pages_agree_under_a_picked_office(client, users, offices, traffic, query):
     """Including the office, which search dropped entirely."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     full = f"{query}&office={offices['SUP'].pk}"
 
     listed = {r.pk for r in client.get(f"{TRACKING}?{full}").context["page_obj"].object_list}
@@ -717,7 +717,7 @@ def test_the_two_pages_agree_under_a_picked_office(client, users, offices, traff
 def test_every_dashboard_link_agrees_under_a_picked_office(client, users, offices, traffic):
     """The stat cards learned to carry the office and the ring slices did not,
     so a slice counted one office and opened another's page."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     for query in ("", f"?office={offices['SUP'].pk}"):
         response = client.get(DASHBOARD + query)
@@ -755,7 +755,7 @@ def test_every_dashboard_link_agrees_under_a_picked_office(client, users, office
 def test_the_direction_tag_follows_the_picked_office(client, users, offices, traffic):
     """Every row of a page headed another office's Incoming used to read
     Outgoing: the queue was built for them, the tag for the viewer."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     listing = client.get(
         f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}"
     ).context["page_obj"].object_list
@@ -773,7 +773,7 @@ def test_the_ring_total_is_the_tracking_page_minus_drafts(client, users, traffic
     create_draft_record(
         user=users["sup"], subject="Unsent", instructions="x", document_type=memo_type,
     )
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     ring = client.get(DASHBOARD).context["breakdown"]["tracking_total"]
     page = len(page_records(client, TRACKING))
@@ -789,7 +789,7 @@ def test_no_office_filter_fails_open(client, users, path):
     """A filter that fails open is worse than one that errors: the reader
     believes the page is narrowed to one office and it is the whole
     university. An unresolvable value has to be *said*, not dropped."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{path}?office=99999")
     body = response.content.decode().lower()
 
@@ -802,7 +802,7 @@ def test_the_two_office_filters_are_different_questions(client, users, offices, 
     """`office` is "view as that office"; `offices` is "raised by that office".
     Both legitimate, and nothing said so — same office, same page, one letter
     apart, different answers. Asserted so a later tidy-up cannot merge them."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     # SUP, not MED: MED raised everything it touches in this fixture, so the two
     # questions happen to coincide there. `traffic["received"]` was raised by
     # MED and now sits at SUP, which is exactly the case that separates them.
@@ -826,7 +826,7 @@ def test_the_two_office_filters_are_different_questions(client, users, offices, 
 def test_an_impossible_combination_says_why(client, users, traffic, query, phrase):
     """Empty by construction, not empty today. Without a reason the reader
     concludes the filter is broken and stops trusting the others."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(f"{TRACKING}?{query}")
 
     assert response.context["page_obj"].paginator.count == 0
@@ -838,7 +838,7 @@ def test_a_queue_pill_keeps_the_filters_already_applied(client, users, traffic):
     """They were bare `?scope=` links, so a reader with a filter set watched
     the count drop and concluded the queue had narrowed their own files, when
     it had replaced their filter with everybody's."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(f"{TRACKING}?owner=mine&status={Status.RECEIVED}").content.decode()
 
     pill = re.search(r'<a[^>]*href="([^"]*scope=incoming[^"]*)"[^>]*aria-label="Incoming · Received"', body).group(1)
@@ -852,7 +852,7 @@ def test_the_action_centre_is_the_queue_its_button_opens(client, users, traffic)
     """It was pending-receipt padded with overdue and then received — three
     queues behind one link, so the panel showed five rows and the page opened
     five, two of them different."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
     panel = {record.pk for record in response.context["attention_records"]}
     body = response.content.decode()
@@ -912,7 +912,7 @@ def test_a_late_record_shows_its_stage_and_its_lateness(client, users, deadlines
     reader who opened the Pending receipt slice counted two records and one
     Pending receipt pill. Overdue says the deadline went by; it does not say
     whether anybody has signed for the document, which is the part to act on."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     record = deadlines[key]
     body = client.get(f"{TRACKING}?q=&status={record.status}").content.decode()
 
@@ -928,7 +928,7 @@ def test_a_late_record_shows_its_stage_and_its_lateness(client, users, deadlines
 def test_the_stage_and_the_deadline_compose(client, users, deadlines, status):
     """Both at once, which `status=OVERDUE` made impossible: it held the one
     parameter, so asking for overdue pending-receipts cost the queue pill."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     staged = page_records(client, f"{TRACKING}?status={status}")
     late = page_records(client, f"{TRACKING}?status={status}&overdue=yes")
@@ -949,7 +949,7 @@ def test_the_two_deadline_buckets_partition_the_whole(client, users, deadlines):
     where the explicit form returns 248 — 235 rows falling out of a page that
     offers only these two choices. The fixture carries both edge cases.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     everything = page_records(client, TRACKING)
     late = page_records(client, f"{TRACKING}?overdue=yes")
@@ -966,7 +966,7 @@ def test_the_legacy_spellings_still_resolve(client, users, deadlines):
     """Every saved bookmark, the dashboard's Overdue card and the queue pill
     emit one of these. They translate in the resolver, so nothing downstream
     keeps a second code path — keeping one is what made overdue a status."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     canonical = page_records(client, f"{TRACKING}?overdue=yes")
 
@@ -977,7 +977,7 @@ def test_the_legacy_spellings_still_resolve(client, users, deadlines):
 @pytest.mark.django_db
 def test_a_legacy_spelling_composes_with_a_queue(client, users, deadlines):
     """`?scope=overdue` used to *be* the queue, so it could not narrow one."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     incoming = page_records(client, f"{TRACKING}?scope=incoming")
     late = page_records(client, f"{TRACKING}?scope=incoming&overdue=yes")
@@ -991,7 +991,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
     """The CSV wrote "Overdue" into the Status column, so an exported sheet had
     no record of what stage the late documents were at — and a spreadsheet
     attached to a memo is read by somebody who cannot re-run the query."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get("/tracking/reports/export/").content.decode().splitlines()
 
     header = next(r for r in rows if r.startswith("Tracking number"))
@@ -1008,7 +1008,7 @@ def test_the_export_carries_the_stage_and_the_condition(client, users, deadlines
 def test_finished_work_is_never_late(client, users, deadlines):
     """Empty by construction: `is_overdue` and both query branches exclude the
     completed statuses, so asking for both can only ever return nothing."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(f"{TRACKING}?overdue=yes&status={Status.COMPLETED_PENDING_UPLOAD}")
 
     assert response.context["page_obj"].paginator.count == 0
@@ -1025,7 +1025,7 @@ def test_received_and_in_process_are_disjoint_halves(client, users, deadlines):
     which is why neither is a `?status=` pill, a status saying nothing about who
     holds the document — they now pin different stages of it.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     held = page_records(client, f"{TRACKING}?scope=received")
     started = page_records(client, f"{TRACKING}?scope=in-process")
@@ -1055,7 +1055,7 @@ def test_the_in_process_queue_is_office_scoped_like_its_neighbours(
     confirm_receipt(theirs, user=users["hr"])
     mark_in_process(theirs, user=users["hr"])
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     held = page_records(client, f"{TRACKING}?scope=in-process")
     anywhere = page_records(client, f"{TRACKING}?status={Status.IN_PROCESS}")
@@ -1075,7 +1075,7 @@ def test_the_pending_upload_pill_agrees_with_its_dashboard_slice(client, users, 
     it as `?status=COMPLETED_PENDING_UPLOAD`. The dashboard slice keeps linking
     to `?scope=pending-upload`, which still resolves — what matters is that the
     count and every route to it stay the same set of records."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(TRACKING).content.decode()
     slice_row = next(
         row for row in client.get(DASHBOARD).context["breakdown"]["slices"]
@@ -1095,25 +1095,25 @@ def test_only_a_system_administrator_is_offered_the_office_picker(client, users)
     """The control is a convenience, not the permission: `?office=` was already
     refused for everybody else by scope_office, which is what decides here too,
     so the two cannot drift into disagreeing."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert 'id="tracking-as-office"' not in client.get(TRACKING).content.decode()
 
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert 'id="tracking-as-office"' not in client.get(TRACKING).content.decode()
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert 'id="tracking-as-office"' in client.get(TRACKING).content.decode()
 
 
 @pytest.mark.django_db
 def test_the_picker_shows_the_chosen_office_queues(client, users, offices, traffic):
     """What the page has honoured all along, now with a way to set it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     own = page_records(client, f"{TRACKING}?scope=incoming")
     theirs = page_records(client, f"{TRACKING}?scope=incoming&office={offices['SUP'].pk}")
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     assert theirs == page_records(client, f"{TRACKING}?scope=incoming")
     assert theirs != own
 
@@ -1123,7 +1123,7 @@ def test_the_picker_carries_the_filters_already_applied(client, users, offices, 
     """A GET form submits only its own fields, so without the hidden inputs
     picking an office would silently clear the queue and everything beside it —
     the same way the queue pills used to drop the owner filter."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(
         f"{TRACKING}?office={offices['SUP'].pk}&scope=incoming&owner=mine&overdue=yes&offices={offices['SUP'].pk}"
     ).content.decode()
@@ -1144,7 +1144,7 @@ def test_no_picker_submits_through_an_inline_handler(client, users):
     """django-csp allows no inline script, so `onchange="this.form.submit()"`
     either fails in production or forces 'unsafe-inline' into script-src for the
     whole site. Native submit buttons now let users finish selecting first."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     for path in (TRACKING, DASHBOARD):
         body = client.get(path).content.decode()
@@ -1159,10 +1159,10 @@ def test_only_a_system_administrator_is_offered_every_office(client, users):
     """An office administrator's rights stop at their own office, so "every
     office" is not theirs to ask for. The option is hidden *and* the value
     refused — hiding a control is not the permission."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert '<option value="all"' not in client.get(TRACKING).content.decode()
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert '<option value="all"' in client.get(TRACKING).content.decode()
 
 
@@ -1170,7 +1170,7 @@ def test_only_a_system_administrator_is_offered_every_office(client, users):
 def test_every_office_is_refused_for_an_office_administrator(client, users, traffic):
     """`?office=all` is gated the same way the option is, so the URL cannot be
     a way around the control."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     own = page_records(client, f"{TRACKING}?scope=incoming")
     asked = page_records(client, f"{TRACKING}?scope=incoming&office=all")
@@ -1188,7 +1188,7 @@ def test_every_office_widens_each_queue_for_a_system_administrator(
     """The queues answer for every office at once rather than falling back to
     the viewer's, which is what `office=all` is for — a system administrator
     reading their own desk under a heading saying "All offices" was the gap."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     own = page_records(client, f"{TRACKING}?scope={scope}")
     everywhere = page_records(client, f"{TRACKING}?scope={scope}&office=all")
@@ -1202,7 +1202,7 @@ def test_every_office_widens_each_queue_for_a_system_administrator(
 def test_every_office_is_the_union_of_the_offices(client, users, offices, traffic):
     """Not merely wider — it is exactly every office's queue put together, which
     is the property that makes the option mean what it says."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     from apps.accounts.models import Office
 
     everywhere = page_records(client, f"{TRACKING}?scope=incoming&office=all")
@@ -1222,7 +1222,7 @@ def test_one_control_drives_the_deadline_parameter(client, users, deadlines):
     "late" and could not say "on time", so `?overdue=no` filtered with nothing
     to set it. What matters is that the pill did not survive alongside it.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(TRACKING).content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
@@ -1265,7 +1265,7 @@ def test_every_office_loads_with_any_other_filter(client, users, traffic, path, 
     """The sentinel is truthy and is not an office, so a variable holding it and
     an Office by turns will reach a query that wants a primary key. It is
     confined to `apply_scope`; every other branch takes a real Office or None."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = f"{path}{query}" if path.endswith("&") else f"{path}?{query}"
 
     assert client.get(url).status_code == 200
@@ -1278,7 +1278,7 @@ def test_every_office_narrows_nothing_by_office(client, users, traffic, offices,
     one — so it must return at least what the same query returns for any single
     office, on the queues the office does not scope as well as the ones it does.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     plain = query.replace("&office=all", "").replace("office=all", "")
     everywhere = page_records(client, f"{TRACKING}?{query}")
     one = page_records(client, f"{TRACKING}?{plain}&office={offices['SUP'].pk}")
@@ -1293,7 +1293,7 @@ def test_the_user_list_office_filter_cannot_crash(client, users, value):
     """`office_id=<anything>` went straight to the ORM, so a stale link or a
     typo took the page down with "Field 'id' expected a number". Every other
     page validated; this one had been missed."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"/accounts/users/?office={value}")
 
     assert response.status_code == 200
@@ -1319,7 +1319,7 @@ def test_an_ordinary_user_can_still_use_the_repository_folders(client, users, of
             access_level=AccessLevel.OVPA,
         )
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert users["med"].is_office_admin is False
 
     everything = client.get("/documents/").context["total"]
@@ -1332,7 +1332,7 @@ def test_an_ordinary_user_can_still_use_the_repository_folders(client, users, of
 @pytest.mark.django_db
 def test_the_repository_still_reports_an_office_it_cannot_find(client, users):
     """Ungating it must not go back to failing open."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/documents/?office=99999").content.decode().lower()
 
     assert "not recognised" in body
@@ -1344,7 +1344,7 @@ def test_search_says_what_it_refused_too(client, users, traffic, query):
     """It shares every filter with the Tracking page and reported none of them,
     so the same bad value warned there and passed silently here — the reader
     believing a narrowed page while looking at all of it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"/search/?mode=tracking&{query}").content.decode().lower()
 
     assert "could not apply" in body or "ignored a filter" in body
@@ -1354,7 +1354,7 @@ def test_search_says_what_it_refused_too(client, users, traffic, query):
 def test_an_unknown_notification_kind_is_reported(client, users):
     """Silently ignoring it showed every notification under a heading naming
     one kind, which reads as "there are this many of these"."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/notifications/?kind=NOPE")
 
     assert response.status_code == 200
@@ -1368,7 +1368,7 @@ def test_the_scope_label_matches_what_the_cards_count(client, users, traffic, wh
     """The picker read "All offices" while the cards answered for the reader's
     own desk — 45 records claimed against 2 shown. Whatever the heading says,
     the page underneath has to be that."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     context = client.get(DASHBOARD).context
 
     if context["scope"]["all_offices"]:
@@ -1384,7 +1384,7 @@ def test_the_scope_label_matches_what_the_cards_count(client, users, traffic, wh
 def test_a_system_administrator_defaults_to_every_office(client, users, traffic, offices):
     """Their scope is the university; the office their account happens to sit in
     is arbitrary. Nothing named means every office, and the picker says so."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
 
     assert context["scope"]["all_offices"] is True
@@ -1397,7 +1397,7 @@ def test_a_system_administrator_defaults_to_every_office(client, users, traffic,
 @pytest.mark.django_db
 def test_an_office_administrator_defaults_to_their_own_office(client, users, traffic):
     """Their assigned office is fixed; there is no office-switching control."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     context = client.get(DASHBOARD).context
     body = client.get(TRACKING).content.decode()
 
@@ -1413,7 +1413,7 @@ def test_neither_picker_offers_a_your_office_entry(client, users):
     office is in the list under its own name, so it duplicated one of them while
     reading like something else."""
     for who in ("admin", "med_admin"):
-        client.force_login(users[who])
+        client.force_verified_login(users[who])
         for path in (TRACKING, DASHBOARD):
             assert "Your office</option>" not in client.get(path).content.decode(), (who, path)
 
@@ -1427,7 +1427,7 @@ def test_every_routed_row_carries_a_direction(client, users, traffic, who, query
     page had stopped answering for one, so rows the viewer's office had never
     touched came back blank — and on a queue built for another office the few
     that were tagged described the wrong one."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     rows = client.get(f"{TRACKING}?{query}").context["page_obj"].object_list
 
     routed = [r for r in rows if r.routing_steps.exists()]
@@ -1444,7 +1444,7 @@ def test_every_routed_row_carries_a_direction(client, users, traffic, who, query
 @pytest.mark.parametrize("who", ["sup", "med_admin"])
 def test_the_default_view_has_rows_and_tags_all_of_them(client, users, traffic, who):
     """So the skip above cannot hide an empty fixture."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     rows = client.get(TRACKING).context["page_obj"].object_list
 
     routed = [r for r in rows if r.routing_steps.exists()]
@@ -1458,7 +1458,7 @@ def test_the_tag_never_contradicts_the_queue(client, users, offices, traffic, qu
     """A page headed Incoming showed rows marked Outgoing: the queue answered
     for the picked office and the tag for the viewer's. They take the same
     office now, so the tag cannot disagree with the heading above it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     expected = query.split("=")[1]
 
     for suffix in ("", f"&office={offices['SUP'].pk}"):
@@ -1472,7 +1472,7 @@ def test_across_every_office_the_tag_is_blank_and_the_page_says_why(client, user
     has no us — a record moving MED to SUP is neither. Falling back to the
     viewer's own office there tagged three rows in twenty, and those three
     described a different office from the one on screen."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(TRACKING)
 
     assert response.context["resolved"].all_offices is True
@@ -1483,7 +1483,7 @@ def test_across_every_office_the_tag_is_blank_and_the_page_says_why(client, user
 @pytest.mark.django_db
 def test_picking_an_office_brings_the_tags_back(client, users, offices, traffic):
     """Which is what the note beside the picker tells the reader to do."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get(
         f"{TRACKING}?office={offices['SUP'].pk}"
     ).context["page_obj"].object_list

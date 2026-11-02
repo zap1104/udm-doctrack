@@ -55,7 +55,7 @@ def test_notifications_are_read_per_user_not_per_office(offices):
 
 @pytest.mark.django_db
 def test_healthz_reports_database_and_migrations(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/healthz/")
     assert response.status_code == 200
     assert response.json()["checks"]["database"] is True
@@ -70,7 +70,7 @@ def test_report_export_applies_office_filter(client, users, offices):
     tracking_services.create_draft_record(
         user=users["admin"], originating_office=offices["SUP"], subject="SUP only", instructions="work"
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"/tracking/reports/export/?office={offices['MED'].pk}")
     rows = list(csv.reader(io.StringIO(response.content.decode())))
     body = "\n".join(",".join(row) for row in rows)
@@ -90,14 +90,26 @@ def test_password_reset_is_honest_when_email_is_not_configured(client):
 
 
 @pytest.mark.django_db
-def test_different_users_behind_one_ip_do_not_lock_each_other_out(client, users):
+def test_different_users_behind_one_ip_do_not_lock_each_other_out(client, users, settings):
+    import re
+
+    from django.core import mail
+
+    from tests.auth_helpers import prepare_verified_user
+
+    settings.EMAIL_CONFIGURED = True
+    settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    prepare_verified_user(users['sup'])
     ip = "198.51.100.77"
     for _ in range(3):
         client.post("/accounts/login/", {"username": "med", "password": "wrong"}, REMOTE_ADDR=ip)
     response = client.post(
         "/accounts/login/", {"username": "sup", "password": "TestPass123!"}, REMOTE_ADDR=ip
     )
-    assert response.status_code in {200, 302}
+    assert response.status_code == 302 and response.url.startswith('/accounts/otp/')
+    assert '_auth_user_id' not in client.session
+    code = re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
+    client.post('/accounts/otp/', {'code': code}, REMOTE_ADDR=ip)
     assert client.session.get("_auth_user_id") == str(users["sup"].pk)
 
 
@@ -200,7 +212,7 @@ def test_bulk_receipt_records_one_history_event_per_selected_record(client, user
         )
         records.append(record)
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.post(
         "/tracking/bulk-receipt/",
         {
@@ -232,7 +244,7 @@ def test_search_click_is_attributed_to_the_originating_user_and_query(client, se
     query_log = SearchQueryLog.objects.create(
         user=users["med"], query="searchable", result_count=1, duration_ms=4
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"/search/click/{query_log.pk}/{document.pk}/1/")
     assert response.status_code == 302
     assert response["Location"] == document.get_absolute_url()
@@ -243,7 +255,7 @@ def test_search_click_is_attributed_to_the_originating_user_and_query(client, se
     query_log.refresh_from_db()
     assert query_log.clicked_document == document
 
-    second_client.force_login(users["sup"])
+    second_client.force_verified_login(users["sup"])
     denied = second_client.get(f"/search/click/{query_log.pk}/{document.pk}/1/")
     assert denied.status_code == 404
     assert SearchResultClick.objects.filter(query_log=query_log).count() == 1
@@ -271,7 +283,7 @@ def test_notification_count_returns_swappable_badge_and_respects_read_state(clie
         message="A record is waiting",
         url="/tracking/1/",
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get("/notifications/count/")
     body = response.content.decode()
     assert response.status_code == 200
@@ -292,7 +304,7 @@ def test_notification_read_is_scoped_to_the_user_office(client, users, offices):
     notification = notify_office(
         offices["MED"], kind=Notification.Kind.ROUTED, title="Private office update", message="Not for SUP"
     )
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.post(f"/notifications/{notification.pk}/read/")
     assert response.status_code == 404
     assert Notification.objects.get(pk=notification.pk).reads.count() == 0
@@ -336,7 +348,7 @@ def test_mark_all_read_is_idempotent(client, users, offices):
     assert mark_all_read(users["med"], Notification.objects.filter(pk__in=[n.pk for n in notifications])) == 3
     assert NotificationRead.objects.filter(user=users["med"], notification__in=notifications).count() == 3
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.post("/notifications/read-all/").status_code == 302
 
 
@@ -345,7 +357,7 @@ def test_non_template_response_does_not_eagerly_count_notifications(client, user
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     with CaptureQueriesContext(connection) as captured:
         response = client.get("/healthz/")
     assert response.status_code == 200

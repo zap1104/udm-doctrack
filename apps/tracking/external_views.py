@@ -628,6 +628,8 @@ class ExternalCorrectionView(AppLoginRequiredMixin, View):
 
 class ExternalAttachmentDownloadView(AppLoginRequiredMixin, View):
     def get(self, request, pk):
+        from apps.accounts.capabilities import require_capability
+        require_capability(request.user, 'external_tracking', 'download')
         attachment = get_object_or_404(
             ExternalAttachment.objects.filter(
                 record__in=ExternalTrackingRecord.objects.visible_to(request.user)

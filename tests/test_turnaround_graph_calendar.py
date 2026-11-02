@@ -125,7 +125,7 @@ def test_daily_monthly_summary_table_and_permissions_agree(client, offices, memo
             with patch("django.utils.timezone.now", return_value=now):
                 # Freeze login and request together so the intentional idle
                 # timeout does not expire a session created at the real clock.
-                client.force_login(user)
+                client.force_verified_login(user)
                 response = client.get(path, {"month": "2026-08", "year": "2026", "office": offices[code].pk if code != "REC" else "all"})
             assert response.status_code == 200
             assert response.context["turnaround"]["stages"] == summary["stages"], (code, path)
@@ -158,7 +158,7 @@ def test_year_picker_uses_local_dates_and_future_events_cannot_break_it(client, 
         # Local January 1 is still December 31 in storage (UTC).
         TrackingRecord.objects.filter(pk=record.pk).update(created_at=at(date(2026, 1, 1), 0))
         with patch("django.utils.timezone.now", return_value=now):
-            client.force_login(user)
+            client.force_verified_login(user)
             response = client.get("/tracking/reports/", {"trend_year": str(future_year)})
     assert response.status_code == 200
     assert response.context["trend_years"] == [2026]

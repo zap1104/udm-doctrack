@@ -144,7 +144,7 @@ def test_the_record_page_colour_codes_its_offices(client, users, offices, memo_t
         user=users["med"], subject="Colour probe", instructions="For action."
     )
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     body = client.get(record.get_absolute_url()).content.decode()
 
@@ -164,7 +164,7 @@ def test_an_administrator_can_change_the_colour(client, users, offices):
 
     assert "colour" in OfficeForm().fields
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = offices["MED"]
     response = client.post(
         f"/accounts/offices/{office.pk}/",

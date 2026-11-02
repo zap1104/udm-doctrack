@@ -76,7 +76,7 @@ def test_admin_may_still_demote_somebody_else(users):
 @pytest.mark.django_db
 def test_the_view_blocks_self_demotion_end_to_end(client, users):
     admin = users["admin"]
-    client.force_login(admin)
+    client.force_verified_login(admin)
     client.post(f"/accounts/users/{admin.pk}/", _payload(admin, role=User.Role.USER))
 
     admin.refresh_from_db()

@@ -59,6 +59,8 @@ class ExternalRepositoryView(AppLoginRequiredMixin, View):
         )
         context.update(form=form, documents=context["page_obj"].object_list, total=context["page_obj"].paginator.count,
                        all_count=visible.count(), can_upload=request.user.can_start_work and request.user.is_office_admin)
+        from apps.accounts.capabilities import capability_allowed
+        context['can_upload'] = context['can_upload'] and capability_allowed(request.user, 'external_repository', 'create')
         return render(request, "documents/external/repository.html", context)
 
 
@@ -81,6 +83,8 @@ class ExternalRepositoryReportView(AppLoginRequiredMixin, View):
     def get(self, request):
         form, documents, visible = external_documents(request)
         if request.GET.get("export") == "csv":
+            from apps.accounts.capabilities import require_capability
+            require_capability(request.user, 'external_repository', 'export')
             response = HttpResponse(content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = 'attachment; filename="external-repository.csv"'
             writer = csv.writer(response)

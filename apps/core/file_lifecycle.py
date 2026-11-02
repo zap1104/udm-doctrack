@@ -3,6 +3,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
+
 from .file_lifecycle_models import lifecycle_write
 from .models import FileLifecycleEvent, StorageCleanupIntent, UploadDraft
 from .permissions import active_writer
@@ -83,6 +85,7 @@ def retire_excess_versions(group, *, policy_actor=None, limit=5):
 
 
 @transaction.atomic
+@requires_capability(None, 'edit_files')
 def discard_draft_group(record, group_id, *, user, reason, expected_version, expected_revision=None):
     from apps.tracking.models import Status
 

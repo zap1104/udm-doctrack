@@ -53,7 +53,7 @@ def _param(month):
 
 @pytest.mark.django_db
 def test_the_dashboard_answers_for_the_month_picked(client, users, two_months):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"/?month={_param(two_months['month'])}")
     figures = response.context["turnaround"]
     body = " ".join(response.content.decode().split())
@@ -67,7 +67,7 @@ def test_the_dashboard_answers_for_the_month_picked(client, users, two_months):
 
 @pytest.mark.django_db
 def test_no_month_is_the_current_month(client, users, two_months):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     figures = client.get("/").context["turnaround"]
 
     assert figures["month"] == timezone.localdate().replace(day=1)
@@ -78,7 +78,7 @@ def test_no_month_is_the_current_month(client, users, two_months):
 @pytest.mark.parametrize("path", ["/", "/tracking/reports/", "/memo/print/"])
 @pytest.mark.parametrize("value", ["not-a-month", "2026-13", "1999-01", "2026-9-1"])
 def test_a_month_that_is_not_charted_is_refused_with_a_note(client, users, path, value):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{path}?month={value}")
 
     assert response.status_code == 200
@@ -89,7 +89,7 @@ def test_a_month_that_is_not_charted_is_refused_with_a_note(client, users, path,
 
 @pytest.mark.django_db
 def test_dashboard_reports_and_memo_print_one_figure_for_one_month(client, users, two_months):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     query = f"?office=all&month={_param(two_months['month'])}"
     dashboard = client.get(f"/{query}").context["turnaround"]
     reports = client.get(f"/tracking/reports/{query}").context["turnaround"]
@@ -106,7 +106,7 @@ def test_dashboard_reports_and_memo_print_one_figure_for_one_month(client, users
 
 @pytest.mark.django_db
 def test_the_picker_offers_the_charted_months_and_keeps_the_office(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = offices["SUP"].pk
     response = client.get(f"/?office={office}")
     picker = response.context["month_picker"]
@@ -123,7 +123,7 @@ def test_the_picker_offers_the_charted_months_and_keeps_the_office(client, users
 
 @pytest.mark.django_db
 def test_the_memo_print_link_carries_the_month(client, users, two_months):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"/?month={_param(two_months['month'])}").content.decode()
 
     assert f"/memo/print/?month={_param(two_months['month'])}" in body
@@ -157,7 +157,7 @@ def three_in_a_past_month(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize("path", ["/", "/tracking/reports/"])
 def test_the_page_names_the_fastest_and_slowest_document(client, users, three_in_a_past_month, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"{path}?month={_param(three_in_a_past_month['month'])}").content.decode()
 
     fastest, slowest = three_in_a_past_month["one_day"], three_in_a_past_month["three_days"]
@@ -168,7 +168,7 @@ def test_the_page_names_the_fastest_and_slowest_document(client, users, three_in
 
 @pytest.mark.django_db
 def test_the_memo_names_the_fastest_and_slowest_lifetime(client, users, three_in_a_past_month):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = three_in_a_past_month["month"]
     memo = client.get(f"/memo/print/?month={_param(month)}").context["memo"]
     lines = {line["label"]: line["value"] for section in memo for line in section["lines"]}
@@ -180,7 +180,7 @@ def test_the_memo_names_the_fastest_and_slowest_lifetime(client, users, three_in
 @pytest.mark.django_db
 def test_one_document_has_no_fastest_to_name(client, users, two_months):
     """With one, fastest and slowest would both repeat the average."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"/tracking/reports/?month={_param(two_months['month'])}").content.decode()
 
     assert "Slowest" not in body
@@ -190,7 +190,7 @@ def test_one_document_has_no_fastest_to_name(client, users, two_months):
 @pytest.mark.django_db
 @pytest.mark.parametrize("path", ["/", "/tracking/reports/"])
 def test_the_turnaround_title_names_the_month_picked(client, users, two_months, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = two_months["month"]
     body = client.get(f"{path}?month={_param(month)}").content.decode()
 
@@ -199,7 +199,7 @@ def test_the_turnaround_title_names_the_month_picked(client, users, two_months, 
 
 @pytest.mark.django_db
 def test_the_memo_heads_its_turnaround_with_the_month(client, users, two_months):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = two_months["month"]
     memo = client.get(f"/memo/print/?month={_param(month)}").context["memo"]
 
@@ -208,7 +208,7 @@ def test_the_memo_heads_its_turnaround_with_the_month(client, users, two_months)
 
 @pytest.mark.django_db
 def test_the_cumulative_chart_says_it_is_a_running_total(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/").content.decode()
 
     assert "<h2>Created, endorsed and completed &mdash; running totals</h2>" in body
@@ -218,7 +218,7 @@ def test_the_cumulative_chart_says_it_is_a_running_total(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("path", ["/", "/memo/print/"])
 def test_the_memo_states_the_period_its_turnaround_covers(client, users, two_months, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = two_months["month"]
     body = client.get(f"{path}?month={_param(month)}").content.decode()
 
@@ -231,7 +231,7 @@ def test_every_print_dialog_is_its_own_audit_row(client, users):
     """Never deduplicated: two prints are two pieces of paper."""
     from apps.core.models import AuditLog
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for _ in range(2):
         client.post("/print-log/", {"label": "the dashboard"})
 

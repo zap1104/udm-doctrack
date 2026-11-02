@@ -168,6 +168,9 @@ def stage_files(draft_id, files, *, user, expected_revision, client_upload_ids):
     if len(set(identities)) != len(identities):
         raise ValidationError("Each selected file needs its own upload identity.")
     with cleanup_new_files(), locked_draft(draft_id, user=user) as (actor, draft, binding):
+        from apps.accounts.capabilities import require_capability
+        if 'repository' not in binding.workflow:
+            require_capability(actor, 'external_tracking' if binding.collection == 'EXTERNAL' else 'tracking', 'edit_files')
         existing = {row.client_upload_id: row for row in draft.files.filter(client_upload_id__in=identities)}
         if any(identity not in existing for identity in identities):
             _check_revision(draft, expected_revision)
@@ -303,6 +306,9 @@ def finalize_upload(draft_id, *, user, context, cleaned_data, expected_revision,
             return _visible_result(UploadResult(**draft.result), actor)
         _check_revision(draft, expected_revision)
         staged = list(draft.files.select_for_update().filter(state="saved").order_by("created_at", "pk"))
+        if staged and 'repository' not in binding.workflow:
+            from apps.accounts.capabilities import require_capability
+            require_capability(actor, 'external_tracking' if binding.collection == 'EXTERNAL' else 'tracking', 'edit_files')
         limit = 1 if binding.workflow.endswith("-version") else settings.MAX_UPLOAD_FILES
         if len(staged) > limit:
             raise ValidationError(f"This form accepts at most {limit} saved file(s).")

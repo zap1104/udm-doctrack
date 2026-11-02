@@ -137,6 +137,10 @@ def search_documents(
     every match for normal pagination, reading candidates in batches. A caller's
     supplied queryset only narrows visibility; it can never grant access.
     """
+    from apps.accounts.capabilities import capability_allowed
+
+    can_content = capability_allowed(user, 'external_repository' if collection == Collection.EXTERNAL else 'repository', 'view_content')
+    vector_field = 'search_vector' if can_content else 'metadata_search_vector'
     started = time.perf_counter()
     raw_query = " ".join((query or "").split())
     limit = limit or settings.SEARCH_RESULT_LIMIT
@@ -165,6 +169,9 @@ def search_documents(
         total = base.distinct().count()
         ordered = base.distinct().order_by("-document_date", "-created_at", "-pk")
         documents = list(ordered.iterator(chunk_size=200)) if exhaustive else list(ordered[:limit])
+        if not can_content:
+            for document in documents:
+                document.ocr_text = ""
         response = SearchResponse(
             results=[
                 SearchResult(document=document, relevance=0, text_score=0, fuzzy_score=0, field_score=0)
@@ -192,10 +199,10 @@ def search_documents(
     search_query = SearchQuery(raw_query, config=settings.SEARCH_CONFIG, search_type="websearch")
     annotations = {
         "rank": SearchRank(
-            F("search_vector"), search_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
+            F(vector_field), search_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
         )
     }
-    if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+    if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
         from .chunks import chunk_annotations
 
         legacy_rank = annotations.pop("rank")
@@ -220,19 +227,19 @@ def search_documents(
         from .aliases import combined_query
 
         expanded_query = combined_query(expanded_terms)
-        expanded_conditions = Q(search_vector=expanded_query)
+        expanded_conditions = Q(**{vector_field: expanded_query})
         for term in expanded_terms:
             expanded_conditions |= (
                 Q(title__icontains=term)
                 | Q(index_title__icontains=term)
                 | Q(index_meta__icontains=term)
                 | Q(index_extra__icontains=term)
-                | Q(ocr_text__icontains=term)
+                | (Q(ocr_text__icontains=term) if can_content else Q(pk__in=[]))
             )
         expanded_rank = SearchRank(
-            F("search_vector"), expanded_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
+            F(vector_field), expanded_query, weights=RANK_WEIGHTS, cover_density=True, normalization=Value(0)
         )
-        if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+        if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
             annotations.update(chunk_annotations(base, raw_query, queries=expanded_terms, prefix="expanded_"))
             metadata_rank = SearchRank(
                 F("metadata_search_vector"),
@@ -270,7 +277,7 @@ def search_documents(
         | Q(index_title__icontains=raw_query)
         | Q(index_meta__icontains=raw_query)
         | Q(index_extra__icontains=raw_query)
-        | Q(ocr_text__icontains=raw_query)
+        | (Q(ocr_text__icontains=raw_query) if can_content else Q(pk__in=[]))
         | Q(reference_number__icontains=raw_query)
     )
     # Exact identifiers score 100% after candidates are read. Keep them ahead
@@ -294,10 +301,10 @@ def search_documents(
     )
     # Metadata/text remain findable while a legacy or newly filed record is
     # waiting for its stored full-text index to be rebuilt.
-    conditions = Q(search_vector=search_query) | plain_conditions | identifier_conditions
+    conditions = Q(**{vector_field: search_query}) | plain_conditions | identifier_conditions
     if expanded_terms:
         conditions |= expanded_conditions
-    if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+    if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
         conditions |= Q(_chunk_match=True)
     if use_fuzzy:
         conditions |= Q(similarity__gte=0.28)
@@ -335,9 +342,9 @@ def search_documents(
                     | Q(index_title__icontains=term)
                     | Q(index_meta__icontains=term)
                     | Q(index_extra__icontains=term)
-                    | Q(ocr_text__icontains=term)
+                    | (Q(ocr_text__icontains=term) if can_content else Q(pk__in=[]))
                 )
-        if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+        if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
             from .chunks import plain_chunk_match
 
             fallback = fallback.annotate(_chunk_match=plain_chunk_match(raw_query))
@@ -361,12 +368,14 @@ def search_documents(
         candidates = fallback.iterator(chunk_size=200) if exhaustive else list(fallback[:limit])
         use_fuzzy = False
 
-    if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+    if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
         from .chunks import attach_source_chunks
 
         candidates = attach_source_chunks(candidates)
     results: list[SearchResult] = []
     for document in candidates:
+        if not can_content:
+            document.ocr_text = ""
         text_score = _saturate(float(getattr(document, "rank", 0.0) or 0.0))
         alias_text_score = 0.5 * _saturate(float(getattr(document, "_expanded_rank", 0.0) or 0.0))
         alias_scored = alias_text_score > text_score
@@ -376,7 +385,7 @@ def search_documents(
         source_evidence = {}
         alias_source = bool(getattr(document, "_source_is_expanded", False))
         snippet_tokens = tokenize(" ".join(expanded_terms)) if alias_source or alias_scored else tokens
-        if settings.ENABLE_SOURCE_CHUNK_SEARCH:
+        if settings.ENABLE_SOURCE_CHUNK_SEARCH and can_content:
             from .chunks import source_snippet
 
             source_evidence = source_snippet(document, snippet_tokens)

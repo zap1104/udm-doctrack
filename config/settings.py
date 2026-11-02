@@ -176,6 +176,8 @@ MIDDLEWARE += [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
     "apps.core.middleware.OfficeScheduleMiddleware",
+    "apps.accounts.otp_middleware.EmailOTPRequiredMiddleware",
+    "apps.accounts.capability_middleware.CapabilityRequiredMiddleware",
     # After auth: reads request.user to pick the role's idle window.
     "apps.core.middleware.RoleIdleTimeoutMiddleware",
     # After auth and messages: it reads request.user and adds a message.
@@ -577,6 +579,7 @@ EMAIL_CONFIGURED = (
     EMAIL_BACKEND != "django.core.mail.backends.console.EmailBackend"
     and bool(EMAIL_HOST)
 )
+EMAIL_OTP_REQUIRED = env_bool('EMAIL_OTP_REQUIRED', True)
 
 
 # ---------------------------------------------------------------------------

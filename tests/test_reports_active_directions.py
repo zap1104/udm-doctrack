@@ -58,7 +58,7 @@ def report_direction_work(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "med_admin", "med", "viewer"])
 def test_reports_cards_and_direction_stages_open_exact_current_records(client, users, offices, report_direction_work, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get("/tracking/reports/", {"office": offices["MED"].pk})
     context, body = response.context, response.content.decode()
     # Total also includes the draft and a visible record passed on by MED.
@@ -92,7 +92,7 @@ def test_reports_cards_and_direction_stages_open_exact_current_records(client, u
 @pytest.mark.django_db
 @pytest.mark.parametrize("params", [{}, {"office": "all"}])
 def test_all_offices_reports_show_one_chart_with_exact_stage_destinations(client, users, report_direction_work, params):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/", params)
     assert response.context["total_records"] == 19
     assert response.context["direction_stages"] == []
@@ -130,7 +130,7 @@ def test_all_offices_chart_counts_a_multi_recipient_document_once(client, users,
     record = create_draft_record(user=users["med"], subject="Shared across offices", instructions="Review",
                                  document_type=memo_type)
     route_record(record, [offices["SUP"], offices["HR"]], user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/", {"office": "all"})
     stages = {row["status"]: row for row in response.context["all_office_stages"]}
     assert response.context["total_records"] == 1
@@ -140,7 +140,7 @@ def test_all_offices_chart_counts_a_multi_recipient_document_once(client, users,
 
 @pytest.mark.django_db
 def test_empty_all_offices_chart_is_readable(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/", {"office": "all"})
     assert response.context["total_records"] == 0
     stages = response.context["all_office_stages"]
@@ -153,7 +153,7 @@ def test_empty_all_offices_chart_is_readable(client, users):
 @pytest.mark.parametrize("role", ["med_admin", "med", "viewer"])
 @pytest.mark.parametrize("office", ["all", "HR"])
 def test_non_system_admin_cannot_switch_to_the_combined_chart(client, users, offices, role, office):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get("/tracking/reports/", {"office": "all" if office == "all" else offices[office].pk})
     assert response.context["university_wide"] is False
     assert response.context["scope_office"] == offices["MED"]
@@ -164,7 +164,7 @@ def test_non_system_admin_cannot_switch_to_the_combined_chart(client, users, off
 
 @pytest.mark.django_db
 def test_empty_direction_bars_have_three_zero_stages(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/", {"office": offices["MED"].pk})
     assert response.context["total_records"] == 0
     for direction in response.context["direction_stages"]:

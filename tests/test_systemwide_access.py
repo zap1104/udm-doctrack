@@ -46,7 +46,7 @@ def notification_cases(users, offices):
 def test_notification_surfaces_hide_objects_user_cannot_read(client, users, notification_cases, role, surface):
     visible, hidden = notification_cases
     actor = users[role]
-    client.force_login(actor)
+    client.force_verified_login(actor)
     if surface == "query":
         assert set(Notification.objects.visible_to(actor).values_list("pk", flat=True)) == {visible.pk}
     elif surface == "list":
@@ -113,7 +113,7 @@ def private_download(request, users, offices, settings, tmp_path):
 @pytest.mark.parametrize("invalid", ["missing", "tampered", "other_user", "other_file", "other_kind", "expired"])
 def test_internal_downloads_require_current_user_object_signature(client, users, private_download, monkeypatch, settings, invalid):
     kind, _obj, file, other_file, endpoint, token = private_download
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     if invalid == "missing":
         token = ""
     elif invalid == "tampered":
@@ -136,7 +136,7 @@ def test_internal_downloads_require_current_user_object_signature(client, users,
 
 def test_internal_download_valid_signature_serves_private_file(client, users, private_download):
     _kind, _obj, _file, _other_file, endpoint, token = private_download
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(endpoint, {"token": token})
     assert response.status_code == 200
     assert response["Cache-Control"] == "private, no-store"
@@ -147,7 +147,7 @@ def test_internal_download_valid_signature_serves_private_file(client, users, pr
 @pytest.mark.parametrize("role", ["med", "viewer", "med_admin", "admin"])
 def test_rendered_private_download_links_work(client, users, private_download, role):
     _kind, obj, _file, _other_file, _endpoint, _token = private_download
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     detail = client.get(obj.get_absolute_url())
     assert detail.status_code == 200
     urls = [html.unescape(url) for url in re.findall(r'href="([^"]+)"', detail.content.decode())
@@ -164,9 +164,9 @@ def test_rendered_private_download_links_work(client, users, private_download, r
         response = client.get(url)
         assert response.status_code == 200
         assert b"".join(response.streaming_content)
-        client.force_login(users["sup"])
+        client.force_verified_login(users["sup"])
         assert client.get(url).status_code in {403, 404}
-        client.force_login(users[role])
+        client.force_verified_login(users[role])
 
 
 def test_signed_download_rechecks_revoked_access(client, users, offices, private_download):
@@ -178,7 +178,7 @@ def test_signed_download_rechecks_revoked_access(client, users, offices, private
         grant = DocumentAccessGrant.objects.create(document=obj, user=actor, granted_by=users["med"])
     token = sign_download(f"{kind}:{file.pk}:{actor.pk}")
     url = endpoint + "?" + urlencode({"token": token})
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.get(url)
     assert response.status_code == 200
     assert b"".join(response.streaming_content) == b"Private audit bytes"
@@ -189,7 +189,7 @@ def test_signed_download_rechecks_revoked_access(client, users, offices, private
 def test_signed_download_missing_file_returns_404(client, users, private_download):
     _kind, _obj, file, _other_file, endpoint, token = private_download
     file.file.delete(save=False)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get(endpoint, {"token": token}).status_code == 404
 
 
@@ -199,7 +199,7 @@ def test_deletion_review_emits_working_signed_file_links(client, users, offices,
     file = DocumentFile.objects.create(
         document=document, file=ContentFile(b"Review evidence", name="review.txt"), original_name="review.txt",
     )
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     review = client.get(reverse("documents:deletion_review", args=[document.pk]))
     assert review.status_code == 200
     endpoint = reverse("documents:file_download", args=[file.pk])

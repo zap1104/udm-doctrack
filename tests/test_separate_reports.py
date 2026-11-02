@@ -51,7 +51,7 @@ def test_report_workspace_links_use_the_destination_office_vocabulary(domain, of
 @pytest.mark.django_db
 @pytest.mark.parametrize("office", ["", "all", "MED"])
 def test_repository_report_links_open_without_invalid_office_warnings(client, users, offices, report_data, office):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     query = {"office": offices[office].pk if office == "MED" else office}
     report = client.get("/documents/reports/", query).context
     targets = [(report["report_workspace_url"], report["total_documents"])]
@@ -67,7 +67,7 @@ def test_repository_report_links_open_without_invalid_office_warnings(client, us
 @pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
 @pytest.mark.parametrize("office", ["all", "MED", "HR"])
 def test_dashboard_total_opens_the_same_scoped_tracking_list(client, users, offices, report_data, who, office):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     chosen = office if office == "all" else offices[office].pk
     context = client.get("/", {"office": chosen}).context
     listed = client.get(context["tracking_total_url"]).context["page_obj"]
@@ -79,7 +79,7 @@ def test_dashboard_total_opens_the_same_scoped_tracking_list(client, users, offi
 @pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
 @pytest.mark.parametrize("domain", ["tracking", "documents"])
 def test_reports_show_statistics_and_open_their_own_workspace(client, users, offices, report_data, who, domain):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(f"/{domain}/reports/", {"office": offices["MED"].pk})
     assert response.status_code == 200
     context, body = response.context, response.content.decode()
@@ -105,7 +105,7 @@ def test_reports_show_statistics_and_open_their_own_workspace(client, users, off
 @pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
 @pytest.mark.parametrize("office", ["all", "MED", "HR"])
 def test_live_stage_links_open_tracking_with_the_same_count(client, users, offices, report_data, who, office):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get("/tracking/reports/", {"office": office if office == "all" else offices[office].pk})
     for row in response.context["by_status"]:
         if row["status"] not in ACTIVE_STATUSES:
@@ -119,7 +119,7 @@ def test_live_stage_links_open_tracking_with_the_same_count(client, users, offic
 
 @pytest.mark.django_db
 def test_repository_month_statistics_still_match_the_scoped_documents(client, users, offices, report_data):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     query = {"office": offices["MED"].pk}
     report = client.get("/documents/reports/", query)
     visible = Document.objects.visible_to(users["admin"]).filter(is_active=True, office=offices["MED"])
@@ -130,7 +130,7 @@ def test_repository_month_statistics_still_match_the_scoped_documents(client, us
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["admin", "med_admin", "sup", "viewer"])
 def test_repository_type_links_open_the_same_scoped_documents(client, users, report_data, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     report = client.get("/documents/reports/")
     for row in report.context["document_types"]:
         if not row.get("document_type_id"):
@@ -150,7 +150,7 @@ def test_filed_history_is_excluded_from_current_report_totals_and_stages(client,
     record.refresh_from_db()
     archive_tracking_record(record, user=users["admin"])
     create_draft_record(user=users["admin"], subject="Draft for this report", instructions="Review")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     report = client.get("/tracking/reports/").context
     listed = client.get(report["report_workspace_url"]).context
     assert report["total_records"] == listed["total"] == 3
@@ -162,7 +162,7 @@ def test_filed_history_is_excluded_from_current_report_totals_and_stages(client,
 @pytest.mark.django_db
 @pytest.mark.parametrize("domain", ["tracking", "documents"])
 def test_old_list_filters_do_not_change_report_statistics(client, users, report_data, domain):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     before = client.get(f"/{domain}/reports/").context
     after = client.get(f"/{domain}/reports/", {
         "record_status": "PENDING_RECEIPT", "record_type": "none", "record_q": "missing",
@@ -179,7 +179,7 @@ def test_year_picker_includes_years_without_new_records(client, users, memo_type
     record = TrackingRecord.objects.create(subject="Completed in a later year", originating_office=users["med"].office,
                                            created_by=users["med"], document_type=memo_type)
     TrackingRecord.objects.filter(pk=record.pk).update(created_at=timezone.now().replace(year=current - 2))
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/", {"trend_year": current - 1})
     assert response.context["trend_year"] == current - 1
     assert {row["month"].year for row in response.context["turnaround_trend"]["rows"]} == {current - 1}
@@ -187,7 +187,7 @@ def test_year_picker_includes_years_without_new_records(client, users, memo_type
 
 @pytest.mark.django_db
 def test_daily_samples_reconcile_with_monthly_summary_and_annual_chart(client, users, two_months):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = two_months["month"]
     response = client.get("/", {"month": month.strftime("%Y-%m")})
     daily = response.context["turnaround_trend"]

@@ -149,6 +149,15 @@ class SignInView(LoginView):
     redirect_authenticated_user = True
 
     def form_valid(self, form):
+        from . import otp
+
+        if otp.required():
+            try:
+                otp.begin(self.request, form.get_user(), return_url=self.get_success_url())
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return self.form_invalid(form)
+            return redirect('accounts:otp')
         response = super().form_valid(form)
         if self.request.user.must_change_password:
             messages.info(self.request, "Please set a new password before you continue.")
@@ -178,6 +187,9 @@ class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
+        from . import otp
+
+        had_otp = otp.verified(self.request)
         try:
             response = super().form_valid(form)
         except ValidationError as exc:
@@ -186,6 +198,8 @@ class PasswordChangeViewCustom(AppLoginRequiredMixin, PasswordChangeView):
         User.objects.filter(pk=self.request.user.pk).update(must_change_password=False)
         form.user.must_change_password = False
         self.request.user = form.user
+        if had_otp:
+            otp.establish_proof(self.request, form.user)
         # Only now is the sign-in fully complete, so this is where a forced
         # password change forgives the lockout escalation (when configured to).
         if getattr(settings, "AXES_ESCALATION_RESET_ON_LOGIN", False):

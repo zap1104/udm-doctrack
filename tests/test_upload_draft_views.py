@@ -36,7 +36,7 @@ def creation_data(offices):
 
 
 def test_invalid_create_post_refresh_and_correction_keep_saved_file(client, users, offices):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     initial = client.get("/tracking/new/")
     data = {**creation_data(offices), **recovery_fields(initial), "attachments": file()}
     invalid = client.post("/tracking/new/", data)
@@ -55,7 +55,7 @@ def test_invalid_create_post_refresh_and_correction_keep_saved_file(client, user
 
 
 def test_invalid_repository_office_keeps_file_and_missing_checkbox_stays_unchecked(client, users, offices):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     initial = client.get("/documents/upload/")
     data = {**recovery_fields(initial), "office": "invalid", "source": "UPLOAD", "ocr_language": "auto",
             "allow_external_ocr": "on", "file": file()}
@@ -71,7 +71,7 @@ def test_invalid_repository_office_keeps_file_and_missing_checkbox_stays_uncheck
 
 
 def test_partial_invalid_native_batch_retains_valid_neighbor(client, users, offices):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     initial = client.get("/tracking/new/")
     invalid = client.post("/tracking/new/", {**creation_data(offices), **recovery_fields(initial),
         "attachments": [file(), file(b"bad", "invalid.exe")]})
@@ -84,7 +84,7 @@ def test_partial_invalid_native_batch_retains_valid_neighbor(client, users, offi
 
 def test_external_creation_recovers_attachments_without_internal_data(client, users, offices):
     outside = ExternalOffice.objects.create(name="Outside office", managing_office=offices["MED"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     initial = client.get("/tracking/external/new/")
     data = {**recovery_fields(initial), "title": "", "from_endpoint": f"external:{outside.pk}",
             "to_endpoint": f"internal:{offices['MED'].pk}", "attachments": file()}
@@ -98,7 +98,7 @@ def test_external_creation_recovers_attachments_without_internal_data(client, us
 
 
 def test_staging_api_and_preview_tokens_remain_private(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     context = resolve_upload_context(users["med"], "tracking-create")
     response = client.post("/uploads/drafts/", {"workflow": "tracking-create", "form_nonce": form_nonce_for(users["med"], context)})
     assert response.status_code == 201
@@ -113,9 +113,9 @@ def test_staging_api_and_preview_tokens_remain_private(client, users):
     assert preview.status_code == 200 and b"Keep this upload" in preview.content
     assert preview["Cache-Control"] == "private, no-store" and preview["X-Content-Type-Options"] == "nosniff"
     assert client.get(f"/files/download/upload/{saved_id}/?token={token}").status_code == 403
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(url).status_code in {403, 404}
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     removed = client.post(f"/uploads/drafts/{draft_id}/files/{saved_id}/remove/", {"expected_revision": saved.json()["revision"]})
     assert removed.status_code == 200 and client.get(url).status_code == 410
 
@@ -123,15 +123,15 @@ def test_staging_api_and_preview_tokens_remain_private(client, users):
 def test_staging_api_refuses_csrf_and_repeated_scope(client, users):
     from tests.conftest import HttpsClient
     protected = HttpsClient(enforce_csrf_checks=True)
-    protected.force_login(users["med"])
+    protected.force_verified_login(users["med"])
     assert protected.post("/uploads/drafts/", {"workflow": "tracking-create"}).status_code == 403
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.post("/uploads/drafts/?office=1&office=2", {"workflow": "repository-upload"})
     assert response.status_code == 400 and not UploadDraft.objects.exists()
 
 
 def test_duplicate_first_native_submission_returns_one_committed_result(client, users, offices):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     initial = client.get("/tracking/new/")
     data = {**creation_data(offices), "subject": "One native submission", **recovery_fields(initial)}
     first = client.post("/tracking/new/", {**data, "attachments": file()})
@@ -145,7 +145,7 @@ def test_duplicate_first_native_submission_returns_one_committed_result(client, 
 
 
 def test_system_admin_selected_filing_office_survives_invalid_fields(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     initial = client.get("/documents/upload/")
     invalid = client.post("/documents/upload/", {**recovery_fields(initial), "file": file(), "office": offices["MED"].pk,
         "source": "not-a-source", "ocr_language": "auto"})
@@ -160,7 +160,7 @@ def test_system_admin_selected_filing_office_survives_invalid_fields(client, use
 def test_invalid_date_and_repeated_types_survive_refresh(client, users, offices, memo_type):
     from apps.core.models import DocumentType
     letter = DocumentType.objects.create(name="Letter", code="LETTER")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     initial = client.get("/tracking/new/")
     invalid = client.post("/tracking/new/", {**creation_data(offices), **recovery_fields(initial), "subject": "Date correction",
         "deadline_choice": "date", "due_date": "broken", "attachments": file(),
@@ -178,7 +178,7 @@ def test_independent_record_action_forms_keep_their_own_saved_inputs(client, use
     record = create_draft_record(user=users["sup"], subject="Action recovery", instructions="Review carefully")
     route_record(record, [offices["MED"]], user=users["sup"])
     confirm_receipt(record, user=users["med"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     detail = client.get(record.get_absolute_url())
     form = detail.context[f"{action}_form"]
     state = form.recovery
@@ -201,7 +201,7 @@ def test_version_upload_form_keeps_file_after_missing_change_summary(client, use
     from apps.tracking.services import attach_files, create_draft_record
     record = create_draft_record(user=users["med"], subject="Version recovery", instructions="Review carefully")
     first = attach_files(record, [file(b"V1")], user=users["med"])[0]
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     url = f"/tracking/{record.pk}/files/{first.file_group_id}/versions/"
     initial = client.get(url)
     invalid = client.post(url, {**recovery_fields(initial), f"version-{first.file_group_id}-file": file(b"V2"),
@@ -220,7 +220,7 @@ def test_changed_staged_storage_identity_does_not_serve_another_backend(client, 
     stage_files(draft.pk, [file()], user=users["med"], expected_revision=0, client_upload_ids=[uuid4()])
     staged = draft.files.get()
     StagedUpload.objects.filter(pk=staged.pk).update(storage_identity="f" * 64)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     token = sign_download(f"file-version:preview:upload:{staged.pk}:{users['med'].pk}")
     response = client.get(f"/files/preview/upload/{staged.pk}/?token={token}")
     assert response.status_code == 410 and b"Keep this upload" not in response.content
@@ -232,7 +232,7 @@ def test_system_admin_all_offices_perspective_does_not_block_target_uploads(clie
     route_record(record, [offices["MED"]], user=users["sup"])
     confirm_receipt(record, user=users["med"])
     context = resolve_upload_context(users["admin"], "tracking-route", target_id=record.pk)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.post("/uploads/drafts/?office=all", {"workflow": "tracking-route", "target_id": record.pk,
         "form_nonce": form_nonce_for(users["admin"], context)})
     assert response.status_code == 201
@@ -242,7 +242,7 @@ def test_system_admin_all_offices_perspective_does_not_block_target_uploads(clie
 def test_external_repository_upload_recovers_a_file_without_tracking_side_effects(client, users, offices):
     own = ExternalOffice.objects.create(name="Own external counterpart", managing_office=offices["MED"])
     foreign = ExternalOffice.objects.create(name="Inactive counterpart", managing_office=offices["SUP"], is_active=False)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     url = "/documents/external/upload/"
     initial = client.get(url)
     invalid = client.post(url, {**recovery_fields(initial), "file": file(), "office": offices["MED"].pk,
@@ -263,11 +263,15 @@ def test_forged_recovery_id_or_revoked_account_cannot_expose_saved_bytes(client,
     context = resolve_upload_context(users["med"], "tracking-create")
     draft = open_draft(user=users["med"], context=context, form_nonce=form_nonce_for(users["med"], context))
     stage_files(draft.pk, [file()], user=users["med"], expected_revision=0, client_upload_ids=[uuid4()])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get(f"/tracking/new/?upload_draft={draft.pk}").status_code == 403
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get(f"/tracking/new/?upload_draft={draft.pk}&upload_draft={uuid4()}").status_code == 400
     type(users["med"]).objects.filter(pk=users["med"].pk).update(office=offices["SUP"])
+    # A changed security identity invalidates the old OTP session. After a new
+    # verified sign-in, the transferred user still cannot consume old-office files.
+    assert client.get(f"/tracking/new/?upload_draft={draft.pk}").status_code == 302
+    client.force_verified_login(users["med"])
     assert client.get(f"/tracking/new/?upload_draft={draft.pk}").status_code == 403
     assert draft.files.count() == 1 and not TrackingRecord.objects.exists()
 
@@ -285,7 +289,7 @@ def test_two_inline_forms_keep_their_own_saved_files_on_refresh(client, users, o
         draft = open_draft(user=users["med"], context=context, form_nonce=form_nonce_for(users["med"], context))
         stage_files(draft.pk, [file(workflow.encode())], user=users["med"], expected_revision=0, client_upload_ids=[uuid4()])
         saved[workflow] = draft.pk
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(record.get_absolute_url(), {"upload_draft": saved["tracking-version"],
         "upload_draft_tracking_remark_0": saved["tracking-remark"],
         f"upload_draft_tracking_version_{current.file_group_id}": saved["tracking-version"]})
@@ -323,7 +327,7 @@ def test_office_less_system_admin_can_still_edit_an_existing_draft(client, users
     from apps.tracking.services import create_draft_record
     record = create_draft_record(user=users["med"], subject="Original draft", instructions="Review")
     type(users["admin"]).objects.filter(pk=users["admin"].pk).update(office=None)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = f"/tracking/new/?draft={record.pk}"
     initial = client.get(url)
     assert initial.status_code == 200
@@ -353,6 +357,6 @@ def test_navigation_slots_cannot_expose_another_users_saved_form(client, users):
     confirm_receipt(record, user=users["med"])
     context = resolve_upload_context(users["admin"], "tracking-remark", target_id=record.pk)
     foreign = open_draft(user=users["admin"], context=context, form_nonce=form_nonce_for(users["admin"], context))
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(record.get_absolute_url(), {"upload_draft_tracking_remark_0": str(foreign.pk)})
     assert response.status_code == 403

@@ -4,6 +4,8 @@ For someone who has never run a Django project. Follow it top to bottom; skippin
 
 Roughly 20 minutes the first time, 2 minutes after that.
 
+Mandatory email OTP defaults on. After installing, complete [verified-email enrollment and delivery setup](EMAIL_OTP_AND_PERMISSIONS.md) before sign-in. Existing/demo passwords are insufficient by themselves. The guide explains private temporary enrollment mode and recovery; production checks reject disabled OTP.
+
 ---
 
 ## 1. Install the three things you need

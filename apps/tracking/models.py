@@ -239,6 +239,11 @@ class TrackingRecordQuerySet(models.QuerySet):
 
     def visible_to(self, user):
         """Records the user is allowed to see at all."""
+        from apps.accounts.capabilities import capability_allowed, current_actor
+
+        user = current_actor(user)
+        if user is None or not capability_allowed(user, 'tracking', 'view_record'):
+            return self.none()
         if (not user.is_authenticated or not user.is_active
                 or user.role not in {"USER", "VIEWER", "ADMIN", "SYSTEM_ADMIN"}):
             return self.none()
@@ -561,6 +566,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
 
     def can_user_act(self, user) -> bool:
         """Can this user add remarks / forward / complete right now?"""
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'tracking', 'view_record'):
+            return False
         if not user.is_authenticated or not user.can_start_work or self.status in COMPLETED_STATUSES:
             return False
         if user.is_viewer:
@@ -576,6 +587,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
         return bool(user.office_id) and self.has_custody(user.office)
 
     def can_user_grant_access(self, user) -> bool:
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'tracking', 'share'):
+            return False
         if not user.is_authenticated or not user.can_start_work:
             return False
         if user.is_office_admin and not user.is_system_admin and not self.can_user_view(user):
@@ -587,6 +604,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
         )
 
     def can_user_confirm_receipt(self, user) -> bool:
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'tracking', 'receive'):
+            return False
         if not user.is_authenticated or not user.can_start_work or not user.office_id:
             return False
         if self.status == Status.DRAFT or self.status in COMPLETED_STATUSES:
@@ -629,6 +652,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
 
     def can_user_file_when_completed(self, user) -> bool:
         """Offer optional filing without pretending the work is completed yet."""
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'tracking', 'file'):
+            return False
         if not user.is_authenticated or not user.can_start_work:
             return False
         if user.is_system_admin:
@@ -659,6 +688,12 @@ class TrackingRecord(DocumentTypesMixin, TimeStampedModel):
         office that completed it can correct its own mistake, and an
         administrator can correct anyone's.
         """
+        from apps.accounts.capabilities import capability_allowed, current_actor
+        user = current_actor(user)
+        if user is None:
+            return False
+        if not capability_allowed(user, 'tracking', 'reopen'):
+            return False
         if not user.is_authenticated or not user.can_start_work:
             return False
         # Only from the pending-upload stage. Once approved the record is part

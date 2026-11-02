@@ -156,7 +156,7 @@ def test_a_user_with_no_office_matches_nothing_rather_than_everything(in_flight,
 @pytest.mark.django_db
 def test_the_queue_links_on_the_page_all_resolve(client, in_flight, users):
     """A queue tab that silently ignores its own scope reads as "none here"."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     for scope in ("incoming", "outgoing", "pending-receipt", "received", "overdue"):
         response = client.get(f"/tracking/?scope={scope}")
         assert response.status_code == 200, scope

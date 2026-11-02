@@ -147,7 +147,7 @@ def test_extraction_states_are_one_row_each(three_uploads_by_med, users, shape):
 # --- what a reader of each page actually saw ---------------------------------
 @pytest.mark.django_db
 def test_reports_counts_every_status_for_every_office(client, three_held_by_sup, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     rows = client.get("/tracking/reports/").context["by_status"]
 
@@ -158,7 +158,7 @@ def test_reports_counts_every_status_for_every_office(client, three_held_by_sup,
 def test_reports_charges_the_holder_for_every_record_it_holds(
     client, three_held_by_sup, users, offices
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     rows = client.get("/tracking/reports/").context["overdue_accountability"]["rows"]
 
@@ -167,7 +167,7 @@ def test_reports_charges_the_holder_for_every_record_it_holds(
 
 @pytest.mark.django_db
 def test_the_dashboard_credits_every_upload(client, three_uploads_by_med, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     uploads = client.get("/").context["uploads_by_office"]
 

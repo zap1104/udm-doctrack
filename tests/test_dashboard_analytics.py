@@ -127,7 +127,7 @@ def test_reports_delegates_rather_than_keeping_its_own_copy(client, users, finis
 
     views.analytics.turnaround = spy
     try:
-        client.force_login(users["admin"])
+        client.force_verified_login(users["admin"])
         client.get(REPORTS)
     finally:
         views.analytics.turnaround = original
@@ -366,7 +366,7 @@ NEW_KEYS = [
 def test_every_panel_is_present_for_both_roles(client, users, finished_record, username):
     """Records staff see office-to-office columns and an office user does not,
     but both get the whole analytics page."""
-    client.force_login(users[username])
+    client.force_verified_login(users[username])
     context = client.get(DASHBOARD).context
 
     for key in NEW_KEYS:
@@ -375,7 +375,7 @@ def test_every_panel_is_present_for_both_roles(client, users, finished_record, u
 
 @pytest.mark.django_db
 def test_the_existing_panels_were_added_to_not_replaced(client, users, finished_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
 
     for key in ("incoming_count", "outgoing_count", "overdue_count",
@@ -386,22 +386,22 @@ def test_the_existing_panels_were_added_to_not_replaced(client, users, finished_
 @pytest.mark.django_db
 def test_show_office_columns_still_governs_the_office_columns(client, users, finished_record):
     """The redesign adds no permission model of its own."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(DASHBOARD).context["show_office_columns"] is True
 
     # `is_records_staff` is everyone except a viewer, so an ordinary office
     # user still gets the columns. The viewer is the one who does not.
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.get(DASHBOARD).context["show_office_columns"] is False
 
 
 @pytest.mark.django_db
 def test_the_panels_respect_visibility(client, users, finished_record):
     """HR had nothing to do with the record, so it is not in HR's figures."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     hr = client.get(DASHBOARD).context["overdue_summary"]["total"]
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     everything = client.get(DASHBOARD).context
 
     assert hr <= everything["overdue_summary"]["total"]
@@ -433,7 +433,7 @@ def test_each_ring_closes_at_one_hundred_percent(
 
     `overdue_record` for a live document: `filed_record` alone is completed,
     which is the figure beside the tracking rings and not a slice of them."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     drawn = [ring for ring in _rings(client.get(DASHBOARD).context, key) if ring["slices"]]
 
     assert drawn, f"{key} drew nothing for {who}"
@@ -452,7 +452,7 @@ def test_each_ring_is_measured_against_its_own_domain(client, users, filed_recor
     would leave each ring summing to its share of everything rather than to
     100%, so a Repository ring covering a third of all documents would be drawn
     as a third of a circle with two thirds of it blank."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     for donut in _rings(client.get(DASHBOARD).context, key):
         if donut["slices"]:
@@ -470,7 +470,7 @@ def test_every_office_ring_and_the_figure_beside_it_still_account_for_everything
     together are the whole" cannot survive a split for one office: Incoming and
     Outgoing leave out what the office has passed on. It still holds where there
     is one ring, and that is where it is asserted."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
     tracking = context["tracking_rings"]
 
@@ -492,7 +492,7 @@ def test_splitting_the_ring_did_not_rewrite_the_shared_slices(client, users, fil
     """The per-domain pass copies rather than mutates: the write-up and the memo
     read the grand-total percentages off these same dicts, and rewriting them
     would silently change what the prose beneath the rings says."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
 
     assert sum(row["percent"] for row in context["breakdown"]["slices"]) == 100
@@ -503,7 +503,7 @@ def test_splitting_the_ring_did_not_rewrite_the_shared_slices(client, users, fil
 @pytest.mark.parametrize("who", ["admin", "sup"])
 def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record, key, who):
     """Not the mockup's forest-green and gold."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     for donut in _rings(client.get(DASHBOARD).context, key):
         for slice_ in donut["slices"]:
@@ -513,7 +513,7 @@ def test_each_ring_is_painted_from_the_brand_tokens(client, users, filed_record,
 @pytest.mark.django_db
 @pytest.mark.parametrize("key", DONUTS)
 def test_an_empty_domain_draws_no_ring(client, users, key):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     for donut in _rings(client.get(DASHBOARD).context, key):
         assert donut["slices"] == []
@@ -524,7 +524,7 @@ def test_an_empty_domain_draws_no_ring(client, users, key):
 def test_a_domain_with_nothing_in_it_says_so_rather_than_drawing_an_empty_circle(
     client, users
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "No unfinished tracking records." in body
@@ -537,7 +537,7 @@ def test_the_combined_stacked_bar_was_replaced_not_kept_alongside(
 ):
     """Two rings replace the one bar; a third combined view would say the same
     thing a third time."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "breakdown-bar" not in body
@@ -555,7 +555,7 @@ def test_the_write_up_is_gone_from_the_page_and_from_the_context(
     colour. Nothing prints the dashboard any more, and the memo — which does
     print — says more than it did.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
 
     assert "What this shows" not in response.content.decode(), "the panel's heading"
@@ -567,7 +567,7 @@ def test_the_write_up_is_gone_from_the_page_and_from_the_context(
 @pytest.mark.django_db
 def test_the_trend_line_is_built_server_side(client, users, finished_record):
     """No JS charting library: the polyline arrives as coordinates."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     series = client.get(DASHBOARD).context["turnaround_trend_points"]
 
     assert series
@@ -673,7 +673,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
     """In the head it shared one line with the title and the office-hours
     caveat, which at this column width left three keys fighting a sentence for
     the same few centimetres."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "trend-legend" in body
@@ -682,7 +682,7 @@ def test_the_legend_sits_with_the_chart_not_in_the_heading(client, users, finish
 
 @pytest.mark.django_db
 def test_nothing_measured_means_nothing_plotted(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert client.get(DASHBOARD).context["turnaround_trend_points"] == []
 
@@ -709,7 +709,7 @@ def test_the_memo_is_composed_server_side(client, users, finished_record):
     lines, so the template renders headings and rows rather than deciding what
     the memo says.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
 
     month = f"{timezone.localdate():%B %Y}"
@@ -726,7 +726,7 @@ def test_the_memo_is_composed_server_side(client, users, finished_record):
 
 @pytest.mark.django_db
 def test_the_memo_agrees_with_the_figures_beside_it(client, users, overdue_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
     memo = memo_text(response.context["memo"])
 
@@ -744,7 +744,7 @@ def test_an_empty_system_still_says_something(client, users):
     zeroes. `_memo` states zero in words everywhere else — this section was the
     last place still printing one as a figure.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
 
     assert memo_headings(memo) == ["Overview"], "nothing else has anything to say"
@@ -754,7 +754,7 @@ def test_an_empty_system_still_says_something(client, users):
 
 @pytest.mark.django_db
 def test_the_memo_says_so_when_nothing_is_late(client, users, finished_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     memo = client.get(DASHBOARD).context["memo"]
     attention = next(s for s in memo if s["heading"] == "Needs attention")
 
@@ -769,7 +769,7 @@ def test_the_memo_uses_office_language_not_a_bare_decimal(client, users, finishe
     """"An average of 0.0 working days" is not a sentence anybody would write.
     The chart plots days because an axis needs a number; the prose beside it
     gets the same wording Reports uses."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     memo = memo_text(client.get(DASHBOARD).context["memo"])
 
     assert "0.0 working day" not in memo
@@ -789,7 +789,7 @@ def test_the_monthly_rows_carry_both_the_number_and_the_wording(finished_record,
 def test_the_memo_names_the_scope_it_describes(client, users, offices, finished_record):
     """A memo that does not say which office it covers is not evidence of
     anything once it leaves the screen."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     everything = client.get(DASHBOARD).context["memo"]
     assert {"label": "Scope", "value": "All offices"} in everything[0]["lines"]
@@ -829,7 +829,7 @@ def test_the_memo_lists_every_office_holding_something_late(
                 due_at=timezone.now() - timedelta(days=days)
             )
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
     attention = next(
         s for s in response.context["memo"] if s["heading"] == "Needs attention"
@@ -854,7 +854,7 @@ def test_the_memo_lists_every_office_that_added_to_the_repository(
     """`uploads_by_office` returns every contributing office and the memo read
     only `leader`. Naming one office and dropping the rest turned a record of
     who contributed into an award."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
     activity = next(
         s for s in response.context["memo"]
@@ -881,7 +881,7 @@ def test_the_memo_names_the_office_rather_than_saying_your_office(
     deciding for itself — there were three copies of that ternary and this
     would have been a fourth.
     """
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get("/memo/print/")
     body = response.content.decode()
     overview = response.context["memo"][0]["lines"]
@@ -897,7 +897,7 @@ def test_an_admin_scope_still_reads_as_the_picker_names_it(
 ):
     """The other half: for a user who has the picker, `display` is the picker's
     own label, so the memo and the control agree."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     everything = client.get("/memo/print/").context["memo"][0]["lines"]
     assert {"label": "Scope", "value": "All offices"} in everything
@@ -910,7 +910,7 @@ def test_an_admin_scope_still_reads_as_the_picker_names_it(
 def test_the_memo_never_compares_month_to_month(client, users, finished_record):
     """Descriptive, never comparative — a printed memo carrying a verdict on an
     office outlives the context that produced it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     memo = memo_text(client.get(DASHBOARD).context["memo"]).lower()
 
     for word in ("increase", "decrease", "improved", "worse", "better than", "up from", "down from"):
@@ -919,7 +919,7 @@ def test_the_memo_never_compares_month_to_month(client, users, finished_record):
 
 @pytest.mark.django_db
 def test_the_memo_is_offered_in_a_dialog(client, users, finished_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "Generate memo" in body
@@ -929,7 +929,7 @@ def test_the_memo_is_offered_in_a_dialog(client, users, finished_record):
 # --- scope -----------------------------------------------------------------
 @pytest.mark.django_db
 def test_records_staff_may_narrow_the_page_to_one_office(client, users, offices, finished_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     scope = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context["scope"]
 
     assert scope["can_pick"] is True
@@ -941,7 +941,7 @@ def test_records_staff_may_narrow_the_page_to_one_office(client, users, offices,
 def test_an_office_user_gets_no_picker(client, users, offices):
     """Gated on `is_admin`. `is_records_staff` would have included this user,
     which is exactly who the picker is not for."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     scope = client.get(DASHBOARD).context["scope"]
 
     assert scope["can_pick"] is False
@@ -953,13 +953,13 @@ def test_the_scope_can_only_narrow_never_widen(client, users, offices, finished_
     """An office user editing the address bar gets their own records back, not
     somebody else's: the filter is applied on top of the visibility rules rather
     than instead of them."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     unfiltered = client.get(DASHBOARD).context["breakdown"]["total"]
     forced = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").context["breakdown"]["total"]
 
     assert forced == unfiltered, "the office parameter did nothing for a non-admin"
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     everything = client.get(DASHBOARD).context["breakdown"]["total"]
     narrowed = client.get(
         f"{DASHBOARD}?office={offices['SUP'].pk}"
@@ -973,7 +973,7 @@ def test_the_scope_can_only_narrow_never_widen(client, users, offices, finished_
 def test_a_nonsense_office_parameter_falls_back_to_everything(client, users, raw):
     """Anything a user can reach by editing the address bar has to be a page,
     not a 500."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(f"{DASHBOARD}?office={raw}")
 
     assert response.status_code == 200
@@ -984,7 +984,7 @@ def test_a_nonsense_office_parameter_falls_back_to_everything(client, users, raw
 @pytest.mark.django_db
 def test_the_scope_reaches_the_printed_copy(client, users, offices, finished_record):
     """A stack of printouts with no office named on them is indistinguishable."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"{DASHBOARD}?office={offices['SUP'].pk}").content.decode()
 
     assert offices["SUP"].name in body
@@ -996,7 +996,7 @@ def test_the_scope_reaches_the_printed_copy(client, users, offices, finished_rec
 def test_there_is_no_self_service_role_toggle(client, users, finished_record):
     """The mockup carried Admin/Office-user buttons only so a static file could
     preview both states. The real distinction is is_records_staff."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for marker in ("Access level", "Office user</button>", "setAdmin", "setOffice"):
@@ -1006,7 +1006,7 @@ def test_there_is_no_self_service_role_toggle(client, users, finished_record):
 @pytest.mark.django_db
 def test_the_undecided_turnaround_cap_was_not_shipped(client, users, finished_record):
     """The mockup labelled it "Placeholder · not final" itself."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for marker in ("Turnaround cap", "Placeholder", "not final"):
@@ -1016,7 +1016,7 @@ def test_the_undecided_turnaround_cap_was_not_shipped(client, users, finished_re
 @pytest.mark.django_db
 def test_no_placeholder_offices_from_the_mockup(client, users, finished_record):
     """Every office name on the page comes from a real Office record."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for name in ("Office of the Registrar", "Graduate School", "Accounting Office",
@@ -1027,7 +1027,7 @@ def test_no_placeholder_offices_from_the_mockup(client, users, finished_record):
 @pytest.mark.django_db
 def test_the_mockup_palette_did_not_come_across(client, users, finished_record):
     """Forest green and gold belong to the prototype, not to this app."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode().lower()
 
     for hexcode in ("#0f6e4c", "#d4af6a", "#0c1f18", "#2f9e6b", "#c0392b"):
@@ -1149,7 +1149,7 @@ def test_every_dashboard_row_and_column_sits_at_the_depth_it_should():
 def test_the_panels_all_render_inside_the_page_container(client, users, filed_record):
     """The rendered page, not just the template — every panel heading has to
     come before the content block closes."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "Newest in the Document Repository" not in body, "removed in the consultation"
@@ -1183,7 +1183,7 @@ def test_the_two_desk_panels_became_one(client, users, awaiting_receipt):
     """"Pending Receipt" and "Recent Tracking Activity" sat in different rows
     answering versions of the same question, so the reader had to look in two
     places to know whether the desk was clear."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "<h2>Currently tracking</h2>" in body
@@ -1195,7 +1195,7 @@ def test_the_two_desk_panels_became_one(client, users, awaiting_receipt):
 def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaiting_receipt):
     """A list of what already happened above a list of what has not is a filing
     cabinet, not a desk."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     # The default attention queue is Awaiting receipt. It stays ahead of the
@@ -1214,7 +1214,7 @@ def test_the_desk_keeps_both_blocks_and_puts_action_first(client, users, awaitin
 def test_the_block_titles_sit_below_the_panel_title(client, users, awaiting_receipt):
     """The panel is the h2; the blocks inside it are h3. Nesting level is what
     tells a screen reader the two tables belong to one panel."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     import re
@@ -1233,7 +1233,7 @@ def test_every_stat_card_opens_the_list_it_counts(client, users, overdue_record)
 
     As an office user: under every office the Incoming and Outgoing cards are
     disabled and open nothing."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     for scope in ("incoming", "outgoing"):
@@ -1255,7 +1255,7 @@ def test_the_overdue_card_and_the_list_it_opens_agree(client, users, overdue_rec
     """The number on the card has to be the number of rows behind it. Pointing
     a count at a list filtered even slightly differently is worse than pointing
     it somewhere else entirely — the reader has no reason to doubt it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     counted = client.get(DASHBOARD).context["overdue_count"]
     listed = client.get("/tracking/?scope=overdue").context["page_obj"].paginator.count
 
@@ -1271,7 +1271,7 @@ def test_the_two_desk_blocks_are_told_apart(client, users, awaiting_receipt):
     modifier so the stylesheet can say which is which; without them the card is
     two identical tables stacked.
     """
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "desk-block desk-block--primary" in body
@@ -1319,7 +1319,7 @@ def test_the_two_blocks_carry_different_colours():
 def test_the_desk_still_reads_from_the_same_two_context_keys(client, users, awaiting_receipt):
     """Merging the panels is a template change. Renaming the context would make
     it a view change nobody asked for."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     context = client.get(DASHBOARD).context
 
     assert "attention_records" in context
@@ -1338,7 +1338,7 @@ def test_every_dashboard_panel_stops_at_the_same_five_rows(client, users, office
         )
         route_record(record, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     context = client.get(DASHBOARD).context
 
     assert len(context["attention_records"]) == DASHBOARD_ROWS
@@ -1359,7 +1359,7 @@ def test_a_long_subject_is_capped_rather_than_left_to_set_the_width(client, user
     route_record(record, [offices["SUP"]], user=users["med"])
     record.refresh_from_db()
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "desk-cell-title" in body
@@ -1385,7 +1385,7 @@ def test_the_panel_caps_are_css_not_just_truncation():
 def test_the_desk_keeps_both_empty_states(client, users):
     """A fresh account has nothing in either block, and an empty panel that says
     nothing looks broken rather than clear."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "Nothing in &ldquo;Awaiting receipt&rdquo;" in body
@@ -1395,7 +1395,7 @@ def test_the_desk_keeps_both_empty_states(client, users):
 
 @pytest.mark.django_db
 def test_the_desk_comes_before_the_memo_dialog(client, users, awaiting_receipt):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     assert body.index("Currently tracking") < body.index('id="dashboard-memo"')
@@ -1414,7 +1414,7 @@ def test_the_dashboard_no_longer_offers_the_two_start_work_buttons(client, users
     """
     from django.urls import reverse
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(DASHBOARD)
     body = response.content.decode()
 
@@ -1443,7 +1443,7 @@ def test_the_gate_still_reads_false_for_a_viewer(client, users):
     whatever the gate did, so only the gate is worth asserting — it is what
     those buttons would be restored behind.
     """
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
 
     assert client.get(DASHBOARD).context["can_start_work"] is False
 
@@ -1452,7 +1452,7 @@ def test_the_gate_still_reads_false_for_a_viewer(client, users):
 def test_hiding_the_button_is_not_the_permission(client, users):
     """The endpoint stays reachable to anyone who knows the URL, so the view has
     to refuse on its own — the hidden button is a courtesy, not a control."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
 
     assert client.get("/tracking/new/").status_code in (302, 403)
 
@@ -1466,7 +1466,7 @@ def test_an_account_with_no_office_is_not_offered_them_either(client, users, off
     orphan = get_user_model().objects.create_user(
         username="unassigned", password="TestPass123!", office=None, role="USER",
     )
-    client.force_login(orphan)
+    client.force_verified_login(orphan)
 
     assert client.get(DASHBOARD).context["can_start_work"] is False
 
@@ -1476,7 +1476,7 @@ def test_an_account_with_no_office_is_not_offered_them_either(client, users, off
 def test_the_desk_offers_bulk_receipt_when_something_can_be_received(
     client, users, awaiting_receipt
 ):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
     body = response.content.decode()
 
@@ -1492,7 +1492,7 @@ def test_the_custody_attestation_is_asked_for_in_the_same_words_as_the_list(
     """It is a custody assertion landing in an append-only audit trail. The
     dashboard does not get to ask for it more casually than the tracking list
     does, and it is not defaulted or dropped to save a click."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
     listing = pathlib.Path("templates/tracking/list.html").read_text(encoding="utf-8")
 
@@ -1505,7 +1505,7 @@ def test_the_custody_attestation_is_asked_for_in_the_same_words_as_the_list(
 def test_the_custody_box_is_required_not_pre_ticked(client, users, awaiting_receipt):
     import re
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     box = re.search(r'<input[^>]*name="confirm_custody"[^>]*>', body).group(0)
@@ -1519,7 +1519,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
     can act on inside the thing that submits."""
     import re
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     form = re.search(r'<form method="post" action="[^"]*bulk-receipt[^"]*".*?</form>', body, re.S)
@@ -1533,7 +1533,7 @@ def test_the_bulk_form_covers_the_needs_action_block_only(client, users, awaitin
 def test_no_bulk_footer_when_nothing_on_the_page_can_be_received(client, users, awaiting_receipt):
     """MED raised these and cannot receive them. Showing the attestation to
     somebody with nothing to attest to is an invitation to tick it anyway."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(DASHBOARD)
 
     assert response.context["can_bulk_receive"] is False
@@ -1546,7 +1546,7 @@ def test_the_dashboard_adds_no_write_path_of_its_own(client, users, awaiting_rec
     receipt is recorded."""
     from django.urls import reverse
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get(DASHBOARD).content.decode()
 
     assert reverse("tracking:bulk_confirm_receipt") in body
@@ -1557,7 +1557,7 @@ def test_bulk_receipt_from_the_dashboard_actually_records_it(client, users, awai
     """The markup is only worth having if the post it builds is accepted."""
     from apps.tracking.models import Status
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.post(
         "/tracking/bulk-receipt/",
         {
@@ -1580,7 +1580,7 @@ def test_the_post_is_refused_without_the_attestation(client, users, awaiting_rec
     """The whole reason the dashboard cannot offer a one-click receive."""
     from apps.tracking.models import Status
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     client.post(
         "/tracking/bulk-receipt/",
         {"record_ids": [r.pk for r in awaiting_receipt], "note": ""},
@@ -1595,7 +1595,7 @@ def test_the_post_is_refused_without_the_attestation(client, users, awaiting_rec
 def test_the_desk_adds_no_inline_event_handlers(client, users, awaiting_receipt):
     """django-csp is enforced. The one `onchange` on the page is the scope
     picker, which predates this panel and is left alone deliberately."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "onclick=" not in body
@@ -1639,7 +1639,7 @@ def _side(body, name):
 
 @pytest.mark.django_db
 def test_current_queues_lead_and_supporting_panels_keep_their_modules(client, users, filed_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert _side(body, "operational")[1] == ["Currently tracking", "Completed - Pending Filing"]
@@ -1664,7 +1664,7 @@ def test_current_queues_lead_and_supporting_panels_keep_their_modules(client, us
 
 @pytest.mark.django_db
 def test_each_side_is_headed_and_opens_its_module(client, users, offices, filed_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = offices["SUP"].pk
     body = client.get(f"{DASHBOARD}?office={office}").content.decode()
 
@@ -1706,7 +1706,7 @@ def test_the_card_row_is_three_queues_the_reader_acts_on(client, users, filed_re
     """"Held by your office" was a fourth card counting ?scope=received — a
     stage of the same pile Incoming beside it already counts, one click away
     from it, and a fifth count query on every load."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(DASHBOARD)
     body = response.content.decode()
 
@@ -1719,7 +1719,7 @@ def test_the_card_row_is_three_queues_the_reader_acts_on(client, users, filed_re
 @pytest.mark.django_db
 def test_the_removed_panels_are_gone_from_the_page(client, users, filed_record):
     """Four panels were removed by explicit approval, one yes each."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for heading in ("Needs attention now", "Records by status", "Office Flow Today"):
@@ -1736,7 +1736,7 @@ def test_removing_the_panels_left_the_helpers_behind_them_alone(client, users, o
     with its two siblings, so the assertion moves to the other side — see
     test_the_unrendered_today_counters_are_gone.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
 
     # `live_by_status` left this list when it was deleted — nothing rendered
@@ -1750,7 +1750,7 @@ def test_the_unrendered_today_counters_are_gone(client, users, overdue_record):
     """Three queries per load for a panel that no longer exists — and each wrong
     if ever reinstated: two ignored the office picker, the third had no office
     filter at all."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(DASHBOARD).context
 
     for key in ("received_today", "forwarded_today", "completed_today"):
@@ -1766,7 +1766,7 @@ def test_the_dashboard_no_longer_offers_to_print_itself(client, users, finished_
     page of its own, so the only print-related control left here is the one
     that opens the memo.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "Print dashboard" not in body
@@ -1782,7 +1782,7 @@ def test_the_dashboard_has_no_print_letterhead(client, users, finished_record):
     app does not advertise. The memo is the document; this page is not, so it
     prints plainly or not at all.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "dashboard-print-header" not in body
@@ -1796,7 +1796,7 @@ def test_ctrl_p_on_the_dashboard_is_recorded_and_says_what_it_is(client, users, 
     The consultation asked for it to be audited like Reports and the memo, and
     the printout now says it is a view of the screen and where the formal
     record comes from."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert 'data-print-log="the dashboard"' in body
@@ -1810,7 +1810,7 @@ def test_ctrl_p_on_the_dashboard_is_recorded_and_says_what_it_is(client, users, 
 def test_no_change_arrows_on_any_of_the_new_panels(client, users, overdue_record):
     """Still explicitly refused: an arrow on a records backlog reads as a
     verdict on the office."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for marker in ("▲", "▼", "trend-up", "trend-down", "change-indicator"):
@@ -1820,7 +1820,7 @@ def test_no_change_arrows_on_any_of_the_new_panels(client, users, overdue_record
 @pytest.mark.django_db
 def test_the_real_sidebar_was_left_alone(client, users):
     """Nothing from the mockup's own sidebar was carried over."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for marker in ("Create Routing Slip", "Upload &amp; Archive", "Offices &amp; Users",
@@ -1843,7 +1843,7 @@ def test_the_print_page_renders_the_same_figures_as_the_dashboard(
     enough — and a printed memo that contradicts the screen it came from is
     worse than no memo.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard = client.get(DASHBOARD)
     printed = client.get(MEMO_PRINT)
 
@@ -1858,7 +1858,7 @@ def test_the_print_page_carries_none_of_the_app_chrome(client, users, finished_r
     """A page that exists to be printed, not a dashboard with a stylesheet over
     it. The sidebar, topbar and dashboard grid are not hidden here — they are
     not on the page."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(MEMO_PRINT).content.decode()
 
     for chrome in ("app-sidebar", "app-topbar", "app-footer", "card-udm", "memo-sheet"):
@@ -1871,7 +1871,7 @@ def test_the_print_page_logs_the_copy_it_produces(client, users, finished_record
     """Printing happens in the browser, so a paper copy leaves no trace unless
     the page asks for one to be recorded. PRINT events are never deduplicated,
     which makes the marker not optional on a page whose purpose is paper."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(MEMO_PRINT).content.decode()
 
     assert 'data-print-log="the dashboard memo"' in body
@@ -1886,7 +1886,7 @@ def test_the_print_page_opens_its_own_dialog_without_inline_script(
     """django-csp allows no inline script, so the behaviour is declared as data
     and read by doctrack.js — the same way every other behaviour on the site is
     wired."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(MEMO_PRINT).content.decode()
 
     assert "data-auto-print" in body
@@ -1904,7 +1904,7 @@ def test_the_print_page_ignores_an_office_a_user_may_not_pick(
     do nothing here either. Were it honoured, anybody could read another
     office's figures by typing an id into the query string.
     """
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     plain = client.get(MEMO_PRINT)
     with_param = client.get(f"{MEMO_PRINT}?office={offices['SUP'].pk}")
 
@@ -1920,7 +1920,7 @@ def test_the_print_page_honours_an_office_an_admin_may_pick(
     """The other half of the same rule: the scope the dashboard showed has to
     travel to the paper, or the printed memo covers a different set of offices
     than the one it was generated from."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     narrowed = client.get(f"{MEMO_PRINT}?office={offices['SUP'].pk}")
 
     assert narrowed.context["scope"]["office"] == offices["SUP"]
@@ -1940,7 +1940,7 @@ def test_the_print_page_needs_a_login(client):
 def test_the_dashboard_accepts_the_all_offices_parameter(client, users, finished_record):
     """`/?office=all` was a 500: `_scope` called `.name` on the ALL_OFFICES
     sentinel. Reports and Tracking accept it, and Tracking's picker sends it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(f"{DASHBOARD}?office=all")
 

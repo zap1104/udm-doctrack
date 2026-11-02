@@ -34,7 +34,7 @@ def test_source_ui_is_safe_scoped_and_current(client, users, readable_source):
     doc, unit = readable_source
     listing = reverse("documents:source_units", args=[doc.pk])
     detail = reverse("documents:source_unit", args=[doc.pk, unit.pk])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     page = client.get(listing)
     assert page.status_code == 200
     assert "Source coverage" in page.content.decode()
@@ -44,11 +44,11 @@ def test_source_ui_is_safe_scoped_and_current(client, users, readable_source):
     assert "&lt;script&gt;" in preview.content.decode()
     assert "<script>alert(1)</script>" not in preview.content.decode()
     assert "no-store" in preview.headers["Cache-Control"]
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     denied = client.get(detail)
     assert denied.status_code in {403, 404}
     assert "source evidence" not in denied.content.decode()
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     unit.run.is_current = False
     unit.run.save(update_fields=["is_current"])
     assert client.get(detail).status_code == 404
@@ -67,7 +67,7 @@ def test_source_unit_detail_renders_in_both_collections(client, users, settings,
     run = request_processing(document, user=actor)[0]
     process_run(run.pk, expected_generation=run.generation)
     unit = run.units.get()
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.get(reverse("documents:source_unit", args=[document.pk, unit.pk]), {"office": actor.office_id})
     assert response.status_code == 200
     assert b"&lt;script&gt;never execute&lt;/script&gt;" in response.content
@@ -87,7 +87,7 @@ def test_existing_document_predictions_require_explicit_authorized_post(client, 
     doc, _ = readable_source
     endpoint = reverse("documents:tag_predict", args=[doc.pk])
     data = {"input_revision": input_revision(doc), "vocabulary": vocabulary_digest()}
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get(endpoint).status_code == 405
     assert not doc.tag_predictions.exists()
     assert client.post(endpoint, {**data, "input_revision": "stale"}).status_code == 409
@@ -97,9 +97,9 @@ def test_existing_document_predictions_require_explicit_authorized_post(client, 
     assert not doc.tags.exists()
     doc.refresh_from_db()
     assert doc.extraction_generation == 0
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.post(endpoint, data).status_code == 403
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     assert client.post(endpoint, data).status_code in {403, 404}
 
 
@@ -113,9 +113,9 @@ def test_tag_review_post_is_explicit_and_stale_revision_conflicts(client, users,
         "input_revision": input_revision(doc),
         "vocabulary": vocabulary_digest(),
     }
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.post(endpoint, data).status_code == 403
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     stale = {**data, "input_revision": "stale"}
     assert client.post(endpoint, stale).status_code == 409
     assert not doc.tags.exists()
@@ -126,9 +126,9 @@ def test_tag_review_post_is_explicit_and_stale_revision_conflicts(client, users,
 def test_training_eligibility_keeps_existing_office_authority(client, users, readable_source):
     doc, _ = readable_source
     endpoint = reverse("documents:training_eligibility", args=[doc.pk])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.post(endpoint, {"eligible": "on"}).status_code == 403
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert (
         client.post(
             endpoint, {"eligible": "on", "family": "office-fixture", "input_revision": input_revision(doc)}
@@ -148,7 +148,7 @@ def test_legacy_done_status_does_not_claim_verified_coverage(client, users):
         ocr_status="DONE",
         ocr_text="Previously extracted text",
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(reverse("documents:extraction_status", args=[doc.pk]))
     assert response.status_code == 200
     assert "Coverage has not been verified" in response.content.decode()
@@ -161,7 +161,7 @@ def test_review_forms_have_distinct_ids_and_real_csrf_protection(users, readable
     doc, _ = readable_source
     tag = Tag.objects.create(name="csrf topic", globally_approved=True)
     client = Client(enforce_csrf_checks=True)
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     page = client.get(reverse("documents:source_units", args=[doc.pk]), secure=True)
     assert page.status_code == 200
     html = page.content.decode()
@@ -186,7 +186,7 @@ def test_forged_unit_parent_fails_closed(client, users, readable_source):
     other = Document.objects.create(
         title="Other office", year=2026, access_level="OFFICE", office=users["hr"].office, uploaded_by=users["hr"]
     )
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     response = client.get(reverse("documents:source_unit", args=[other.pk, unit.pk]))
     assert response.status_code == 404
     assert "source evidence" not in response.content.decode()
@@ -195,9 +195,9 @@ def test_forged_unit_parent_fails_closed(client, users, readable_source):
 def test_only_system_administrator_can_approve_aliases(client, users):
     alias_url = reverse("documents:tag_vocabulary")
     tag = Tag.objects.create(name="purchase request", globally_approved=True)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get(alias_url).status_code == 403
     assert client.post(alias_url, {"action": "alias", "tag": tag.pk, "phrase": "pr"}).status_code == 403
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.post(alias_url, {"action": "alias", "tag": tag.pk, "phrase": "pr"}).status_code == 302
     assert tag.approved_aliases.filter(phrase="pr", approved_by=users["admin"], is_active=True).exists()

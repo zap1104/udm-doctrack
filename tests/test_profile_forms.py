@@ -4,6 +4,7 @@ from html.parser import HTMLParser
 
 import pytest
 from django.contrib.messages import ERROR, SUCCESS, get_messages
+from django.test import override_settings
 from django.urls import reverse
 
 from apps.core.models import NotificationPreference
@@ -50,10 +51,11 @@ def profile_user(users):
     return user
 
 
+@override_settings(EMAIL_OTP_REQUIRED=False)
 def test_native_profile_forms_submit_separate_actions_and_preserve_verification_target(client, profile_user):
     profile_user.verified_email = ""
     profile_user.save(update_fields=["verified_email"])
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
 
     response = client.get(reverse("accounts:profile"))
 
@@ -82,7 +84,7 @@ def test_native_profile_forms_submit_separate_actions_and_preserve_verification_
 @pytest.mark.parametrize("enabled", [True, False])
 def test_profile_save_preserves_notification_preference(client, profile_user, enabled):
     preference = NotificationPreference.objects.create(user=profile_user, in_app_enabled=enabled)
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
 
     response = client.post(reverse("accounts:profile"), {
         "action": "profile", **PERSONAL_DETAILS, "first_name": "Mariana",
@@ -103,7 +105,7 @@ def test_profile_save_preserves_notification_preference(client, profile_user, en
 @pytest.mark.parametrize("enabled", [True, False])
 def test_preferences_save_preserves_personal_details_and_verified_email(client, profile_user, enabled):
     preference = NotificationPreference.objects.create(user=profile_user, in_app_enabled=not enabled)
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
     data = {"action": "preferences"}
     if enabled:
         data["in_app_enabled"] = "on"
@@ -124,7 +126,7 @@ def test_preferences_save_preserves_personal_details_and_verified_email(client, 
 
 def test_invalid_profile_save_keeps_preference_form_unbound_and_all_saved_values(client, profile_user):
     preference = NotificationPreference.objects.create(user=profile_user, in_app_enabled=True)
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
 
     response = client.post(reverse("accounts:profile"), {
         "action": "profile", **PERSONAL_DETAILS, "first_name": "Unsaved", "email": "invalid-address",
@@ -148,7 +150,7 @@ def test_invalid_profile_save_keeps_preference_form_unbound_and_all_saved_values
 def test_missing_or_unknown_profile_action_changes_nothing(client, profile_user, action, existing_preference):
     if existing_preference:
         NotificationPreference.objects.create(user=profile_user, in_app_enabled=True)
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
     data = {**PERSONAL_DETAILS, "first_name": "Should not save", "email": "other@example.edu"}
     if action is not None:
         data["action"] = action
@@ -170,25 +172,26 @@ def test_missing_or_unknown_profile_action_changes_nothing(client, profile_user,
 
 def test_profile_email_change_requires_reverification_without_overwriting_verified_address(client, profile_user):
     NotificationPreference.objects.create(user=profile_user, in_app_enabled=True)
-    client.force_login(profile_user)
+    client.force_verified_login(profile_user)
 
     response = client.post(reverse("accounts:profile"), {
         "action": "profile", **PERSONAL_DETAILS, "email": "new-address@example.edu",
         "verified_email": "new-address@example.edu",
     })
 
-    assert response.status_code == 302
+    assert response.status_code == 200
+    assert 'email' in response.context['form'].errors
     profile_user.refresh_from_db()
-    assert profile_user.email == "new-address@example.edu"
+    assert profile_user.email == 'maria@example.edu'
     assert profile_user.verified_email == "maria@example.edu"
-    assert not profile_user.email_is_verified
+    assert profile_user.email_is_verified
 
 
 @pytest.mark.parametrize("role", ["med", "viewer", "med_admin", "admin"])
 def test_profile_form_split_remains_available_for_each_account_role(client, users, role):
     user = users[role]
     preference = NotificationPreference.objects.create(user=user, in_app_enabled=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     response = client.post(reverse("accounts:profile"), {"action": "preferences"})
 

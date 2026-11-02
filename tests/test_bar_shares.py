@@ -72,7 +72,7 @@ def test_a_printed_share_never_contradicts_its_bar(part, whole, text):
 @pytest.mark.django_db
 @pytest.mark.parametrize("url", [f"{DASHBOARD}?office=all", f"{REPORTS}?office=all"])
 def test_every_bar_is_drawn_at_the_share_beside_it(client, users, agreement, url):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pairs = _pairs(client.get(url).content.decode())
 
     assert len(pairs) >= 5, "the pattern found the bars"
@@ -85,7 +85,7 @@ def test_the_searches_panel_draws_its_shares_too(client, users):
     for index in range(14):
         for _ in range(index + 1):
             SearchQueryLog.objects.create(user=users["admin"], query=f"query {index:02d}")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pairs = _pairs(client.get(ADMINISTRATION).content.decode())
 
     assert len(pairs) == analytics.TOP_N + 1, "twelve queries and the rest"
@@ -98,7 +98,7 @@ def test_the_searches_panel_draws_its_shares_too(client, users):
 def test_the_busiest_office_is_drawn_at_its_share_not_at_full_length(
     client, users, agreement  # noqa: F811
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     uploads = client.get(f"{DASHBOARD}?office=all").context["uploads_by_office"]
     leader = uploads["rows"][0]
 
@@ -112,7 +112,7 @@ def test_the_busiest_office_is_drawn_at_its_share_not_at_full_length(
 def test_the_other_row_is_drawn_at_its_share(client, users, agreement):  # noqa: F811
     """It had no bar at all, because a long "everything else" would have set
     the scale. Against the whole it is simply how much everything else is."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     uploads = client.get(f"{DASHBOARD}?office=all").context["uploads_by_office"]
     other = next(row for row in uploads["rows"] if row.get("is_remainder"))
 
@@ -121,7 +121,7 @@ def test_the_other_row_is_drawn_at_its_share(client, users, agreement):  # noqa:
 
 @pytest.mark.django_db
 def test_working_stages_and_drafts_reconcile_with_the_current_total(client, users, agreement):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
     rows = context["by_status"]
@@ -133,7 +133,7 @@ def test_working_stages_and_drafts_reconcile_with_the_current_total(client, user
 
 @pytest.mark.django_db
 def test_overdue_bars_are_shares_of_every_overdue_document(client, users, agreement):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
     panel = context["overdue_accountability"]
 
@@ -146,7 +146,7 @@ def test_overdue_bars_are_shares_of_every_overdue_document(client, users, agreem
 
 @pytest.mark.django_db
 def test_receipts_and_endorsements_are_shares_of_every_one(client, users, agreement):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(f"{REPORTS}?office=all").context
 
     volume = context["office_volume"]

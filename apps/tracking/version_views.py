@@ -24,9 +24,15 @@ class VersionUploadForm(BootstrapFormMixin, forms.Form):
 
 
 def version_rows(versions, kind, user, *, request=None, external=False):
+    from apps.accounts.capabilities import capability_allowed
+    area = ('external_repository' if external else 'repository') if kind == 'repository' else ('external_tracking' if kind == 'external' else 'tracking')
+    can_preview = capability_allowed(user, area, 'view_content')
+    can_download = capability_allowed(user, area, 'download')
     def link(item, purpose):
         if not item.available_content:
             return ""
+        if not can_preview or (purpose == 'download' and not can_download):
+            return ''
         url = file_url(kind, item.pk, user, purpose)
         return office_context_url(url, request.GET) if external and request is not None else url
     return [dict(item=item, entry_id=f"file-version-{kind}-{item.pk}",
@@ -42,6 +48,8 @@ def tracking_file_rows(record, user, *, external=False, request=None):
     from apps.core.file_history import history_url, retained_groups
     kind = "external" if external else "tracking"
     can_update = record.status not in (*COMPLETED_STATUSES, "PENDING_RECEIPT") and (record.can_act(user) if external else record.can_user_act(user))
+    from apps.accounts.capabilities import capability_allowed
+    can_update = can_update and capability_allowed(user, 'external_tracking' if external else 'tracking', 'edit_files')
     can_discard = can_update and record.status == "DRAFT" and not record.routing_steps.exists()
     rows = []
     for group in retained_groups(record.file_groups.filter(discarded_at__isnull=True)).order_by("pk"):

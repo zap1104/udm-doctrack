@@ -151,6 +151,7 @@ class AdminUserCreateForm(BootstrapFormMixin, UserCreationForm):
         super().__init__(*args, **kwargs)
         self.actor = actor
         self.fields["office"].queryset = _offices_for(actor)
+        self.fields['email'].required = getattr(settings, 'EMAIL_OTP_REQUIRED', True)
         self.fields["office"].required = True
         if actor is not None and not actor.is_system_admin and actor.office_id:
             self.fields["office"].initial = actor.office_id
@@ -189,6 +190,15 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["office"].queryset = _offices_for(actor)
         self.fields["role"].choices = _roles_for(actor)
         self.fields["is_active"].label = "Account is active"
+        if getattr(settings, 'EMAIL_OTP_REQUIRED', True):
+            self.fields['email'].widget.attrs['readonly'] = True
+            self.fields['email'].help_text = 'Use Email security to replace an address and require verification.'
+
+    def clean_email(self):
+        value = self.cleaned_data.get('email', '')
+        if getattr(settings, 'EMAIL_OTP_REQUIRED', True) and value.casefold() != self.instance.email.casefold():
+            raise forms.ValidationError('Use Email security for an audited email replacement.')
+        return value
 
     def clean_role(self):
         return _validated_role(self.cleaned_data.get("role"), self.actor)
@@ -266,6 +276,18 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "email", "phone", "position")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if getattr(settings, 'EMAIL_OTP_REQUIRED', True):
+            self.fields['email'].widget.attrs['readonly'] = True
+            self.fields['email'].help_text = 'Use Change email to verify a replacement address securely.'
+
+    def clean_email(self):
+        value = self.cleaned_data.get('email', '')
+        if getattr(settings, 'EMAIL_OTP_REQUIRED', True) and value.casefold() != self.instance.email.casefold():
+            raise forms.ValidationError('Use Change email and verify the replacement before it becomes active.')
+        return value
 
 
 class NotificationPreferenceForm(BootstrapFormMixin, forms.ModelForm):

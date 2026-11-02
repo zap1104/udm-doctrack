@@ -31,6 +31,10 @@ def resource_for(kind, pk, user):
 
         item = get_object_or_404(StagedUpload.objects.select_related("draft"), pk=pk, draft__owner=user)
         parent = item.draft
+        from apps.accounts.capabilities import require_capability
+        repository = 'repository' in parent.workflow
+        area = ('external_repository' if parent.collection == 'EXTERNAL' else 'repository') if repository else ('external_tracking' if parent.collection == 'EXTERNAL' else 'tracking')
+        require_capability(user, area, 'view_content')
         try:
             read_draft(parent.pk, user=user, context=UploadContext(**parent.binding))
         except ValidationError:
@@ -65,6 +69,9 @@ def resource_for(kind, pk, user):
         raise Http404
     if not user.is_active or not visible:
         raise Http404
+    from apps.accounts.capabilities import area_for, require_capability
+
+    require_capability(user, area_for(parent), 'view_content')
     latest = versions.order_by("-version_number").values_list("version_number", flat=True).first()
     return FileResource(item, parent, kind, latest or item.version_number)
 

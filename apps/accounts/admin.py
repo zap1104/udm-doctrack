@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from . import permission_admin  # noqa: F401
 from .models import LoginLockout, Office, User
 
 
@@ -35,6 +36,30 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (
         ("DocTrack profile", {"fields": ("first_name", "last_name", "email", "office", "role", "position")}),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        from .otp import required
+
+        return ('email',) if obj is not None and required() else ()
+
+    def get_form(self, request, obj=None, **kwargs):
+        from .otp import required
+
+        form = super().get_form(request, obj, **kwargs)
+        if required() and 'email' in form.base_fields:
+            form.base_fields['email'].required = True
+        return form
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        from urllib.parse import urlencode
+
+        from django.shortcuts import redirect
+
+        from .otp import verified
+
+        if request.method == 'POST' and not verified(request, recent=True):
+            return redirect('/accounts/reauthenticate/?' + urlencode({'next': request.path}))
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
 
 @admin.register(LoginLockout)

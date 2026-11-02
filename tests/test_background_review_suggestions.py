@@ -17,7 +17,7 @@ def test_upload_session_review_loads_completed_background_suggestions(
     settings.MEDIA_ROOT = tmp_path
     settings.ENABLE_BACKGROUND_TASKS = True
     settings.SUGGESTION_ENGINE = "rules"
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     uploaded = SimpleUploadedFile(
         "scan.txt",
         b"Subject: Completed worker memorandum\n"

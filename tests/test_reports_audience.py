@@ -39,7 +39,7 @@ def routed(traffic):  # noqa: F811
 # --- whose report it is ---------------------------------------------------------
 @pytest.mark.django_db
 def test_an_office_administrator_reads_their_own_office_by_default(client, users, offices, routed):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     response = client.get(REPORTS)
     context = response.context
@@ -53,7 +53,7 @@ def test_an_office_administrator_reads_their_own_office_by_default(client, users
 
 @pytest.mark.django_db
 def test_a_system_administrator_reads_the_university_by_default(client, users, routed):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(REPORTS)
 
@@ -64,7 +64,7 @@ def test_a_system_administrator_reads_the_university_by_default(client, users, r
 
 @pytest.mark.django_db
 def test_an_office_administrator_cannot_pick_another_office(client, users, offices, routed):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     context = client.get(f"{REPORTS}?office={offices['SUP'].pk}").context
 
@@ -79,7 +79,7 @@ RANKINGS = ("Confirmed receipts by office", "Endorsements by office: sent and co
 
 @pytest.mark.django_db
 def test_the_university_report_ranks_offices(client, users, routed):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(REPORTS)
     body = response.content.decode()
@@ -92,7 +92,7 @@ def test_the_university_report_ranks_offices(client, users, routed):
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["sup", "viewer", "med_admin"])
 def test_an_office_report_does_not_rank_other_offices(client, users, routed, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     response = client.get(REPORTS)
     body = response.content.decode()
@@ -106,7 +106,7 @@ def test_an_office_report_does_not_rank_other_offices(client, users, routed, who
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["sup", "med_admin", "viewer", "admin"])
 def test_reports_remove_the_office_endorsement_panel_for_every_role(client, users, offices, routed, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(REPORTS, {"office": offices["MED"].pk})
     assert "office_activity" not in response.context
     assert "received and sent</h2>" not in response.content.decode()
@@ -146,7 +146,7 @@ def _listed(client, url):
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["admin", "med_admin", "med", "viewer"])
 def test_every_retention_figure_is_the_list_it_opens(client, users, scheduled, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     context = client.get("/documents/reports/").context
     retention = context["retention"]
@@ -159,7 +159,7 @@ def test_every_retention_figure_is_the_list_it_opens(client, users, scheduled, w
 
 @pytest.mark.django_db
 def test_retention_counts_what_is_past_and_what_is_coming(client, users, scheduled):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
 
     retention = client.get("/documents/reports/").context["retention"]
 
@@ -170,7 +170,7 @@ def test_retention_counts_what_is_past_and_what_is_coming(client, users, schedul
 @pytest.mark.parametrize(("who", "shown"), [("admin", True), ("med_admin", True), ("med", False), ("viewer", False)])
 def test_repository_upkeep_is_for_administrators(client, users, scheduled, who, shown):
     """Tagging and text extraction are an administrator's to fix."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
 
     response = client.get("/documents/reports/")
 
@@ -181,7 +181,7 @@ def test_repository_upkeep_is_for_administrators(client, users, scheduled, who, 
 @pytest.mark.django_db
 def test_the_types_in_use_card_is_gone(client, users, scheduled):
     """It counted the type panel's rows, "Unclassified" and "Other" included."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert "Document types in use" not in client.get("/documents/reports/").content.decode()
 
@@ -191,7 +191,7 @@ def test_the_types_in_use_card_is_gone(client, users, scheduled):
 def test_a_deactivated_document_leaves_every_count(client, users, scheduled):
     """The repository, search and the document page all hide it; the dashboard
     and Reports went on counting it, so a figure could exceed its list."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     before_report = client.get("/documents/reports/").context["total_documents"]
     before_ring = client.get("/").context["repository_donut"]["total"]
 

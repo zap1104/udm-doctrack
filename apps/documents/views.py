@@ -63,6 +63,9 @@ def _get_document(request, pk) -> Document:
         raise PermissionDenied(
             "This record belongs to another office and has not been shared with your account."
         )
+    from apps.accounts.capabilities import area_for, capability_allowed
+    if not capability_allowed(request.user, area_for(document), 'view_content'):
+        document.ocr_text = ''
     return document
 
 
@@ -423,6 +426,9 @@ class MetadataReviewView(OfficeAssignedMixin, View):
     template_name = "documents/review.html"
 
     def _suggestion(self, request, document) -> dict:
+        from apps.accounts.capabilities import area_for, capability_allowed
+        if not capability_allowed(request.user, area_for(document), 'view_content'):
+            return Suggestion().as_dict()
         latest = document.suggestions.first()
         if latest:
             return latest.suggested
@@ -530,6 +536,7 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
 
     def get(self, request, pk):
         document = _get_document(request, pk)
+        from apps.accounts.capabilities import area_for, permission_snapshot
         from apps.core.file_history import history_url, retained_groups
         from apps.tracking.version_views import version_rows
 
@@ -546,12 +553,14 @@ class DocumentDetailView(AppLoginRequiredMixin, View):
             self.template_name,
             {
                 "document": document,
+                'file_access': permission_snapshot(request.user)[area_for(document)],
                 "files": document.files.all(),
                 "file_rows": file_rows,
                 "metadata_values": document.metadata_values.select_related("field"),
-                "suggestion": document.suggestions.first(),
+                "suggestion": document.suggestions.first() if permission_snapshot(request.user)[area_for(document)]['view_content'] else None,
                 "add_files_form": AddFilesForm(),
                 "can_edit": document.can_user_edit(request.user),
+                "can_extract": document.can_user_manage(request.user, 'extract'),
                 "can_review_deletion": document.can_user_review_deletion(request.user),
                 "deletion_reviews": document.deletion_reviews.select_related("reviewed_by")[:20],
                 "related": Document.objects.visible_to(request.user)
@@ -613,6 +622,8 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
         document_file = get_object_or_404(files, pk=pk)
         if not document_file.document.can_user_view(request.user):
             raise PermissionDenied("You do not have access to this document.")
+        from apps.accounts.capabilities import area_for, require_capability
+        require_capability(request.user, area_for(document_file.document), 'download')
         if unsign_download(request.GET.get("token", "")) != f"document-file:{document_file.pk}:{request.user.pk}":
             raise PermissionDenied("This download link has expired or is invalid. Open the document to get a new link.")
         log_action(
@@ -638,7 +649,7 @@ class ReExtractView(OfficeAssignedMixin, View):
 
     def post(self, request, pk):
         document = _get_document(request, pk)
-        if not document.can_user_edit(request.user):
+        if not document.can_user_manage(request.user, 'extract'):
             raise PermissionDenied("Only the owning office can re-run extraction.")
 
         try:

@@ -158,7 +158,7 @@ def _report_records(user, filters):
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_both_pages_resolve_the_same_office(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, reports = _both(client, _office_param(offices, agreement, code))
 
     assert dashboard["scope"]["office"] == reports["filters"]["office"]
@@ -168,7 +168,7 @@ def test_both_pages_resolve_the_same_office(client, users, offices, agreement, c
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_the_overdue_totals_agree(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, reports = _both(client, _office_param(offices, agreement, code))
 
     assert dashboard["overdue_summary"]["total"] == reports["overdue_all"]
@@ -181,7 +181,7 @@ def test_the_two_pages_count_the_same_records_not_merely_as_many(
 ):
     """Sets, not counts. Two definitions can land on the same number over
     different records, which is exactly how the drift stayed invisible."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, reports = _both(client, _office_param(offices, agreement, code))
 
     dashboard_pks = set(
@@ -198,7 +198,7 @@ def test_an_office_sees_what_it_forwarded_and_what_was_forwarded_to_it(
     client, users, offices, agreement
 ):
     """The case the two-relationship filter missed, on both pages at once."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for code in ("SUP", "PRC"):
         dashboard, reports = _both(client, _office_param(offices, agreement, code))
         for records in (
@@ -217,7 +217,7 @@ def test_the_awaiting_headline_is_ours_theirs_and_between_others(
     """Not `ours + theirs`: a document this office is involved in can be waiting
     on a receipt owed between two *other* offices. That third part is counted
     independently here, so the headline has to equal the three exactly."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _dashboard, reports = _both(client, _office_param(offices, agreement, code))
     office = reports["filters"]["office"]
     records = _report_records(users["admin"], reports["filters"])
@@ -239,7 +239,7 @@ def test_the_awaiting_headline_is_ours_theirs_and_between_others(
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_the_awaiting_headline_is_the_one_definition(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _dashboard, reports = _both(client, _office_param(offices, agreement, code))
     records = _report_records(users["admin"], reports["filters"])
 
@@ -251,7 +251,7 @@ def test_a_superseded_unconfirmed_hop_is_named_not_counted(client, users, agreem
     """HR never signed for the first batch, and the record has moved on and been
     received since. It is no longer awaiting receipt, and it is not dropped
     silently either."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     reports = client.get(f"{REPORTS}?office=all").context
 
     assert agreement["stale"] not in awaiting_receipt(
@@ -264,7 +264,7 @@ def test_a_superseded_unconfirmed_hop_is_named_not_counted(client, users, agreem
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_overdue_office_rows_sum_to_the_overdue_total(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, _reports = _both(client, _office_param(offices, agreement, code))
 
     rows = dashboard["overdue_offices"]
@@ -274,7 +274,7 @@ def test_overdue_office_rows_sum_to_the_overdue_total(client, users, offices, ag
 @pytest.mark.django_db
 def test_upload_rows_sum_to_a_total_counted_over_every_office(client, users, agreement):
     """Thirteen offices uploaded and the cap is twelve, so this truncates."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     uploads = client.get(f"{DASHBOARD}?office=all").context["uploads_by_office"]
 
     assert any(row.get("is_remainder") for row in uploads["rows"]), "the cap truncated"
@@ -290,7 +290,7 @@ def test_upload_rows_sum_to_a_total_counted_over_every_office(client, users, agr
 def test_upload_shares_sum_to_a_hundred_within_rounding(client, users, agreement):
     """Whole percentages cannot promise exactly 100 — 33 + 33 + 33 is 99 — so
     the bound is the rounding: at most half a point per row."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get(f"{DASHBOARD}?office=all").context["uploads_by_office"]["rows"]
 
     assert abs(sum(row["percent"] for row in rows) - 100) <= len(rows) / 2
@@ -299,7 +299,7 @@ def test_upload_shares_sum_to_a_hundred_within_rounding(client, users, agreement
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_document_type_rows_sum_to_the_repository(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _dashboard, reports = _both(client, _office_param(offices, agreement, code))
 
     assert sum(row["total"] for row in reports["document_types"]) == reports["total_documents"]
@@ -308,7 +308,7 @@ def test_document_type_rows_sum_to_the_repository(client, users, offices, agreem
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", SCOPES)
 def test_extraction_states_sum_to_the_repository(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _dashboard, reports = _both(client, _office_param(offices, agreement, code))
 
     assert sum(reports["extraction"]["by_status"].values()) == reports["total_documents"]
@@ -343,7 +343,7 @@ MEMO_AGGREGATES = {"overdue_offices", "overdue_summary"}
 
 @pytest.mark.django_db
 def test_the_dashboard_context_is_exactly_the_named_keys(client, users, agreement):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
 
     assert set(response.context_data) == DASHBOARD_CONTEXT
@@ -351,7 +351,7 @@ def test_the_dashboard_context_is_exactly_the_named_keys(client, users, agreemen
 
 @pytest.mark.django_db
 def test_every_dashboard_context_key_is_read(client, users, agreement):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(DASHBOARD)
     # str(): a template name can arrive as a SafeString, and Python 3.11's
     # pathlib interns path parts, which refuses a str subclass.
@@ -373,7 +373,7 @@ def test_every_dashboard_context_key_is_read(client, users, agreement):
 @pytest.mark.django_db
 @pytest.mark.parametrize("code", ["MED", "SUP", "PRC", "HR"])
 def test_the_recent_panels_list_only_the_picked_office(client, users, offices, agreement, code):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, _reports = _both(client, _office_param(offices, agreement, code))
     office = dashboard["scope"]["office"]
 
@@ -387,7 +387,7 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
     """Every rate here divides by something; an empty office must not find out
     which one raises."""
     empty = Office.objects.create(code="NIL", name="Empty office", cluster="OVPA")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     dashboard, reports = _both(client, str(empty.pk))
 
     assert dashboard["overdue_summary"]["total"] == 0
@@ -431,7 +431,8 @@ def test_an_office_with_no_records_renders_both_pages_at_zero(client, users, db)
 # Office-stage annotations travel with the rows, so rendering does not fetch
 # them again. Hidden legacy queues are counted only when explicitly selected.
 # The all-office page now performs two fewer reads than the previous 53.
-DASHBOARD_QUERIES = 51
+# One request-scoped capability snapshot adds one fixed read, independent of rows.
+DASHBOARD_QUERIES = 52
 #: 51: the repository section gained its three retention counts (due, due in
 #: 90 days, never scheduled), each one query, for every reader.
 #: 51: holidays, one read for the page's one turnaround calculation.
@@ -441,7 +442,7 @@ DASHBOARD_QUERIES = 51
 #: Removing the report's type choices, pagination and record rows saves three reads.
 # The repository chart now partitions all dates in one grouped query instead
 # of making separate queries for its two sources.
-REPORTS_QUERIES = 43
+REPORTS_QUERIES = 44
 
 
 def _assert_one_office_schedule_query(captured):
@@ -452,7 +453,7 @@ def _assert_one_office_schedule_query(captured):
 def test_the_dashboard_query_count_is_pinned(
     client, users, agreement, django_assert_num_queries
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     client.get(f"{REPORTS}?office=all")  # session and permission caches warm
 
     with django_assert_num_queries(DASHBOARD_QUERIES) as captured:
@@ -464,7 +465,7 @@ def test_the_dashboard_query_count_is_pinned(
 def test_the_reports_query_count_is_pinned(
     client, users, agreement, django_assert_num_queries
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     client.get(f"{DASHBOARD}?office=all")
 
     with django_assert_num_queries(REPORTS_QUERIES) as captured:
@@ -480,13 +481,13 @@ def test_the_reports_query_count_is_pinned(
 #: every office cannot see them: there, the rings do not exist. Both views of
 #: the rings are one pass, so asking for the overdue view costs nothing extra.
 #: Both up with holidays, by the same reads as the two pins above.
-DASHBOARD_OFFICE_QUERIES = 55
+DASHBOARD_OFFICE_QUERIES = 56
 # The incoming movement-today counter is no longer displayed or queried.
 #: 52: with an office picked, the two office rankings are no longer computed
 #: (their rows would have been built from that office's documents only) and one
 # The office endorsement summary was removed. Direction bars reuse the existing
 # grouped stage counts, so there is no new query per direction or stage.
-REPORTS_OFFICE_QUERIES = 43
+REPORTS_OFFICE_QUERIES = 44
 
 
 @pytest.mark.django_db
@@ -494,7 +495,7 @@ REPORTS_OFFICE_QUERIES = 43
 def test_the_dashboard_query_count_is_pinned_for_an_office(
     client, users, offices, agreement, django_assert_num_queries, ring
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pk = offices["SUP"].pk
     client.get(f"{REPORTS}?office={pk}")
 
@@ -507,7 +508,7 @@ def test_the_dashboard_query_count_is_pinned_for_an_office(
 def test_the_reports_query_count_is_pinned_for_an_office(
     client, users, offices, agreement, django_assert_num_queries
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     pk = offices["SUP"].pk
     client.get(f"{DASHBOARD}?office={pk}")
 
@@ -526,7 +527,7 @@ def test_neither_page_runs_a_query_per_record(
     this only moves for a loop — fifteen more routed records, same count."""
     office = "all" if scope == "all" else offices[scope].pk
     url = f"{page}?office={office}"
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     client.get(url)
 
     def queries():

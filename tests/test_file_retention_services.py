@@ -95,7 +95,7 @@ def test_old_signed_and_legacy_links_cannot_bypass_retirement(client, users, ext
     record, actor, versions = history(users, external, 6)
     old = versions[0]
     kind = "external" if external else "tracking"
-    client.force_login(actor)
+    client.force_verified_login(actor)
     for purpose in ("preview", "content", "download"):
         response = client.get(file_url(kind, old.pk, actor, purpose))
         assert response.status_code == 410 and response["Cache-Control"] == "private, no-store"
@@ -104,5 +104,5 @@ def test_old_signed_and_legacy_links_cannot_bypass_retirement(client, users, ext
     legacy = reverse("tracking:external_attachment" if external else "tracking:attachment_download", args=[old.pk])
     response = client.get(legacy, {"token": sign_download(f"{prefix}:{old.pk}:{actor.pk}")})
     assert response.status_code == 410
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     assert client.get(file_url(kind, old.pk, users["sup"], "download")).status_code in {403, 404}

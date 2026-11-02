@@ -12,7 +12,7 @@ from tests.test_turnaround_period import two_months  # noqa: F401
 @pytest.mark.django_db
 @pytest.mark.parametrize("stage", ["receipt", "processing", "lifetime"])
 def test_stage_filter_changes_every_turnaround_view_only(client, users, two_months, stage):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     # Compare the same snapshot; the service exposes its precise cutoff.
     with patch("django.utils.timezone.now", return_value=timezone.now()):
         baseline = client.get("/").context
@@ -34,7 +34,7 @@ def test_stage_filter_changes_every_turnaround_view_only(client, users, two_mont
 
 @pytest.mark.django_db
 def test_window_ends_at_the_picked_month_and_keeps_the_office(client, users, offices, two_months):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     month = two_months["month"]
     response = client.get("/", {"month": f"{month:%Y-%m}", "office": offices["SUP"].pk,
                                 "turnaround_stage": "lifetime", "turnaround_window": "3"})
@@ -54,7 +54,7 @@ def test_window_ends_at_the_picked_month_and_keeps_the_office(client, users, off
 
 @pytest.mark.django_db
 def test_statistics_are_visible_and_empty_filters_have_a_message(client, users, two_months):  # noqa: F811
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/").content.decode()
     assert '<details class="dashboard-turnaround-statistics">' not in body
     assert 'class="trend-summary dashboard-turnaround-summary"' in body
@@ -73,7 +73,7 @@ def test_statistics_are_visible_and_empty_filters_have_a_message(client, users, 
 
 @pytest.mark.django_db
 def test_invalid_turnaround_filters_fall_back_with_an_explanation(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/", {"turnaround_stage": "unknown", "turnaround_window": "999"})
     notes = [str(note) for note in get_messages(response.wsgi_request)]
     assert any("Unknown turnaround stage" in note for note in notes)

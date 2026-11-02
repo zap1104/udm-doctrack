@@ -191,7 +191,7 @@ def test_a_forced_password_change_cannot_be_walked_around(client, users):
     account carry on using the password the administrator had handed out."""
     user = users["med"]
     type(user).objects.filter(pk=user.pk).update(must_change_password=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     for path in ("/", "/tracking/", "/documents/", "/search/"):
         response = client.get(path)
@@ -204,12 +204,12 @@ def test_the_password_page_itself_stays_reachable(client, users):
     """A forced change that redirects the change page to itself is a locked account."""
     user = users["med"]
     type(user).objects.filter(pk=user.pk).update(must_change_password=True)
-    client.force_login(user)
+    client.force_verified_login(user)
 
     assert client.get("/accounts/password/").status_code == 200
 
 
 @pytest.mark.django_db
 def test_normal_accounts_are_not_redirected(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert client.get("/").status_code == 200

@@ -62,7 +62,7 @@ def test_shared_filter_attributes_default_to_explicit_submission():
     ("/documents/external/deletion-review/", "id_status", "submit", None),
 ])
 def test_filters_declare_selective_update_policy_with_a_native_fallback(client, users, path, control_id, mode, sync):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path)
     assert response.status_code == 200
     html = RenderedHTML(response.content.decode())
@@ -134,7 +134,7 @@ def test_filters_declare_selective_update_policy_with_a_native_fallback(client, 
     ("/administration/audit-log/", ["audit-system-results", "audit-access-results"]),
 ])
 def test_updated_results_have_stable_filter_regions(client, users, path, region_ids):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path)
     assert response.status_code == 200
     html = RenderedHTML(response.content.decode())
@@ -152,7 +152,7 @@ def test_updated_results_have_stable_filter_regions(client, users, path, region_
     "/documents/external/deletion-review/?q=paper",
 ])
 def test_clear_reset_and_search_mode_links_explicitly_discard_pending_filters(client, users, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path)
     assert response.status_code == 200
     html = RenderedHTML(response.content.decode())
@@ -166,7 +166,7 @@ def test_clear_reset_and_search_mode_links_explicitly_discard_pending_filters(cl
 
 @pytest.mark.django_db
 def test_audit_clear_actions_discard_only_their_own_pending_form(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/administration/audit-log/?q=paper&record=paper")
     html = RenderedHTML(response.content.decode())
     clear_links = [node for node in html.nodes if node["tag"] == "a" and node["text"].strip() == "Clear these filters"]
@@ -177,7 +177,7 @@ def test_audit_clear_actions_discard_only_their_own_pending_form(client, users):
 
 @pytest.mark.django_db
 def test_deletion_queue_tabs_keep_their_immediate_link_policy(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     html = RenderedHTML(client.get("/documents/deletion-review/").content.decode())
     tabs = [node for node in html.nodes if node["tag"] == "a" and node["parent"] and node["parent"]["attrs"].get("aria-label") == "Deletion review queues"]
     assert len(tabs) == 4
@@ -186,7 +186,7 @@ def test_deletion_queue_tabs_keep_their_immediate_link_policy(client, users):
 
 @pytest.mark.django_db
 def test_filter_loading_status_stays_outside_the_content_being_replaced(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     html = RenderedHTML(client.get("/").content.decode())
     status = html.by_id("filter-update-status")
     assert status["attrs"].get("role") == "status"

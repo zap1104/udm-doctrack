@@ -65,7 +65,7 @@ def test_a_hop_states_its_receipt_wait_and_how_long_it_was_held(completed_at_sup
 
 @pytest.mark.django_db
 def test_the_timeline_prints_them(client, users, completed_at_sup):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = " ".join(client.get(completed_at_sup.get_absolute_url()).content.decode().split())
 
     assert "Confirmed after 2 hrs of office time" in body

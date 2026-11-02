@@ -38,6 +38,7 @@
       <section class="card-udm workspace-panel mt-4" aria-labelledby="email-verification-heading">
         <div class="card-udm-head"><h2 id="email-verification-heading">Email verification</h2></div>
         <div class="card-udm-body">
+          <a class="btn btn-udm-outline mb-3" href="{% url 'accounts:email_change' %}">Change email securely</a>
           {% if user.email_is_verified %}
             <p class="mb-0">Email verified. Password recovery is available when email delivery is configured.</p>
           {% else %}

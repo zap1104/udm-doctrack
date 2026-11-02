@@ -58,7 +58,7 @@ def test_the_role_properties_say_what_they_mean(users):
 # --- reading is allowed ----------------------------------------------------
 @pytest.mark.django_db
 def test_a_viewer_can_open_a_record_from_their_own_office(client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.get(med_record.get_absolute_url())
 
     assert response.status_code == 200
@@ -67,7 +67,7 @@ def test_a_viewer_can_open_a_record_from_their_own_office(client, med_record, us
 
 @pytest.mark.django_db
 def test_a_viewer_can_print_the_routing_slip(client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.get(f"/tracking/{med_record.pk}/slip/")
 
     assert response.status_code == 200
@@ -81,7 +81,7 @@ def test_a_viewer_still_cannot_read_another_offices_record(client, users, office
     )
     route_record(other, [offices["SUP"]], user=users["hr"])
 
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.get(other.get_absolute_url()).status_code == 403
 
 
@@ -121,7 +121,7 @@ def test_the_service_layer_refuses_every_mutation(med_record, users, offices, me
     ],
 )
 def test_every_mutating_endpoint_refuses_a_viewer(client, med_record, users, path, payload):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.post(f"/tracking/{med_record.pk}/{path}", payload)
 
     assert response.status_code == 403, path
@@ -129,7 +129,7 @@ def test_every_mutating_endpoint_refuses_a_viewer(client, med_record, users, pat
 
 @pytest.mark.django_db
 def test_a_viewer_cannot_reach_the_create_page(client, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.get("/tracking/new/").status_code == 403
 
 
@@ -143,14 +143,14 @@ def test_the_action_panel_is_not_offered_to_a_viewer(client, med_record, users):
 
 @pytest.mark.django_db
 def test_a_viewer_cannot_open_the_administration_area(client, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.get("/accounts/users/").status_code == 403
 
 
 # --- 2.5: what a viewer does is still recorded -----------------------------
 @pytest.mark.django_db
 def test_opening_a_record_is_logged(client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     client.get(med_record.get_absolute_url())
 
     entry = med_record.activities.filter(event=RecordActivity.Event.VIEWED).first()
@@ -160,7 +160,7 @@ def test_opening_a_record_is_logged(client, med_record, users):
 
 @pytest.mark.django_db
 def test_printing_the_slip_is_logged(client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     client.get(f"/tracking/{med_record.pk}/slip/")
 
     entry = med_record.activities.filter(event=RecordActivity.Event.PRINTED).first()
@@ -173,7 +173,7 @@ def test_repeated_opens_collapse_to_one_entry(client, med_record, users):
     """One row per page load would bury the movement history under footprints —
     and the timeline is on the page being opened, so each read would lengthen
     the thing being read."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     for _ in range(4):
         client.get(med_record.get_absolute_url())
 
@@ -183,7 +183,7 @@ def test_repeated_opens_collapse_to_one_entry(client, med_record, users):
 @pytest.mark.django_db
 def test_each_print_is_its_own_entry(client, med_record, users):
     """Every print puts another copy outside the system."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     for _ in range(3):
         client.get(f"/tracking/{med_record.pk}/slip/")
 
@@ -192,9 +192,9 @@ def test_each_print_is_its_own_entry(client, med_record, users):
 
 @pytest.mark.django_db
 def test_two_people_opening_it_are_logged_separately(client, second_client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     client.get(med_record.get_absolute_url())
-    second_client.force_login(users["med"])
+    second_client.force_verified_login(users["med"])
     second_client.get(med_record.get_absolute_url())
 
     actors = set(
@@ -208,7 +208,7 @@ def test_two_people_opening_it_are_logged_separately(client, second_client, med_
 def test_a_view_does_not_promote_the_status(client, med_record, users):
     """VIEWED must not read as activity after receipt."""
     assert med_record.status == Status.RECEIVED
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     client.get(med_record.get_absolute_url())
 
     med_record.refresh_from_db()
@@ -217,7 +217,7 @@ def test_a_view_does_not_promote_the_status(client, med_record, users):
 
 @pytest.mark.django_db
 def test_views_are_kept_out_of_the_rendered_timeline(client, med_record, users):
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     client.get(med_record.get_absolute_url())
     body = client.get(med_record.get_absolute_url()).content.decode()
 
@@ -272,7 +272,7 @@ def test_a_superuser_may_start_work_without_an_office(db):
 def test_a_viewer_is_not_offered_the_new_tracking_slip_button(client, users):
     """RecordCreateView turns a viewer away with a redirect and a warning, so
     the list page stops offering the button that leads there."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     body = client.get(TRACKING_LIST).content.decode()
 
     assert "New Tracking Slip" not in body
@@ -280,7 +280,7 @@ def test_a_viewer_is_not_offered_the_new_tracking_slip_button(client, users):
 
 @pytest.mark.django_db
 def test_an_ordinary_user_still_gets_the_new_tracking_slip_button(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(TRACKING_LIST).content.decode()
 
     assert "+ New Tracking Slip" in body
@@ -290,7 +290,7 @@ def test_an_ordinary_user_still_gets_the_new_tracking_slip_button(client, users)
 def test_a_viewer_is_not_offered_the_upload_button(client, users):
     """Both places the repository offers it — the page head and the empty
     state — since a viewer with no matching documents sees the second one."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     body = client.get(REPOSITORY).content.decode()
 
     assert 'href="/documents/upload/"' not in body
@@ -298,7 +298,7 @@ def test_a_viewer_is_not_offered_the_upload_button(client, users):
 
 @pytest.mark.django_db
 def test_an_ordinary_user_still_gets_the_upload_button(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(REPOSITORY).content.decode()
 
     assert 'href="/documents/upload/"' in body
@@ -308,7 +308,7 @@ def test_an_ordinary_user_still_gets_the_upload_button(client, users):
 def test_hiding_those_buttons_is_not_the_permission(client, users):
     """The endpoints stay reachable to anyone who knows the URL, so the views
     have to refuse on their own. The hidden button is a courtesy."""
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
 
     assert client.get("/tracking/new/").status_code in (302, 403)
     assert client.get("/documents/upload/").status_code in (302, 403)

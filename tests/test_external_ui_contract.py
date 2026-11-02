@@ -31,7 +31,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_external_create_connects_the_shared_document_type_picker(client, users, memo_type):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_create"))
     assert response.status_code == 200
     controls = Controls(response.content.decode())
@@ -44,7 +44,7 @@ def test_external_create_connects_the_shared_document_type_picker(client, users,
 
 
 def test_external_invalid_creation_has_linkable_field_errors(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {})
     response = follow_upload_recovery(client, response)
     assert response.status_code == 200
@@ -62,7 +62,7 @@ def test_external_review_keeps_one_revision_and_one_recipient_selector(client, u
     admin = users["med_admin"]
     counterpart = create_external_office(user=admin, name="College paper office", code="COL")
     record = create_record(user=admin, title="Paper review", from_external_office=counterpart)
-    client.force_login(admin)
+    client.force_verified_login(admin)
     response = client.get(reverse("tracking:external_review", args=[record.pk]))
     assert response.status_code == 200
     controls = Controls(response.content.decode())
@@ -79,7 +79,7 @@ def test_external_repository_file_totals_are_available_without_row_queries(clien
     document = Document.objects.create(title="External paper files", office=offices["MED"], collection="EXTERNAL")
     for name in ("cover.pdf", "evidence.pdf"):
         DocumentFile.objects.create(document=document, file="test-only/" + name, original_name=name)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("documents:external_repository"))
     assert response.status_code == 200
     displayed = list(response.context["documents"])

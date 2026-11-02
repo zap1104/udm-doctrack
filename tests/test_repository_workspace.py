@@ -28,7 +28,7 @@ def repository_records(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["med", "med_admin", "viewer"])
 def test_repository_rows_folder_counts_and_tags_are_scoped(client, users, repository_records, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get("/documents/")
     assert response.status_code == 200
     body = response.content.decode()
@@ -44,7 +44,7 @@ def test_repository_rows_folder_counts_and_tags_are_scoped(client, users, reposi
 
 @pytest.mark.django_db
 def test_pending_queue_has_its_own_pagination_and_search(client, users, offices, repository_records):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     for index in range(12):
         TrackingRecord.objects.create(subject=f"Queued memo {index}", tracking_number=f"QUEUE-{index}", originating_office=offices["MED"], created_by=users["med"], status=Status.COMPLETED_PENDING_UPLOAD, completed_at=timezone.now())
     response = client.get("/documents/?view=pending&per_page=10")
@@ -59,7 +59,7 @@ def test_pending_queue_has_its_own_pagination_and_search(client, users, offices,
 
 @pytest.mark.django_db
 def test_private_folder_parameter_does_not_disclose_office_or_documents(client, users, offices, repository_records):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     for view in ("", "pending"):
         response = client.get(f"/documents/?office={offices['HR'].pk}&view={view}")
         assert response.context["total"] == 0
@@ -73,7 +73,7 @@ def test_private_folder_parameter_does_not_disclose_office_or_documents(client, 
 def test_explicit_document_grant_changes_folder_and_result_counts(client, users, repository_records):
     restricted = repository_records[2]
     DocumentAccessGrant.objects.create(document=restricted, user=users["med"], granted_by=users["admin"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get("/documents/")
     assert response.context["all_count"] == 2
     assert "Restricted file" in response.content.decode()
@@ -81,7 +81,7 @@ def test_explicit_document_grant_changes_folder_and_result_counts(client, users,
 
 @pytest.mark.django_db
 def test_pending_folder_exists_even_before_its_first_filed_document(client, users, offices, repository_records):
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     Document.objects.filter(office=offices["HR"]).update(is_active=False)
     response = client.get("/documents/?view=pending")
     assert response.context["all_count"] == 0

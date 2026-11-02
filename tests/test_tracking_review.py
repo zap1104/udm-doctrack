@@ -40,7 +40,7 @@ def _payload(offices, memo_type, **changes):
 
 
 def _create(client, users, offices, memo_type, **changes):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     payload = _payload(offices, memo_type, **changes)
     response = client.post("/tracking/new/", payload)
     assert response.status_code == 302
@@ -394,7 +394,7 @@ def test_tracking_attachment_picker_links_its_validation_error(client, users, of
 
 def test_editing_as_system_admin_labels_the_drafts_originating_office(client, users, offices):
     record = create_draft_record(user=users["med"], subject="Original office display", instructions="For action.")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(f"/tracking/new/?draft={record.pk}")
 
@@ -428,7 +428,7 @@ def test_invalid_draft_edit_leaves_the_persisted_record_untouched(client, users,
 @pytest.mark.parametrize("actor", ["sup", "med_admin", "viewer"])
 def test_draft_edit_cannot_open_or_change_another_users_draft(client, users, offices, memo_type, actor):
     record = create_draft_record(user=users["med"], subject="Private draft", instructions="For appropriate action.")
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     url = f"/tracking/new/?draft={record.pk}"
 
     assert client.get(url).status_code in (403, 404)
@@ -440,7 +440,7 @@ def test_draft_edit_cannot_open_or_change_another_users_draft(client, users, off
 
 @pytest.mark.parametrize("draft_id", ["0", "not-an-id"])
 def test_invalid_draft_reference_never_creates_a_new_record(client, users, offices, memo_type, draft_id):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     url = f"/tracking/new/?draft={draft_id}"
 
     assert client.get(url).status_code == 404
@@ -484,7 +484,7 @@ def test_detail_action_tabs_name_their_panels_and_initial_selection(client, user
     record = create_draft_record(user=users["med"], subject="Action tab relationships", instructions="For action.")
     route_record(record, [offices["SUP"]], user=users["med"])
     confirm_receipt(record, user=users["sup"])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     response = client.get(record.get_absolute_url())
 
@@ -521,7 +521,7 @@ def test_detail_attachment_pickers_have_distinct_ids_and_their_own_labels(client
     record = create_draft_record(user=users["med"], subject="Response attachment labels", instructions="For action.")
     route_record(record, [offices["SUP"]], user=users["med"])
     confirm_receipt(record, user=users["sup"])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     response = client.get(record.get_absolute_url())
 

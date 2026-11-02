@@ -7,7 +7,7 @@ import pytest
 
 @pytest.mark.django_db
 def test_the_three_offices_are_defined_above_the_table(client, users):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
     terms = body.index('<dl class="office-terms">')

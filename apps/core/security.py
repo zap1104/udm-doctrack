@@ -37,13 +37,14 @@ def redact_secrets(value):
     text = re.sub(r"(?i)(password|token|apikey|api_key|secret|signature|sig)([=:\s]+)[^&\s,;]+", r"\1\2[REDACTED]", text)
     text = re.sub(r"(://[^\s:/]+:)[^\s@]+@", r"\1[REDACTED]@", text)
     text = re.sub(r"(/accounts/(?:password-reset|email/verify)/[^/\s]+/)[^/\s\"?]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(/accounts/email/invitation/[^/\s]+/)[^/\s\"?]+", r"\1[REDACTED]", text)
     return text
 
 
 def redact_audit_data(value):
     """Keep credentials out of structured audit rows as well as text logs."""
     if isinstance(value, dict):
-        sensitive_keys = {"password", "token", "apikey", "api_key", "secret", "signature", "sig", "authorization"}
+        sensitive_keys = {"password", "token", "apikey", "api_key", "secret", "signature", "sig", "authorization", "code", "otp", "otp_code"}
         return {
             key: "[REDACTED]" if str(key).lower().replace("-", "_") in sensitive_keys else redact_audit_data(item)
             for key, item in value.items()

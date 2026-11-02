@@ -23,7 +23,7 @@ def test_tag_rename_refreshes_existing_document_search(client, users, offices, s
     document.tags.add(tag)
     document.rebuild_index()
     assert document.pk in matching_ids(users["admin"], tag.name)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.post(f"/administration/tags/{tag.pk}/", {
         "name": "quartzfilingneedle", "category": tag.category,
@@ -44,7 +44,7 @@ def test_office_rename_refreshes_existing_document_search(client, users, setting
     office = Office.objects.create(code="IDXOFF", name="oldofficeneedle", cluster="OVPA")
     document = make_document(office, "Ordinary filed request")
     assert document.pk in matching_ids(users["admin"], office.name)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.post(f"{path}{office.pk}/", {
         "code": office.code, "name": "quartzofficeneedle",
@@ -76,7 +76,7 @@ def test_type_rename_refreshes_primary_and_secondary_document_search(
         document.document_types.add(memo_type, kind)
         document.rebuild_index()
     assert document.pk in matching_ids(users["admin"], kind.name)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.post(f"/administration/document-types/{kind.pk}/", {
         "code": kind.code, "name": "quartztypeneedle", "description": kind.description,
@@ -106,7 +106,7 @@ def test_metadata_searchable_toggle_refreshes_existing_values(
     )
     document.rebuild_index()
     assert (document.pk in matching_ids(users["admin"], value.value)) is not searchable
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     payload = {
         "key": field.key, "label": field.label, "field_type": field.field_type,
         "choices_csv": "", "help_text": "", "sort_order": field.sort_order,
@@ -144,7 +144,7 @@ def test_office_rename_refreshes_a_document_filed_during_the_save(
         return original_save(form, *args, **kwargs)
 
     monkeypatch.setattr(OfficeForm, "save", file_before_office_save)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     with django_capture_on_commit_callbacks(execute=True):
         response = client.post(f"/accounts/offices/{office.pk}/", {
             "code": office.code, "name": "quartzconcurrentofficeneedle",

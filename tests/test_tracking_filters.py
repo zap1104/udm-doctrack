@@ -157,7 +157,7 @@ def test_a_partly_received_batch_still_counts_as_pending(client, users, offices,
         ("sup", Status.RECEIVED, Status.PENDING_RECEIPT),
         ("hr", Status.PENDING_RECEIPT, Status.RECEIVED),
     ):
-        client.force_login(users[recipient])
+        client.force_verified_login(users[recipient])
         response = client.get("/tracking/", {"scope": "incoming", "status": own_stage})
         assert response.status_code == 200
         assert {row.pk for row in response.context["page_obj"]} == {record.pk}
@@ -247,7 +247,7 @@ def test_filtering_by_office_matches_who_raised_it_not_who_holds_it(
     """A real behaviour change: the old dropdown matched originating OR current
     office, so picking SUP returned documents merely passing through it. The
     control is labelled "originating office" and now means it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     by_originator = client.get(f"/tracking/?offices={offices['MED'].pk}")
     assert med_record_at_sup in by_originator.context["records"]
@@ -268,7 +268,7 @@ def test_checking_two_offices_shows_records_from_either(
     )
     route_record(hr_record, [offices["SUP"]], user=users["hr"])
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(
         f"/tracking/?offices={offices['MED'].pk}&offices={offices['HR'].pk}"
     )
@@ -290,7 +290,7 @@ def test_files_created_by_me_returns_only_mine(client, users, offices, memo_type
     )
     route_record(theirs, [offices["MED"]], user=users["hr"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     found = set(client.get("/tracking/?owner=mine").context["records"])
 
     assert mine in found
@@ -306,7 +306,7 @@ def test_office_files_returns_what_your_office_is_holding(client, users, offices
     confirm_receipt(held, user=users["sup"])
     held.refresh_from_db()
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     found = set(client.get("/tracking/?owner=custody").context["records"])
 
     assert held in found
@@ -342,7 +342,7 @@ def test_the_owner_filter_narrows_within_the_pill_rather_than_replacing_it(
     theirs_overdue.due_at = timezone.now() - timedelta(days=2)
     theirs_overdue.save(update_fields=["due_at"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     found = set(client.get("/tracking/?scope=overdue&owner=mine").context["records"])
 
     assert mine_overdue in found, "overdue and mine"
@@ -353,7 +353,7 @@ def test_the_owner_filter_narrows_within_the_pill_rather_than_replacing_it(
 # --- what the page renders --------------------------------------------------
 @pytest.mark.django_db
 def test_the_page_has_a_tracking_search_box(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/tracking/").content.decode()
     # The page's own markup, not the chrome around it. The topbar carries the
     # repository's archive search — also name="q" — on every page.
@@ -377,7 +377,7 @@ def test_the_page_has_a_tracking_search_box(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("url", ["/tracking/", "/search/?mode=tracking&q=a"])
 def test_the_stage_row_offers_the_four_live_stages(client, users, url):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(url).content.decode()
     row = body[body.index("status-label"):]
     row = row[:row.index("</nav>") if "</nav>" in row else len(row)]
@@ -407,7 +407,7 @@ def test_two_stages_can_be_asked_for_at_once(client, users, offices, memo_type):
     route_record(signed, [offices["SUP"]], user=users["med"])
     confirm_receipt(signed, user=users["sup"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     def subjects(query):
         return {
@@ -423,7 +423,7 @@ def test_two_stages_can_be_asked_for_at_once(client, users, offices, memo_type):
 @pytest.mark.django_db
 def test_a_repeated_stage_lights_one_pill(client, users):
     """`?status=A&status=A` is one selection, not two."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     resolved = client.get("/tracking/?status=RECEIVED&status=RECEIVED").context["resolved"]
 
@@ -434,7 +434,7 @@ def test_a_repeated_stage_lights_one_pill(client, users):
 def test_an_unknown_stage_is_refused_and_the_rest_kept(client, users):
     """Not all-or-nothing: a stale link with one bad value must narrow by the
     values it does understand rather than quietly returning everything."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get("/tracking/?status=RECEIVED&status=BOGUS")
 
@@ -459,7 +459,7 @@ def test_the_stage_row_composes_with_the_queue(client, users, offices, memo_type
     route_record(signed, [offices["SUP"]], user=users["med"])
     confirm_receipt(signed, user=users["sup"])
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     def subjects(query):
         return {
@@ -482,7 +482,7 @@ def test_the_stage_row_composes_with_the_queue(client, users, offices, memo_type
 def test_a_stage_queue_that_lost_its_pill_still_resolves(client, users, scope):
     """The dashboard's links and saved bookmarks carry these. Only which of them
     get a pill has changed — `?scope=received` still means what it always did."""
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     response = client.get(f"/tracking/?scope={scope}")
 
@@ -498,7 +498,7 @@ def test_incoming_and_outgoing_are_disabled_across_every_office(client, users, u
     outgoing for Supply is incoming for HR at the same instant. Disabled rather
     than hidden: a row that loses two pills when the picker changes reads as the
     page breaking."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     from tests.test_template_accessibility import RenderedHTML
 
     html = RenderedHTML(client.get(url).content.decode())
@@ -520,7 +520,7 @@ def test_a_direction_queue_asked_across_every_office_is_dropped_not_honoured(cli
     """`apply_scope` with no office turns both predicates into the empty Q, so
     honouring the click would head the full active list "Incoming" — the
     fail-open the filter module exists to prevent."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/tracking/?office=all&scope=incoming")
     resolved = response.context["resolved"]
@@ -534,7 +534,7 @@ def test_a_direction_queue_asked_across_every_office_is_dropped_not_honoured(cli
 @pytest.mark.django_db
 def test_the_direction_queues_still_work_for_one_office(client, users, offices):
     """Only "every office" removes them."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"/tracking/?office={offices['SUP'].pk}").content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
@@ -549,7 +549,7 @@ def test_the_deadline_row_offers_all_three_states(client, users, url):
     """A single Overdue pill could say "late" and could not say "on time".
     `?overdue=no` was resolved and filtered all along and simply had no control,
     so the one question an office asks in two directions had a button for one."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(url).content.decode()
 
     for label in ("All deadlines", "On time", "Overdue"):
@@ -562,7 +562,7 @@ def test_the_overdue_pill_left_the_queue_nav(client, users, url):
     """It is a modifier, not a queue — it composes with whichever queue is
     selected, so it belongs with Status and Show rather than among the pills
     that replace each other."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(url).content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
@@ -576,7 +576,7 @@ def test_the_overdue_pill_left_the_queue_nav(client, users, url):
     [("", "All deadlines"), ("?overdue=no", "On time"), ("?overdue=yes", "Overdue")],
 )
 def test_the_deadline_row_lights_the_state_it_is_in(client, users, query, lit):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"/tracking/{query}").content.decode()
     # From this row's label to the next row's, so the Show row below — which
     # always has an active pill of its own — cannot be counted as this one's.
@@ -609,7 +609,7 @@ def test_on_time_actually_narrows(client, users, offices, memo_type):
     punctual.due_at = timezone.now() + timedelta(days=3)
     punctual.save(update_fields=["due_at"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     def subjects(query):
         return {
@@ -641,7 +641,7 @@ def test_a_row_names_the_originating_office_rather_than_saying_from(
         document_type=memo_type,
     )
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(url).content.decode()
     cell = body[body.index("Electrical supplies request"):]
@@ -665,7 +665,7 @@ def test_the_in_process_pill_is_a_scope_and_not_a_status(client, users):
     # An office user, not the system administrator: the administrator defaults
     # to every office, where Incoming and Outgoing are drawn disabled and carry
     # no href at all.
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/tracking/").content.decode()
     queue_nav = body[body.index("tracking-queue-nav"):body.index("tracking-filters")]
 
@@ -686,7 +686,7 @@ def test_every_filter_pill_carries_the_active_queue(client, users, offices):
     """Each pill's href already contains the selection clicking it produces, so
     there is nothing to submit — and the queue has to ride along in it, or
     filtering would drop the reader back to All Active."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/tracking/?scope=overdue").content.decode()
 
     assert "overdue=yes&amp;offices=" in body, "office pills keep the deadline condition"
@@ -699,7 +699,7 @@ def test_every_filter_pill_carries_the_active_queue(client, users, offices):
 def test_the_filters_are_links_not_a_form(client, users):
     """The card, the checkboxes, the radios and the Apply button are all gone:
     one pill language for the page, not two."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
 
     assert "Apply filters" not in content
@@ -710,7 +710,7 @@ def test_the_filters_are_links_not_a_form(client, users):
 
 @pytest.mark.django_db
 def test_the_panel_renders_both_groups(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/tracking/").content.decode()
 
     assert "Originating office" in body
@@ -723,7 +723,7 @@ def test_the_panel_renders_both_groups(client, users, offices):
 @pytest.mark.django_db
 def test_the_queue_and_filter_pills_share_one_class(client, users):
     """The acceptance criterion: one pill design on the page, not two."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     content = client.get("/tracking/").content.decode().split('<main id="main-content"', 1)[1]
 
     assert "tracking-queue-link" not in content, "folded into the shared class"
@@ -738,7 +738,7 @@ def test_an_office_pill_toggles_itself_off_again(client, users, offices):
     must keep it, which is what makes selecting a second office additive."""
     import re
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     med, sup = offices["MED"], offices["SUP"]
     body = client.get(f"/tracking/?offices={med.pk}").content.decode()
 
@@ -753,7 +753,7 @@ def test_an_office_pill_toggles_itself_off_again(client, users, offices):
 
 @pytest.mark.django_db
 def test_a_second_office_pill_keeps_the_first(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     med, sup = offices["MED"].pk, offices["SUP"].pk
     body = client.get(f"/tracking/?offices={med}").content.decode()
 
@@ -763,7 +763,7 @@ def test_a_second_office_pill_keeps_the_first(client, users, offices):
 @pytest.mark.django_db
 def test_changing_a_filter_returns_to_the_first_page(client, users, offices):
     """Page four of the old filter is not page four of the new one."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"/tracking/?page=3&offices={offices['MED'].pk}").content.decode()
     filters = body.split("Originating office", 1)[1].split("tracking record", 1)[0]
 

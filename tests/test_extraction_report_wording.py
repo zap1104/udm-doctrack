@@ -11,7 +11,7 @@ def test_skipped_report_does_not_claim_existing_text_is_unsearchable(client, use
         uploaded_by=users["med"], year=2026, ocr_status=OcrStatus.SKIPPED,
         ocr_text=existing_text,
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/documents/reports/")
     assert response.status_code == 200
     assert response.context["extraction"]["skipped"] == 1

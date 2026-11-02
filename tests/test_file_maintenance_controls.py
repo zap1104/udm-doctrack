@@ -51,10 +51,10 @@ def test_cleanup_admin_is_read_only_and_office_scoped(client, users):
         office_id_snapshot=users["med_admin"].office_id)
     other = StorageCleanupIntent.objects.create(storage_identity="", storage_key="private/other", reason="Other", state="blocked",
         office_id_snapshot=users["sup_admin"].office_id)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(reverse("admin:core_storagecleanupintent_change", args=[own.pk])).status_code == 200
     assert client.post(reverse("admin:core_storagecleanupintent_change", args=[own.pk]), {"state": "complete"}).status_code == 403
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     # Some deployments intentionally reserve Django administration for system
     # administrators. In either case, direct cross-office rows remain refused.
     assert client.get(reverse("admin:core_storagecleanupintent_change", args=[other.pk])).status_code in {302, 403, 404}

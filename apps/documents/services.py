@@ -9,6 +9,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
 from apps.core.models import AuditLog, MetadataFieldDefinition, Tag
 from apps.core.permissions import active_writer, locked_mutation
 from apps.core.storage import compensate_storage, create_stored_file
@@ -71,6 +72,7 @@ def ingest_upload(
 
 @compensate_storage
 @transaction.atomic
+@requires_capability('repository', 'create')
 def _persist_upload(
     *, user, uploaded_file=None, uploaded_files=None, office=None, source=Source.UPLOAD,
     ocr_language="auto", allow_external_ocr=False, collection=Collection.OVPA, external_offices=None, defer_extraction=False,
@@ -261,6 +263,7 @@ def duplicate_of(uploaded_file, *, user=None, collection=Collection.OVPA) -> Doc
 # Metadata review (step 2 of the upload wizard)
 # ---------------------------------------------------------------------------
 @locked_mutation
+@requires_capability(None, 'edit_metadata')
 def save_document_metadata(document: Document, *, user, data: dict, tag_names, metadata_values: dict,
                            accepted_from_suggestion: dict | None = None) -> Document:
     if not document.can_user_edit(user):
@@ -411,7 +414,7 @@ def add_file_to_document(document: Document, uploaded_file, *, user, run_extract
 
 def _append_initial_file(document: Document, uploaded_file, *, user, run_extraction: bool = True) -> DocumentFile:
     """Append only inside ingest_upload's initial, compensated transaction."""
-    if not document.can_user_edit(user):
+    if not document.can_user_manage(user, 'create'):
         raise PermissionDenied("Only the owning office can add files.")
     if document.ocr_status == OcrStatus.FAILED or document.extraction_failed_generation is not None:
         document.retain_extraction_failure()
@@ -474,9 +477,10 @@ def re_extract_document(document: Document, *, user) -> dict:
 
 
 @locked_mutation
+@requires_capability(None, 'extract')
 def _request_document_extraction(document: Document, *, user) -> dict:
     """Retry all attachments with current authorization in either runtime mode."""
-    if not document.can_user_edit(user):
+    if not document.can_user_manage(user, 'extract'):
         raise PermissionDenied("Only the owning office can re-run extraction.")
     if not document.files.exists():
         raise ValidationError("This record has no file to read.")

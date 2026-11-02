@@ -22,7 +22,7 @@ JS = pathlib.Path("static/js/doctrack.js")
 # --- 4.1 / 4.2 naming and navigation ---------------------------------------
 @pytest.mark.django_db
 def test_the_modules_are_named_once_each(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/tracking/").content.decode()
 
     assert "Document Tracking" in body
@@ -37,7 +37,7 @@ def test_the_old_module_name_is_gone_from_every_page(client, users, settings):
     not the module label and is left alone, so it is removed from the haystack
     rather than being allowed to fail this.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for path in ("/", "/tracking/", "/documents/", "/tracking/reports/", "/search/"):
         body = client.get(path).content.decode().replace(settings.SITE_LONG_NAME, "")
         assert "Document Management" not in body, path
@@ -45,7 +45,7 @@ def test_the_old_module_name_is_gone_from_every_page(client, users, settings):
 
 @pytest.mark.django_db
 def test_the_sidebar_order_puts_search_second(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/").content.decode()
     nav = body[body.index('aria-label="Main navigation"') : body.index("</nav>")]
 
@@ -58,7 +58,7 @@ def test_the_sidebar_order_puts_search_second(client, users):
 def test_neither_module_has_sub_tabs_in_the_sidebar(client, users):
     """The queues appeared both here and on the page, with two active states to
     keep in step."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/tracking/?scope=incoming").content.decode()
 
     assert "tracking-subnav" not in body
@@ -72,7 +72,7 @@ def test_the_sub_nav_styling_went_with_it():
 def test_an_office_admin_can_see_the_administration_link(client, users):
     """It was gated on is_system_admin, so an office administrator had no way
     into the screens they are now allowed to use."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get("/").content.decode()
 
     assert "/administration/" in body
@@ -80,7 +80,7 @@ def test_an_office_admin_can_see_the_administration_link(client, users):
 
 @pytest.mark.django_db
 def test_an_ordinary_user_still_does_not_see_it(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/").content.decode()
 
     assert 'href="/administration/"' not in body
@@ -105,7 +105,7 @@ def test_the_placeholder_never_reaches_a_screen(client, users, memo_type):
         user=users["med"], subject="Still being written", instructions="For action.",
         document_type=memo_type,
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     # The record's own placeholder, not the bare prefix: "DRAFT" also appears
     # legitimately as the status filter's option value.
@@ -183,7 +183,7 @@ def test_the_record_page_names_all_three_offices(client, users, offices, memo_ty
     route_record(record, [offices["SUP"]], user=users["med"])
     record.refresh_from_db()
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(record.get_absolute_url()).content.decode()
 
     assert "Originating office" in body
@@ -213,7 +213,7 @@ def test_the_list_shows_the_receiving_office_column(client, users, offices, memo
     )
     route_record(record, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/tracking/").content.decode()
 
     assert "Awaiting receipt" in body
@@ -228,7 +228,7 @@ def test_the_receiving_column_is_annotated_in_one_pass(client, users, offices, m
         )
         route_record(record, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     records = client.get("/tracking/").context["records"]
 
     assert all(hasattr(record, "receiving_offices_shown") for record in records)
@@ -264,7 +264,7 @@ def test_a_record_awaiting_receipt_does_not_name_a_person_who_does_not_exist(
     record.refresh_from_db()
     assert record.status == Status.PENDING_RECEIPT
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(record.get_absolute_url()).content.decode()
 
     receipt_person = re.search(r">Latest receipt by</th>\s*<td>(.*?)</td>", body, re.S).group(1)
@@ -275,7 +275,7 @@ def test_a_record_awaiting_receipt_does_not_name_a_person_who_does_not_exist(
 # --- 4.7 repository folders -------------------------------------------------
 @pytest.mark.django_db
 def test_the_repository_renders_folders_in_a_grid(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     list_body = client.get("/documents/").content.decode()
     assert "Office Folders" not in list_body
     assert "Browse folders" in list_body
@@ -290,7 +290,7 @@ def test_the_repository_renders_folders_in_a_grid(client, users):
 @pytest.mark.django_db
 def test_the_column_count_comes_from_settings(client, users, settings):
     settings.REPOSITORY_FOLDER_COLUMNS = 6
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/documents/?view=folders").content.decode()
 
     assert "--folder-columns:6" in body
@@ -313,7 +313,7 @@ def test_the_printed_slip_lists_attachments_as_plain_names(client, users, office
     )
     route_record(record, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get(f"/tracking/{record.pk}/slip/").content.decode()
     start = body.find("routing-slip-attachments")
     if start == -1:
@@ -369,7 +369,7 @@ def test_the_toggle_stores_the_choice_and_follows_the_system_until_then():
 
 @pytest.mark.django_db
 def test_the_toggle_is_in_the_app_but_not_on_the_sign_in_page(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     assert "data-theme-toggle" in client.get("/").content.decode()
 
     client.logout()

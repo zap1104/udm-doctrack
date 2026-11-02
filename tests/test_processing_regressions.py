@@ -72,7 +72,7 @@ def test_append_job_merges_with_text_saved_while_file_was_processing(users, proc
 
 def test_retry_extraction_reads_all_files_and_reports_missing_secondary_file(client, users, processed_document):
     DocumentFile.objects.create(document=processed_document, file="documents/missing-secondary.txt", original_name="missing-secondary.txt")
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     with patch("apps.documents.tasks.extract_document_text", return_value=ExtractionResult(text="Primary file text", pages=7, status="DONE")):
         response = client.post(f"/documents/{processed_document.pk}/re-extract/")
     assert response.status_code == 302

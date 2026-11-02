@@ -30,7 +30,7 @@ def test_profile_save_does_not_restore_stale_administrative_fields(users, office
     new_value = make_password("AdministratorReset789!") if field == "password" else new_values[field]
     request = stale_profile_request(user, {
         "action": "profile", "first_name": "Updated", "last_name": "Staff",
-        "email": "updated@example.edu", "phone": "", "position": "Records officer",
+        "email": user.email, "phone": "", "position": "Records officer",
     })
     # The request has loaded its user; an administrator now changes the row.
     User.objects.filter(pk=user.pk).update(**{field: new_value})
@@ -41,7 +41,7 @@ def test_profile_save_does_not_restore_stale_administrative_fields(users, office
     user.refresh_from_db()
     assert getattr(user, field) == new_value
     assert user.first_name == "Updated"
-    assert user.email == "updated@example.edu"
+    assert user.email == ''  # Email-factor changes use the separate verified flow.
 
 
 def test_preferences_save_does_not_restore_stale_administrative_fields(users, offices):

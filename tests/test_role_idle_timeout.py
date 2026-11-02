@@ -44,7 +44,7 @@ def test_the_helper_picks_the_window_by_role(users):
 
 @pytest.mark.django_db
 def test_an_admin_session_actually_expires_sooner(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     client.get("/")
 
     assert expiry_seconds(client) <= settings.SESSION_COOKIE_AGE_ADMIN + 5
@@ -53,7 +53,7 @@ def test_an_admin_session_actually_expires_sooner(client, users):
 
 @pytest.mark.django_db
 def test_an_ordinary_session_keeps_the_full_window(client, users):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     client.get("/")
 
     assert expiry_seconds(client) > settings.SESSION_COOKIE_AGE_ADMIN + 5
@@ -61,20 +61,20 @@ def test_an_ordinary_session_keeps_the_full_window(client, users):
 
 @pytest.mark.django_db
 def test_the_keep_alive_reports_the_role_s_own_window(client, second_client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.post(KEEP_ALIVE).json()["seconds_remaining"] == settings.SESSION_COOKIE_AGE_ADMIN
 
-    second_client.force_login(users["med"])
+    second_client.force_verified_login(users["med"])
     assert second_client.post(KEEP_ALIVE).json()["seconds_remaining"] == settings.SESSION_COOKIE_AGE
 
 
 @pytest.mark.django_db
 def test_the_page_countdown_matches_what_is_enforced(client, second_client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get("/").content.decode()
     assert f'data-session-timeout="{settings.SESSION_COOKIE_AGE_ADMIN}"' in body
 
-    second_client.force_login(users["med"])
+    second_client.force_verified_login(users["med"])
     body = second_client.get("/").content.decode()
     assert f'data-session-timeout="{settings.SESSION_COOKIE_AGE}"' in body
 
@@ -83,13 +83,18 @@ def test_the_page_countdown_matches_what_is_enforced(client, second_client, user
 def test_losing_the_admin_role_restores_the_longer_window(client, users):
     """Otherwise the shorter window sticks to the session until the next sign-in."""
     user = users["med_admin"]
-    client.force_login(user)
+    client.force_verified_login(user)
     client.get("/")
     assert expiry_seconds(client) <= settings.SESSION_COOKIE_AGE_ADMIN + 5
 
     user.role = user.Role.USER
     user.save(update_fields=["role"])
-    client.get("/")
+    response = client.get('/')
+    assert response.status_code == 302
+    assert '_auth_user_id' not in client.session
+    client.force_verified_login(user)
+    response = client.get('/')
+    assert response.status_code == 200
 
     assert expiry_seconds(client) > settings.SESSION_COOKIE_AGE_ADMIN + 5
 
@@ -146,7 +151,7 @@ def test_a_signed_in_reader_is_told_their_own_window_not_the_query_string(client
     """The query string only answers for the sign-in page, where nobody is
     signed in. Anywhere else the reader's own role decides, or a crafted link
     could make the countdown on a working page disagree with the server."""
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get(f"/?timeout={settings.SESSION_COOKIE_AGE}").content.decode()
 
     assert f'data-session-timeout="{settings.SESSION_COOKIE_AGE_ADMIN}"' in body

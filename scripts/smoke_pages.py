@@ -188,7 +188,8 @@ def _run() -> int:
 
         for label, person in present:
             client = HttpsClient()
-            client.force_login(person)
+            from scripts.audit_auth import diagnostic_login
+            diagnostic_login(client, person)
 
             for name, args in STATIC_PAGES:
                 smoke.named(client, name, args, who=label)

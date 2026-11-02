@@ -53,7 +53,7 @@ def test_viewer_is_not_offered_individual_or_bulk_receipt(client, users, offices
         user=users["sup"], subject="Read-only recipient", instructions="Please review.",
     )
     services.route_record(record, [offices["MED"]], user=users["sup"])
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
 
     response = client.get(reverse("tracking:list"))
 
@@ -78,7 +78,7 @@ def test_completed_parallel_recipient_has_no_receipt_action(client, users, offic
     services.complete_record(record, user=users["sup"])
     if filed:
         services.approve_upload(record, user=users["sup_admin"])
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
 
     response = client.get(record.get_absolute_url())
 
@@ -95,7 +95,7 @@ def test_completed_parallel_recipient_has_no_receipt_action(client, users, offic
 
 
 def test_rejected_new_draft_attachment_does_not_leave_a_draft_or_creation_history(client, users, offices):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     before_audits = list(AuditLog.objects.values())
 
     response = client.post(reverse("tracking:create"), _new_record_data(offices, attachments=_invalid_pdf()), follow=True)
@@ -108,7 +108,7 @@ def test_rejected_new_draft_attachment_does_not_leave_a_draft_or_creation_histor
 
 def test_rejected_remark_attachment_does_not_save_the_remark_or_promote_status(client, users, received_record):
     record = received_record
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     before_record = TrackingRecord.objects.values().get(pk=record.pk)
     before_history = list(record.activities.values())
     before_audits = list(AuditLog.objects.values())
@@ -129,7 +129,7 @@ def test_rejected_remark_attachment_does_not_save_the_remark_or_promote_status(c
 
 def test_failed_forward_does_not_keep_its_attachment(client, users, offices, received_record, monkeypatch):
     record = received_record
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     before_record = TrackingRecord.objects.values().get(pk=record.pk)
     before_history = list(record.activities.values())
     real_route = services.route_record
@@ -157,7 +157,7 @@ def test_failed_forward_does_not_keep_its_attachment(client, users, offices, rec
 
 
 def test_administrator_completion_before_receipt_returns_a_validation_message(client, users, sent_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     client.raise_request_exception = False
     before_record = TrackingRecord.objects.values().get(pk=sent_record.pk)
     before_history = list(sent_record.activities.values())
@@ -172,7 +172,7 @@ def test_administrator_completion_before_receipt_returns_a_validation_message(cl
 
 
 def test_administrator_is_not_offered_completion_before_any_receipt(client, users, sent_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(sent_record.get_absolute_url())
 
@@ -183,7 +183,7 @@ def test_administrator_is_not_offered_completion_before_any_receipt(client, user
 
 @pytest.mark.parametrize("actor", ["sup", "sup_admin", "admin"])
 def test_authorized_completion_remains_available_after_receipt(client, users, received_record, actor):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
 
     response = client.get(received_record.get_absolute_url())
 
@@ -200,7 +200,7 @@ def test_active_parallel_recipient_can_still_confirm_after_the_first_receipt(cli
     )
     services.route_record(record, [offices["SUP"], offices["HR"]], user=users["med"])
     services.confirm_receipt(record, user=users["sup"])
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
 
     response = client.get(record.get_absolute_url())
 
@@ -214,7 +214,7 @@ def test_active_parallel_recipient_can_still_confirm_after_the_first_receipt(cli
 
 
 def test_bulk_receipt_race_returns_to_the_dashboard_that_submitted_it(client, users, sent_record, monkeypatch):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     real_bulk = services.bulk_confirm_receipts
 
     def receive_elsewhere_then_bulk(records, **kwargs):
@@ -243,7 +243,7 @@ def test_administrator_draft_recipient_choices_follow_the_actual_origin(client, 
     if not has_office:
         administrator.office = None
         administrator.save(update_fields=["office"])
-    client.force_login(administrator)
+    client.force_verified_login(administrator)
     url = f"{reverse('tracking:create')}?draft={record.pk}" if stage == "edit" else reverse("tracking:review", args=[record.pk])
 
     response = client.get(url)
@@ -259,7 +259,7 @@ def test_administrator_draft_edit_can_route_to_the_administrators_office(client,
     record = services.create_draft_record(
         user=users["med"], subject="Draft prepared by Maintenance", instructions="Please review.",
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.post(f"{reverse('tracking:create')}?draft={record.pk}", _new_record_data(
         offices, receiving_offices=[offices["REC"].pk],
@@ -277,7 +277,7 @@ def test_administrator_draft_review_sends_from_the_actual_origin(client, users, 
     record = services.create_draft_record(
         user=users["med"], subject="Draft prepared by Maintenance", instructions="Please review.",
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.post(reverse("tracking:review", args=[record.pk]), {
         "receiving_offices": [offices["REC"].pk], "deadline_choice": "none",
@@ -295,7 +295,7 @@ def test_administrator_draft_review_sends_from_the_actual_origin(client, users, 
 
 
 def test_administrator_draft_creation_still_uses_the_initiating_office(client, users, offices):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(reverse("tracking:create"))
     offered = set(response.context["form"].fields["receiving_offices"].queryset.values_list("pk", flat=True))
     assert offices["REC"].pk not in offered

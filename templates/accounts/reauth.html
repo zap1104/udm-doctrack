@@ -1,0 +1,3 @@
+{% extends "accounts/access_base.html" %}
+{% block title %}Confirm identity · {{ SITE_NAME }}{% endblock %}
+{% block content %}<div class="login-form-heading"><h1>Confirm your identity</h1><p>Send a fresh code to your verified email before changing account security or permissions.</p></div><form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}"><button class="btn btn-udm" type="submit">Send verification code</button></form><a href="{% url 'accounts:profile' %}" class="btn btn-udm-outline mt-3">Back to account</a>{% endblock %}

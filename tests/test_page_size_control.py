@@ -150,7 +150,7 @@ def test_the_tracking_page_honours_the_size(client, users, memo_type):
             user=users["med"], subject=f"Request {index}", instructions="For action.",
             document_type=memo_type,
         )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     short = client.get(f"{TRACKING}?owner=mine&per_page=10")
     long = client.get(f"{TRACKING}?owner=mine&per_page=100")
@@ -164,7 +164,7 @@ def test_the_tracking_page_honours_the_size(client, users, memo_type):
 @pytest.mark.django_db
 def test_a_nonsense_size_still_renders_the_page(client, users):
     """`?per_page=abc` is a stale link, not an attack surface for a 500."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get(f"{TRACKING}?per_page=abc")
 
@@ -186,7 +186,7 @@ def test_a_nonsense_size_still_renders_the_page(client, users):
 def test_every_long_list_offers_the_control(client, users, url):
     """One control, in one place, on every page that lists more than a
     screenful — so there is one thing to learn rather than five."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     response = client.get(url)
 
@@ -206,7 +206,7 @@ def test_the_size_control_sits_above_the_list_and_the_steps_below(client, users,
             user=users["med"], subject=f"Request {index}", instructions="For action.",
             document_type=memo_type,
         )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(f"{TRACKING}?owner=mine&per_page=10").content.decode()
     size = body.index("page-controls--size")
@@ -229,7 +229,7 @@ def test_the_picker_sits_at_the_right_edge(client, users, memo_type):
             user=users["med"], subject=f"Request {index}", instructions="For action.",
             document_type=memo_type,
         )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(f"{TRACKING}?owner=mine&per_page=10").content.decode()
     row = body[body.index("page-controls--size"):body.index("</div>", body.index("page-controls--size"))]
@@ -249,7 +249,7 @@ def test_the_position_count_is_dropped_when_there_is_no_position(client, users, 
         user=users["med"], subject="Request", instructions="For action.",
         document_type=memo_type,
     )
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     one_page = client.get(f"{TRACKING}?owner=mine").content.decode()
     assert "page-size-options" in one_page
@@ -269,7 +269,7 @@ def test_the_size_control_does_not_borrow_the_filter_rows_word(client, users):
     """The Tracking page already has a filter row labelled "Show" — all I can
     see / mine / in my custody. A second Show right above it would be two
     answers to a question the reader asked once."""
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
 
     body = client.get(TRACKING).content.decode()
 
@@ -279,7 +279,7 @@ def test_the_size_control_does_not_borrow_the_filter_rows_word(client, users):
 
 @pytest.mark.django_db
 def test_the_audit_screen_offers_one_control_per_trail(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/administration/audit-log/")
 

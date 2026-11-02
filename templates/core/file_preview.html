@@ -11,7 +11,7 @@
     <div><p class="eyebrow">Read-only file preview</p><h1 class="h4 text-break">{{ file.original_name }}</h1>
       <p class="mb-0">{% if is_saved_upload %}Saved upload · Not yet submitted{% else %}Viewing Version {{ version_number }} of {{ current_number }}{% if version_number < current_number %} <strong class="badge text-bg-warning">Earlier version</strong>{% endif %}{% endif %}</p>
     </div>
-    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-udm-outline" href="{{ back_url }}">{% if is_saved_upload %}Back to saved form{% else %}Back to record{% endif %}</a><a class="btn btn-udm" href="{{ download_url }}">Download original</a></div>
+    <div class="d-flex gap-2 flex-wrap"><a class="btn btn-udm-outline" href="{{ back_url }}">{% if is_saved_upload %}Back to saved form{% else %}Back to record{% endif %}</a>{% if download_url %}<a class="btn btn-udm" href="{{ download_url }}">Download original</a>{% endif %}</div>
   </div>
   {% if preview_kind == 'docx' %}<p class="alert alert-info">Approximate DOCX preview. Download the original for exact layout and signature inspection. DocTrack does not create or verify signatures.</p>{% endif %}
   {% if preview_kind == 'table' %}

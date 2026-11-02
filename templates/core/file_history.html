@@ -8,7 +8,7 @@
 <p>{{ row.item.change_summary }}{% if row.item.retired_at %} · Content retired {{ row.item.retired_at|date:"j M Y" }}{% endif %}</p>
 <small>{{ row.item.uploader_name_snapshot }} · {{ row.item.uploader_office_snapshot }} · {{ row.item.size|filesizeformat }}</small>
 <details><summary>Audit details</summary><p>Checksum: {{ row.item.checksum|default:"Unknown" }}</p><p>{{ row.item.retirement_reason }}</p></details>
-{% if row.preview_url %}<a href="{{ row.preview_url }}">Preview V{{ row.item.version_number }}</a> <a href="{{ row.download_url }}">Download</a>{% else %}<span>Audit only · File unavailable</span>{% endif %}
+{% if row.preview_url %}<a href="{{ row.preview_url }}">Preview V{{ row.item.version_number }}</a>{% endif %}{% if row.download_url %} <a href="{{ row.download_url }}">Download</a>{% endif %}{% if not row.item.available_content %}<span>Audit only · File unavailable</span>{% endif %}
 {% else %}<strong>{{ row.item.action|capfirst }}</strong> · {{ row.item.created_at }}<p>{{ row.item.reason }} · {{ row.item.actor_name_snapshot }}</p>{% endif %}
 </div>{% empty %}<p>No file history.</p>{% endfor %}
 {% if history.next_cursor %}<a class="btn btn-udm-outline" href="{{ history.next_url }}">Older entries</a>{% endif %}

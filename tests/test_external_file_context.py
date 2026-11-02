@@ -39,7 +39,7 @@ def test_external_file_preview_and_history_return_to_selected_office(client, use
     case, group, document = files
     parent = case if kind == "external" else document
     selected = users["med_admin"].office_id
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     detail = client.get(parent.get_absolute_url(), {"office": selected})
     row = detail.context["file_rows"][0]
     scope(row["current"]["preview_url"], selected)
@@ -65,7 +65,7 @@ def test_external_file_preview_and_history_return_to_selected_office(client, use
 def test_external_version_upload_keeps_selected_scope_and_file_identity(client, users, files):
     case, group, _ = files
     selected = users["med_admin"].office_id
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = reverse("tracking:external_file_version", args=[case.pk, group.pk]) + f"?office={selected}"
     form = client.get(url)
     assert form.status_code == 200
@@ -82,7 +82,7 @@ def test_external_version_upload_keeps_selected_scope_and_file_identity(client, 
 def test_external_file_discard_preserves_scope_without_removing_history(client, users, files):
     case, group, _ = files
     selected = users["med_admin"].office_id
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = reverse("tracking:external_file_discard", args=[case.pk, group.pk]) + f"?office={selected}"
     form = client.get(url)
     scope(form.context["back_url"], selected)
@@ -95,7 +95,7 @@ def test_external_file_discard_preserves_scope_without_removing_history(client, 
 
 def test_forged_file_perspective_does_not_grant_history_or_preview(client, users, files):
     case, group, _ = files
-    client.force_login(users["sup_admin"])
+    client.force_verified_login(users["sup_admin"])
     selected = users["med_admin"].office_id
     url = file_url("external", group.latest_version.pk, users["sup_admin"])
     assert client.get(url + f"&office={selected}").status_code in {403, 404}
@@ -136,7 +136,7 @@ def test_worksheet_form_keeps_selected_office_when_submitted(client, users, file
     item = external_services.add_attachment(case, user=users["med_admin"], expected_revision=case.revision,
         uploaded_file=SimpleUploadedFile("sheets.xlsx", content.getvalue()))
     selected = users["med_admin"].office_id
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = file_url("external", item.pk, users["admin"]) + f"&office={selected}"
     response = client.get(url)
     assert response.status_code == 200
@@ -155,7 +155,7 @@ def test_file_history_pagination_keeps_scope_and_all_audit_rows(client, users, f
     for _ in range(26):
         FileLifecycleEvent.objects.create(resource_kind="external", collection="EXTERNAL", parent_id=case.pk,
             group_id=group.pk, office_id_snapshot=users["med_admin"].office_id, action="retired", reason="Audit pagination fixture")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     selected = users["med_admin"].office_id
     first = client.get(history_url(group), {"office": selected})
     next_url = first.context["history"]["next_url"]
@@ -169,7 +169,7 @@ def test_file_history_pagination_keeps_scope_and_all_audit_rows(client, users, f
 def test_invalid_external_version_preview_returns_to_scoped_saved_form(client, users, files):
     case, group, _ = files
     selected = users["med_admin"].office_id
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = reverse("tracking:external_file_version", args=[case.pk, group.pk]) + f"?office={selected}"
     initial = client.get(url)
     saved = initial.context["form"].recovery

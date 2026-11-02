@@ -49,7 +49,7 @@ SYSTEM_PAGES = ["/accounts/offices/", "/accounts/offices/new/", "/administration
 @pytest.mark.parametrize("role", ["admin", "med_admin", "med", "viewer"])
 @pytest.mark.parametrize("page", PAGES + ADMIN_PAGES + SYSTEM_PAGES)
 def test_page_role_matrix(client, users, role, page):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     allowed = page in PAGES or role == "admin" or (page in ADMIN_PAGES and role == "med_admin")
     response = client.get(page)
     assert response.status_code == (200 if allowed else 403), (role, page)
@@ -66,7 +66,7 @@ def test_anonymous_pages_require_login(client, page):
 @pytest.mark.parametrize("role", ["admin", "med_admin", "med", "viewer"])
 def test_suspension_removes_existing_session_access(client, users, role):
     actor = users[role]
-    client.force_login(actor)
+    client.force_verified_login(actor)
     User.objects.filter(pk=actor.pk).update(is_active=False)
     for path in PAGES + ADMIN_PAGES:
         response = client.get(path)
@@ -75,11 +75,13 @@ def test_suspension_removes_existing_session_access(client, users, role):
 
 
 def test_demotion_applies_to_an_existing_session(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     User.objects.filter(pk=users["admin"].pk).update(role=User.Role.VIEWER)
-    assert client.get("/administration/").status_code == 403
-    assert client.get("/documents/upload/").status_code == 403
-    assert client.get("/tracking/new/").status_code == 403
+    for path in ('/administration/', '/documents/upload/', '/tracking/new/'):
+        response = client.get(path)
+        assert response.status_code == 302
+        assert response['Location'].startswith('/accounts/login/')
+    assert '_auth_user_id' not in client.session
 
 
 @pytest.mark.parametrize("change", ["suspend", "demote"])
@@ -131,7 +133,7 @@ def test_unknown_role_fails_closed_despite_superuser_flags(client, users, held, 
     actor = users["admin"]
     actor.role = "UNKNOWN"
     actor.save(update_fields=["role"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     for path in PAGES + ADMIN_PAGES + SYSTEM_PAGES:
         assert client.get(path).status_code == 403, path
     assert not TrackingRecord.objects.visible_to(actor).exists()
@@ -263,7 +265,7 @@ def test_former_uploader_has_read_access_but_no_edit_controls_or_endpoints(clien
     actor = users["sup"]
     assert private_document.can_user_view(actor)
     assert not private_document.can_user_edit(actor)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.get(private_document.get_absolute_url())
     assert response.status_code == 200
     assert response.context["can_edit"] is False
@@ -307,14 +309,14 @@ def test_receiving_offices_are_deduplicated(users, offices):
                                   "/accounts/email/verify/", "/accounts/password/", "/notifications/1/read/"])
 def test_mutations_require_csrf_even_with_valid_session(client, users, path):
     browser = type(client)(enforce_csrf_checks=True)
-    browser.force_login(users["admin"])
+    browser.force_verified_login(users["admin"])
     assert browser.post(path, {}).status_code == 403
 
 
 @pytest.mark.parametrize("role", ["med", "med_admin", "viewer"])
 def test_direct_private_file_identifiers_cannot_bypass_scope(client, users, role, private_document):
     file = DocumentFile.objects.create(document=private_document, file=SimpleUploadedFile("private.txt", b"private"), original_name="private.txt")
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get(reverse("documents:file_download", args=[file.pk]))
     assert response.status_code in {403, 404}
     assert b"private" not in response.content

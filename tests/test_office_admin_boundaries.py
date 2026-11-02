@@ -71,7 +71,7 @@ def test_every_list_and_export_stays_inside_the_office(client, users, offices, b
     actor = users["med_admin"]
     actor.is_staff, actor.is_superuser = staff, superuser
     actor.save(update_fields=["is_staff", "is_superuser"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     for page in LIST_PAGES:
         for office in ("", str(offices["SUP"].pk), "SUP", "all"):
             url = page + ("&" if "?" in page else "?") + urlencode({"office": office})
@@ -93,7 +93,7 @@ def test_every_list_and_export_stays_inside_the_office(client, users, offices, b
 
 @pytest.mark.django_db
 def test_direct_document_and_tracking_urls_never_expose_foreign_objects(client, users, boundary):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     record = boundary["foreign"]
     document = boundary["docs"]["foreign"]
     for url in (
@@ -121,7 +121,7 @@ def test_admin_global_settings_and_raw_admin_are_blocked(client, users, offices,
     actor = users["med_admin"]
     actor.is_staff = actor.is_superuser = True
     actor.save(update_fields=["is_staff", "is_superuser"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     for slug, config in MASTER_DATA.items():
         assert config["system_admin_only"]
         for method in (client.get, client.post):
@@ -171,7 +171,7 @@ def test_own_office_work_and_legitimate_incoming_routes_still_work(client, users
     confirm_receipt(incoming, user=actor)
     incoming.refresh_from_db()
     assert incoming.current_office_id == actor.office_id
-    client.force_login(actor)
+    client.force_verified_login(actor)
     assert client.get(f"/tracking/{incoming.pk}/").status_code == 200
     assert client.get(f"/documents/{boundary['docs']['own'].pk}/").status_code == 200
     assert client.get(f"/accounts/users/{users['med'].pk}/").status_code == 200
@@ -182,7 +182,7 @@ def test_notifications_cannot_disclose_foreign_documents(client, users, boundary
     actor = users["med_admin"]
     own = Notification.objects.create(office=actor.office, kind="SHARED", title="OWN_NOTICE", document=boundary["docs"]["own"])
     hidden = Notification.objects.create(office=actor.office, kind="SHARED", title="FOREIGN_NOTICE", document=boundary["docs"]["foreign"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     body = client.get("/notifications/").content.decode()
     assert "OWN_NOTICE" in body and "FOREIGN_NOTICE" not in body
     assert unread_count(actor) == 1
@@ -197,7 +197,7 @@ def test_own_document_forms_and_search_clicks_do_not_leak_foreign_data(client, u
     actor = users["med_admin"]
     boundary["docs"]["own"].uploaded_by = actor
     boundary["docs"]["own"].save(update_fields=["uploaded_by"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     url = f"/documents/{boundary['docs']['own'].pk}/review/"
     for response in (client.get(url), client.post(url, {})):
         assert response.status_code in {200, 400}
@@ -208,7 +208,7 @@ def test_own_document_forms_and_search_clicks_do_not_leak_foreign_data(client, u
 
 @pytest.mark.django_db
 def test_print_audit_targets_require_visible_objects(client, users, boundary):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     for kind, key in (("Document", boundary["docs"]["foreign"].pk), ("TrackingRecord", boundary["foreign"].pk)):
         assert client.post("/print-log/", {"target_type": kind, "target_id": key}).status_code == 404
     for target in ("bad", "9" * 64):
@@ -237,7 +237,7 @@ def test_foreign_account_urls_and_privilege_escalation_stay_blocked(client, user
     actor = users["med_admin"]
     actor.is_staff, actor.is_superuser = staff, superuser
     actor.save(update_fields=["is_staff", "is_superuser"])
-    client.force_login(actor)
+    client.force_verified_login(actor)
     foreign = users["sup"]
     payload = {"username": foreign.username, "office": actor.office_id, "role": "SYSTEM_ADMIN", "is_superuser": "on"}
     assert client.get(f"/accounts/users/{foreign.pk}/").status_code == 404
@@ -270,7 +270,7 @@ def test_filing_an_incoming_record_does_not_open_a_foreign_repository(client, us
     confirm_receipt(incoming, user=actor)
     incoming.refresh_from_db()
     complete_record(incoming, user=actor)
-    client.force_login(actor)
+    client.force_verified_login(actor)
     response = client.post(f"/tracking/{incoming.pk}/archive/")
     assert response.status_code == 302 and response.url == incoming.get_absolute_url()
     document = Document.objects.get(tracking_record=incoming)
@@ -304,7 +304,7 @@ def test_unassigned_admin_fails_closed_and_superusers_are_created_with_explicit_
     assert not TrackingRecord.objects.visible_to(actor).exists()
     assert not User.objects.administrable_by(actor).exists()
     assert not audit_entries_for(actor).exists()
-    client.force_login(actor)
+    client.force_verified_login(actor)
     for page in LIST_PAGES:
         response = client.get(page)
         assert response.status_code == 200, page

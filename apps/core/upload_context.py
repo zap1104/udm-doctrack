@@ -38,6 +38,10 @@ def resolve_upload_context(user, workflow, *, target_id=None, group_id=None, que
     if workflow not in (*INTERNAL_WORKFLOWS, *EXTERNAL_WORKFLOWS):
         raise ValidationError("Choose a supported upload action.")
     external = workflow in EXTERNAL_WORKFLOWS
+    from apps.accounts.capabilities import require_capability
+    area = ('external_repository' if external else 'repository') if 'repository' in workflow else ('external_tracking' if external else 'tracking')
+    action = 'create' if workflow in CREATION_WORKFLOWS else {'tracking-edit':'edit_metadata', 'tracking-route':'endorse', 'tracking-remark':'work'}.get(workflow, 'edit_files')
+    require_capability(actor, area, action)
     creation_office_id = actor.office_id
     if query is not None and "office" in query:
         choices = query.getlist("office") if hasattr(query, "getlist") else [query["office"]]

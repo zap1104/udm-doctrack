@@ -26,7 +26,7 @@ def test_the_names_are_unchanged_and_point_under_tracking():
     ("/reports/export/?office=7", "/tracking/reports/export/?office=7"),
 ])
 def test_the_old_address_redirects_permanently_with_its_query(client, users, old, new):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(old)
 
     assert response.status_code == 301
@@ -37,7 +37,7 @@ def test_the_old_address_redirects_permanently_with_its_query(client, users, old
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "viewer"])
 @pytest.mark.parametrize("path", ["/tracking/reports/", "/documents/reports/"])
 def test_reports_highlights_only_its_own_sidebar_link(client, users, role, path):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     body = client.get(path).content.decode()
 
     sidebar = body[body.index('aria-label="Main navigation"'):body.index("</nav>", body.index('aria-label="Main navigation"'))]
@@ -52,7 +52,7 @@ def test_reports_highlights_only_its_own_sidebar_link(client, users, role, path)
 
 @pytest.mark.django_db
 def test_the_tracking_page_offers_the_reports_tab(client, users):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
     assert '<a class="subtab is-active" href="/tracking/" aria-current="page">Tracking</a>' in body

@@ -54,7 +54,7 @@ def long_record(users, offices):
 
 @pytest.mark.django_db
 def test_a_long_history_is_folded(client, users, long_record):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
     assert FOLD_RE.search(body), "a record with a long history should offer a fold"
@@ -63,7 +63,7 @@ def test_a_long_history_is_folded(client, users, long_record):
 @pytest.mark.django_db
 def test_the_fold_says_how_many_it_is_hiding(client, users, long_record):
     """"Read more" tells the reader nothing. A count tells them whether to look."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
     for label in FOLD_RE.findall(body):
@@ -74,7 +74,7 @@ def test_the_fold_says_how_many_it_is_hiding(client, users, long_record):
 def test_folding_never_drops_or_repeats_an_entry(client, users, long_record):
     """The fold hides history behind a click; it must not lose it, and the
     split must not render the same entry in both halves."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
     expected = long_record.routing_steps.count() + shown_activities(long_record).count()
@@ -85,7 +85,7 @@ def test_folding_never_drops_or_repeats_an_entry(client, users, long_record):
 def test_the_newest_entries_stay_open(client, users, long_record):
     """Where the document is now is the question this page is opened to answer,
     so the recent end is never the part that gets hidden."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
     newest = shown_activities(long_record).order_by("-created_at", "-id").first()
@@ -98,7 +98,7 @@ def test_the_fold_ships_open_so_a_blocked_script_hides_nothing(client, users, lo
     """doctrack.js closes it on load. Rendering it closed instead would mean a
     browser with JavaScript off — or a script that failed to load — silently
     withheld part of an append-only record."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(long_record.get_absolute_url()).content.decode()
 
     assert '<details class="fold" open>' in body
@@ -112,7 +112,7 @@ def test_a_short_record_is_not_folded_at_all(client, users, offices):
         user=users["med"], subject="A brand new request", instructions="For action."
     )
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     body = client.get(record.get_absolute_url()).content.decode()
 

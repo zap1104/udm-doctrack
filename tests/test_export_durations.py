@@ -54,7 +54,7 @@ def _record(users, offices, memo_type, subject, *, finish):
 @pytest.mark.django_db
 def test_a_finished_record_exports_its_three_stages_in_office_hours(client, users, offices, memo_type):
     _record(users, offices, memo_type, "Finished", finish=True)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     preamble, rows = _sheet(client)
     row = next(r for r in rows if r["Subject"] == "Finished")
 
@@ -66,7 +66,7 @@ def test_a_finished_record_exports_its_three_stages_in_office_hours(client, user
 @pytest.mark.django_db
 def test_a_stage_not_reached_is_blank_not_zero(client, users, offices, memo_type):
     _record(users, offices, memo_type, "Still waiting", finish=False)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _preamble, rows = _sheet(client)
     row = next(r for r in rows if r["Subject"] == "Still waiting")
 
@@ -75,7 +75,7 @@ def test_a_stage_not_reached_is_blank_not_zero(client, users, offices, memo_type
 
 @pytest.mark.django_db
 def test_the_durations_cost_the_same_queries_however_many_rows(client, users, offices, memo_type):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     _record(users, offices, memo_type, "One", finish=True)
     client.get(EXPORT)  # session and caches warm
     with CaptureQueriesContext(connection) as one:

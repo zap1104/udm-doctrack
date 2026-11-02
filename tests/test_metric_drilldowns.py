@@ -35,7 +35,7 @@ def partly_received(users, offices, memo_type):
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["admin", "med_admin", "sup", "viewer"])
 def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(client, users, partly_received, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get("/tracking/reports/")
     context = response.context
     expected_pending = 1 if role == "sup" else 3
@@ -53,7 +53,7 @@ def test_pending_receipt_counts_the_stage_instead_of_partial_confirmations(clien
 
 @pytest.mark.django_db
 def test_office_overdue_link_opens_all_overdue_records_in_its_scope(client, users, offices, partly_received):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     url = f"/tracking/reports/?office={offices['MED'].pk}"
     response = client.get(url)
     context = response.context
@@ -71,7 +71,7 @@ def test_office_overdue_link_opens_all_overdue_records_in_its_scope(client, user
 @pytest.mark.django_db
 @pytest.mark.parametrize("stage", [Status.PENDING_RECEIPT, Status.RECEIVED, Status.IN_PROCESS])
 def test_export_uses_the_report_record_filters(client, users, offices, partly_received, stage):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/tracking/reports/export/", {
         "record_status": stage, "record_q": "Count audit", "record_overdue": "yes", "office": offices["SUP"].pk,
     })
@@ -100,7 +100,7 @@ def test_repository_badges_match_their_filtered_destinations(client, users, offi
     for title, source in (("Match one", "DTS"), ("Match two", "UPLOAD"), ("Unrelated", "UPLOAD")):
         document = Document.objects.create(title=title, source=source, office=offices["MED"], document_type=memo_type, uploaded_by=users["med"], retention_until=today - timedelta(days=1))
         document.tags.add(tag)
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     url = f"/documents/?q=Match&source={HISTORICAL_FILTER}"
     context = client.get(url).context
     assert context["total"] == 1
@@ -120,7 +120,7 @@ def test_pending_upload_type_badges_keep_search_filters(client, users, offices, 
     for title in ("Match upload", "Other upload"):
         record = create_draft_record(user=users["med"], subject=title, instructions="x", document_type=memo_type)
         TrackingRecord.objects.filter(pk=record.pk).update(status=Status.COMPLETED_PENDING_UPLOAD, completed_at=timezone.now())
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/documents/?view=pending&q=Match").context
     assert context["total"] == 1
     assert context["pending_count"] == 2
@@ -160,7 +160,7 @@ def test_a_retired_type_still_opens_its_existing_records(client, users, offices,
     document = Document.objects.create(title="Retired type", office=offices["MED"], document_type=memo_type)
     memo_type.is_active = False
     memo_type.save(update_fields=["is_active"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/documents/").context
     folder = next(row for row in context["type_folders"] if row["document_type_id"] == memo_type.pk)
     listed = client.get(folder["url"]).context
@@ -174,11 +174,11 @@ def test_tag_usage_is_live_and_permission_scoped(client, users, offices):
     for office, active in (("MED", True), ("HR", True), ("MED", False)):
         document = Document.objects.create(title="Tagged", office=offices[office], is_active=active)
         document.tags.add(tag)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get("/administration/tags/").status_code == 403
     context = client.get("/documents/").context
     assert next(row for row in context["popular_tags"] if row.pk == tag.pk).visible_usage == 1
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get("/administration/tags/").context
     assert next(row for row in context["objects"] if row.pk == tag.pk).visible_usage == 2
 
@@ -187,7 +187,7 @@ def test_tag_usage_is_live_and_permission_scoped(client, users, offices):
 def test_denied_folder_tabs_remain_empty_instead_of_resetting_to_every_record(client, users, offices):
     Document.objects.create(title="Allowed", office=offices["MED"])
     Document.objects.create(title="Hidden", office=offices["HR"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     context = client.get(f"/documents/?office={offices['HR'].pk}").context
     assert context["folder_unavailable"]
     assert context["selected_office"] is None

@@ -27,7 +27,7 @@ def test_clean_rejects_ambiguous_or_missing_recipient(office, user):
 def test_share_with_both_recipients_shows_error_without_granting_access(client, users, offices, actor):
     record = create_draft_record(user=users["med"], subject="Share validation", instructions="")
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.post(reverse("tracking:grant_access", args=[record.pk]), {
         "office": offices["MED"].pk, "user": users["med"].pk, "reason": "Review",
     })
@@ -44,7 +44,7 @@ def test_share_with_both_recipients_shows_error_without_granting_access(client, 
 def test_share_with_one_recipient_still_grants_access(client, users, offices, recipient):
     record = create_draft_record(user=users["med"], subject="Valid share", instructions="")
     route_record(record, [offices["SUP"]], user=users["med"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     selected = offices["HR"].pk if recipient == "office" else users["hr"].pk
     response = client.post(reverse("tracking:grant_access", args=[record.pk]), {recipient: selected})
     assert response.status_code == 302

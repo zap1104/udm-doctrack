@@ -258,7 +258,8 @@ class ExternalCompleteForm(ExternalNoteForm):
         super().__init__(*args, **kwargs)
         if not record.current_external_office_id:
             self.fields.pop("completed_at")
-        if user is None or not record.can_manage(user):
+        from apps.accounts.capabilities import capability_allowed
+        if user is None or not record.can_manage(user) or not capability_allowed(user, 'external_tracking', 'file'):
             self.fields.pop("archive_now")
 
 

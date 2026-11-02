@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/admin-permissions.css' %}">{% endblock %}
+{% block content %}
+<div class="permissions-page">
+<p>{{ target.get_role_display }} · {{ target.office_label }}. A setting can restrict role access. It cannot grant custody, expand office access, or unlock Repository files.</p>
+<p><a href="{% url 'admin:record_sharing' %}">Manage individual record sharing</a> · <a href="{% url 'accounts:email_security' target.pk %}">Email security</a></p>
+<form method="post">{% csrf_token %}{{ form.revision }}{{ form.non_field_errors }}{{ form.revision.errors }}
+{% for section in form.sections %}<div class="module"><h2>{{ section.title }}</h2><div class="permissions-scroll" role="region" aria-label="{{ section.title }} permissions" tabindex="0"><table><thead><tr><th scope="col">Ability</th><th scope="col">Setting</th><th scope="col">Role default</th><th scope="col">Current effective access</th></tr></thead><tbody>{% for row in section.rows %}<tr><th scope="row"><label for="{{ row.field.id_for_label }}">{{ row.field.label }}</label></th><td>{{ row.field }}{{ row.field.errors }}</td><td>{{ row.default }}</td><td>{{ row.effective }}</td></tr>{% endfor %}</tbody></table></div></div>{% endfor %}
+<div class="form-row">{{ form.reason.label_tag }}{{ form.reason }}{{ form.reason.errors }}</div><div class="submit-row"><input type="submit" value="Save restrictions" class="default"><a href="{% url 'admin:accounts_permissionuser_changelist' %}">Back to users</a></div>
+</form>
+</div>
+{% endblock %}

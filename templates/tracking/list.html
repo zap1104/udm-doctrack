@@ -18,7 +18,7 @@
     refuses the request on its own, and the URL stays reachable to anyone who
     knows it. This only stops offering a button that answers with a redirect.
   {% endcomment %}
-  {% if can_start_work %}
+  {% if can_start_work and access.tracking.create %}
     <a class="btn btn-udm" href="{% url 'tracking:create' %}">+ New Tracking Slip</a>
   {% endif %}
 </div>

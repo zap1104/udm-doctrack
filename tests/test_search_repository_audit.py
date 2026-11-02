@@ -26,7 +26,7 @@ def test_repository_pending_matches_tracking_with_a_stale_archive_flag(client, u
     TrackingRecord.objects.filter(pk=record.pk).update(
         status=Status.COMPLETED_PENDING_UPLOAD, completed_at=timezone.now(), is_archived=True,
     )
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
 
     tracking = client.get("/tracking/?scope=pending-upload").context
     repository = client.get("/documents/?view=pending").context
@@ -98,7 +98,7 @@ def test_search_all_explains_the_result_ceiling(client, users, offices, settings
     settings.SEARCH_RESULT_LIMIT = 2
     for index in range(3):
         make_document(offices["MED"], f"Limit audit policy {index}")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get("/search/", {
         "q": "Limit audit policy", "min_relevance": 0, "per_page": "all",

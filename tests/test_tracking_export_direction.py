@@ -37,7 +37,7 @@ def test_tracking_csv_keeps_effective_direction_office(
     if actor == "admin":
         users[actor].office = offices["MED"]
         users[actor].save(update_fields=["office"])
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.get(reverse("tracking:list"), {**params, "per_page": "all"})
     assert response.status_code == 200
     expected_ids = {traffic[key].pk for key in expected}

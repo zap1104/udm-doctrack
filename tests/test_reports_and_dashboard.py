@@ -50,7 +50,7 @@ def test_turnaround_reports_office_hours_and_calendar_time_together(
 ):
     """Neither replaces the other: office hours judge the office fairly,
     calendar time is what the requester actually waited."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     turnaround = client.get(REPORTS).context["turnaround"]
 
     for key in ("receipt", "processing", "lifetime"):
@@ -63,7 +63,7 @@ def test_the_page_says_the_figure_excludes_weekends_and_holidays(
     client, finished_record, users
 ):
     """Labelled honestly rather than presented as exact."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
     assert "Turnaround is counted in office hours (8 hours = 1 working day" in body
@@ -97,7 +97,7 @@ REPOSITORY_PANELS = (
 
 @pytest.mark.django_db
 def test_the_report_carries_exactly_the_specified_panels(client, finished_record, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
     headings = re.findall(r'<h2(?: id="report-document-stages-title")?>(.*?)</h2>', body)
@@ -111,7 +111,7 @@ def test_the_report_carries_exactly_the_specified_panels(client, finished_record
 def test_the_two_sections_stay_apart(client, finished_record, users):
     """Tracking answers "where is the work"; the repository answers "what did we
     file". They are different corpora and the page keeps them in two panels."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
     tracking = body.index('data-report-panel="tracking"')
@@ -130,7 +130,7 @@ def test_the_dropped_panels_are_gone_from_the_page_and_the_context(
     quality" restated three of the stat cards above it word for word. Their
     view code went with them rather than being left computing figures nothing
     renders — the per-office table cost two queries and a Python aggregation."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(REPORTS)
     body = response.content.decode()
 
@@ -172,7 +172,7 @@ def test_monthly_repository_volume_says_which_kind_of_work_it_was(
     tracking finishing and being filed; historical is the backlog being
     digitised. A month of 90 uploads and 2 completions draws the same single bar
     as the reverse and means the opposite thing about how the office is doing."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/documents/reports/")
     rows = [row for row in response.context["document_months"]["rows"] if row["total"]]
     body = response.content.decode()
@@ -207,7 +207,7 @@ def test_a_scan_is_historical_everywhere_it_is_counted(
     assert totals["completed"] == 3, "only what came out of tracking"
     assert totals["historical"] == 3, "two uploads and the scan"
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get(REPORTS).context["document_months"]["rows"]
     assert sum(row["historical"] for row in rows) == totals["historical"]
     assert sum(row["completed"] for row in rows) == totals["completed"]
@@ -229,7 +229,7 @@ def test_overdue_offices_report_a_share_of_the_whole_backlog(
     """Two series per office, and a stated count of what nobody can be charged
     with. The panel groups by who owes the next move, not by who holds the
     paper — see tests/test_overdue_accountability.py for why those differ."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     panel = client.get(REPORTS).context["overdue_accountability"]
 
     for row in panel["rows"]:
@@ -240,7 +240,7 @@ def test_overdue_offices_report_a_share_of_the_whole_backlog(
 # --- 3.3 cumulative three-series -------------------------------------------
 @pytest.mark.django_db
 def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     monthly = client.get("/").context["monthly"]
 
     row = monthly["rows"][-1]
@@ -251,7 +251,7 @@ def test_the_monthly_chart_has_three_cumulative_series(client, finished_record, 
 @pytest.mark.django_db
 def test_the_series_never_decrease(client, finished_record, users):
     """A running total that falls is not a running total."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get("/").context["monthly"]["rows"]
 
     for key in ("created", "transferred", "completed"):
@@ -268,7 +268,7 @@ def test_the_gap_between_created_and_completed_is_what_is_still_open(
     )
     route_record(open_one, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     monthly = client.get("/").context["monthly"]
     last = monthly["rows"][-1]
 
@@ -281,7 +281,7 @@ def test_the_gap_between_created_and_completed_is_what_is_still_open(
 def test_the_office_leaderboard_counts_receipts(client, finished_record, users, offices):
     """"Handled" means received — crediting what an office sent would reward a
     pass-through desk over the office that did the work."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     volume = client.get(REPORTS).context["office_volume"]
 
     codes = {row["code"] for row in volume["rows"]}
@@ -293,7 +293,7 @@ def test_the_office_leaderboard_counts_receipts(client, finished_record, users, 
 def test_the_leaderboard_shows_cumulative_and_this_month_together(
     client, finished_record, users
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     rows = client.get(REPORTS).context["office_volume"]["rows"]
 
     from apps.core import analytics
@@ -315,7 +315,7 @@ def test_the_leaderboard_shows_cumulative_and_this_month_together(
 # --- 3.10 naming -----------------------------------------------------------
 @pytest.mark.django_db
 def test_the_two_report_sections_are_named_exactly(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
     assert "Document Tracking Reports" in body
@@ -327,7 +327,7 @@ def test_the_two_report_sections_are_named_exactly(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["admin"])
 def test_an_administrator_gets_the_office_filter(client, users, who):
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     body = client.get(REPORTS).content.decode()
 
     assert 'id="report-office"' in body
@@ -344,7 +344,7 @@ def test_an_ordinary_account_goes_straight_to_its_own_office(client, users, who)
     """No filter row at all. The dropdown they used to be shown went through
     `scope_office`, which drops a pick from an account without the picker — so
     it was a control that appeared to work and did nothing."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(REPORTS)
     body = response.content.decode()
 
@@ -365,7 +365,7 @@ def test_an_ordinary_account_cannot_name_another_office_by_hand(
     the dropdown was gated and the "…or by name" box was not, so
     `?office_name=Supply` re-scoped this page for an account with no picker at
     all. The box is gone; the gate is the same one either way."""
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(f"{REPORTS}?office={offices['SUP'].pk}")
 
     assert response.context["filters"]["office"] is None
@@ -377,7 +377,7 @@ def test_the_all_offices_sentinel_never_reaches_an_office_lookup(client, users):
     """`scope_office` answers "all" with a string sentinel. Reports had never
     been given the option, so it had never hit it — and would have, on a
     hand-typed URL, with Q(originating_office="__all__")."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     response = client.get(f"{REPORTS}?office=all")
 
@@ -391,7 +391,7 @@ def test_the_report_filters_down_to_the_office_only(client, users):
     """Year, status and document type are gone. The panels below already break
     the same records down by month, by status and by type, so those three
     filtered a chart into agreeing with itself."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(REPORTS).content.decode()
 
     for gone in ('id="report-year"', 'id="report-status"', 'id="report-document-type"'):
@@ -403,7 +403,7 @@ def test_the_report_opens_tracking_with_the_selected_office(
     client, finished_record, users, offices
 ):
     """Reports keep statistics; opening current work preserves the office scope."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(f"{REPORTS}?office={offices['SUP'].pk}").content.decode()
 
     assert f"/tracking/?office={offices['SUP'].pk}" in body
@@ -414,7 +414,7 @@ def test_the_report_opens_tracking_with_the_selected_office(
 def test_the_export_names_the_office_it_covers(client, finished_record, users, offices):
     """A CSV attached to a memo is read by somebody who cannot re-run the
     query, so the scope travels with it."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     body = client.get(f"/tracking/reports/export/?office={offices['SUP'].pk}").content.decode()
 
@@ -429,7 +429,7 @@ def test_generating_a_report_notifies_nobody(client, finished_record, users, off
     from apps.core.models import Notification
 
     before = Notification.objects.count()
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     client.get(f"{REPORTS}?office={offices['SUP'].pk}")
 
     assert Notification.objects.count() == before
@@ -440,7 +440,7 @@ def test_generating_a_report_notifies_nobody(client, finished_record, users, off
 def test_the_dashboard_shows_one_percentage_across_both_modules(
     client, finished_record, users
 ):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
     keys = {row["key"] for row in breakdown["slices"]}
@@ -461,7 +461,7 @@ def test_the_slices_add_up_to_the_whole(client, finished_record, users, offices,
     )
     route_record(other, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
     assert sum(row["total"] for row in breakdown["slices"]) == breakdown["total"]
@@ -470,7 +470,7 @@ def test_the_slices_add_up_to_the_whole(client, finished_record, users, offices,
 @pytest.mark.django_db
 def test_every_slice_links_through_to_its_list(client, finished_record, users):
     """A percentage nobody can open is a number the reader has to take on trust."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
     for row in breakdown["slices"]:
@@ -488,7 +488,7 @@ def test_every_tracking_slice_opens_the_tracking_list(client, users):
     surprise every time it happens. The per-office breakdown is still a click
     away in Reports, which the dashboard links to in its own right.
     """
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
     tracking = [row for row in breakdown["slices"] if row["group"] == "tracking"]
@@ -499,7 +499,7 @@ def test_every_tracking_slice_opens_the_tracking_list(client, users):
 
 @pytest.mark.django_db
 def test_the_dashboard_offers_a_way_into_reports(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "Open Reports" in body
@@ -517,7 +517,7 @@ def test_the_memo_is_what_the_dashboard_offers_to_print(client, users):
     """
     from django.urls import reverse
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     assert "data-print-trigger" not in body
@@ -528,7 +528,7 @@ def test_the_memo_is_what_the_dashboard_offers_to_print(client, users):
 def test_no_change_arrows_anywhere_on_the_dashboard(client, finished_record, users):
     """Explicitly refused: a month-on-month arrow on a records backlog reads as
     a verdict on the office."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(DASHBOARD).content.decode()
 
     for marker in ("▲", "▼", "trend-up", "trend-down", "change-indicator"):
@@ -538,10 +538,10 @@ def test_no_change_arrows_anywhere_on_the_dashboard(client, finished_record, use
 @pytest.mark.django_db
 def test_the_breakdown_respects_visibility(client, finished_record, users):
     """HR had nothing to do with the record, so it is not in HR's total."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     breakdown = client.get(DASHBOARD).context["breakdown"]
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     admin_breakdown = client.get(DASHBOARD).context["breakdown"]
 
     assert breakdown["total"] < admin_breakdown["total"]
@@ -591,7 +591,7 @@ def test_the_screen_rule_still_hides_the_inactive_panel():
 @pytest.mark.parametrize("path", [REPORTS, "/documents/reports/"])
 def test_only_the_requested_report_panel_is_rendered(client, users, path):
     """Each report prints only its own domain, with no hidden second report."""
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get(path).content.decode()
 
     assert body.count('class="report-panel active"') == 1
@@ -609,7 +609,7 @@ def test_the_completion_rate_leaves_drafts_out_of_its_denominator(
     create_draft_record(
         user=users["admin"], subject="Unsent", instructions="x", document_type=memo_type,
     )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(REPORTS).context
 
     assert context["total_records"] == 1, "current total counts the draft but excludes finished work"
@@ -632,7 +632,7 @@ def test_extraction_is_reported_by_state_and_sums_to_the_repository(
             source="UPLOAD", uploaded_by=users["admin"], ocr_status=status.value,
             ocr_text="title only" if status == OcrStatus.SKIPPED else "",
         )
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     context = client.get(REPORTS).context
     extraction = context["extraction"]
 
@@ -656,7 +656,7 @@ def test_no_report_carries_another_offices_search_terms(client, users, who):
     from apps.documents.models import SearchQueryLog
 
     SearchQueryLog.objects.create(user=users["hr"], query="confidential hr matter")
-    client.force_login(users[who])
+    client.force_verified_login(users[who])
     response = client.get(REPORTS)
 
     assert "top_searches" not in response.context
@@ -669,7 +669,7 @@ def test_a_system_administrator_sees_search_activity_on_administration(client, u
     from apps.documents.models import SearchQueryLog
 
     SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/administration/")
 
     assert "retention schedule" in response.content.decode()
@@ -683,7 +683,7 @@ def test_an_office_administrator_is_not_shown_university_wide_search_terms(clien
     from apps.documents.models import SearchQueryLog
 
     SearchQueryLog.objects.create(user=users["hr"], query="retention schedule")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get("/administration/")
 
     assert response.status_code == 200
@@ -698,6 +698,6 @@ def test_a_deleted_accounts_searches_still_count(client, users):
     from apps.documents.models import SearchQueryLog
 
     SearchQueryLog.objects.create(user=None, query="orphaned search")
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
 
     assert client.get("/administration/").context["search_analytics"]["queries"] == 1

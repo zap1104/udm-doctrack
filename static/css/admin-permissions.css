@@ -1,0 +1,13 @@
+/* Keep security tables readable without widening the entire admin page. */
+#content, #content-main, .main, .main > .content { min-width: 0; }
+.permissions-page { max-width: 100%; min-width: 0; }
+.permissions-scroll { max-width: 100%; overflow-x: auto; }
+.permissions-scroll table { width: 100%; min-width: 620px; }
+.permissions-page textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+.permissions-page input:not([type="hidden"]), .permissions-page select { max-width: 100%; box-sizing: border-box; }
+.permissions-page .form-row { display: block; }
+.permissions-page .submit-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+@media (max-width: 480px) {
+  .permissions-page h2, .permissions-page p, .permissions-page label { overflow-wrap: anywhere; }
+  #content { padding-left: 12px; padding-right: 12px; }
+}

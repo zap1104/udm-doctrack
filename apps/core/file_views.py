@@ -40,6 +40,15 @@ class FileVersionView(AppLoginRequiredMixin, View):
 
     def get(self, request, kind, pk):
         resource = resource_for(kind, pk, request.user)
+        if self.purpose == 'download' and kind != 'upload':
+            from apps.accounts.capabilities import area_for, require_capability
+            require_capability(request.user, area_for(resource.parent), 'download')
+        elif self.purpose == 'download':
+            from apps.accounts.capabilities import require_capability
+            parent = resource.parent
+            repository = 'repository' in parent.workflow
+            area = ('external_repository' if parent.collection == 'EXTERNAL' else 'repository') if repository else ('external_tracking' if parent.collection == 'EXTERNAL' else 'tracking')
+            require_capability(request.user, area, 'download')
         expected = f"file-version:{self.purpose}:{kind}:{pk}:{request.user.pk}"
         if unsign_download(request.GET.get("token", "")) != expected:
             raise PermissionDenied("This file link has expired. Open its record for a fresh link.")
@@ -80,6 +89,14 @@ class FilePreviewView(FileVersionView):
             "back_url": back_url + f"#file-version-{resource.kind}-{item.pk}",
             "preview_fields": [(key, value) for key, values in request.GET.lists() if key != "worksheet" for value in values],
         }
+        from apps.accounts.capabilities import area_for, capability_allowed
+        if resource.kind == 'upload':
+            parent = resource.parent
+            area = ('external_repository' if parent.collection == 'EXTERNAL' else 'repository') if 'repository' in parent.workflow else ('external_tracking' if parent.collection == 'EXTERNAL' else 'tracking')
+        else:
+            area = area_for(resource.parent)
+        if not capability_allowed(request.user, area, 'download'):
+            context['download_url'] = ''
         try:
             if context["preview_kind"] in {"txt", "table"}:
                 data = read_validated(item)

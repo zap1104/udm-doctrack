@@ -22,7 +22,7 @@ def at(day, hour):
 
 @pytest.mark.django_db
 def test_admin_can_save_schedule_and_change_is_audited(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(URL).status_code == 200
     assert not OfficeSchedule.objects.exists(), "Opening the editor must not change defaults."
     response = client.post(URL, VALID)
@@ -40,7 +40,7 @@ def test_admin_can_save_schedule_and_change_is_audited(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["med_admin", "med", "viewer"])
 def test_only_system_admins_can_read_or_write_schedule(client, users, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     assert client.get(URL).status_code == 403
     assert client.post(URL, VALID).status_code == 403
     assert not OfficeSchedule.objects.exists()
@@ -51,7 +51,7 @@ def test_only_system_admins_can_read_or_write_schedule(client, users, role):
 def test_anonymous_and_csrf_requests_cannot_write(users):
     client = Client(enforce_csrf_checks=True)
     assert client.get(URL, secure=True).status_code == 302
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.post(URL, VALID, secure=True).status_code == 403
     assert not OfficeSchedule.objects.exists()
 
@@ -64,14 +64,14 @@ def test_anonymous_and_csrf_requests_cannot_write(users):
     {"opens_at": "broken"},
 ])
 def test_invalid_schedules_do_not_change_the_database(client, users, changes):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.post(URL, {**VALID, **changes}).status_code == 400
     assert not OfficeSchedule.objects.exists()
 
 
 @pytest.mark.django_db
 def test_break_can_be_disabled_and_reenabled(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     data = {key: value for key, value in VALID.items() if key not in {"break_enabled", "break_start", "break_end"}}
     assert client.post(URL, data).status_code == 302
     assert OfficeSchedule.objects.get().break_start == OfficeSchedule.objects.get().break_end == time(9)
@@ -98,7 +98,7 @@ def test_saved_break_and_holiday_agree_across_cards_daily_and_yearly_graphs(clie
     TrackingRecord.objects.filter(pk=record.pk).update(status=Status.COMPLETED, created_at=at(5, 8),
         first_received_at=at(5, 8), completed_at=at(6, 17))
     records = TrackingRecord.objects.filter(pk=record.pk)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.post(URL, VALID).status_code == 302
     Holiday.objects.create(date=date(2026, 10, 6), name="Work suspension")
     month = date(2026, 10, 1)

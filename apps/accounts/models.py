@@ -373,3 +373,14 @@ class User(AbstractUser):
         if self.is_system_admin:
             return True
         return self.office_id == getattr(office, "pk", office)
+
+
+from .permission_models import CapabilityRestriction, UserPermissionPolicy  # noqa: E402,F401
+from .security_models import EmailChallenge  # noqa: E402,F401
+
+
+class PermissionUser(User):
+    class Meta:
+        proxy = True
+        verbose_name = 'user permissions'
+        verbose_name_plural = 'User permissions'

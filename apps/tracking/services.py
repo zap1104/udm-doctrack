@@ -27,6 +27,7 @@ from django.db.models import (
 )
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
 from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, notify_offices, overdue_notice_text, resolve_for_record
 from apps.core.pagination import DEFAULT_PAGE_SIZE
@@ -226,6 +227,7 @@ def _one_of(value, choices, field_name: str, default: str) -> str:
 
 
 @transaction.atomic
+@requires_capability('tracking', 'create')
 def create_draft_record(*, user, subject, instructions, document_type=None, document_types=None, remarks="",
                         classification=None, priority=None, due_at=None, originating_office=None,
                         requested_action=""):
@@ -284,6 +286,7 @@ def create_draft_record(*, user, subject, instructions, document_type=None, docu
 
 @compensate_storage
 @locked_mutation
+@requires_capability('tracking', 'edit_files')
 def attach_files(record, files, *, user, note="", routing_step=None) -> list[Attachment]:
     if files:
         refuse_viewers(user, "upload files")
@@ -345,6 +348,7 @@ def sending_office(record, user):
 
 
 @locked_mutation
+@requires_capability('tracking', 'endorse')
 def route_record(record, offices, *, user, instructions="", action=RoutingStep.Action.SEND,
                  due_days=None, due_at=_UNSET, remark="") -> list[RoutingStep]:
     """Send the record to one or more offices. Creates a new batch of steps.
@@ -481,6 +485,7 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
 
 
 @locked_mutation
+@requires_capability('tracking', 'receive')
 def confirm_receipt(record, *, user, note="") -> RoutingStep:
     """Explicit receipt. Server time only — never a value typed by the user."""
     refuse_viewers(user, "confirm receipt")
@@ -566,6 +571,7 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
 
 
 @transaction.atomic
+@requires_capability('tracking', 'receive')
 def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
     """Confirm an explicit selection while preserving one receipt event per record."""
     record_ids = [record.pk for record in records]
@@ -584,6 +590,7 @@ def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
 
 
 @locked_mutation
+@requires_capability('tracking', 'work')
 def add_remark(record, *, user, remark) -> RecordActivity:
     refuse_viewers(user, "add remarks")
     if not record.can_user_act(user):
@@ -611,6 +618,7 @@ def add_remark(record, *, user, remark) -> RecordActivity:
 
 
 @locked_mutation
+@requires_capability('tracking', 'work')
 def mark_in_process(record, *, user, note="") -> TrackingRecord:
     """Declare that the office holding the document has started work on it.
 
@@ -649,6 +657,7 @@ def mark_in_process(record, *, user, note="") -> TrackingRecord:
 
 
 @locked_mutation
+@requires_capability('tracking', 'complete')
 def complete_record(record, *, user, note="") -> TrackingRecord:
     """Finish the work. The record stays in Tracking awaiting approval.
 
@@ -704,6 +713,7 @@ def complete_record(record, *, user, note="") -> TrackingRecord:
     return record
 
 
+@requires_capability('tracking', 'file')
 def approve_upload(record, *, user, tag_names=None, description=""):
     """Approve a finished record into the Document Repository.
 
@@ -727,6 +737,7 @@ def approve_upload(record, *, user, tag_names=None, description=""):
 
 
 @locked_mutation
+@requires_capability('tracking', 'reopen')
 def reopen_record(record, *, user, reason="") -> TrackingRecord:
     """Send a completed record back into active tracking. History is kept intact.
 
@@ -794,13 +805,35 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
     return record
 
 
-@locked_mutation
 def grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
+    from django.db import connection
+
+    # Account administration uses this order too: global lock, actor, record,
+    # recipient. Never authorize a recipient cached before an office transfer.
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_xact_lock(%s)', [0x55444D414343])
+        return _grant_access(record, user=user, office=office, target_user=target_user, reason=reason)
+
+
+@locked_mutation
+@requires_capability('tracking', 'share')
+def _grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
+    from apps.accounts.models import Office, User
+
     refuse_viewers(user, "share documents")
     if not record.can_user_grant_access(user):
         raise PermissionDenied("Only the originating or holding office can share this record.")
     if (office is None) == (target_user is None):
         raise ValidationError("Choose exactly one office or user to grant access to.")
+    if office is not None:
+        office = Office.objects.select_for_update(no_key=True).filter(pk=office.pk, is_active=True).first()
+        if office is None:
+            raise ValidationError('Choose an active internal office.')
+    if target_user is not None:
+        target_user = User.objects.select_for_update(no_key=True).filter(pk=target_user.pk, is_active=True).first()
+        if target_user is None:
+            raise ValidationError('Choose an active account.')
     if user.is_office_admin and not user.is_system_admin:
         if not user.office_id or (office is not None and office.pk != user.office_id):
             raise PermissionDenied("You can only manage access within your own office.")

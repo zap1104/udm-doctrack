@@ -70,12 +70,12 @@ def test_existing_external_saved_view_data_stays_private_after_screen_removal(cl
         params=QueryDict("q=alpha"),
     )
     assert service.open_saved_view(view.pk, user=users["med_admin"]).startswith("/documents/external/?q=alpha")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     page = client.get("/documents/views/")
     assert page.status_code == 404
     assert "private-label" not in page.content.decode()
     assert "<script>private-label</script>" not in page.content.decode()
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     assert client.get(f"/documents/views/{view.pk}/").status_code == 404
     assert client.post(f"/documents/views/{view.pk}/delete/").status_code == 404
     assert SavedDocumentView.objects.filter(pk=view.pk).exists()

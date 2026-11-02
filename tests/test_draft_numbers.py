@@ -35,7 +35,7 @@ def test_creating_a_draft_logs_its_subject_not_its_placeholder(draft):
 @pytest.mark.django_db
 def test_the_audit_log_names_a_draft_without_its_placeholder(client, users, draft):
     log_view(draft, user=users["med"])
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     body = client.get("/administration/audit-log/").content.decode()
 
     assert PLACEHOLDER not in body
@@ -44,7 +44,7 @@ def test_the_audit_log_names_a_draft_without_its_placeholder(client, users, draf
 
 @pytest.mark.django_db
 def test_a_draft_exports_without_its_placeholder(client, users, draft):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     body = client.get("/tracking/reports/export/").content.decode()
 
     assert "Still a draft" in body
@@ -53,7 +53,7 @@ def test_a_draft_exports_without_its_placeholder(client, users, draft):
 
 @pytest.mark.django_db
 def test_a_draft_has_no_routing_slip_and_prints_nothing(client, users, draft):
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     detail = client.get(draft.get_absolute_url()).content.decode()
     response = client.get(f"/tracking/{draft.pk}/slip/")
 
@@ -67,7 +67,7 @@ def test_a_draft_has_no_routing_slip_and_prints_nothing(client, users, draft):
 def test_once_sent_the_slip_prints_the_real_number(client, users, offices, draft):
     route_record(draft, [offices["SUP"]], user=users["med"])
     draft.refresh_from_db()
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.get(f"/tracking/{draft.pk}/slip/")
 
     assert response.status_code == 200

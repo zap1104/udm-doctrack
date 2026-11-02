@@ -16,7 +16,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_external_workspace_has_its_own_route(client, users):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert client.get("/tracking/external/").status_code == 200
 
 
@@ -30,7 +30,7 @@ def test_external_workspace_has_its_own_route(client, users):
     ],
 )
 def test_external_filters_use_existing_in_place_updates(client, users, route):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     url = reverse(route)
     response = client.get(url, {"q": "Paper reference"}, HTTP_HX_REQUEST="true")
     assert response.status_code == 200
@@ -56,7 +56,7 @@ def external_cases(users, offices):
 
 @pytest.mark.parametrize("role", ["med", "viewer", "med_admin", "admin"])
 def test_external_list_does_not_disclose_another_offices_draft(client, users, external_cases, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     response = client.get(reverse("tracking:external_list"))
     assert response.status_code == 200
     if role != "admin":
@@ -74,7 +74,7 @@ def test_external_list_does_not_disclose_another_offices_draft(client, users, ex
     ],
 )
 def test_external_invalid_filters_never_widen_results(client, users, external_cases, filters):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_list"), filters)
     assert response.status_code == 400
     assert b"MED external draft" not in response.content
@@ -83,14 +83,14 @@ def test_external_invalid_filters_never_widen_results(client, users, external_ca
 
 @pytest.mark.parametrize("role", ["med", "viewer"])
 def test_only_admins_create_directory_entries_and_external_cases(client, users, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     assert client.post(reverse("tracking:external_office_create"), {"name": "Forged"}).status_code == 403
     assert client.post(reverse("tracking:external_create"), {"title": "Forged"}).status_code == 403
 
 
 def test_forged_directory_id_is_not_editable(client, users, external_cases):
     _own, other, _record, _foreign = external_cases
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         reverse("tracking:external_office_edit", args=[other.pk]), {"name": "Taken", "revision": other.revision}
     )
@@ -107,7 +107,7 @@ def test_viewer_cannot_write_even_with_a_valid_visible_record(client, users, ext
         record, user=users["med_admin"], expected_revision=record.revision, to_office=users["med"].office, action="SEND"
     )
     record.refresh_from_db()
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     assert client.get(reverse("tracking:external_detail", args=[record.pk])).status_code == 200
     response = client.post(
         reverse("tracking:external_action", args=[record.pk, "remark"]),
@@ -118,7 +118,7 @@ def test_viewer_cannot_write_even_with_a_valid_visible_record(client, users, ext
 
 def test_review_and_writes_require_revision(client, users, external_cases):
     _own, _other, record, _foreign = external_cases
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_review", args=[record.pk]))
     assert response.status_code == 200
     assert f'name="revision" value="{record.revision}"'.encode() in response.content
@@ -132,7 +132,7 @@ def test_external_csv_neutralizes_spreadsheet_formula_cells(client, users, exter
     _own, _other, record, _foreign = external_cases
     record.title = '=HYPERLINK("evil")'
     record.save(update_fields=["title"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_export"))
     assert response.status_code == 200
     rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
@@ -145,7 +145,7 @@ def test_create_preserves_multiple_types_and_requires_selected_main(client, user
     from apps.tracking.external_models import ExternalTrackingRecord
 
     second = DocumentType.objects.create(code="LETTER-EXT", name="Letter for external packet", retention_years=3)
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     data = {"title": "Mixed packet", "from_office": offices["MED"].pk, "document_types": [memo_type.pk, second.pk]}
     response = client.post(reverse("tracking:external_create"), data)
     response = follow_upload_recovery(client, response)
@@ -163,7 +163,7 @@ def test_internal_route_does_not_offer_manual_dispatch_time(client, users, offic
     from apps.tracking.external_services import create_record
 
     record = create_record(user=users["med_admin"], title="Internal source")
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     body = client.get(reverse("tracking:external_review", args=[record.pk])).content
     assert b'name="sent_at"' not in body
 
@@ -173,7 +173,7 @@ def test_mixed_internal_external_http_flow_preserves_separate_repository(client,
     from apps.tracking.models import Status
 
     external, _other, record, _foreign = external_cases
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         reverse("tracking:external_review", args=[record.pk]),
         {
@@ -186,7 +186,7 @@ def test_mixed_internal_external_http_flow_preserves_separate_repository(client,
     assert response.status_code == 302
     record.refresh_from_db()
     assert record.status == Status.PENDING_RECEIPT
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     response = client.post(
         reverse("tracking:external_action", args=[record.pk, "receipt"]),
         {"revision": record.revision, "note": "Paper received"},
@@ -206,7 +206,7 @@ def test_mixed_internal_external_http_flow_preserves_separate_repository(client,
     )
     assert response.status_code == 302
     record.refresh_from_db()
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(
         reverse("tracking:external_action", args=[record.pk, "external-receipt"]),
         {"revision": record.revision, "received_at": timezone.now().isoformat(), "note": "Office signed the paper"},
@@ -246,7 +246,7 @@ def test_private_attachment_links_are_signed_and_user_bound(client, users, exter
     attachment = add_attachment(
         record, user=users["med_admin"], expected_revision=record.revision, uploaded_file=uploaded
     )
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_detail", args=[record.pk]))
     url = response.context["attachments"][0][1]
     missing_token = client.get(reverse("tracking:external_attachment", args=[attachment.pk]))
@@ -255,13 +255,13 @@ def test_private_attachment_links_are_signed_and_user_bound(client, users, exter
     assert download.status_code == 200
     assert download["Cache-Control"] == "private, no-store"
     assert b"External attachment test" in b"".join(download.streaming_content)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     assert client.get(url).status_code == 403
 
 
 def test_stale_revision_does_not_duplicate_a_movement(client, users, offices, external_cases):
     _external, _other, record, _foreign = external_cases
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     data = {
         "revision": record.revision,
         "action": "SEND",
@@ -285,7 +285,7 @@ def test_reports_count_current_work_with_another_office_without_losing_totals(cl
         to_office=offices["SUP"],
         sent_at=timezone.now() - timedelta(hours=1),
     )
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_reports"))
     assert response.status_code == 200
     assert response.context["total_count"] == 1
@@ -304,7 +304,7 @@ def test_viewer_can_print_authorized_external_slip_but_not_foreign_draft(client,
         to_office=offices["MED"],
         sent_at=timezone.now() - timedelta(hours=1),
     )
-    client.force_login(users["viewer"])
+    client.force_verified_login(users["viewer"])
     response = client.get(reverse("tracking:external_slip", args=[record.pk]))
     assert response.status_code == 200
     assert b"data-print-trigger" in response.content
@@ -316,7 +316,7 @@ def test_viewer_can_print_authorized_external_slip_but_not_foreign_draft(client,
 def test_directory_create_edit_and_deactivate_use_current_revision(client, users):
     from apps.tracking.external_models import ExternalOffice
 
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert (
         client.post(
             reverse("tracking:external_office_create"), {"name": "College of Arts", "code": "ART", "is_active": "on"}
@@ -363,7 +363,7 @@ def test_concurrent_directory_requests_render_a_duplicate_message(client, users,
     actors = [users["med_admin"], users["admin"]]
     browsers = [type(client)(), type(client)()]
     for browser, actor in zip(browsers, actors, strict=True):
-        browser.force_login(actor)
+        browser.force_verified_login(actor)
     entries = []
     if operation == "rename":
         entries = [
@@ -419,7 +419,7 @@ def test_involved_staff_can_filter_a_counterpart_from_another_managing_office(cl
         to_office=offices["SUP"],
         sent_at=timezone.now() - timedelta(hours=1),
     )
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get(reverse("tracking:external_list"), {"external_office": counterpart.pk})
     assert response.status_code == 200
     assert record.title.encode() in response.content
@@ -436,7 +436,7 @@ def test_other_direction_filter_and_count_link_match_reports(client, users, offi
         to_office=offices["SUP"],
         sent_at=timezone.now() - timedelta(hours=1),
     )
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_list"), {"direction": "other"})
     assert response.status_code == 200
     assert response.context["total_count"] == 1
@@ -451,7 +451,7 @@ def test_filed_history_is_explicit_in_tracking_default(client, users, external_c
     _own, _other, record, _foreign = external_cases
     record.status = Status.COMPLETED
     record.save(update_fields=["status"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     assert record.title.encode() not in client.get(reverse("tracking:external_list")).content
     response = client.get(reverse("tracking:external_list"), {"status": Status.COMPLETED})
     assert record.title.encode() in response.content
@@ -464,7 +464,7 @@ def test_overdue_filter_matches_csv_and_does_not_include_completed(client, users
     record.due_at = timezone.now() - timedelta(days=1)
     record.status = Status.IN_PROCESS
     record.save(update_fields=["due_at", "status"])
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.get(reverse("tracking:external_list"), {"overdue": "yes"})
     assert response.context["total_count"] == 1
     assert record.title.encode() in client.get(reverse("tracking:external_export"), {"overdue": "yes"}).content
@@ -504,7 +504,7 @@ def test_draft_cannot_record_external_work_before_publication(client, users, ext
     from apps.tracking.models import Status
 
     _own, _other, record, _foreign = external_cases
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     detail = client.get(reverse("tracking:external_detail", args=[record.pk]))
     endpoint = reverse("tracking:external_action", args=[record.pk, "external-work"])
     assert endpoint.encode() not in detail.content

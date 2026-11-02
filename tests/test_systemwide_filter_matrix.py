@@ -75,7 +75,7 @@ def document_ids(response, search=False):
 def test_document_filter_matrix_is_exact(
     client, users, mixed_repository, actor, path, params, candidates,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.get(path, {**params, "per_page": "all"})
     expected = {mixed_repository[key].pk for key in DOCUMENT_VISIBLE[actor] & candidates}
     if path == "/search/" and not params:
@@ -94,7 +94,7 @@ def test_document_filter_matrix_is_exact(
 @pytest.mark.parametrize("actor", DOCUMENT_VISIBLE)
 @pytest.mark.parametrize("path", ["/documents/", "/search/"])
 def test_repeated_scalar_document_filter_uses_last_value(client, users, mixed_repository, actor, path):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.get(path + "?year=2025&year=2026&per_page=all")
     keys = DOCUMENT_VISIBLE[actor] - {"med_private"}
     assert document_ids(response, search=path == "/search/") == {mixed_repository[key].pk for key in keys}
@@ -103,7 +103,7 @@ def test_repeated_scalar_document_filter_uses_last_value(client, users, mixed_re
 @pytest.mark.parametrize("bad", ["unknown", "²", "9" * 65])
 @pytest.mark.parametrize("actor", DOCUMENT_VISIBLE)
 def test_invalid_document_filters_preserve_endpoint_contract(client, users, mixed_repository, actor, bad):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     repository = client.get("/documents/", {"year": bad, "per_page": "all"})
     assert document_ids(repository) == {mixed_repository[key].pk for key in DOCUMENT_VISIBLE[actor]}
     search = client.get("/search/", {"year": bad})
@@ -113,7 +113,7 @@ def test_invalid_document_filters_preserve_endpoint_contract(client, users, mixe
 
 @pytest.mark.parametrize("actor", DOCUMENT_VISIBLE)
 def test_external_repository_has_its_own_exact_population(client, users, mixed_repository, actor):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     response = client.get("/documents/external/", {"per_page": "all"})
     assert document_ids(response) == {
         mixed_repository["external_" + key].pk for key in DOCUMENT_VISIBLE[actor]
@@ -124,7 +124,7 @@ def test_external_repository_has_its_own_exact_population(client, users, mixed_r
 def test_foreign_office_selection_preserves_repository_and_search_contracts(
     client, users, mixed_repository, actor,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     repository = client.get("/documents/?office=SUP&per_page=all")
     expected = {"med_private", "med_shared"} if actor == "med_admin" else {"sup_shared"}
     assert document_ids(repository) == {mixed_repository[key].pk for key in expected}
@@ -141,7 +141,7 @@ def test_type_facets_overlap_but_primary_report_partition_does_not(
 ):
     other = DocumentType.objects.create(code="LETTER", name="Letter")
     mixed_repository["med_shared"].document_types.add(memo_type, other)
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/documents/?per_page=all")
     facets = response.context["type_folders"]
     expected_facets = {
@@ -196,7 +196,7 @@ def csv_subjects(response):
 def test_tracking_filter_expected_ids_and_export(
     client, users, export_records, path, actor, params, expected,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     join = "&" if "?" in path else "?"
     response = client.get(path + join + urlencode({**params, "per_page": "all"}, doseq=True))
     assert response.status_code == 200
@@ -212,7 +212,7 @@ def test_tracking_filter_expected_ids_and_export(
 def test_tracking_pages_and_export_cover_same_explicit_draft_ids(client, users, export_records):
     extra = {create_draft_record(user=users["med"], subject=f"Extra draft {n}", instructions="Review").pk for n in range(13)}
     expected = extra | {export_records["draft-med"].pk, export_records["draft-sup"].pk}
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     first = client.get("/tracking/?status=DRAFT&per_page=10")
     second = client.get("/tracking/?status=DRAFT&per_page=10&page=2")
     first_ids = {row.pk for row in first.context["records"]}
@@ -230,7 +230,7 @@ def test_tracking_pages_and_export_cover_same_explicit_draft_ids(client, users, 
 def test_dashboard_direction_counts_and_drilldowns_use_expected_ids(
     client, users, offices, export_records, actor,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     query = {"office": offices["SUP"].pk} if actor == "admin" else {}
     context = client.get("/", query).context
     expected = {
@@ -264,7 +264,7 @@ def test_ranked_search_cap_and_exhaustive_repository_have_distinct_contracts(
     assert result.evaluated_count == 4
     assert result.truncated and result.limited_count == 2
     assert {row.document.pk for row in result.results} <= expected
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     repository = client.get("/documents/?q=Policy+needle&min_relevance=0&per_page=all")
     assert document_ids(repository) == expected
 
@@ -292,7 +292,7 @@ def populated_direction_stages(users, offices):
 def test_populated_direction_stage_pairs_match_for_every_role(
     client, users, offices, populated_direction_stages, actor, direction, stage,
 ):
-    client.force_login(users[actor])
+    client.force_verified_login(users[actor])
     params = {"office": offices["MED"].pk, "scope": direction, "status": stage}
     expected = {populated_direction_stages[direction, stage]}
     for path in ("/tracking/", "/search/?mode=tracking"):

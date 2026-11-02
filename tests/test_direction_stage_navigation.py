@@ -36,7 +36,7 @@ def listed(client, url):
 @pytest.mark.parametrize("role", ["sup", "sup_admin", "admin", "viewer"])
 def test_dashboard_group_counts_and_children_match_tracking_and_search(client, users, offices, direction_traffic, role):
     # The viewer belongs to MED; other roles read SUP's direction.
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     query = f"?office={offices['SUP'].pk}" if role == "admin" else ""
     response = client.get("/" + query)
     groups = response.context["desk_direction_groups"]
@@ -66,7 +66,7 @@ def test_dashboard_group_counts_and_children_match_tracking_and_search(client, u
 def test_outgoing_received_and_in_process_are_sender_filters_and_partial_receipt_is_local_stage(
     client, users, direction_traffic,
 ):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     groups = {group["key"]: group for group in client.get("/").context["desk_direction_groups"]}
     outgoing = {stage["status"]: stage for stage in groups["outgoing"]["stages"]}
     assert listed(client, outgoing[Status.RECEIVED]["tracking_url"]) == {direction_traffic["sent_received"].pk}
@@ -83,7 +83,7 @@ def test_outgoing_received_and_in_process_are_sender_filters_and_partial_receipt
 @pytest.mark.django_db
 @pytest.mark.parametrize("path", ["/tracking/", "/search/?mode=tracking&"])
 def test_group_links_set_both_filters_preserve_other_filters_and_reset_page(client, users, offices, direction_traffic, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     joiner = "&" if "?" in path else "?"
     response = client.get(path + joiner + (
         f"office={offices['SUP'].code.lower()}&scope=incoming&status=RECEIVED&status=IN_PROCESS"
@@ -115,7 +115,7 @@ def test_group_links_set_both_filters_preserve_other_filters_and_reset_page(clie
     ("/search/?mode=tracking&office=all", "direction_filter_groups"),
 ])
 def test_all_offices_never_offers_direction_stage_links(client, users, direction_traffic, path, context_key):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(path)
     for group in response.context[context_key]:
         assert group["disabled"]
@@ -127,7 +127,7 @@ def test_all_offices_never_offers_direction_stage_links(client, users, direction
 @pytest.mark.django_db
 @pytest.mark.parametrize("role", ["sup", "sup_admin", "viewer"])
 def test_direction_groups_ignore_foreign_office_for_non_system_admin(client, users, offices, direction_traffic, role):
-    client.force_login(users[role])
+    client.force_verified_login(users[role])
     own = client.get("/").context["desk_direction_groups"]
     foreign = client.get(f"/?office={offices['HR'].pk}").context["desk_direction_groups"]
     assert [[stage["count"] for stage in group["stages"]] for group in own] == [
@@ -137,7 +137,7 @@ def test_direction_groups_ignore_foreign_office_for_non_system_admin(client, use
 
 @pytest.mark.django_db
 def test_report_group_count_and_record_sets_agree_with_dashboard(client, users, offices, direction_traffic):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     office = offices["SUP"].pk
     dashboard = {group["key"]: group for group in client.get(f"/?office={office}").context["desk_direction_groups"]}
     response = client.get(f"/tracking/reports/?office={office}")
@@ -156,10 +156,10 @@ def test_old_batches_and_finished_work_are_not_current_direction_stages(client, 
     forwarded = direction_traffic["received"]
     services.route_record(forwarded, [offices["HR"]], user=users["sup"], action=RoutingStep.Action.FORWARD)
     services.complete_record(direction_traffic["sent_received"], user=users["hr"])
-    client.force_login(users["med"])
+    client.force_verified_login(users["med"])
     med_groups = {group["key"]: group for group in client.get("/").context["desk_direction_groups"]}
     assert forwarded.pk not in listed(client, med_groups["outgoing"]["tracking_url"])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     sup_groups = {group["key"]: group for group in client.get("/").context["desk_direction_groups"]}
     assert forwarded.pk not in listed(client, sup_groups["incoming"]["tracking_url"])
     assert forwarded.pk in listed(client, sup_groups["outgoing"]["tracking_url"])
@@ -171,7 +171,7 @@ def test_old_batches_and_finished_work_are_not_current_direction_stages(client, 
 @pytest.mark.django_db
 @pytest.mark.parametrize("path", ["/tracking/", "/search/?mode=tracking&"])
 def test_all_tracking_clears_direction_and_stages_but_preserves_search_and_office(client, users, offices, path):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     joiner = "&" if "?" in path else "?"
     response = client.get(path + joiner + f"office={offices['SUP'].pk}&scope=outgoing&status=RECEIVED&q=memo&overdue=yes")
     params = parse_qs(urlsplit(response.context["all_tracking_href"]).query)
@@ -182,7 +182,7 @@ def test_all_tracking_clears_direction_and_stages_but_preserves_search_and_offic
 
 @pytest.mark.django_db
 def test_search_keeps_global_stage_filter_visible_when_direction_is_unavailable(client, users):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get("/search/?mode=tracking&office=all&scope=incoming&status=RECEIVED")
     assert response.context["resolved"].scope == ""
     assert response.context["selected_statuses"] == {Status.RECEIVED}

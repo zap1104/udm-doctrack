@@ -63,7 +63,7 @@ def test_repository_month_excludes_inactive_and_next_month(users, offices):
 @pytest.mark.django_db
 @pytest.mark.parametrize("url", ["/", "/tracking/reports/", "/documents/reports/"])
 def test_private_dashboard_and_reports_are_not_cached(client, users, url):
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     response = client.get(url)
     assert response.status_code == 200
     assert "private" in response.headers["Cache-Control"]

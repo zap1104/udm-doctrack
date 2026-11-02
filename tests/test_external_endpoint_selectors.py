@@ -95,7 +95,7 @@ def test_repeated_combined_source_is_rejected(users, offices, counterparts):
 
 
 def test_invalid_creation_keeps_the_selected_source(client, users, counterparts):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     token = f"external:{counterparts['own'].pk}"
     response = client.post(reverse("tracking:external_create"), {"from_endpoint": token})
     response = follow_upload_recovery(client, response)
@@ -124,7 +124,7 @@ def test_combined_destination_decodes_without_changing_current_custody(users, of
 
 
 def test_external_http_create_and_review_route_uses_new_selectors(client, users, offices, counterparts):
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {
         "title": "Single selector round trip", "from_endpoint": f"external:{counterparts['own'].pk}",
     })
@@ -151,7 +151,7 @@ def test_external_http_create_and_review_route_uses_new_selectors(client, users,
 def test_error_redisplay_can_change_source_without_javascript(client, users, offices, counterparts):
     from tests.test_external_ui_contract import Controls
 
-    client.force_login(users["med_admin"])
+    client.force_verified_login(users["med_admin"])
     response = client.post(reverse("tracking:external_create"), {"from_office": offices["MED"].pk})
     response = follow_upload_recovery(client, response)
     assert response.status_code == 200
@@ -207,7 +207,7 @@ def test_shared_destination_is_allowed_and_inactive_destination_does_not_mutate(
     admin = users["med_admin"]
     record = create_record(user=admin, title="Protected recipient", from_office=offices["MED"])
     before_revision = record.revision
-    client.force_login(admin)
+    client.force_verified_login(admin)
     response = client.post(reverse("tracking:external_review", args=[record.pk]), {
         "revision": record.revision, "action": "SEND", "to_endpoint": f"external:{counterparts[entry].pk}",
     })
@@ -227,7 +227,7 @@ def test_shared_destination_is_allowed_and_inactive_destination_does_not_mutate(
 def test_readonly_from_office_cannot_forge_the_actual_sender(client, users, offices, counterparts):
     admin = users["med_admin"]
     record = create_record(user=admin, title="Protected sender", from_office=offices["MED"])
-    client.force_login(admin)
+    client.force_verified_login(admin)
     response = client.post(reverse("tracking:external_review", args=[record.pk]), {
         "revision": record.revision, "action": "SEND", "to_endpoint": f"external:{counterparts['own'].pk}",
         "from_endpoint": f"internal:{offices['HR'].pk}", "external-from-office": offices["HR"].name,

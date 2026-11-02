@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.capabilities import requires_capability
 from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, resolve_for_external_record
 from apps.core.permissions import active_writer
@@ -19,6 +20,7 @@ from .services import _enqueue_extraction, set_tags
 logger = logging.getLogger("doctrack")
 
 
+@requires_capability('external_tracking', 'file')
 def archive_external_record(record, *, user, expected_revision, tag_names=None, description=""):
     """Serialize filing and remove every new storage copy if the transaction fails."""
     from apps.tracking.models import ExternalActivity, ExternalTrackingRecord

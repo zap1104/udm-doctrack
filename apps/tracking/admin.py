@@ -3,6 +3,10 @@ this exists for data repair and inspection, not routine use."""
 
 from django.contrib import admin
 
+from apps.accounts.permission_admin import ReadOnlyShareAdmin
+from apps.accounts.record_admin import RecordPolicyAdminMixin
+
+from .external_models import ExternalRecordAccessGrant
 from .models import (
     Attachment,
     ExternalAttachment,
@@ -20,6 +24,14 @@ class RoutingStepInline(admin.TabularInline):
     readonly_fields = ("sequence", "sent_at", "received_at", "received_by")
     can_delete = False
 
+    def has_add_permission(self, request, obj=None):
+        from apps.accounts.capabilities import capability_allowed
+        return capability_allowed(request.user, 'tracking', 'endorse') and super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        from apps.accounts.capabilities import capability_allowed
+        return capability_allowed(request.user, 'tracking', 'endorse') and super().has_change_permission(request, obj)
+
 
 class RecordActivityInline(admin.TabularInline):
     model = RecordActivity
@@ -29,7 +41,7 @@ class RecordActivityInline(admin.TabularInline):
 
 
 @admin.register(TrackingRecord)
-class TrackingRecordAdmin(admin.ModelAdmin):
+class TrackingRecordAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     from apps.core.type_forms import DocumentTypeAdminForm
     form = DocumentTypeAdminForm
     filter_horizontal = ("document_types",)
@@ -43,7 +55,7 @@ class TrackingRecordAdmin(admin.ModelAdmin):
 
 
 @admin.register(RoutingStep)
-class RoutingStepAdmin(admin.ModelAdmin):
+class RoutingStepAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     list_display = ("record", "sequence", "action", "from_office", "to_office", "sent_at", "received_at")
     list_filter = ("action", "to_office")
     search_fields = ("record__tracking_number", "record__subject")
@@ -51,7 +63,7 @@ class RoutingStepAdmin(admin.ModelAdmin):
 
 
 @admin.register(RecordActivity)
-class RecordActivityAdmin(admin.ModelAdmin):
+class RecordActivityAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     list_display = ("record", "event", "message", "actor", "created_at")
     list_filter = ("event",)
     search_fields = ("record__tracking_number", "message", "detail")
@@ -62,12 +74,15 @@ class RecordActivityAdmin(admin.ModelAdmin):
 
 
 @admin.register(Attachment, ExternalAttachment)
-class AttachmentAdmin(admin.ModelAdmin):
+class AttachmentAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     list_display = ("original_name", "record", "size", "uploaded_by", "created_at")
     search_fields = ("original_name", "record__tracking_number")
 
     def get_readonly_fields(self, request, obj=None):
-        return tuple(field.name for field in self.model._meta.fields)
+        return tuple(field.name for field in self.model._meta.fields if field.name != 'file')
+
+    def get_fields(self, request, obj=None):
+        return self.get_readonly_fields(request, obj)
 
     def has_add_permission(self, request):
         return False
@@ -80,9 +95,14 @@ class AttachmentAdmin(admin.ModelAdmin):
 
 
 @admin.register(RecordAccessGrant)
-class RecordAccessGrantAdmin(admin.ModelAdmin):
+class RecordAccessGrantAdmin(ReadOnlyShareAdmin):
     list_display = ("record", "office", "user", "granted_by", "created_at")
     search_fields = ("record__tracking_number", "reason")
+
+
+@admin.register(ExternalRecordAccessGrant)
+class ExternalRecordAccessGrantAdmin(ReadOnlyShareAdmin):
+    list_display = ('record', 'office', 'user', 'granted_by', 'created_at')
 
 
 @admin.register(RoutingSLA)

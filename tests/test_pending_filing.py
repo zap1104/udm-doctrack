@@ -86,7 +86,7 @@ def test_an_active_record_is_never_in_the_queue(users, offices, memo_type):
 
 @pytest.mark.django_db
 def test_the_queue_appears_on_the_tracking_page(client, completed_unfiled, users):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/tracking/").content.decode()
 
     assert "Completed - Pending Filing" in body
@@ -98,7 +98,7 @@ def test_unfiled_work_is_not_a_filed_repository_document(client, completed_unfil
     """A pending preview may appear, but completion alone must not file a record."""
     from apps.documents.models import Document
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.get("/documents/")
 
     assert response.status_code == 200
@@ -111,7 +111,7 @@ def test_unfiled_work_is_not_a_filed_repository_document(client, completed_unfil
 @pytest.mark.django_db
 def test_the_queue_respects_visibility(client, completed_unfiled, users):
     """HR had nothing to do with this record and must not see it queued."""
-    client.force_login(users["hr"])
+    client.force_verified_login(users["hr"])
     body = client.get("/tracking/").content.decode()
 
     assert completed_unfiled.tracking_number not in body
@@ -126,7 +126,7 @@ def test_the_scope_link_shows_only_the_queue(client, completed_unfiled, users, o
     )
     route_record(still_moving, [offices["SUP"]], user=users["med"])
 
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     body = client.get("/tracking/?scope=pending-upload").content.decode()
 
     assert completed_unfiled.tracking_number in body
@@ -180,7 +180,7 @@ def test_returning_restores_the_real_state_and_keeps_the_history(completed_unfil
 
 @pytest.mark.django_db
 def test_returning_needs_a_reason(client, completed_unfiled, users):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     client.post(f"/tracking/{completed_unfiled.pk}/reopen/", {"reason": ""})
 
     completed_unfiled.refresh_from_db()
@@ -191,7 +191,7 @@ def test_returning_needs_a_reason(client, completed_unfiled, users):
 
 @pytest.mark.django_db
 def test_returning_end_to_end(client, completed_unfiled, users):
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
     response = client.post(
         f"/tracking/{completed_unfiled.pk}/reopen/", {"reason": "Finished too early"}
     )

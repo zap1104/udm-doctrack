@@ -179,7 +179,7 @@ def test_every_chart_draws_a_status_in_its_own_colour(client, users, offices, me
         route_record(record, [offices["SUP"]], user=users["med"])
         if confirm:
             confirm_receipt(record, user=users["sup"])
-    client.force_login(users["sup"])
+    client.force_verified_login(users["sup"])
 
     dashboard = client.get("/").context
     for ring in dashboard["tracking_rings"]["rings"]:
@@ -191,7 +191,7 @@ def test_every_chart_draws_a_status_in_its_own_colour(client, users, offices, me
     series = {row["key"]: row["colour"] for row in dashboard["turnaround_trend_points"]}
     assert series.get("receipt", STATUS_COLOURS["PENDING_RECEIPT"]) == STATUS_COLOURS["PENDING_RECEIPT"]
 
-    client.force_login(users["admin"])
+    client.force_verified_login(users["admin"])
     for row in client.get("/tracking/reports/").context["by_status"]:
         assert row["colour"] == STATUS_COLOURS[row["status"]]
 

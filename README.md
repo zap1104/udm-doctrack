@@ -40,6 +40,8 @@ Open <http://127.0.0.1:8000> and sign in:
 
 Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people actually hit.
 
+**Email sign-in:** Mandatory email OTP now defaults on, including Django administration. Demo passwords alone cannot sign in until each account's registered email is verified. Follow [email enrollment, activation and recovery](docs/EMAIL_OTP_AND_PERMISSIONS.md) before using existing accounts. The same guide covers the User permissions and Record sharing tables. Temporary enrollment mode must remain private and is rejected by deployment checks.
+
 ---
 
 ## Status
