@@ -69,6 +69,23 @@ class DocumentAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
 
+    def get_readonly_fields(self, request, obj=None):
+        from apps.accounts.capabilities import area_for, capability_allowed
+
+        fields = list(super().get_readonly_fields(request, obj))
+        # The add form can select either collection; authorize the collection
+        # actually submitted rather than the initial form's default.
+        area = area_for(obj) if obj is not None else (
+            "external_repository" if request.POST.get("collection") == "EXTERNAL" else "repository"
+        )
+        if not capability_allowed(request.user, area, "extract"):
+            fields.extend(("page_count", "ocr_status", "ocr_engine", "ocr_confidence"))
+            # get_fields() includes readonly fields even when get_exclude()
+            # hides them. Do not turn excluded content into a readonly leak.
+            if obj is None or capability_allowed(request.user, area, "view_content"):
+                fields.extend(("ocr_text", "ocr_notes"))
+        return tuple(dict.fromkeys(fields))
+
     def has_delete_permission(self, request, obj=None):
         # Approval, recovery and file cleanup belong to the review workflow.
         return False

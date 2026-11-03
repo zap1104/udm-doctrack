@@ -2,10 +2,13 @@
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
+from threading import Timer
 
 import pytest
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.utils import timezone
@@ -14,6 +17,7 @@ from apps.documents.models import AccessLevel, Collection, Document, DocumentFil
 from apps.tracking import external_services
 from apps.tracking.models import ExternalTrackingRecord, Status, TrackingRecord
 from apps.tracking.services import add_remark, confirm_receipt, create_draft_record, route_record
+from tests.auth_helpers import prepare_verified_user
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.skipif(
     os.environ.get("RUN_LIVE_BROWSER_AUDIT") != "1", reason="Opt-in live Chromium audit; run documented command.",
@@ -29,6 +33,11 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
     settings.CSRF_COOKIE_SECURE = False
     settings.CSRF_TRUSTED_ORIGINS = [live_server.url]
     settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+    settings.EMAIL_OTP_REQUIRED = True
+    settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    settings.EMAIL_CONFIGURED = True
+    for user in users.values():
+        prepare_verified_user(user)
     call_command("init_db", verbosity=0)
     seeded = {}
     for name in ("Pending", "Received", "Processing"):
@@ -98,12 +107,38 @@ def test_real_browser_filters_workflows_and_responsive_views(live_server, users,
     manifest_file = tmp_path / "manifest.json"
     manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
     node = os.environ.get("AUDIT_NODE", "node")
-    completed = subprocess.run(
-        [node, str(Path(settings.BASE_DIR) / "scripts/check_systemwide_live.cjs"), str(manifest_file)],
-        cwd=settings.BASE_DIR, env=os.environ.copy(), capture_output=True, text=True, timeout=1200,
-    )
-    (evidence / "live-browser-output.txt").write_text(completed.stdout + completed.stderr, encoding="utf-8")
-    assert completed.returncode == 0, completed.stdout + completed.stderr
+    output_lines = []
+    error_file = evidence / 'browser-stderr.txt'
+    with error_file.open('w', encoding='utf-8') as errors:
+        process = subprocess.Popen(
+            [node, str(Path(settings.BASE_DIR) / "scripts/check_systemwide_live.cjs"), str(manifest_file)],
+            cwd=settings.BASE_DIR, env=os.environ.copy(), text=True, encoding='utf-8',
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors,
+        )
+        timeout = Timer(1200, process.kill)
+        timeout.start()
+        try:
+            for line in process.stdout:
+                event = json.loads(line)
+                if event.get('event') == 'code':
+                    address = users[event['user']].email
+                    latest = next(message for message in reversed(mail.outbox) if message.to == [address])
+                    code = re.search(r'\b(\d{6})\b', latest.body).group(1)
+                    process.stdin.write(code + '\n')
+                    process.stdin.flush()
+                else:
+                    output_lines.append(line)
+            process.wait(timeout=30)
+        finally:
+            timeout.cancel()
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=10)
+    safe_errors = re.sub(r'\b\d{6}\b', '[test-code-redacted]', error_file.read_text(encoding='utf-8'))
+    error_file.write_text(safe_errors, encoding='utf-8')
+    output = ''.join(output_lines) + safe_errors
+    (evidence / "live-browser-output.txt").write_text(output, encoding="utf-8")
+    assert process.returncode == 0, output
     created = TrackingRecord.objects.get(subject="Browser created and filed")
     assert created.status == Status.COMPLETED
     assert Document.objects.filter(tracking_record=created, collection=Collection.OVPA).count() == 1

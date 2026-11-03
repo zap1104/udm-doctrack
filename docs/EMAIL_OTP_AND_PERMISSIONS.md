@@ -1,6 +1,6 @@
 # Email OTP, permissions and read sharing
 
-This feature is local to `codex/email-otp-permissions`. Applying migrations to the original database, sending real emails and enabling production access are separate operator actions. Back up the database and files before rollout.
+Applying migrations to the intended database, sending real emails and enabling production access are separate operator actions. Back up the database and files before rollout.
 
 ## Enrollment and activation
 
@@ -54,6 +54,8 @@ Resending replaces the code, retains wrong-attempt counters and cannot extend th
 Self-service address replacement requires the current password and recent OTP verification of the existing address. Use **Profile → Change registered email**. The current address remains active until the replacement is verified. Recent security verification lasts five minutes; the screen requests a new email code when necessary.
 
 Changes to password, role, office, active/staff status or verified address invalidate old OTP proof. A legitimate own-password change preserves proof only for the session making that change. Other sessions must sign in again. Existing forced-password changes, lockouts and idle timeouts remain in effect.
+
+Account administration preserves at least one ready system administrator: active, with Django staff access, a usable password and, when codes are required, a verified email. Both the normal user screen and Django administration refuse changes that would remove the last ready administrator. Django administration also refuses self-deletion, self-deactivation and removal of the actor's administrator role. A step down to office administrator requires another ready system administrator. Temporary enrollment mode does not require the replacement's email to be verified.
 
 ## Assisted recovery
 

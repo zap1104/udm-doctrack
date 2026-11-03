@@ -216,9 +216,16 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         project means nobody could.
         """
         cleaned = super().clean()
+        from .admin_safety import is_ready_system_admin, ready_system_admins
+
+        role = cleaned.get('role')
+        loses_ready_access = is_ready_system_admin(self.instance) and (
+            role != User.Role.SYSTEM_ADMIN or not cleaned.get('is_active'))
+        if loses_ready_access and not ready_system_admins(exclude_ids=[self.instance.pk]):
+            field = 'role' if cleaned.get('role') != User.Role.SYSTEM_ADMIN else 'is_active'
+            self.add_error(field, 'Keep another ready system administrator before removing this account\'s access.')
         if not self.editing_self:
             return cleaned
-        role = cleaned.get("role")
         if role not in {User.Role.ADMIN, User.Role.SYSTEM_ADMIN}:
             self.add_error(
                 "role",
@@ -228,9 +235,7 @@ class AdminUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         elif (
             role == User.Role.ADMIN
             and self.instance.role == User.Role.SYSTEM_ADMIN
-            and not User.objects.filter(role=User.Role.SYSTEM_ADMIN, is_active=True)
-            .exclude(pk=self.instance.pk)
-            .exists()
+            and not ready_system_admins(exclude_ids=[self.instance.pk])
         ):
             # Stepping down to office administrator is a demotion like any
             # other, except when you are the last account that can undo it.

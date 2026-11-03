@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
 from django.db.models.functions import ExtractYear
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -626,6 +626,14 @@ class DocumentFileDownloadView(AppLoginRequiredMixin, View):
         require_capability(request.user, area_for(document_file.document), 'download')
         if unsign_download(request.GET.get("token", "")) != f"document-file:{document_file.pk}:{request.user.pk}":
             raise PermissionDenied("This download link has expired or is invalid. Open the document to get a new link.")
+        from apps.core.file_views import private
+        from apps.core.storage import storage_identity
+
+        latest = document_file.versions.order_by('-version_number', '-pk').first()
+        if latest is None or not latest.available_content or latest.file.name != document_file.file.name:
+            return private(HttpResponse('This file content is no longer available. Return to its record.', status=410))
+        if latest.storage_identity and latest.storage_identity != storage_identity(document_file.file.storage):
+            return private(HttpResponse('This file\'s storage configuration changed. Contact an administrator.', status=410))
         log_action(
             AuditLog.Action.DOWNLOAD,
             f"Downloaded {document_file.original_name}",

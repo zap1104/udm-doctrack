@@ -253,7 +253,12 @@ class ProfileView(AppLoginRequiredMixin, View):
                 # Personal details must not overwrite a concurrent password
                 # reset, suspension, office transfer, or role change.
                 profile = form.save(commit=False)
-                profile.save(update_fields=ProfileForm.Meta.fields)
+                fields = ProfileForm.Meta.fields
+                if getattr(settings, 'EMAIL_OTP_REQUIRED', True):
+                    # An in-flight profile form can predate an email recovery.
+                    # The readonly contact field must never restore that factor.
+                    fields = tuple(field for field in fields if field != 'email')
+                profile.save(update_fields=fields)
                 messages.success(request, "Profile updated.")
                 return redirect("accounts:profile")
         elif action == "preferences":
@@ -464,6 +469,10 @@ class UserToggleActiveView(OfficeScopedUserMixin, AdminRequiredMixin, View):
         if user.pk == request.user.pk:
             messages.error(request, "You cannot deactivate your own account.")
             return redirect("accounts:user_list")
+        from .admin_safety import is_ready_system_admin, ready_system_admins
+        if is_ready_system_admin(user) and not ready_system_admins(exclude_ids=[user.pk]):
+            messages.error(request, 'Keep another ready system administrator before suspending this account.')
+            return redirect('accounts:user_list')
         user.is_active = not user.is_active
         user.save(update_fields=["is_active"])
         log_action(

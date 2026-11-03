@@ -4,7 +4,16 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const readline = require('node:readline');
 const {chromium} = require('playwright');
+const input = readline.createInterface({input:process.stdin});
+const codes=[];
+let receiver;
+input.on('line', line=>{if(receiver){const next=receiver;receiver=null;next(line);}else codes.push(line);});
+function nextCode(user) {
+  process.stdout.write(JSON.stringify({event:'code',user})+'\n');
+  return codes.length ? Promise.resolve(codes.shift()) : new Promise(resolve=>{receiver=resolve;});
+}
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const report = {origin:manifest.origin, phase:manifest.phase || 'all', checks:[], errors:[], httpErrors:[], failedRequests:[], navigations:[], filterRequests:[], screenshots:[], limitations:[
   'Chromium emulation; physical devices and screen readers were not tested.',
@@ -67,9 +76,14 @@ async function signIn(browser, username) {
   await navigate(page,manifest.origin + '/accounts/login/');
   await page.locator('[name=username]').fill(username);
   await page.locator('[name=password]').fill('TestPass123!');
-  await Promise.all([page.waitForURL(url => !url.pathname.includes('/login/'),{waitUntil:'domcontentloaded'}), page.getByRole('button',{name:'Sign In',exact:true}).click()]);
+  await Promise.all([page.waitForURL('**/accounts/otp/',{waitUntil:'domcontentloaded'}), page.getByRole('button',{name:'Sign In',exact:true}).click()]);
+  const protectedResponse=await context.request.get(manifest.origin+'/tracking/',{maxRedirects:0});
+  assert.equal(protectedResponse.status(),302,'Password alone must not authenticate');
+  assert.ok(protectedResponse.headers().location.includes('/accounts/login/'));
+  await page.locator('[name=code]').fill((await nextCode(username)).trim());
+  await Promise.all([page.waitForURL(url=>url.pathname!='/accounts/otp/',{waitUntil:'domcontentloaded'}),page.getByRole('button',{name:'Verify code and sign in',exact:true}).click()]);
   assert.equal(new URL(page.url()).pathname, '/');
-  record('Real authentication and CSRF', {username});
+  record('Real password-plus-email-OTP authentication and CSRF', {username});
   return {context,page};
 }
 async function submit(page) {
@@ -343,7 +357,9 @@ async function checkNoJavaScript(browser) {
     await page.goto(manifest.origin+'/accounts/login/');
     await page.locator('[name=username]').fill('med');
     await page.locator('[name=password]').fill('TestPass123!');
-    await Promise.all([page.waitForURL(url=>url.pathname==='/'),page.getByRole('button',{name:'Sign In',exact:true}).click()]);
+    await Promise.all([page.waitForURL('**/accounts/otp/'),page.getByRole('button',{name:'Sign In',exact:true}).click()]);
+    await page.locator('[name=code]').fill((await nextCode('med')).trim());
+    await Promise.all([page.waitForURL(url=>url.pathname==='/'),page.getByRole('button',{name:'Verify code and sign in',exact:true}).click()]);
     await page.goto(manifest.origin+'/documents/');
     const form=page.locator('[data-auto-filter]').filter({has:page.locator('input[name=q]')}).first();
     await form.locator('input[name=q]').fill('Browser Repository Alpha');
@@ -357,7 +373,7 @@ async function checkNoJavaScript(browser) {
 }
 
 async function run() {
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Users/USER/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe';
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
   const browser = await chromium.launch({headless:true,executablePath});
   const sessions = {};
   try {
@@ -433,6 +449,14 @@ async function run() {
       await page.setViewportSize({width:1366,height:950});
     }
     if(manifest.phase!=='core') {
+      await navigate(manager,manifest.origin+new URL(manager.url()).pathname);
+      const preview=manager.getByRole('link',{name:/^Preview/}).first();
+      await Promise.all([manager.waitForNavigation({waitUntil:'domcontentloaded'}),preview.click()]);
+      await ready(manager);
+      assert.equal(await manager.locator('.file-preview [class=preview-text]').innerText(),'Private browser audit file');
+      assert.ok((await manager.locator('.file-preview').innerText()).includes('Viewing Version 1 of 1'));
+      await Promise.all([manager.waitForNavigation({waitUntil:'domcontentloaded'}),manager.getByRole('link',{name:'Back to record',exact:true}).click()]);
+      record('Authorized filed TXT preview shows original bytes and version label with Back navigation');
       await checkHistoryResetAndPages(med);
       await checkCombinedDates(med);
       await checkTrackingCombinedSearch(admin);
@@ -449,6 +473,8 @@ async function run() {
   } finally {
     fs.writeFileSync(manifest.output,JSON.stringify(report,null,2));
     await browser.close();
+    input.close();
+    process.stdin.destroy();
   }
 }
-run().catch(error=>{report.failure=error.stack;fs.writeFileSync(manifest.output,JSON.stringify(report,null,2));console.error(error.stack);process.exitCode=1;});
+run().catch(error=>{report.failure=error.stack;fs.writeFileSync(manifest.output,JSON.stringify(report,null,2));console.error(error.stack);process.exitCode=1;input.close();process.stdin.destroy();});

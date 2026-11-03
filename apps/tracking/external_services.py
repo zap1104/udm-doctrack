@@ -261,7 +261,9 @@ def route_record(
     if action not in ExternalRoutingStep.Action.values:
         raise ValidationError("Choose a valid routing action.")
     if to_office:
-        to_office = Office.objects.filter(pk=to_office.pk, is_active=True).first()
+        to_office = Office.objects.select_for_update(no_key=True).filter(
+            pk=to_office.pk, is_active=True,
+        ).order_by("pk").first()
         if not to_office:
             raise ValidationError("Choose an active receiving office.")
     else:
@@ -561,6 +563,8 @@ def correct_step(record, *, step, user, reason, changes):
         origin = record.activities.filter(event="CREATED", actual_at__isnull=False).first()
         if origin and step.sent_at < origin.actual_at:
             raise ValidationError("Sending cannot precede the known external source time.")
+    if "sent_at" in changes and step.due_at and step.due_at < step.sent_at:
+        raise ValidationError("The deadline cannot precede sending.")
     step.full_clean()
     step.save(update_fields=[*changes, *[field.split("_")[0] + "_name_snapshot" for field in endpoint_fields]])
     if "from_external_office" in changes:

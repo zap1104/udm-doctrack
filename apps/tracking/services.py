@@ -365,10 +365,22 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     if action not in RoutingStep.Action.values:
         raise ValidationError("Choose a valid routing action.")
     offices = list({office.pk: office for office in offices if office is not None}.values())
-    if any(not office.is_active for office in offices):
-        raise ValidationError("Choose an active receiving office.")
     if not offices:
         raise ValidationError("Select at least one receiving office.")
+    from apps.accounts.models import Office
+
+    # A form's selected instances can outlive an office's deactivation. Reload
+    # and keep each destination active until this transfer commits. Lock in PK
+    # order while retaining the caller's recipient order for parallel routes.
+    destinations = {
+        office.pk: office
+        for office in Office.objects.select_for_update(no_key=True).filter(
+            pk__in=[office.pk for office in offices], is_active=True,
+        ).order_by("pk")
+    }
+    if len(destinations) != len(offices):
+        raise ValidationError("Choose an active receiving office.")
+    offices = [destinations[office.pk] for office in offices]
 
     if action == RoutingStep.Action.SEND:
         if record.status != Status.DRAFT:

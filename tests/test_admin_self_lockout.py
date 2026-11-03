@@ -18,6 +18,7 @@ from django.test import RequestFactory
 from apps.accounts.forms import AdminUserUpdateForm
 from apps.accounts.models import User
 from apps.accounts.views import UserUpdateView
+from tests.auth_helpers import prepare_verified_user
 
 
 def _payload(user, **overrides):
@@ -97,10 +98,11 @@ def test_the_last_system_admin_cannot_step_down_to_office_admin(users):
 @pytest.mark.django_db
 def test_stepping_down_is_allowed_once_somebody_else_can_take_over(users, offices):
     admin = users["admin"]
-    User.objects.create_user(
+    replacement = User.objects.create_user(
         username="second-sysadmin", password="TestPass123!",
-        office=offices["REC"], role=User.Role.SYSTEM_ADMIN,
+        office=offices["REC"], role=User.Role.SYSTEM_ADMIN, is_staff=True,
     )
+    prepare_verified_user(replacement)
     form = AdminUserUpdateForm(
         _payload(admin, role=User.Role.ADMIN), instance=admin, editing_self=True, actor=admin
     )
@@ -120,7 +122,9 @@ def test_an_inactive_system_admin_cannot_take_over(users, offices):
 @pytest.mark.django_db(transaction=True)
 def test_two_system_admins_cannot_both_step_down_at_the_same_time(users, offices):
     second = User.objects.create_user(username="second-concurrent-admin", password="TestPass123!",
-                                      office=offices["REC"], role=User.Role.SYSTEM_ADMIN)
+                                      office=offices["REC"], role=User.Role.SYSTEM_ADMIN, is_staff=True)
+    prepare_verified_user(users['admin'])
+    prepare_verified_user(second)
     barrier = Barrier(2)
 
     def step_down(user_id):

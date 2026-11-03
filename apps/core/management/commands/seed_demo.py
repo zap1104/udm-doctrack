@@ -1,7 +1,7 @@
-"""Creates everything needed to demo the system, in about a minute.
+"""Creates demo accounts, master data and sample records; email setup is separate.
 
     python manage.py seed_demo
-    python manage.py seed_demo --records 0    # accounts and master data only
+    python manage.py seed_demo --records 0    # skip generated traffic; keep narrative samples
 
 Two kinds of sample data. Eight narrative records written to be read — the
 walkthrough at the end of this file refers to them by name — and on top of that
@@ -10,8 +10,9 @@ have any shape: a trend line wants twelve months of completions, the two rings
 want every status occupied at once, and the per-office lists want more than one
 office in them. With only the narrative eight, every chart is one bar tall.
 
-`--records` sets how much of that generated traffic to make. It is the only
-slow part; drop it to 0 when you just need accounts.
+`--records` sets the tracking-record target for generated traffic. Set it to 0
+to skip generated traffic and its archive; narrative records and their sample
+archive are still created.
 
 Safe to run more than once — it updates rather than duplicates, and the
 generated traffic is skipped once the records are there. Use --wipe only on a
@@ -346,7 +347,7 @@ class Command(BaseCommand):
             users = self._users(offices, password)
 
         self.stdout.write("")
-        self.stdout.write(self.style.SUCCESS("Accounts and master data are saved — you can sign in now."))
+        self.stdout.write(self.style.SUCCESS("Accounts and master data are saved."))
 
         # Sample records are demo garnish. If they fail, say so loudly but do
         # not take the working accounts down with them.
@@ -369,10 +370,11 @@ class Command(BaseCommand):
             self.stderr.write("")
             self.stderr.write(self.style.ERROR(f"Sample records could not be created: {exc}"))
             self.stderr.write(
-                "Your accounts and master data are fine — sign in and create a document by hand."
+                "Your accounts and master data are fine — finish sign-in setup, then create a document by hand."
             )
             if options.get("traceback"):
                 raise
+            raise CommandError("Sample records could not be created; accounts and master data are preserved.") from exc
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
@@ -381,6 +383,9 @@ class Command(BaseCommand):
         # was an office administrator or a viewer, so the two roles whose whole
         # point is what they *cannot* do had no way into the demo.
         self.stdout.write("  Sign in at /accounts/login/ using the configured demo password.")
+        if getattr(settings, "EMAIL_OTP_REQUIRED", True):
+            self.stdout.write("  Mandatory email OTP: verify account emails and configure delivery before sign-in.")
+            self.stdout.write("  Run python manage.py check_otp_readiness to check enrollment.")
         self.stdout.write("")
         self.stdout.write("  System administrator : admin        every office, and /admin/")
         self.stdout.write("  Office administrator : med.head     MED only — hires, suspends, approves")
@@ -618,7 +623,9 @@ class Command(BaseCommand):
             # seeded tag on zero, and the repository's popular-tags panel only
             # lists tags with a count above zero — so a freshly seeded demo
             # showed an empty panel next to five tagged documents.
-            set_tags(document, tag_names, user=users.get("records"))
+            # The seed administrator may apply metadata across offices; the
+            # historical uploader above remains separate provenance.
+            set_tags(document, tag_names, user=users["admin"])
             document.rebuild_index()
             created += 1
         self.stdout.write(f"Archived documents: {created}")
@@ -821,7 +828,7 @@ class Command(BaseCommand):
                     ocr_status="SKIPPED",
                     ocr_text=title,
                 )
-                set_tags(document, tag_names, user=users.get("records"))
+                set_tags(document, tag_names, user=users["admin"])
                 document.rebuild_index()
                 stamp = timezone.make_aware(
                     datetime.combine(month_day.replace(day=day), time(hour=hour))

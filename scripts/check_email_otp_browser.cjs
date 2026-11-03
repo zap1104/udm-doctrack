@@ -7,6 +7,8 @@ const path = require('node:path');
 const base = process.env.OTP_BROWSER_BASE;
 const output = process.env.OTP_BROWSER_OUTPUT;
 const target = process.env.OTP_BROWSER_TARGET;
+const administrator = process.env.OTP_BROWSER_ADMIN;
+const documentId = process.env.OTP_BROWSER_DOCUMENT;
 const lines = readline.createInterface({ input: process.stdin });
 const queue = [];
 let receiver;
@@ -49,6 +51,25 @@ function check(value, text) { if (!value) throw new Error(text); checks++; }
       check(refused.status()===403,'Viewer gained creation access');
     }
     if(user==='admin') {
+      await page.goto(base+`/django-admin/accounts/user/${administrator}/change/`);
+      await page.locator('[name="role"]').selectOption('USER');
+      await Promise.all([
+        page.waitForResponse(response=>response.request().method()==='POST' && response.url().includes(`/accounts/user/${administrator}/change/`)),
+        page.locator('input[name="_save"]').click()
+      ]);
+      await page.getByText('You cannot remove your own administrator role.',{exact:true}).waitFor();
+      check(await page.locator('.errornote').count()===1,'Self-demotion was not refused');
+      await page.goto(base+`/django-admin/documents/document/${documentId}/change/`);
+      check(await page.locator('[name="ocr_text"], [name="ocr_status"], [name="page_count"]').count()===0,'Blocked extraction controls remain editable');
+      await page.locator('[name="title"]').fill('Browser corrected metadata');
+      await Promise.all([page.waitForLoadState('load'),page.locator('input[name="_save"]').click()]);
+      await page.waitForURL('**/django-admin/documents/document/');
+      check(await page.getByText('Browser corrected metadata',{exact:true}).count()>0,'Allowed metadata correction did not save');
+      for(const query of ['', '?q=Browser%20external%20metadata']) {
+        await page.goto(base+'/documents/external/'+query);
+        check(await page.getByText('Browser external metadata',{exact:true}).count()>0,'External metadata disappeared');
+        check(!(await page.locator('body').innerText()).includes('private-browser-external-evidence'),'External card exposed restricted extracted text');
+      }
       await page.goto(base+'/django-admin/accounts/permissionuser/');
       check(await page.getByRole('link',{name:'med',exact:true}).count()===1,'User permissions table missing');
       await page.goto(base+`/django-admin/accounts/permissionuser/${target}/change/`);

@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 from django.core import mail
 
+from apps.accounts.permission_models import CapabilityRestriction, UserPermissionPolicy
+from apps.documents.models import Document
 from tests.auth_helpers import prepare_verified_user
 
 
@@ -23,12 +25,29 @@ def test_email_otp_and_permission_browser_journeys(live_server, users, settings)
     settings.CSRF_COOKIE_SECURE = False
     for user in users.values():
         prepare_verified_user(user)
+    policy = UserPermissionPolicy.objects.create(user=users['admin'])
+    CapabilityRestriction.objects.create(policy=policy, area='repository', action='extract')
+    CapabilityRestriction.objects.create(policy=policy, area='external_repository', action='view_content')
+    document = Document.objects.create(
+        title='Browser metadata review', office=users['med'].office,
+        uploaded_by=users['admin'], year=2026, ocr_text='Original browser extraction evidence',
+        ocr_status='FAILED', page_count=2,
+    )
+    external_document = Document.objects.create(
+        title='Browser external metadata', collection='EXTERNAL', office=users['med'].office,
+        uploaded_by=users['admin'], year=2026, ocr_text='private-browser-external-evidence',
+    )
+    document.rebuild_index()
+    external_document.rebuild_index()
     node = shutil.which('node')
     assert node, 'Node is required for the opt-in browser journey'
     root = Path(__file__).resolve().parents[1]
     output = Path(os.environ['OTP_BROWSER_OUTPUT'])
     output.mkdir(parents=True, exist_ok=True)
-    env = os.environ | {'OTP_BROWSER_BASE':live_server.url, 'OTP_BROWSER_TARGET':str(users['med'].pk)}
+    env = os.environ | {
+        'OTP_BROWSER_BASE':live_server.url, 'OTP_BROWSER_TARGET':str(users['med'].pk),
+        'OTP_BROWSER_ADMIN':str(users['admin'].pk), 'OTP_BROWSER_DOCUMENT':str(document.pk),
+    }
     errors = output / 'browser-stderr.txt'
     with errors.open('w',encoding='utf-8') as error_stream:
         process = subprocess.Popen([node,str(root/'scripts/check_email_otp_browser.cjs')], cwd=root, env=env,
@@ -53,5 +72,12 @@ def test_email_otp_and_permission_browser_journeys(live_server, users, settings)
     safe_errors = re.sub(r'\b\d{6}\b','[test-code-redacted]',errors.read_text(encoding='utf-8'))
     errors.write_text(safe_errors,encoding='utf-8')
     assert code == 0, safe_errors
-    assert complete and complete['checks'] >= 30
+    assert complete and complete['checks'] >= 50
+    users['admin'].refresh_from_db()
+    document.refresh_from_db()
+    assert users['admin'].role == 'SYSTEM_ADMIN'
+    assert document.title == 'Browser corrected metadata'
+    assert document.ocr_text == 'Original browser extraction evidence'
+    assert document.ocr_status == 'FAILED'
+    assert document.page_count == 2
     (output/'browser-results.json').write_text(json.dumps(complete,indent=2),encoding='utf-8')

@@ -1,8 +1,30 @@
+from copy import copy
+
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.forms import AdminPasswordChangeForm
+from django.core.exceptions import PermissionDenied
 
 from . import permission_admin  # noqa: F401
+from .admin_safety import is_ready_system_admin, ready_system_admins
 from .models import LoginLockout, Office, User
+
+
+def _require_ready_replacement(user):
+    if is_ready_system_admin(user) and not ready_system_admins(exclude_ids=[user.pk]):
+        raise forms.ValidationError(
+            'Keep at least one active system administrator with staff access, a usable '
+            'password and a verified email when email codes are required.'
+        )
+
+
+class AvailableAdminPasswordChangeForm(AdminPasswordChangeForm):
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('set_usable_password', True):
+            _require_ready_replacement(self.user)
+        return cleaned
 
 
 @admin.register(Office)
@@ -27,6 +49,7 @@ class OfficeAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
+    change_password_form = AvailableAdminPasswordChangeForm
     list_display = ("username", "display_name", "office", "role", "is_active", "last_login")
     list_filter = ("role", "office", "is_active")
     search_fields = ("username", "first_name", "last_name", "email")
@@ -36,6 +59,14 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (
         ("DocTrack profile", {"fields": ("first_name", "last_name", "email", "office", "role", "position")}),
     )
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+            # The site holds the account-wide lock. Also lock the target before
+            # Django builds a form that later saves the whole account instance.
+            queryset = queryset.select_for_update(no_key=True, of=('self',))
+        return queryset
 
     def get_readonly_fields(self, request, obj=None):
         from .otp import required
@@ -48,7 +79,41 @@ class UserAdmin(DjangoUserAdmin):
         form = super().get_form(request, obj, **kwargs)
         if required() and 'email' in form.base_fields:
             form.base_fields['email'].required = True
-        return form
+        if obj is None:
+            return form
+
+        class AvailableAccountForm(form):
+            def clean(self):
+                cleaned = super().clean()
+                proposed = copy(self.instance)
+                for field in ('role', 'is_active', 'is_staff'):
+                    if field in cleaned:
+                        setattr(proposed, field, cleaned[field])
+                if proposed.pk == request.user.pk:
+                    if not proposed.is_active:
+                        raise forms.ValidationError('You cannot deactivate your own account.')
+                    if not proposed.is_office_admin:
+                        raise forms.ValidationError('You cannot remove your own administrator role.')
+                if not is_ready_system_admin(proposed):
+                    _require_ready_replacement(self.instance)
+                return cleaned
+
+        return AvailableAccountForm
+
+    def _check_deletions(self, request, targets):
+        ids = [target.pk for target in targets]
+        if request.user.pk in ids:
+            raise PermissionDenied('You cannot delete your own administrator account.')
+        if any(is_ready_system_admin(target) for target in targets) and not ready_system_admins(exclude_ids=ids):
+            raise PermissionDenied('Keep a ready system administrator before deleting these accounts.')
+
+    def delete_model(self, request, obj):
+        self._check_deletions(request, [obj])
+        return super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        self._check_deletions(request, list(queryset))
+        return super().delete_queryset(request, queryset)
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         from urllib.parse import urlencode

@@ -73,7 +73,8 @@ def file_history_rows(parent, *, user, cursor=None):
         if before:
             versions = versions.filter(version_number__lt=before)
         items = list(versions[:26])
-        entries = [dict(row, type="version") for row in version_rows(items[:25], kind, user)]
+        external = kind == "external" or (kind == "repository" and record.is_external)
+        entries = [dict(row, type="version") for row in version_rows(items[:25], kind, user, external=external)]
         if len(items) > 25:
             next_cursor = continuation("versions", items[24].version_number)
             return {"entries": entries, "next_cursor": next_cursor, "record": record}

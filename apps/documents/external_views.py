@@ -57,9 +57,17 @@ class ExternalRepositoryView(AppLoginRequiredMixin, View):
             request,
             documents.with_related().annotate(file_count=Count("files", distinct=True)).order_by("-document_date", "-pk"),
         )
-        context.update(form=form, documents=context["page_obj"].object_list, total=context["page_obj"].paginator.count,
-                       all_count=visible.count(), can_upload=request.user.can_start_work and request.user.is_office_admin)
         from apps.accounts.capabilities import capability_allowed
+
+        page_documents = list(context["page_obj"].object_list)
+        if not capability_allowed(request.user, "external_repository", "view_content"):
+            # Search returns IDs, then this page refetches the documents.
+            # Redact those final instances before snippet can fall back to OCR.
+            for document in page_documents:
+                document.ocr_text = ""
+        context["page_obj"].object_list = page_documents
+        context.update(form=form, documents=page_documents, total=context["page_obj"].paginator.count,
+                       all_count=visible.count(), can_upload=request.user.can_start_work and request.user.is_office_admin)
         context['can_upload'] = context['can_upload'] and capability_allowed(request.user, 'external_repository', 'create')
         return render(request, "documents/external/repository.html", context)
 
