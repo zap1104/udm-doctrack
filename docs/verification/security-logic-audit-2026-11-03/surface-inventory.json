@@ -1,0 +1,1354 @@
+{
+  "routes": [
+    {
+      "path": "uploads/saved/",
+      "name": "upload_drafts"
+    },
+    {
+      "path": "uploads/drafts/<uuid:draft_id>/discard/",
+      "name": "upload_draft_discard"
+    },
+    {
+      "path": "uploads/drafts/",
+      "name": "upload_draft_create"
+    },
+    {
+      "path": "uploads/drafts/<uuid:draft_id>/",
+      "name": "upload_draft"
+    },
+    {
+      "path": "uploads/drafts/<uuid:draft_id>/files/",
+      "name": "upload_draft_files"
+    },
+    {
+      "path": "uploads/drafts/<uuid:draft_id>/files/<uuid:file_id>/remove/",
+      "name": "upload_draft_remove"
+    },
+    {
+      "path": "files/preview/upload/<uuid:pk>/",
+      "name": "upload_file_preview"
+    },
+    {
+      "path": "files/content/upload/<uuid:pk>/",
+      "name": "upload_file_content"
+    },
+    {
+      "path": "files/download/upload/<uuid:pk>/",
+      "name": "upload_file_download"
+    },
+    {
+      "path": "files/preview-frame/",
+      "name": "file_preview_frame"
+    },
+    {
+      "path": "files/history/<slug:kind>/<int:pk>/",
+      "name": "file_history"
+    },
+    {
+      "path": "files/preview/<slug:kind>/<int:pk>/",
+      "name": "file_preview"
+    },
+    {
+      "path": "files/content/<slug:kind>/<int:pk>/",
+      "name": "file_content"
+    },
+    {
+      "path": "files/download/<slug:kind>/<int:pk>/",
+      "name": "file_download"
+    },
+    {
+      "path": "healthz/",
+      "name": "healthz"
+    },
+    {
+      "path": "notifications/",
+      "name": "notifications"
+    },
+    {
+      "path": "notifications/count/",
+      "name": "notification_count"
+    },
+    {
+      "path": "notifications/read-all/",
+      "name": "notification_mark_all_read"
+    },
+    {
+      "path": "notifications/<int:pk>/read/",
+      "name": "notification_read"
+    },
+    {
+      "path": "",
+      "name": "dashboard"
+    },
+    {
+      "path": "memo/print/",
+      "name": "dashboard_memo_print"
+    },
+    {
+      "path": "tracking/reports/",
+      "name": "reports"
+    },
+    {
+      "path": "documents/reports/",
+      "name": "repository_reports"
+    },
+    {
+      "path": "tracking/reports/export/",
+      "name": "report_export"
+    },
+    {
+      "path": "reports/",
+      "name": null
+    },
+    {
+      "path": "reports/export/",
+      "name": null
+    },
+    {
+      "path": "print-log/",
+      "name": "log_print"
+    },
+    {
+      "path": "administration/",
+      "name": "administration"
+    },
+    {
+      "path": "administration/audit-log/",
+      "name": "audit_log"
+    },
+    {
+      "path": "administration/office-schedule/",
+      "name": "office_schedule"
+    },
+    {
+      "path": "administration/<slug:slug>/",
+      "name": "masterdata_list"
+    },
+    {
+      "path": "administration/<slug:slug>/new/",
+      "name": "masterdata_create"
+    },
+    {
+      "path": "administration/<slug:slug>/<int:pk>/",
+      "name": "masterdata_edit"
+    },
+    {
+      "path": "accounts/login/",
+      "name": "login"
+    },
+    {
+      "path": "accounts/otp/",
+      "name": "otp"
+    },
+    {
+      "path": "accounts/otp/resend/",
+      "name": "otp_resend"
+    },
+    {
+      "path": "accounts/otp/cancel/",
+      "name": "otp_cancel"
+    },
+    {
+      "path": "accounts/reauthenticate/",
+      "name": "reauthenticate"
+    },
+    {
+      "path": "accounts/email/invitation/<uuid:pk>/<str:token>/",
+      "name": "email_invitation"
+    },
+    {
+      "path": "accounts/email/change/",
+      "name": "email_change"
+    },
+    {
+      "path": "accounts/users/<int:pk>/email/",
+      "name": "email_security"
+    },
+    {
+      "path": "accounts/password-reset/",
+      "name": "password_reset"
+    },
+    {
+      "path": "accounts/password-reset/done/",
+      "name": "password_reset_done"
+    },
+    {
+      "path": "accounts/password-reset/<uidb64>/<token>/",
+      "name": "password_reset_confirm"
+    },
+    {
+      "path": "accounts/password-reset/complete/",
+      "name": "password_reset_complete"
+    },
+    {
+      "path": "accounts/logout/",
+      "name": "logout"
+    },
+    {
+      "path": "accounts/password/",
+      "name": "password_change"
+    },
+    {
+      "path": "accounts/session/keep-alive/",
+      "name": "session_keep_alive"
+    },
+    {
+      "path": "accounts/profile/",
+      "name": "profile"
+    },
+    {
+      "path": "accounts/email/verify/",
+      "name": "verify_email"
+    },
+    {
+      "path": "accounts/email/verify/<int:pk>/<str:token>/",
+      "name": "verify_email_confirm"
+    },
+    {
+      "path": "accounts/users/",
+      "name": "user_list"
+    },
+    {
+      "path": "accounts/users/new/",
+      "name": "user_create"
+    },
+    {
+      "path": "accounts/users/<int:pk>/",
+      "name": "user_edit"
+    },
+    {
+      "path": "accounts/users/<int:pk>/toggle/",
+      "name": "user_toggle"
+    },
+    {
+      "path": "accounts/offices/",
+      "name": "office_list"
+    },
+    {
+      "path": "accounts/offices/new/",
+      "name": "office_create"
+    },
+    {
+      "path": "accounts/offices/<int:pk>/",
+      "name": "office_edit"
+    },
+    {
+      "path": "accounts/locked/",
+      "name": "lockout"
+    },
+    {
+      "path": "tracking/external/",
+      "name": "external_list"
+    },
+    {
+      "path": "tracking/external/new/",
+      "name": "external_create"
+    },
+    {
+      "path": "tracking/external/reports/",
+      "name": "external_reports"
+    },
+    {
+      "path": "tracking/external/export/",
+      "name": "external_export"
+    },
+    {
+      "path": "tracking/external/offices/",
+      "name": "external_offices"
+    },
+    {
+      "path": "tracking/external/offices/new/",
+      "name": "external_office_create"
+    },
+    {
+      "path": "tracking/external/offices/<int:pk>/edit/",
+      "name": "external_office_edit"
+    },
+    {
+      "path": "tracking/external/offices/<int:pk>/deactivate/",
+      "name": "external_office_deactivate"
+    },
+    {
+      "path": "tracking/external/attachments/<int:pk>/",
+      "name": "external_attachment"
+    },
+    {
+      "path": "tracking/external/<int:pk>/",
+      "name": "external_detail"
+    },
+    {
+      "path": "tracking/external/<int:pk>/files/<int:group_pk>/versions/",
+      "name": "external_file_version"
+    },
+    {
+      "path": "tracking/external/<int:pk>/files/<int:group_pk>/discard/",
+      "name": "external_file_discard"
+    },
+    {
+      "path": "tracking/external/<int:pk>/review/",
+      "name": "external_review"
+    },
+    {
+      "path": "tracking/external/<int:pk>/slip/",
+      "name": "external_slip"
+    },
+    {
+      "path": "tracking/external/<int:pk>/correct/<int:step_pk>/",
+      "name": "external_correct"
+    },
+    {
+      "path": "tracking/external/<int:pk>/actions/<slug:action>/",
+      "name": "external_action"
+    },
+    {
+      "path": "tracking/",
+      "name": "list"
+    },
+    {
+      "path": "tracking/new/",
+      "name": "create"
+    },
+    {
+      "path": "tracking/bulk-receipt/",
+      "name": "bulk_confirm_receipt"
+    },
+    {
+      "path": "tracking/<int:pk>/review/",
+      "name": "review"
+    },
+    {
+      "path": "tracking/<int:pk>/",
+      "name": "detail"
+    },
+    {
+      "path": "tracking/<int:pk>/files/<int:group_pk>/versions/",
+      "name": "file_version"
+    },
+    {
+      "path": "tracking/<int:pk>/files/<int:group_pk>/discard/",
+      "name": "file_discard"
+    },
+    {
+      "path": "tracking/<int:pk>/receipt/",
+      "name": "confirm_receipt"
+    },
+    {
+      "path": "tracking/<int:pk>/remark/",
+      "name": "add_remark"
+    },
+    {
+      "path": "tracking/<int:pk>/route/",
+      "name": "route"
+    },
+    {
+      "path": "tracking/<int:pk>/complete/",
+      "name": "complete"
+    },
+    {
+      "path": "tracking/<int:pk>/archive/",
+      "name": "archive"
+    },
+    {
+      "path": "tracking/<int:pk>/reopen/",
+      "name": "reopen"
+    },
+    {
+      "path": "tracking/<int:pk>/share/",
+      "name": "grant_access"
+    },
+    {
+      "path": "tracking/<int:pk>/slip/",
+      "name": "routing_slip"
+    },
+    {
+      "path": "tracking/attachment/<int:pk>/",
+      "name": "attachment_download"
+    },
+    {
+      "path": "documents/intelligence/review-queue/",
+      "name": "tag_review_queue"
+    },
+    {
+      "path": "documents/intelligence/vocabulary/",
+      "name": "tag_vocabulary"
+    },
+    {
+      "path": "documents/<int:pk>/extraction/units/",
+      "name": "source_units"
+    },
+    {
+      "path": "documents/<int:pk>/extraction/units/<int:unit_id>/",
+      "name": "source_unit"
+    },
+    {
+      "path": "documents/<int:pk>/tags/review/",
+      "name": "tag_review"
+    },
+    {
+      "path": "documents/<int:pk>/tags/predict/",
+      "name": "tag_predict"
+    },
+    {
+      "path": "documents/<int:pk>/tags/review-complete/",
+      "name": "tag_review_complete"
+    },
+    {
+      "path": "documents/<int:pk>/training-eligibility/",
+      "name": "training_eligibility"
+    },
+    {
+      "path": "documents/external/",
+      "name": "external_repository"
+    },
+    {
+      "path": "documents/external/upload/",
+      "name": "external_upload"
+    },
+    {
+      "path": "documents/external/reports/",
+      "name": "external_reports"
+    },
+    {
+      "path": "documents/external/deletion-review/",
+      "name": "external_deletion_queue"
+    },
+    {
+      "path": "documents/",
+      "name": "repository"
+    },
+    {
+      "path": "documents/upload/",
+      "name": "upload"
+    },
+    {
+      "path": "documents/deletion-review/",
+      "name": "deletion_queue"
+    },
+    {
+      "path": "documents/<int:pk>/deletion-review/",
+      "name": "deletion_review"
+    },
+    {
+      "path": "documents/<int:pk>/review/",
+      "name": "review"
+    },
+    {
+      "path": "documents/<int:pk>/",
+      "name": "detail"
+    },
+    {
+      "path": "documents/<int:pk>/edit/",
+      "name": "edit"
+    },
+    {
+      "path": "documents/<int:pk>/files/",
+      "name": "add_files"
+    },
+    {
+      "path": "documents/<int:pk>/re-extract/",
+      "name": "re_extract"
+    },
+    {
+      "path": "documents/<int:pk>/extraction-status/",
+      "name": "extraction_status"
+    },
+    {
+      "path": "documents/file/<int:pk>/",
+      "name": "file_download"
+    },
+    {
+      "path": "documents/tags/suggest/",
+      "name": "tag_suggest"
+    },
+    {
+      "path": "search/",
+      "name": "index"
+    },
+    {
+      "path": "search/autocomplete/",
+      "name": "autocomplete"
+    },
+    {
+      "path": "search/click/<int:log_id>/<int:document_id>/<int:rank>/",
+      "name": "click"
+    },
+    {
+      "path": "django-admin/record-sharing/",
+      "name": "record_sharing"
+    },
+    {
+      "path": "django-admin/",
+      "name": "index"
+    },
+    {
+      "path": "django-admin/login/",
+      "name": "login"
+    },
+    {
+      "path": "django-admin/logout/",
+      "name": "logout"
+    },
+    {
+      "path": "django-admin/password_change/",
+      "name": "password_change"
+    },
+    {
+      "path": "django-admin/password_change/done/",
+      "name": "password_change_done"
+    },
+    {
+      "path": "django-admin/autocomplete/",
+      "name": "autocomplete"
+    },
+    {
+      "path": "django-admin/jsi18n/",
+      "name": "jsi18n"
+    },
+    {
+      "path": "django-admin/r/<path:content_type_id>/<path:object_id>/",
+      "name": "view_on_site"
+    },
+    {
+      "path": "django-admin/auth/group/",
+      "name": "auth_group_changelist"
+    },
+    {
+      "path": "django-admin/auth/group/add/",
+      "name": "auth_group_add"
+    },
+    {
+      "path": "django-admin/auth/group/<path:object_id>/history/",
+      "name": "auth_group_history"
+    },
+    {
+      "path": "django-admin/auth/group/<path:object_id>/delete/",
+      "name": "auth_group_delete"
+    },
+    {
+      "path": "django-admin/auth/group/<path:object_id>/change/",
+      "name": "auth_group_change"
+    },
+    {
+      "path": "django-admin/auth/group/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/axes/accessattempt/",
+      "name": "axes_accessattempt_changelist"
+    },
+    {
+      "path": "django-admin/axes/accessattempt/add/",
+      "name": "axes_accessattempt_add"
+    },
+    {
+      "path": "django-admin/axes/accessattempt/<path:object_id>/history/",
+      "name": "axes_accessattempt_history"
+    },
+    {
+      "path": "django-admin/axes/accessattempt/<path:object_id>/delete/",
+      "name": "axes_accessattempt_delete"
+    },
+    {
+      "path": "django-admin/axes/accessattempt/<path:object_id>/change/",
+      "name": "axes_accessattempt_change"
+    },
+    {
+      "path": "django-admin/axes/accessattempt/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/axes/accesslog/",
+      "name": "axes_accesslog_changelist"
+    },
+    {
+      "path": "django-admin/axes/accesslog/add/",
+      "name": "axes_accesslog_add"
+    },
+    {
+      "path": "django-admin/axes/accesslog/<path:object_id>/history/",
+      "name": "axes_accesslog_history"
+    },
+    {
+      "path": "django-admin/axes/accesslog/<path:object_id>/delete/",
+      "name": "axes_accesslog_delete"
+    },
+    {
+      "path": "django-admin/axes/accesslog/<path:object_id>/change/",
+      "name": "axes_accesslog_change"
+    },
+    {
+      "path": "django-admin/axes/accesslog/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/",
+      "name": "axes_accessfailurelog_changelist"
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/add/",
+      "name": "axes_accessfailurelog_add"
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/<path:object_id>/history/",
+      "name": "axes_accessfailurelog_history"
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/<path:object_id>/delete/",
+      "name": "axes_accessfailurelog_delete"
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/<path:object_id>/change/",
+      "name": "axes_accessfailurelog_change"
+    },
+    {
+      "path": "django-admin/axes/accessfailurelog/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/holiday/",
+      "name": "core_holiday_changelist"
+    },
+    {
+      "path": "django-admin/core/holiday/add/",
+      "name": "core_holiday_add"
+    },
+    {
+      "path": "django-admin/core/holiday/<path:object_id>/history/",
+      "name": "core_holiday_history"
+    },
+    {
+      "path": "django-admin/core/holiday/<path:object_id>/delete/",
+      "name": "core_holiday_delete"
+    },
+    {
+      "path": "django-admin/core/holiday/<path:object_id>/change/",
+      "name": "core_holiday_change"
+    },
+    {
+      "path": "django-admin/core/holiday/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/documenttype/",
+      "name": "core_documenttype_changelist"
+    },
+    {
+      "path": "django-admin/core/documenttype/add/",
+      "name": "core_documenttype_add"
+    },
+    {
+      "path": "django-admin/core/documenttype/<path:object_id>/history/",
+      "name": "core_documenttype_history"
+    },
+    {
+      "path": "django-admin/core/documenttype/<path:object_id>/delete/",
+      "name": "core_documenttype_delete"
+    },
+    {
+      "path": "django-admin/core/documenttype/<path:object_id>/change/",
+      "name": "core_documenttype_change"
+    },
+    {
+      "path": "django-admin/core/documenttype/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/tag/",
+      "name": "core_tag_changelist"
+    },
+    {
+      "path": "django-admin/core/tag/add/",
+      "name": "core_tag_add"
+    },
+    {
+      "path": "django-admin/core/tag/<path:object_id>/history/",
+      "name": "core_tag_history"
+    },
+    {
+      "path": "django-admin/core/tag/<path:object_id>/delete/",
+      "name": "core_tag_delete"
+    },
+    {
+      "path": "django-admin/core/tag/<path:object_id>/change/",
+      "name": "core_tag_change"
+    },
+    {
+      "path": "django-admin/core/tag/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/tagrule/",
+      "name": "core_tagrule_changelist"
+    },
+    {
+      "path": "django-admin/core/tagrule/add/",
+      "name": "core_tagrule_add"
+    },
+    {
+      "path": "django-admin/core/tagrule/<path:object_id>/history/",
+      "name": "core_tagrule_history"
+    },
+    {
+      "path": "django-admin/core/tagrule/<path:object_id>/delete/",
+      "name": "core_tagrule_delete"
+    },
+    {
+      "path": "django-admin/core/tagrule/<path:object_id>/change/",
+      "name": "core_tagrule_change"
+    },
+    {
+      "path": "django-admin/core/tagrule/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/",
+      "name": "core_metadatafielddefinition_changelist"
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/add/",
+      "name": "core_metadatafielddefinition_add"
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/<path:object_id>/history/",
+      "name": "core_metadatafielddefinition_history"
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/<path:object_id>/delete/",
+      "name": "core_metadatafielddefinition_delete"
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/<path:object_id>/change/",
+      "name": "core_metadatafielddefinition_change"
+    },
+    {
+      "path": "django-admin/core/metadatafielddefinition/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/auditlog/",
+      "name": "core_auditlog_changelist"
+    },
+    {
+      "path": "django-admin/core/auditlog/add/",
+      "name": "core_auditlog_add"
+    },
+    {
+      "path": "django-admin/core/auditlog/<path:object_id>/history/",
+      "name": "core_auditlog_history"
+    },
+    {
+      "path": "django-admin/core/auditlog/<path:object_id>/delete/",
+      "name": "core_auditlog_delete"
+    },
+    {
+      "path": "django-admin/core/auditlog/<path:object_id>/change/",
+      "name": "core_auditlog_change"
+    },
+    {
+      "path": "django-admin/core/auditlog/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/",
+      "name": "core_storagecleanupintent_changelist"
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/add/",
+      "name": "core_storagecleanupintent_add"
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/<path:object_id>/history/",
+      "name": "core_storagecleanupintent_history"
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/<path:object_id>/delete/",
+      "name": "core_storagecleanupintent_delete"
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/<path:object_id>/change/",
+      "name": "core_storagecleanupintent_change"
+    },
+    {
+      "path": "django-admin/core/storagecleanupintent/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/",
+      "name": "core_filelifecycleevent_changelist"
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/add/",
+      "name": "core_filelifecycleevent_add"
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/<path:object_id>/history/",
+      "name": "core_filelifecycleevent_history"
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/<path:object_id>/delete/",
+      "name": "core_filelifecycleevent_delete"
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/<path:object_id>/change/",
+      "name": "core_filelifecycleevent_change"
+    },
+    {
+      "path": "django-admin/core/filelifecycleevent/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/",
+      "name": "accounts_permissionuser_changelist"
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/add/",
+      "name": "accounts_permissionuser_add"
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/<path:object_id>/history/",
+      "name": "accounts_permissionuser_history"
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/<path:object_id>/delete/",
+      "name": "accounts_permissionuser_delete"
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/<path:object_id>/change/",
+      "name": "accounts_permissionuser_change"
+    },
+    {
+      "path": "django-admin/accounts/permissionuser/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/accounts/office/",
+      "name": "accounts_office_changelist"
+    },
+    {
+      "path": "django-admin/accounts/office/add/",
+      "name": "accounts_office_add"
+    },
+    {
+      "path": "django-admin/accounts/office/<path:object_id>/history/",
+      "name": "accounts_office_history"
+    },
+    {
+      "path": "django-admin/accounts/office/<path:object_id>/delete/",
+      "name": "accounts_office_delete"
+    },
+    {
+      "path": "django-admin/accounts/office/<path:object_id>/change/",
+      "name": "accounts_office_change"
+    },
+    {
+      "path": "django-admin/accounts/office/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/accounts/user/<id>/password/",
+      "name": "auth_user_password_change"
+    },
+    {
+      "path": "django-admin/accounts/user/",
+      "name": "accounts_user_changelist"
+    },
+    {
+      "path": "django-admin/accounts/user/add/",
+      "name": "accounts_user_add"
+    },
+    {
+      "path": "django-admin/accounts/user/<path:object_id>/history/",
+      "name": "accounts_user_history"
+    },
+    {
+      "path": "django-admin/accounts/user/<path:object_id>/delete/",
+      "name": "accounts_user_delete"
+    },
+    {
+      "path": "django-admin/accounts/user/<path:object_id>/change/",
+      "name": "accounts_user_change"
+    },
+    {
+      "path": "django-admin/accounts/user/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/",
+      "name": "accounts_loginlockout_changelist"
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/add/",
+      "name": "accounts_loginlockout_add"
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/<path:object_id>/history/",
+      "name": "accounts_loginlockout_history"
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/<path:object_id>/delete/",
+      "name": "accounts_loginlockout_delete"
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/<path:object_id>/change/",
+      "name": "accounts_loginlockout_change"
+    },
+    {
+      "path": "django-admin/accounts/loginlockout/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/",
+      "name": "tracking_trackingrecord_changelist"
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/add/",
+      "name": "tracking_trackingrecord_add"
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/<path:object_id>/history/",
+      "name": "tracking_trackingrecord_history"
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/<path:object_id>/delete/",
+      "name": "tracking_trackingrecord_delete"
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/<path:object_id>/change/",
+      "name": "tracking_trackingrecord_change"
+    },
+    {
+      "path": "django-admin/tracking/trackingrecord/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/routingstep/",
+      "name": "tracking_routingstep_changelist"
+    },
+    {
+      "path": "django-admin/tracking/routingstep/add/",
+      "name": "tracking_routingstep_add"
+    },
+    {
+      "path": "django-admin/tracking/routingstep/<path:object_id>/history/",
+      "name": "tracking_routingstep_history"
+    },
+    {
+      "path": "django-admin/tracking/routingstep/<path:object_id>/delete/",
+      "name": "tracking_routingstep_delete"
+    },
+    {
+      "path": "django-admin/tracking/routingstep/<path:object_id>/change/",
+      "name": "tracking_routingstep_change"
+    },
+    {
+      "path": "django-admin/tracking/routingstep/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/",
+      "name": "tracking_recordactivity_changelist"
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/add/",
+      "name": "tracking_recordactivity_add"
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/<path:object_id>/history/",
+      "name": "tracking_recordactivity_history"
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/<path:object_id>/delete/",
+      "name": "tracking_recordactivity_delete"
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/<path:object_id>/change/",
+      "name": "tracking_recordactivity_change"
+    },
+    {
+      "path": "django-admin/tracking/recordactivity/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/attachment/",
+      "name": "tracking_attachment_changelist"
+    },
+    {
+      "path": "django-admin/tracking/attachment/add/",
+      "name": "tracking_attachment_add"
+    },
+    {
+      "path": "django-admin/tracking/attachment/<path:object_id>/history/",
+      "name": "tracking_attachment_history"
+    },
+    {
+      "path": "django-admin/tracking/attachment/<path:object_id>/delete/",
+      "name": "tracking_attachment_delete"
+    },
+    {
+      "path": "django-admin/tracking/attachment/<path:object_id>/change/",
+      "name": "tracking_attachment_change"
+    },
+    {
+      "path": "django-admin/tracking/attachment/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/",
+      "name": "tracking_externalattachment_changelist"
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/add/",
+      "name": "tracking_externalattachment_add"
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/<path:object_id>/history/",
+      "name": "tracking_externalattachment_history"
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/<path:object_id>/delete/",
+      "name": "tracking_externalattachment_delete"
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/<path:object_id>/change/",
+      "name": "tracking_externalattachment_change"
+    },
+    {
+      "path": "django-admin/tracking/externalattachment/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/",
+      "name": "tracking_recordaccessgrant_changelist"
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/add/",
+      "name": "tracking_recordaccessgrant_add"
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/<path:object_id>/history/",
+      "name": "tracking_recordaccessgrant_history"
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/<path:object_id>/delete/",
+      "name": "tracking_recordaccessgrant_delete"
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/<path:object_id>/change/",
+      "name": "tracking_recordaccessgrant_change"
+    },
+    {
+      "path": "django-admin/tracking/recordaccessgrant/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/",
+      "name": "tracking_externalrecordaccessgrant_changelist"
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/add/",
+      "name": "tracking_externalrecordaccessgrant_add"
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/<path:object_id>/history/",
+      "name": "tracking_externalrecordaccessgrant_history"
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/<path:object_id>/delete/",
+      "name": "tracking_externalrecordaccessgrant_delete"
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/<path:object_id>/change/",
+      "name": "tracking_externalrecordaccessgrant_change"
+    },
+    {
+      "path": "django-admin/tracking/externalrecordaccessgrant/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/tracking/routingsla/",
+      "name": "tracking_routingsla_changelist"
+    },
+    {
+      "path": "django-admin/tracking/routingsla/add/",
+      "name": "tracking_routingsla_add"
+    },
+    {
+      "path": "django-admin/tracking/routingsla/<path:object_id>/history/",
+      "name": "tracking_routingsla_history"
+    },
+    {
+      "path": "django-admin/tracking/routingsla/<path:object_id>/delete/",
+      "name": "tracking_routingsla_delete"
+    },
+    {
+      "path": "django-admin/tracking/routingsla/<path:object_id>/change/",
+      "name": "tracking_routingsla_change"
+    },
+    {
+      "path": "django-admin/tracking/routingsla/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/documentfile/",
+      "name": "documents_documentfile_changelist"
+    },
+    {
+      "path": "django-admin/documents/documentfile/add/",
+      "name": "documents_documentfile_add"
+    },
+    {
+      "path": "django-admin/documents/documentfile/<path:object_id>/history/",
+      "name": "documents_documentfile_history"
+    },
+    {
+      "path": "django-admin/documents/documentfile/<path:object_id>/delete/",
+      "name": "documents_documentfile_delete"
+    },
+    {
+      "path": "django-admin/documents/documentfile/<path:object_id>/change/",
+      "name": "documents_documentfile_change"
+    },
+    {
+      "path": "django-admin/documents/documentfile/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/",
+      "name": "documents_documentfileversion_changelist"
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/add/",
+      "name": "documents_documentfileversion_add"
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/<path:object_id>/history/",
+      "name": "documents_documentfileversion_history"
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/<path:object_id>/delete/",
+      "name": "documents_documentfileversion_delete"
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/<path:object_id>/change/",
+      "name": "documents_documentfileversion_change"
+    },
+    {
+      "path": "django-admin/documents/documentfileversion/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/document/",
+      "name": "documents_document_changelist"
+    },
+    {
+      "path": "django-admin/documents/document/add/",
+      "name": "documents_document_add"
+    },
+    {
+      "path": "django-admin/documents/document/<path:object_id>/history/",
+      "name": "documents_document_history"
+    },
+    {
+      "path": "django-admin/documents/document/<path:object_id>/delete/",
+      "name": "documents_document_delete"
+    },
+    {
+      "path": "django-admin/documents/document/<path:object_id>/change/",
+      "name": "documents_document_change"
+    },
+    {
+      "path": "django-admin/documents/document/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/",
+      "name": "documents_metadatasuggestion_changelist"
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/add/",
+      "name": "documents_metadatasuggestion_add"
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/<path:object_id>/history/",
+      "name": "documents_metadatasuggestion_history"
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/<path:object_id>/delete/",
+      "name": "documents_metadatasuggestion_delete"
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/<path:object_id>/change/",
+      "name": "documents_metadatasuggestion_change"
+    },
+    {
+      "path": "django-admin/documents/metadatasuggestion/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/",
+      "name": "documents_searchquerylog_changelist"
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/add/",
+      "name": "documents_searchquerylog_add"
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/<path:object_id>/history/",
+      "name": "documents_searchquerylog_history"
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/<path:object_id>/delete/",
+      "name": "documents_searchquerylog_delete"
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/<path:object_id>/change/",
+      "name": "documents_searchquerylog_change"
+    },
+    {
+      "path": "django-admin/documents/searchquerylog/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/",
+      "name": "documents_searchresultclick_changelist"
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/add/",
+      "name": "documents_searchresultclick_add"
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/<path:object_id>/history/",
+      "name": "documents_searchresultclick_history"
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/<path:object_id>/delete/",
+      "name": "documents_searchresultclick_delete"
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/<path:object_id>/change/",
+      "name": "documents_searchresultclick_change"
+    },
+    {
+      "path": "django-admin/documents/searchresultclick/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/",
+      "name": "documents_documentaccessgrant_changelist"
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/add/",
+      "name": "documents_documentaccessgrant_add"
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/<path:object_id>/history/",
+      "name": "documents_documentaccessgrant_history"
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/<path:object_id>/delete/",
+      "name": "documents_documentaccessgrant_delete"
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/<path:object_id>/change/",
+      "name": "documents_documentaccessgrant_change"
+    },
+    {
+      "path": "django-admin/documents/documentaccessgrant/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/documents/deletionreview/",
+      "name": "documents_deletionreview_changelist"
+    },
+    {
+      "path": "django-admin/documents/deletionreview/add/",
+      "name": "documents_deletionreview_add"
+    },
+    {
+      "path": "django-admin/documents/deletionreview/<path:object_id>/history/",
+      "name": "documents_deletionreview_history"
+    },
+    {
+      "path": "django-admin/documents/deletionreview/<path:object_id>/delete/",
+      "name": "documents_deletionreview_delete"
+    },
+    {
+      "path": "django-admin/documents/deletionreview/<path:object_id>/change/",
+      "name": "documents_deletionreview_change"
+    },
+    {
+      "path": "django-admin/documents/deletionreview/<path:object_id>/",
+      "name": null
+    },
+    {
+      "path": "django-admin/^(?P<app_label>auth|axes|core|accounts|tracking|documents)/$",
+      "name": "app_list"
+    },
+    {
+      "path": "django-admin/(?P<url>.*)$",
+      "name": null
+    }
+  ],
+  "commands": {
+    "activate_tag_model": "apps.documents",
+    "axes_list_attempts": "axes",
+    "axes_reset": "axes",
+    "axes_reset_failure_logs": "axes",
+    "axes_reset_ip": "axes",
+    "axes_reset_ip_username": "axes",
+    "axes_reset_logs": "axes",
+    "axes_reset_username": "axes",
+    "changepassword": "django.contrib.auth",
+    "check": "django.core",
+    "check_otp_readiness": "apps.accounts",
+    "clearsessions": "django.contrib.sessions",
+    "collectstatic": "django.contrib.staticfiles",
+    "compilemessages": "django.core",
+    "create_admin": "apps.accounts",
+    "createcachetable": "django.core",
+    "createsuperuser": "django.contrib.auth",
+    "dbshell": "django.core",
+    "diffsettings": "django.core",
+    "dumpdata": "django.core",
+    "ensure_schedules": "apps.core",
+    "evaluate_search": "apps.search",
+    "evaluate_tag_model": "apps.documents",
+    "export_training_data": "apps.documents",
+    "findstatic": "django.contrib.staticfiles",
+    "fix_login": "apps.accounts",
+    "flush": "django.core",
+    "init_db": "apps.core",
+    "inspectdb": "django.core",
+    "loaddata": "django.core",
+    "maintain_file_uploads": "apps.core",
+    "makemessages": "django.core",
+    "makemigrations": "django.core",
+    "migrate": "django.core",
+    "optimizemigration": "django.core",
+    "prepare_tag_dataset": "apps.documents",
+    "purge_deleted_documents": "apps.documents",
+    "reconcile_file_retention": "apps.core",
+    "reconcile_processing": "apps.documents",
+    "reconcile_tracking_stages": "apps.tracking",
+    "recover_account_email": "apps.accounts",
+    "recover_extraction": "apps.documents",
+    "reindex_documents": "apps.documents",
+    "remove_stale_contenttypes": "django.contrib.contenttypes",
+    "rollback_auto_tags": "apps.documents",
+    "runserver": "whitenoise.runserver_nostatic",
+    "seed_demo": "apps.core",
+    "selfcheck": "apps.core",
+    "sendtestemail": "django.core",
+    "shell": "django.core",
+    "showmigrations": "django.core",
+    "sqlflush": "django.core",
+    "sqlmigrate": "django.core",
+    "sqlsequencereset": "django.core",
+    "squashmigrations": "django.core",
+    "startapp": "django.core",
+    "startproject": "django.core",
+    "test": "django.core",
+    "testserver": "django.core",
+    "train_tag_model": "apps.documents"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "code_revision": "d0675de56dab20832a2b4e6cceae3e501be78206",
+  "base_revision": "8fc45b08c7e38fd74e2a28ddc52825f73c84bf17",
+  "finished_utc": "2026-11-03T13:43:46.176529+00:00",
+  "environment": {
+    "python": "3.13.7",
+    "django": "5.2.17",
+    "postgresql_major": 18,
+    "node": "24.22.1",
+    "platform": "Windows"
+  },
+  "full_suite": {
+    "passed": 8251,
+    "skipped": 7,
+    "failed": 0
+  },
+  "supplementary_seed_tests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "background_tests": {
+    "passed": 77,
+    "failed": 0
+  },
+  "javascript_tests": {
+    "passed": 194,
+    "failed": 0
+  },
+  "browser_journeys": 3,
+  "browser_checks": 536,
+  "live_filter_swaps": 195,
+  "unexpected_browser_errors": 0,
+  "count_checks": 21518,
+  "count_scopes": 26,
+  "filter_checks": 627,
+  "workflow_selfchecks": 21,
+  "page_requests": 256,
+  "page_roles": 4,
+  "templates_checked": 131,
+  "preview_asset_hashes_checked": 290,
+  "static_files_collected": 442,
+  "known_python_advisories_after_update": 0,
+  "npm_packages_checked": 5,
+  "npm_advisories_returned": 0,
+  "original_database_mutated": false,
+  "pushed": false,
+  "deployed": false,
+  "limitations": [
+    "One empty-fixture Incoming filter case remains skipped.",
+    "External email, OCR and cloud storage were simulated.",
+    "Production configuration, other browser engines, physical devices and screen readers were not verified.",
+    "TXT preview was exercised in the browser; other preview formats use automated backend/security tests."
+  ]
+}

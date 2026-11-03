@@ -1,0 +1,26 @@
+{
+  "core": {
+    "checks": 451,
+    "live_filter_requests": 181,
+    "browser_errors": 0,
+    "http_errors": 0,
+    "screenshots": 12,
+    "failed_requests": [],
+    "failure": null
+  },
+  "tail": {
+    "checks": 35,
+    "live_filter_requests": 14,
+    "browser_errors": 0,
+    "http_errors": 0,
+    "screenshots": 0,
+    "failed_requests": [
+      {
+        "username": "med",
+        "url": "http://localhost:50908/documents/?per_page=25&q=Browser%20Repository%20Alpha&office=&document_type=&type_scope=&year=&month=&date_from=&date_to=&tag=&source=&retention=&min_relevance=0",
+        "error": "net::ERR_ABORTED"
+      }
+    ],
+    "failure": null
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "total": 8258,
+  "exits": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "finished": "2026-11-03T13:36:34.757664+00:00",
+  "shard_1": {
+    "passed": 2065,
+    "failed": 0,
+    "skipped": 0
+  },
+  "shard_2": {
+    "passed": 2064,
+    "failed": 0,
+    "skipped": 1
+  },
+  "shard_3": {
+    "passed": 2062,
+    "failed": 0,
+    "skipped": 2
+  },
+  "shard_4": {
+    "passed": 2060,
+    "failed": 0,
+    "skipped": 4
+  }
+}

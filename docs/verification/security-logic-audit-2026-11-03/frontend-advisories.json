@@ -1,0 +1,33 @@
+{
+  "packages": [
+    {
+      "name": "pdfjs-dist",
+      "version": "6.4.299"
+    },
+    {
+      "name": "docx-preview",
+      "version": "0.4.1"
+    },
+    {
+      "name": "jszip",
+      "version": "3.10.2"
+    },
+    {
+      "name": "bootstrap",
+      "version": "5.3.3"
+    },
+    {
+      "name": "htmx.org",
+      "version": "1.9.12"
+    }
+  ],
+  "result": {
+    "results": [
+      {},
+      {},
+      {},
+      {},
+      {}
+    ]
+  }
+}
