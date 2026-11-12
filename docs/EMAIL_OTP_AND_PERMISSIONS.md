@@ -55,6 +55,8 @@ Self-service address replacement requires the current password and recent OTP ve
 
 Changes to password, role, office, active/staff status or verified address invalidate old OTP proof. A legitimate own-password change preserves proof only for the session making that change. Other sessions must sign in again. Existing forced-password changes, lockouts and idle timeouts remain in effect.
 
+The account security revision also invalidates old OTP proof, pending codes and verification invitations when a security setting is changed and then changed back. After applying the migration that adds this revision (`accounts.0011_user_security_revision`), users must sign in again and any outstanding verification invitations must be reissued.
+
 Account administration preserves at least one ready system administrator: active, with Django staff access, a usable password and, when codes are required, a verified email. Both the normal user screen and Django administration refuse changes that would remove the last ready administrator. Django administration also refuses self-deletion, self-deactivation and removal of the actor's administrator role. A step down to office administrator requires another ready system administrator. Temporary enrollment mode does not require the replacement's email to be verified.
 
 ## Assisted recovery

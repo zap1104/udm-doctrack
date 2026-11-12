@@ -228,6 +228,43 @@ def test_empty_workbook_has_safe_preview_fallback(client, users, attachment):
     assert b'Preview unavailable' in response.content
 
 
+def test_xlsx_preview_rejects_worksheet_entity_and_preserves_original(client, users, attachment):
+    import zipfile
+
+    from openpyxl import Workbook
+
+    original = io.BytesIO()
+    workbook = Workbook()
+    workbook.active['A1'] = 'cell-placeholder'
+    workbook.save(original)
+    workbook.close()
+    crafted = io.BytesIO()
+    with zipfile.ZipFile(original) as source, zipfile.ZipFile(crafted, 'w') as target:
+        for name in source.namelist():
+            payload = source.read(name)
+            if name == 'xl/worksheets/sheet1.xml':
+                payload = (
+                    b'<!DOCTYPE worksheet [<!ENTITY marker "Synthetic expanded cell">]>'
+                    + payload.replace(b'>cell-placeholder<', b'>&marker;<')
+                )
+            target.writestr(name, payload)
+
+    payload = crafted.getvalue()
+    item = Attachment.objects.create(
+        record=attachment.record, uploaded_by=users['med'], original_name='entity.xlsx',
+        file=SimpleUploadedFile('entity.xlsx', payload),
+    )
+    client.force_verified_login(users['med'])
+    url = f'/files/preview/tracking/{item.pk}/'
+    response = client.get(url, {'token': token('tracking', item.pk, users['med'])})
+    assert response.status_code == 200
+    assert b'Preview unavailable. The original file is unchanged.' in response.content
+    assert b'Synthetic expanded cell' not in response.content
+    download = client.get(response.context['download_url'])
+    assert download.status_code == 200
+    assert b''.join(download.streaming_content) == payload
+
+
 @pytest.mark.parametrize('broken_part', ['[Content_Types].xml', 'xl/workbook.xml'])
 def test_malformed_workbook_xml_keeps_preview_fallback_and_original(client, users, attachment, broken_part):
     import zipfile

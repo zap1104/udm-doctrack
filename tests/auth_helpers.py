@@ -14,6 +14,7 @@ def prepare_verified_user(user):
         user.email = user.email or f'{user.username}@example.test'
         user.verified_email = user.email
         get_user_model().objects.filter(pk=user.pk).update(email=user.email, verified_email=user.verified_email)
+        user.refresh_from_db(fields=['security_revision'])
 
 
 def verified_request(user):

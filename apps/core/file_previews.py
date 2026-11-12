@@ -37,11 +37,17 @@ def read_validated(item):
     return data
 
 
-def safe_xml(data):
-    # Reject entity declarations before parsing. OpenXML has no need for a DTD.
-    if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
+class _NoDoctypeTreeBuilder(ET.TreeBuilder):
+    def doctype(self, name, public_id, system_id):
+        # OpenXML does not need a DTD. Reject it in any supported XML encoding.
         raise ValidationError("This document contains unsupported XML declarations.")
-    return ET.fromstring(data)
+
+
+def safe_xml(data):
+    try:
+        return ET.fromstring(data, parser=ET.XMLParser(target=_NoDoctypeTreeBuilder()))
+    except LookupError as exc:
+        raise ValidationError("This document uses an unsupported XML encoding.") from exc
 
 
 def image_pixels(data, extension):
@@ -110,7 +116,10 @@ def sanitized_docx(data):
                 if not any(part in lower for part in ("activex", "embeddings/", "vba", "customxml/")):
                     allowed.add(name)
         for name in allowed:
-            payload = source.read(name)
+            try:
+                payload = source.read(name)
+            except NotImplementedError as exc:
+                raise ValidationError("This document uses unsupported package compression.") from exc
             extension = file_extension(name)
             if extension in {"png", "jpg", "jpeg", "gif", "bmp"}:
                 rendered_pixels += image_pixels(payload, extension)
@@ -136,7 +145,10 @@ def sanitized_docx(data):
                         for child in list(element):
                             if child.tag.rsplit("}", 1)[-1] in {"altChunk", "object", "OLEObject", "control"}:
                                 element.remove(child)
-                payload = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                try:
+                    payload = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                except RecursionError as exc:
+                    raise ValidationError("This document contains too many nested XML elements.") from exc
             target.writestr(name, payload)
     return output.getvalue()
 
@@ -147,8 +159,9 @@ def tabular_preview(data, extension, worksheet=None):
     if extension == "xlsx":
         from openpyxl import load_workbook
 
-        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
+        workbook = None
         try:
+            workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
             sheets = [sheet.title for sheet in workbook.worksheets]
             if not sheets:
                 raise ValidationError("This workbook has no worksheets to preview.")
@@ -167,8 +180,11 @@ def tabular_preview(data, extension, worksheet=None):
                 truncated |= any(value is not None for value in row[COL_LIMIT:])
                 truncated |= any(len(str(value)) > CELL_LIMIT for value in row[:COL_LIMIT] if value is not None)
                 rows.append([str(value)[:CELL_LIMIT] if value is not None else "" for value in row[:COL_LIMIT]])
+        except NotImplementedError as exc:
+            raise ValidationError("This workbook uses unsupported package compression.") from exc
         finally:
-            workbook.close()
+            if workbook is not None:
+                workbook.close()
     else:
         text = data[:TEXT_LIMIT].decode("utf-8-sig", errors="replace")
         truncated = len(data) > TEXT_LIMIT

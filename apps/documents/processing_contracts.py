@@ -153,6 +153,10 @@ def resolve_file_version(document_file):
         version.checksum and document_file.checksum and version.checksum != document_file.checksum
     ):
         raise ValidationError("The current file snapshot does not match the repository file. Contact the administrator.")
+    from apps.core.storage import storage_identity
+
+    if version.storage_identity and version.storage_identity != storage_identity(version.file.storage):
+        raise ValidationError("The file's recorded storage configuration changed. Contact the administrator before extraction.")
     return version
 
 

@@ -4,6 +4,7 @@ import logging
 from contextlib import contextmanager
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -163,6 +164,11 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                 return _cancel_extraction(document, generation)
             processed_file_ids.add(document_file.pk)
             try:
+                from .processing_contracts import resolve_file_version
+
+                # Reconfiguration must not reinterpret an old private key in a
+                # different bucket/location, even before any provider is called.
+                resolve_file_version(document_file)
                 document_file.file.open("rb")
                 try:
                     result = extract_document_text(
@@ -173,6 +179,9 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                     )
                 finally:
                     document_file.file.close()
+            except ValidationError as exc:
+                failures.append(f"{document_file.original_name}: {'; '.join(exc.messages)}")
+                continue
             except (FileNotFoundError, OSError) as exc:
                 failures.append(f"{document_file.original_name}: file is missing from storage")
                 logger.warning("Extraction could not open %s: %s", document_file.pk, exc)

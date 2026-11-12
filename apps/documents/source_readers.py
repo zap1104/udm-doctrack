@@ -188,20 +188,65 @@ def _word(payload, policy):
     return UnitBatch(tuple(units), None if omitted else len(units), tuple(dict.fromkeys(omitted)), policy.digest)
 
 
+def _worksheet_extent(archive, sheet):
+    """Read actual cell/row coordinates, never the optional dimension cache.
+
+    Stream the part inside the archive budget instead of imposing the smaller
+    limit used by Word's in-memory XML reader. Discard parsed elements so large
+    worksheets don't require keeping a second worksheet tree in memory.
+    """
+    from lxml import etree
+    from openpyxl.utils.cell import coordinate_to_tuple
+
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    data_tag, row_tag, cell_tag = (ns + name for name in ("sheetData", "row", "c"))
+    max_row = max_column = 1
+    row_number = column = 0
+    active_row = None
+    with archive.open(sheet._worksheet_path) as stream:
+        for event, element in etree.iterparse(stream, events=("start", "end"), resolve_entities=False,
+                no_network=True, huge_tree=False, remove_comments=True, remove_pis=True):
+            parent = element.getparent()
+            if event == "end":
+                if element is active_row:
+                    active_row = None
+                element.clear()
+                while element.getprevious() is not None:
+                    del parent[0]
+            elif element.tag == row_tag and parent is not None and parent.tag == data_tag:
+                active_row = element
+                row_number = int(element.get("r", row_number + 1))
+                if row_number < 1:
+                    raise ValueError("Invalid worksheet row")
+                max_row = max(max_row, row_number)
+                column = 0
+            elif element.tag == cell_tag and active_row is not None and parent is active_row:
+                reference = element.get("r")
+                if reference:
+                    cell_row, column = coordinate_to_tuple(reference)
+                    max_row = max(max_row, cell_row)
+                else:
+                    column += 1
+                max_column = max(max_column, column)
+    return max_row, max_column
+
+
 def _xlsx(payload, policy):
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
 
-    with _archive(payload, policy) as archive:
-        embedded = [member for member in archive.namelist() if member.startswith(("xl/media/", "xl/embeddings/", "xl/charts/", "xl/externalLinks/")) or member.lower().endswith("vbaproject.bin")]
-    formulas = load_workbook(io.BytesIO(payload), read_only=True, data_only=False, keep_links=False)
-    cached = load_workbook(io.BytesIO(payload), read_only=True, data_only=True, keep_links=False)
+    archive = _archive(payload, policy)
+    formulas = cached = None
     units, omitted = [], []
     cells = 0
     try:
+        embedded = [member for member in archive.namelist() if member.startswith(("xl/media/", "xl/embeddings/", "xl/charts/", "xl/externalLinks/")) or member.lower().endswith("vbaproject.bin")]
+        formulas = load_workbook(io.BytesIO(payload), read_only=True, data_only=False, keep_links=False)
+        cached = load_workbook(io.BytesIO(payload), read_only=True, data_only=True, keep_links=False)
         for sheet, values in zip(formulas.worksheets, cached.worksheets, strict=True):
-            rows, columns = min(sheet.max_row or 1, policy.max_rows), min(sheet.max_column or 1, policy.max_columns)
-            if (sheet.max_row or 1) > rows or (sheet.max_column or 1) > columns:
+            actual_rows, actual_columns = _worksheet_extent(archive, sheet)
+            rows, columns = min(actual_rows, policy.max_rows), min(actual_columns, policy.max_columns)
+            if actual_rows > rows or actual_columns > columns:
                 omitted.append("Worksheet row/column safety limit reached; additional cells remain unread.")
             lines, warnings, start = [], [], 1
             for row_index, (row, cache_row) in enumerate(zip(sheet.iter_rows(max_row=rows, max_col=columns),
@@ -240,8 +285,11 @@ def _xlsx(payload, policy):
                 policy=policy, state=WorkState.PENDING if is_image else WorkState.UNSUPPORTED,
                 warnings=("Spreadsheet macros are never executed or read." if member.lower().endswith("vbaproject.bin") else "Embedded spreadsheet image, object or linked content remains unread.",), metadata={"archive_member": member, "ocr_needed": is_image}))
     finally:
-        formulas.close()
-        cached.close()
+        if formulas is not None:
+            formulas.close()
+        if cached is not None:
+            cached.close()
+        archive.close()
     return UnitBatch(tuple(units), None if omitted else len(units), tuple(dict.fromkeys(omitted)), policy.digest)
 
 

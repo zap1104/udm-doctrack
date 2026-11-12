@@ -36,7 +36,8 @@ def stamp(user):
     # TextChoices and their database strings compare equal but repr() differs.
     # Normalize types so equivalent saved account state has one fingerprint.
     values = (str(user.pk), str(user.password), user.email.casefold(), user.verified_email.casefold(),
-              str(user.role), str(user.office_id or ''), bool(user.is_active), bool(user.is_staff), bool(user.is_superuser))
+              str(user.role), str(user.office_id or ''), bool(user.is_active), bool(user.is_staff), bool(user.is_superuser),
+              int(user.security_revision))
     return salted_hmac('doctrack.otp.account', repr(values)).hexdigest()
 
 

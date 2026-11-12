@@ -1422,20 +1422,25 @@ def test_neither_picker_offers_a_your_office_entry(client, users):
 @pytest.mark.django_db
 @pytest.mark.parametrize("who", ["sup", "med_admin"])
 @pytest.mark.parametrize("query", ["", "scope=incoming", "scope=outgoing"])
-def test_every_routed_row_carries_a_direction(client, users, traffic, who, query):
+def test_every_routed_row_carries_a_direction(client, users, offices, traffic, who, query):
     """Only some rows were tagged. The tag is computed from one office and the
     page had stopped answering for one, so rows the viewer's office had never
     touched came back blank — and on a queue built for another office the few
     that were tagged described the wrong one."""
+    # Supply is a real sender and MED is a real recipient in the Incoming
+    # case. The historical traffic fixture otherwise has no MED incoming row,
+    # which used to skip the administrator's direction assertion entirely.
+    if who == "med_admin" and query == "scope=incoming":
+        from apps.tracking.services import create_draft_record, route_record
+
+        incoming = create_draft_record(user=users["sup"], subject="MED incoming direction evidence",
+                                       instructions="Review the incoming paper")
+        route_record(incoming, [offices["MED"]], user=users["sup"])
     client.force_verified_login(users[who])
     rows = client.get(f"{TRACKING}?{query}").context["page_obj"].object_list
 
     routed = [r for r in rows if r.routing_steps.exists()]
-    if not routed:
-        # This office simply has nothing in that queue — MED sends more than it
-        # receives. Nothing to assert, and the default view below proves the
-        # fixture is not empty.
-        pytest.skip(f"{who} has no routed rows for ?{query}")
+    assert routed, f"Populate direction evidence for {who}: {query}"
     untagged = [r.tracking_number for r in routed if not r.direction]
     assert not untagged, untagged
 

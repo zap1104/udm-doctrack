@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.validators import RegexValidator
-from django.db import models
+from django.db import models, router, transaction
 
 from apps.core.models import ActiveManager, TimeStampedModel
 
@@ -31,6 +31,12 @@ OFFICE_COLOURS = [
     "#7a5230",  # brown
     "#3f7d3f",  # moss
 ]
+
+# Monotonic invalidation survives a security setting being changed back to its
+# original value; comparing only those values could resurrect an old OTP proof.
+ACCOUNT_SECURITY_FIELDS = frozenset({
+    "password", "email", "verified_email", "role", "office_id", "is_active", "is_staff", "is_superuser",
+})
 
 
 class Office(TimeStampedModel):
@@ -123,6 +129,26 @@ class Office(TimeStampedModel):
 
 
 class UserQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        # This manager is also used by historical migration models, before the
+        # additive revision column exists. Their original migrations stay valid.
+        if not any(field.name == 'security_revision' for field in self.model._meta.fields):
+            return super().update(**kwargs)
+        if 'security_revision' in kwargs:
+            raise ValueError('The account security revision is managed automatically.')
+        security = {key: value for key, value in kwargs.items() if (
+            'office_id' if key == 'office' else key
+        ) in ACCOUNT_SECURITY_FIELDS}
+        if security:
+            changed = models.Q()
+            for key, value in security.items():
+                changed |= ~models.Q(**{key: value})
+            kwargs['security_revision'] = models.F('security_revision') + models.Case(
+                models.When(changed, then=models.Value(1)), default=models.Value(0),
+                output_field=models.PositiveBigIntegerField(),
+            )
+        return super().update(**kwargs)
+
     def in_office(self, office):
         return self.filter(office=office, is_active=True)
 
@@ -243,6 +269,31 @@ class User(AbstractUser):
     )
     last_seen_at = models.DateTimeField(null=True, blank=True)
     verified_email = models.EmailField(blank=True, editable=False)
+    security_revision = models.PositiveBigIntegerField(default=0, editable=False)
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            kwargs['update_fields'] = update_fields
+            relevant = {'office_id' if field == 'office' else field for field in update_fields}
+            if 'security_revision' in relevant:
+                raise ValueError('The account security revision is managed automatically.')
+            if not relevant.intersection(ACCOUNT_SECURITY_FIELDS):
+                return super().save(*args, **kwargs)
+        if self.pk is None:
+            self.security_revision = 0
+            return super().save(*args, **kwargs)
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            current = type(self).objects.using(using).select_for_update(no_key=True).filter(pk=self.pk).first()
+            if current is not None:
+                watched = ACCOUNT_SECURITY_FIELDS if update_fields is None else ACCOUNT_SECURITY_FIELDS.intersection(relevant)
+                changed = any(getattr(self, field) != getattr(current, field) for field in watched)
+                self.security_revision = current.security_revision + int(changed)
+                if changed and update_fields is not None:
+                    kwargs['update_fields'] = update_fields | {'security_revision'}
+            return super().save(*args, **kwargs)
 
     @property
     def email_is_verified(self) -> bool:
