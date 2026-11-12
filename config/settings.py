@@ -391,19 +391,13 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # ---------------------------------------------------------------------------
 if ENABLE_AXES:
     AXES_FAILURE_LIMIT = env_int("AXES_FAILURE_LIMIT", 5)
-    # Cool-off is computed dynamically so it doubles on each successive lockout
-    # for the same account/IP (see apps.accounts.axes_hooks). These two settings
-    # are the base and ceiling that callable uses.
-    AXES_COOLOFF_BASE_MINUTES = env_int("AXES_COOLOFF_MINUTES", 15)
-    AXES_COOLOFF_MAX_MINUTES = env_int("AXES_COOLOFF_MAX_MINUTES", 24 * 60)
+    # Apply the same five-minute wait to every password lockout.
+    AXES_COOLOFF_BASE_MINUTES = AXES_COOLOFF_MAX_MINUTES = 5
     AXES_COOLOFF_TIME = "apps.accounts.axes_hooks.get_progressive_cooloff"
-    # A quiet spell forgives the escalation, so an honest user who fumbled
-    # their password months ago does not start at a long wait.
+    # Reset the recorded lockout stage after a quiet period.
     AXES_ESCALATION_DECAY_DAYS = env_int("AXES_ESCALATION_DECAY_DAYS", 7)
-    # Off by default: the wait keeps growing per lockout even if a sign-in
-    # succeeds in between, and is only forgiven by the decay window above or by
-    # `manage.py fix_login`. Turn on to wipe an account's escalation as soon as
-    # its owner completes a full sign-in (including any forced password change).
+    # Turn on to clear the recorded stage after a completed sign-in, including
+    # any forced password change. Otherwise it follows the decay window.
     AXES_ESCALATION_RESET_ON_LOGIN = env_bool(
         "AXES_ESCALATION_RESET_ON_LOGIN", False)
     AXES_RESET_ON_SUCCESS = True

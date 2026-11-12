@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from axes.models import AccessAttempt
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import override_settings
@@ -44,7 +45,7 @@ def test_each_stage_doubles_the_wait_and_then_stops_at_the_ceiling():
     assert cooloff_for_stage(99) == timedelta(hours=24)
 
 
-@override_settings(AXES_COOLOFF_BASE_MINUTES=15, AXES_ESCALATION_DECAY_DAYS=7)
+@override_settings(AXES_COOLOFF_BASE_MINUTES=15, AXES_COOLOFF_MAX_MINUTES=24 * 60, AXES_ESCALATION_DECAY_DAYS=7)
 def test_repeated_failures_during_one_lockout_do_not_escalate_it(db):
     """Axes fires user_locked_out on every attempt while locked, not just the first."""
     start = timezone.now()
@@ -58,7 +59,7 @@ def test_repeated_failures_during_one_lockout_do_not_escalate_it(db):
     assert current_stage("mallory", None) == 1, "retries inside one lockout must not escalate"
 
 
-@override_settings(AXES_COOLOFF_BASE_MINUTES=15, AXES_ESCALATION_DECAY_DAYS=7)
+@override_settings(AXES_COOLOFF_BASE_MINUTES=15, AXES_COOLOFF_MAX_MINUTES=24 * 60, AXES_ESCALATION_DECAY_DAYS=7)
 def test_a_fresh_lockout_after_the_last_one_expired_waits_longer(db):
     start = timezone.now()
     _record_lockout(USERNAME, "mallory", start)
@@ -104,7 +105,7 @@ def test_escalation_is_recorded_per_username_and_per_ip(db):
     assert current_stage(None, "10.0.0.9") == 1, "clearing a user must not clear the shared IP"
 
 
-@override_settings(AXES_FAILURE_LIMIT=3, AXES_COOLOFF_BASE_MINUTES=15)
+@override_settings(AXES_FAILURE_LIMIT=3)
 def test_locked_out_user_is_redirected_to_a_reloadable_page_with_a_countdown(client, db):
     User.objects.create_user(username="mallory", password="RealPass123!")
 
@@ -120,7 +121,7 @@ def test_locked_out_user_is_redirected_to_a_reloadable_page_with_a_countdown(cli
     assert page["Cache-Control"] == "no-store"
 
     seconds = int(page.context["cooloff_seconds_remaining"])
-    assert 0 < seconds <= 15 * 60
+    assert 0 < seconds <= 300
 
     # Reloading must not restart the countdown.
     again = client.get("/accounts/locked/")
@@ -129,7 +130,7 @@ def test_locked_out_user_is_redirected_to_a_reloadable_page_with_a_countdown(cli
     assert LoginLockout.objects.filter(kind=USERNAME, key="mallory", stage=1).exists()
 
 
-@override_settings(AXES_FAILURE_LIMIT=3, AXES_COOLOFF_BASE_MINUTES=15)
+@override_settings(AXES_FAILURE_LIMIT=3)
 def test_retrying_while_locked_does_not_push_the_deadline_back(client, second_client, db):
     """The reported bug: any retry made the countdown jump back up to full."""
     User.objects.create_user(username="mallory", password="RealPass123!")
@@ -165,14 +166,53 @@ def test_lockout_page_sends_you_back_to_login_once_it_expires(client, db):
         client.post("/accounts/login/", {"username": "mallory", "password": "nope"})
 
     # Cool-off elapsed: axes drops the attempts it counts against you.
-    from axes.models import AccessAttempt
-
     AccessAttempt.objects.all().delete()
 
     page = client.get("/accounts/locked/")
     assert page.status_code == 302
     assert page["Location"] == "/accounts/login/"
     assert SESSION_USERNAME_KEY not in client.session
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_repeat_password_lockout_still_lasts_five_minutes(client, db):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    _record_lockout(USERNAME, "mallory", timezone.now() - timedelta(days=1))
+
+    for _ in range(3):
+        response = client.post("/accounts/login/", {"username": "mallory", "password": "nope"},
+                               HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 429
+    assert response.json()["cooloff_seconds"] == 300
+    row = LoginLockout.objects.get(kind=USERNAME, key="mallory")
+    assert row.stage == 2
+    assert row.locked_until - row.last_lockout_at == timedelta(minutes=5)
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+@pytest.mark.parametrize("multiple_devices", [False, True])
+def test_existing_lockout_counts_down_to_the_new_five_minute_deadline(client, db, multiple_devices):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    started = timezone.now() - timedelta(minutes=4)
+    attempt = AccessAttempt.objects.create(username="mallory", failures_since_start=2 if multiple_devices else 3)
+    AccessAttempt.objects.filter(pk=attempt.pk).update(attempt_time=started)
+    if multiple_devices:
+        other = AccessAttempt.objects.create(username="mallory", ip_address="203.0.113.9", failures_since_start=1)
+        AccessAttempt.objects.filter(pk=other.pk).update(attempt_time=started + timedelta(minutes=3))
+    LoginLockout.objects.create(kind=USERNAME, key="mallory", stage=2, last_lockout_at=started,
+                                locked_until=started + timedelta(minutes=30))
+
+    refused = client.post("/accounts/login/", {"username": "mallory", "password": "RealPass123!"})
+    assert refused.url == "/accounts/locked/"
+    page = client.get(refused.url)
+    assert page.status_code == 429
+    assert 0 < page.context["cooloff_seconds_remaining"] <= 60
+
+    AccessAttempt.objects.filter(pk=attempt.pk).update(attempt_time=timezone.now() - timedelta(minutes=6))
+    assert client.get(refused.url).url == "/accounts/login/"
+    sign_in(client)
+    assert client.session.get("_auth_user_id")
 
 
 def sign_in(client, username="mallory", password="RealPass123!", **extra):
@@ -213,7 +253,7 @@ def test_full_sign_in_forgives_the_escalation_when_that_is_enabled(client, db):
 
 @override_settings(AXES_FAILURE_LIMIT=3, AXES_ESCALATION_RESET_ON_LOGIN=False)
 def test_by_default_signing_in_does_not_forgive_the_escalation(client, db):
-    """The reported bug: sign in, get locked out again, and the wait had reset."""
+    """The recorded stage is preserved even though the wait stays fixed."""
     User.objects.create_user(username="mallory", password="RealPass123!")
     _record_lockout(USERNAME, "mallory", timezone.now() - timedelta(days=1))
 
@@ -223,7 +263,7 @@ def test_by_default_signing_in_does_not_forgive_the_escalation(client, db):
 
     _record_lockout(USERNAME, "mallory", timezone.now())
     assert current_stage("mallory", None) == 2
-    assert cooloff_for_stage(current_stage("mallory", None)) == timedelta(minutes=30)
+    assert cooloff_for_stage(current_stage("mallory", None)) == timedelta(minutes=5)
 
 
 @override_settings(AXES_ESCALATION_RESET_ON_LOGIN=True)

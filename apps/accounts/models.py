@@ -185,15 +185,7 @@ class UserManagerFromQuerySet(UserManager.from_queryset(UserQuerySet)):
 
 
 class LoginLockout(TimeStampedModel):
-    """How many times this username / IP has been locked out, so each new
-    lockout can last longer than the last one.
-
-    This has to live in the database rather than the cache. The project has no
-    shared cache configured, so Django falls back to a per-process in-memory
-    one: the dev server's auto-reloader wipes it on every code change and each
-    Gunicorn worker in production would keep its own separate copy. Either way
-    the escalation silently resets and every lockout looks like the first.
-    """
+    """Database record of successive lockouts for a username or IP address."""
 
     class Kind(models.TextChoices):
         USERNAME = "username", "Username"
@@ -202,10 +194,10 @@ class LoginLockout(TimeStampedModel):
     kind = models.CharField(max_length=10, choices=Kind.choices)
     key = models.CharField(max_length=255, help_text="The username or IP address this applies to.")
     stage = models.PositiveIntegerField(
-        default=0, help_text="Number of lockouts so far. Each one doubles the wait."
+        default=0, help_text="Number of lockouts recorded since this history last reset."
     )
     locked_until = models.DateTimeField(
-        null=True, blank=True, help_text="End of the current lockout, used to tell episodes apart."
+        null=True, blank=True, help_text="Recorded end of the latest lockout when it began."
     )
     last_lockout_at = models.DateTimeField(null=True, blank=True)
 

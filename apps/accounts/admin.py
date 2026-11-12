@@ -135,7 +135,7 @@ class LoginLockoutAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
     actions = ["clear_escalation"]
 
-    @admin.action(description="Clear escalation (next lockout starts from the base wait)")
+    @admin.action(description="Clear recorded lockout stages")
     def clear_escalation(self, request, queryset):
         count, _ = queryset.delete()
         self.message_user(request, f"Cleared {count} lockout escalation record(s).")

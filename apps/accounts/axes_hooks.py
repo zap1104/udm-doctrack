@@ -1,9 +1,7 @@
-"""Progressive sign-in lockouts for django-axes, plus a real page to show them.
+"""Sign-in lockout history and a reloadable countdown for django-axes.
 
-django-axes has one fixed cool-off for every lockout. This module makes each
-successive lockout of the same username (or client IP) wait twice as long as
-the one before, up to ``AXES_COOLOFF_MAX_MINUTES``, and gives the lockout page
-its own URL so the countdown on it is real.
+Equal base and ceiling settings give every lockout the same wait. The stage
+records successive lockouts for the same username or client IP.
 
 Three things need to be true for that to work, and each one is a bug we hit:
 
@@ -25,9 +23,8 @@ Three things need to be true for that to work, and each one is a bug we hit:
    again, from this device or another one, kept showing a fresh full timer
    instead of counting down. ``AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT
    = False`` stops axes doing that, ``_record_lockout`` refuses to move
-   ``locked_until`` once it is set, and the countdown reads that frozen value
-   instead of axes' live attempt data — so the same number shows no matter
-   which device or username/IP pairing asks.
+   ``locked_until`` once it is set, and the countdown uses the attempt time
+   that Axes uses for enforcement.
 
 Office IP addresses here are shared by many staff behind NAT, so a successful
 sign-in never clears the IP-side escalation — that would let one person's login
@@ -38,12 +35,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 from logging import getLogger
+from math import ceil
 
 from axes.attempts import get_user_attempts
 from axes.handlers.proxy import AxesProxyHandler
 from axes.helpers import (
     get_client_ip_address,
     get_client_username,
+    get_cool_off,
     get_cool_off_iso8601,
     get_credentials,
     get_failure_limit,
@@ -104,7 +103,7 @@ def _record_for(kind: str, key: str) -> dict | None:
     if record is None:  # a miss; we never store None itself, only _NO_ROW
         record = (
             LoginLockout.objects.filter(kind=kind, key=key)
-            .values("stage", "last_lockout_at", "locked_until")
+            .values("stage", "last_lockout_at")
             .first()
             or _NO_ROW
         )
@@ -161,10 +160,10 @@ def _active_lockout_ip(request):
 def get_progressive_cooloff() -> timedelta:
     """``AXES_COOLOFF_TIME`` callable.
 
-    Axes uses this for two things: how long a lockout lasts, and how far back
-    it counts failed attempts. Both should grow together, so both come from the
-    same stage.
+    Axes uses the same duration for the lockout and the attempt-counting window.
     """
+    if settings.AXES_COOLOFF_BASE_MINUTES == settings.AXES_COOLOFF_MAX_MINUTES:
+        return cooloff_for_stage(0)
     request = get_current_request()
     if request is None:  # management commands, shell, tests
         return cooloff_for_stage(0)
@@ -245,35 +244,23 @@ def on_user_logged_in(sender, request, user, **kwargs):
 # ---------------------------------------------------------------------------
 # The lockout page
 # ---------------------------------------------------------------------------
-def _seconds_remaining(request, credentials, username, ip_address, cool_off) -> int:
-    """Time left until unlock — the same number regardless of who asks or from where.
-
-    ``LoginLockout.locked_until`` is the authoritative answer: it is a single
-    timestamp keyed on the username and IP, set once when the lockout began
-    and frozen from then on (see ``_record_lockout``). Reading it here, rather
-    than re-deriving a deadline from axes' own live attempt data, is what
-    makes the countdown agree across devices and across reloads — axes'
-    per-request bookkeeping is exactly the thing that used to make it drift.
-
-    Live axes attempts are still consulted as a fallback, only for the gap
-    between a lockout being detected and our signal handler recording it.
-    """
-    if getattr(settings, "AXES_LOCKOUT_PARAMETERS", None) == ["username"]:
-        ip_address = None
-    recorded = [record["locked_until"] for record in _live_records(username, ip_address) if record["locked_until"]]
-    unlock_at = max(recorded, default=None)
-
+def _seconds_remaining(request, credentials, cool_off, failure_limit) -> int:
+    """Use the same expiry as Axes, including for locks created under an older policy."""
+    unlock_at = None
+    for attempts in get_user_attempts(request, credentials):
+        failures_remaining = 0
+        # Find when this group drops below the failure limit as its attempts expire.
+        by_recency = attempts.order_by("-attempt_time").values_list("attempt_time", "failures_since_start")
+        for attempt_time, failures in by_recency.iterator():
+            failures_remaining += failures
+            if failures_remaining >= failure_limit:
+                expires_at = attempt_time + cool_off
+                if unlock_at is None or expires_at > unlock_at:
+                    unlock_at = expires_at
+                break
     if unlock_at is None:
-        latest = None
-        for attempts in get_user_attempts(request, credentials):
-            newest = attempts.order_by("-attempt_time").values_list("attempt_time", flat=True).first()
-            if newest and (latest is None or newest > latest):
-                latest = newest
-        unlock_at = latest + cool_off if latest else None
-
-    if unlock_at is None:
-        return int(cool_off.total_seconds())
-    return max(0, int((unlock_at - timezone.now()).total_seconds()))
+        return 0
+    return max(0, ceil((unlock_at - timezone.now()).total_seconds()))
 
 
 def lockout_response(request, credentials=None):
@@ -282,7 +269,7 @@ def lockout_response(request, credentials=None):
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         # Keep axes' own JSON contract for non-browser callers.
-        cool_off = cooloff_for_stage(current_stage(username, _active_lockout_ip(request)))
+        cool_off = get_cool_off()
         response = JsonResponse(
             {
                 "failure_limit": get_failure_limit(request, credentials),
@@ -308,17 +295,14 @@ def lockout_status_view(request):
         request.session.pop(SESSION_USERNAME_KEY, None)
         return redirect("accounts:login")
 
-    ip_address = request.axes_ip_address
-    cool_off = cooloff_for_stage(current_stage(username, ip_address))
-
+    cool_off = get_cool_off()
+    failure_limit = get_failure_limit(request, credentials)
     context = {
-        "failure_limit": get_failure_limit(request, credentials),
+        "failure_limit": failure_limit,
         "username": username or "",
         "cooloff_time": get_cool_off_iso8601(cool_off),
         "cooloff_timedelta": cool_off,
-        "cooloff_seconds_remaining": _seconds_remaining(
-            request, credentials, username, ip_address, cool_off
-        ),
+        "cooloff_seconds_remaining": _seconds_remaining(request, credentials, cool_off, failure_limit),
     }
     response = render(
         request, settings.AXES_LOCKOUT_TEMPLATE, context, status=settings.AXES_HTTP_RESPONSE_CODE
