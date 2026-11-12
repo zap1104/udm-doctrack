@@ -1,0 +1,20 @@
+{
+  "repair_revision": "7bce65118c40c4947b0c5ae5cc6c727526dbbb4d",
+  "collected": 8478,
+  "outcomes": {
+    "passed": 8470,
+    "skipped": 8
+  },
+  "skipped_ids": [
+    "tests/test_deletion_purge.py::test_background_schedule_is_registered_once",
+    "tests/test_file_maintenance_controls.py::test_background_maintenance_schedule_is_registered_once",
+    "tests/test_security_maintenance.py::test_worker_schedules_register_security_cleanup_without_duplicates",
+    "tests/test_email_otp_browser.py::test_email_otp_and_permission_browser_journeys",
+    "tests/test_nov8_preview_browser.py::test_real_browser_previews_current_and_history_in_all_four_areas",
+    "tests/test_nov8_worker_process.py::test_real_workers_retry_duplicates_and_recheck_authority",
+    "tests/test_systemwide_live_browser.py::test_real_browser_filters_workflows_and_responsive_views[core]",
+    "tests/test_systemwide_live_browser.py::test_real_browser_filters_workflows_and_responsive_views[tail]"
+  ],
+  "failed_ids": [],
+  "missing": 0
+}
