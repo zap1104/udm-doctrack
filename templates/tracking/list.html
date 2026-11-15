@@ -286,7 +286,11 @@
   <div><dt>Received by</dt><dd>offices that confirmed receipt of the latest endorsement. More than one office can receive a document.</dd></div>
   <div><dt>Awaiting receipt</dt><dd>offices that still need to confirm receipt. Once confirmed, they appear under Received by.</dd></div>
 </dl>
-{% if can_bulk_receive %}<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}{% endif %}
+{% if can_bulk_receive %}
+<form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="tracking">
+{% endif %}
 <div id="tracking-results" data-filter-region class="card-udm">
   <div class="card-udm-head">
     <h2>{{ total }} tracking record{{ total|pluralize }}</h2>

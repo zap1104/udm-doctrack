@@ -37,6 +37,39 @@ def code():
     return re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('clear_history_on_login', [False, True])
+def test_pending_otp_can_finish_without_ending_a_new_password_lockout(
+    client, second_client, users, settings, monkeypatch, clear_history_on_login,
+):
+    settings.AXES_FAILURE_LIMIT = 3
+    settings.AXES_ESCALATION_RESET_ON_LOGIN = clear_history_on_login
+    user = users['med']
+    prepare_verified_user(user)
+    now = timezone.now()
+    monkeypatch.setattr(timezone, 'now', lambda: now)
+    monkeypatch.setattr('axes.handlers.proxy.now', lambda: now)
+    credentials = {'username': user.username, 'password': 'TestPass123!'}
+
+    assert client.post('/accounts/login/', credentials).url == '/accounts/otp/'
+    pending_code = code()
+    for _ in range(3):
+        wrong = second_client.post('/accounts/login/', credentials | {'password': 'incorrect'})
+    assert wrong.url == '/accounts/locked/'
+
+    now += timedelta(minutes=4)
+    assert client.post('/accounts/otp/', {'code': pending_code}).status_code == 302
+    assert client.session['_auth_user_id'] == str(user.pk)
+
+    assert second_client.post('/accounts/login/', credentials).url == '/accounts/locked/'
+    assert second_client.get('/accounts/locked/').context['cooloff_seconds_remaining'] == 60
+
+    now += timedelta(minutes=1)
+    assert second_client.post('/accounts/login/', credentials).url == '/accounts/otp/'
+    assert second_client.post('/accounts/otp/', {'code': code()}).status_code == 302
+    assert second_client.session['_auth_user_id'] == str(user.pk)
+
+
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_code_consumption_is_single_use(users):
     from django.contrib.sessions.backends.db import SessionStore
@@ -69,6 +102,32 @@ def test_concurrent_code_consumption_is_single_use(users):
         results = list(pool.map(lambda _: consume(), range(2)))
     assert sorted(results) == ['accepted', 'rejected']
     assert EmailChallenge.objects.get(user=user).consumed_at is not None
+
+
+@pytest.mark.django_db
+def test_cancellation_does_not_rewrite_a_code_consumed_after_its_pending_check(client, users, monkeypatch):
+    user = users['med']
+    prepare_verified_user(user)
+    client.post('/accounts/login/', {'username': user.username, 'password': 'TestPass123!'})
+    value = code()
+    cancelling = request()
+    cancelling.session = dict(client.session.items())
+    original = otp.pending
+
+    def consume_after_pending_check(req):
+        challenge = original(req)
+        if req is cancelling:
+            assert challenge is not None
+            assert client.post('/accounts/otp/', {'code': value}).status_code == 302
+        return challenge
+
+    monkeypatch.setattr(otp, 'pending', consume_after_pending_check)
+    otp.cancel(cancelling)
+
+    challenge = EmailChallenge.objects.get(user=user)
+    assert challenge.consumed_at is not None
+    assert challenge.cancelled_at is None
+    assert otp.PENDING not in cancelling.session
 
 
 @pytest.mark.django_db

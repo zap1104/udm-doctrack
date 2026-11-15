@@ -8,13 +8,18 @@ made *during* a lockout.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Barrier, Event
 
 import pytest
 from axes.models import AccessAttempt
 from django.contrib.auth import get_user_model
+from django.contrib.auth.backends import ModelBackend
 from django.core.cache import cache
+from django.db import close_old_connections
 from django.test import override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.axes_hooks import (
@@ -188,6 +193,134 @@ def test_repeat_password_lockout_still_lasts_five_minutes(client, db):
     row = LoginLockout.objects.get(kind=USERNAME, key="mallory")
     assert row.stage == 2
     assert row.locked_until - row.last_lockout_at == timedelta(minutes=5)
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_different_devices_cannot_shorten_a_new_lockout(client, second_client, db, monkeypatch):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    start = now = timezone.now()
+    monkeypatch.setattr(timezone, "now", lambda: now)
+    monkeypatch.setattr("axes.handlers.proxy.now", lambda: now)
+    failure = {"username": "mallory", "password": "nope"}
+    for _ in range(2):
+        client.post("/accounts/login/", failure, REMOTE_ADDR="198.51.100.10")
+
+    now = start + timedelta(seconds=299)
+    locked = second_client.post("/accounts/login/", failure, REMOTE_ADDR="203.0.113.9")
+    assert locked.url == "/accounts/locked/"
+    assert second_client.get(locked.url).context["cooloff_seconds_remaining"] == 300
+
+    now = start + timedelta(seconds=301)
+    assert client.post("/accounts/login/", failure | {"password": "RealPass123!"}).url == locked.url
+    assert client.get(locked.url).context["cooloff_seconds_remaining"] == 298
+
+    now = start + timedelta(seconds=599)
+    # At the exact boundary a new mistake is the first failure, not a
+    # continuation of the expired lockout.
+    assert second_client.post("/accounts/login/", failure, REMOTE_ADDR="203.0.113.9").status_code == 200
+    sign_in(client)
+    assert client.session.get("_auth_user_id")
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_fresh_lockout_replaces_the_deadline_of_legacy_history(client, db):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    earlier = timezone.now() - timedelta(minutes=6)
+    row = LoginLockout.objects.create(kind=USERNAME, key="mallory", stage=2, last_lockout_at=earlier,
+                                     locked_until=earlier + timedelta(minutes=30))
+    for _ in range(3):
+        response = client.post("/accounts/login/", {"username": "mallory", "password": "nope"})
+
+    assert response.url == "/accounts/locked/"
+    row.refresh_from_db()
+    assert row.stage == 3
+    assert row.locked_until - row.last_lockout_at == timedelta(minutes=5)
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_new_failures_after_axes_reset_do_not_restore_the_old_lock(client, db):
+    from axes.utils import reset
+
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    failure = {"username": "mallory", "password": "nope"}
+    for _ in range(3):
+        response = client.post("/accounts/login/", failure)
+    assert response.url == "/accounts/locked/"
+    reset(username="mallory")
+
+    assert client.post("/accounts/login/", failure).status_code == 200
+    assert client.post("/accounts/login/", failure).status_code == 200
+    response = client.post("/accounts/login/", failure)
+    assert response.url == "/accounts/locked/"
+    assert LoginLockout.objects.get(kind=USERNAME, key="mallory").stage == 2
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_clearing_admin_stage_preserves_an_active_lock(client, second_client, users, monkeypatch):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    start = now = timezone.now()
+    monkeypatch.setattr(timezone, "now", lambda: now)
+    monkeypatch.setattr("axes.handlers.proxy.now", lambda: now)
+    failure = {"username": "mallory", "password": "nope"}
+    for _ in range(2):
+        client.post("/accounts/login/", failure, REMOTE_ADDR="198.51.100.10")
+    now = start + timedelta(seconds=299)
+    locked = second_client.post("/accounts/login/", failure, REMOTE_ADDR="203.0.113.9")
+    row = LoginLockout.objects.get(kind=USERNAME, key="mallory")
+    client.force_verified_login(users["admin"])
+    result = client.post(reverse("admin:accounts_loginlockout_changelist"), {
+        "action": "clear_escalation", "_selected_action": [row.pk],
+    })
+    assert result.status_code == 302
+
+    now = start + timedelta(seconds=301)
+    assert second_client.get(locked.url).context["cooloff_seconds_remaining"] == 298
+    row.refresh_from_db()
+    assert row.stage == 0
+
+
+@override_settings(AXES_FAILURE_LIMIT=3)
+def test_racing_password_failures_do_not_move_the_deadline(client, second_client, transactional_db, monkeypatch):
+    User.objects.create_user(username="mallory", password="RealPass123!")
+    failure = {"username": "mallory", "password": "nope"}
+    for _ in range(2):
+        client.post("/accounts/login/", failure)
+
+    start = now = timezone.now()
+    monkeypatch.setattr(timezone, "now", lambda: now)
+    monkeypatch.setattr("axes.handlers.proxy.now", lambda: now)
+    original = ModelBackend.authenticate
+    entered, release = Barrier(3), Event()
+
+    def paused(backend, request, *args, **kwargs):
+        entered.wait(timeout=10)
+        if request.headers.get("x-test-second"):
+            assert release.wait(10)
+        return original(backend, request, *args, **kwargs)
+
+    def fail(browser, *, second=False):
+        close_old_connections()
+        try:
+            return browser.post("/accounts/login/", failure, HTTP_X_TEST_SECOND="1" if second else "")
+        finally:
+            close_old_connections()
+
+    monkeypatch.setattr(ModelBackend, "authenticate", paused)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        first = workers.submit(fail, client)
+        second = workers.submit(fail, second_client, second=True)
+        try:
+            entered.wait(timeout=10)
+            assert first.result(timeout=10).url == "/accounts/locked/"
+            now = start + timedelta(seconds=1)
+        finally:
+            release.set()
+        assert second.result(timeout=10).url == "/accounts/locked/"
+
+    page = second_client.get("/accounts/locked/")
+    assert page.context["cooloff_seconds_remaining"] == 299
+    assert LoginLockout.objects.get(kind=USERNAME, key="mallory").stage == 1
+    assert AccessAttempt.objects.get(username="mallory").failures_since_start == 3
 
 
 @override_settings(AXES_FAILURE_LIMIT=3)

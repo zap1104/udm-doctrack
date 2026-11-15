@@ -59,8 +59,7 @@
         dashboard asks for it in the same words the tracking list does.
       {% endcomment %}
       {% if can_bulk_receive %}
-        <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}" novalidate>{% csrf_token %}
-          {# Back here, on success and on failure — not to a page nobody submitted from. #}
+        <form method="post" action="{% url 'tracking:bulk_confirm_receipt' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" novalidate>{% csrf_token %}
           <input type="hidden" name="next" value="dashboard">
       {% endif %}
 

@@ -105,13 +105,15 @@ def _enqueue(run_ids):
             logger.warning("Could not enqueue extraction run %s; pending intent retained", run_id)
 
 
-def request_processing(document, *, user, file_ids=None, replace=False):
-    """Persist intent and enqueue after commit. Does not itself read any file."""
+def request_processing(document, *, user, file_ids=None, replace=False, expected_generation=None):
+    """Persist intent, or return None when a queued request has been superseded."""
     from .tasks import _extraction_actor
 
     with transaction.atomic():
         actor = User.objects.select_for_update(no_key=True).filter(pk=getattr(user, "pk", None)).first() if user is not None else None
         current = Document.objects.select_for_update().get(pk=document.pk)
+        if expected_generation is not None and current.extraction_generation != expected_generation:
+            return None
         if user is not None:
             if actor is None or not _extraction_actor(current, actor.pk)[1]:
                 raise PermissionDenied("Your current account cannot request extraction for this document.")

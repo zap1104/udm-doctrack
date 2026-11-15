@@ -137,5 +137,18 @@ class LoginLockoutAdmin(admin.ModelAdmin):
 
     @admin.action(description="Clear recorded lockout stages")
     def clear_escalation(self, request, queryset):
-        count, _ = queryset.delete()
-        self.message_user(request, f"Cleared {count} lockout escalation record(s).")
+        from django.db import transaction
+        from django.utils import timezone
+
+        count = 0
+        with transaction.atomic(using=queryset.db):
+            for record in queryset.order_by("pk").select_for_update():
+                if record.locked_until and record.locked_until > timezone.now():
+                    # Clear history without removing a deadline that still
+                    # protects the account. Axes can separately reset attempts.
+                    record.stage = 0
+                    record.save(update_fields=["stage", "updated_at"])
+                else:
+                    record.delete()
+                count += 1
+        self.message_user(request, f"Cleared {count} recorded lockout stage(s).")

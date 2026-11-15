@@ -4,12 +4,14 @@ from urllib.parse import urlsplit
 
 from django import forms
 from django.conf import settings
+from django.contrib.admin.forms import AdminAuthenticationForm
 from django.contrib.auth.forms import (
     AuthenticationForm,
     PasswordChangeForm,
     PasswordResetForm,
     SetPasswordForm,
     UserCreationForm,
+    UsernameField,
 )
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -20,10 +22,13 @@ from apps.core.models import NotificationPreference
 
 from .models import Office, User
 
+_USERNAME_MAX_LENGTH = User._meta.get_field(User.USERNAME_FIELD).max_length
+
 
 class SignInForm(BootstrapFormMixin, AuthenticationForm):
     username = forms.CharField(
         label="Username",
+        max_length=_USERNAME_MAX_LENGTH,
         widget=forms.TextInput(attrs={
                                "autofocus": True, "placeholder": "Enter username", "autocomplete": "username"}),
     )
@@ -38,6 +43,13 @@ class SignInForm(BootstrapFormMixin, AuthenticationForm):
         "invalid_login": "That username and password do not match an account. Check both and try again.",
         "inactive": "This account is deactivated. Ask the system administrator to reactivate it.",
     }
+
+
+class SystemAdminAuthenticationForm(AdminAuthenticationForm):
+    username = UsernameField(
+        max_length=_USERNAME_MAX_LENGTH,
+        widget=forms.TextInput(attrs={"autofocus": True}),
+    )
 
 
 class VerifiedEmailPasswordResetForm(BootstrapFormMixin, PasswordResetForm):

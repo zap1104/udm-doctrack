@@ -263,7 +263,9 @@ def verify(request, code):
 def cancel(request):
     challenge = pending(request)
     if challenge:
-        EmailChallenge.objects.filter(pk=challenge.pk).update(cancelled_at=timezone.now(), digest='')
+        EmailChallenge.objects.filter(
+            pk=challenge.pk, consumed_at__isnull=True, cancelled_at__isnull=True,
+        ).update(cancelled_at=timezone.now(), digest='')
     request.session.pop(PENDING, None)
 
 

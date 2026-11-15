@@ -21,7 +21,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
@@ -351,21 +351,36 @@ class Document(DocumentTypesMixin, TimeStampedModel):
         """Update the blobs and the stored tsvector for this one document."""
         from django.contrib.postgres.search import SearchVector
 
-        self.build_index_blobs()
-        Document.objects.filter(pk=self.pk).update(
-            index_title=self.index_title, index_meta=self.index_meta, index_extra=self.index_extra
-        )
-        config = settings.SEARCH_CONFIG
-        vector = (
-            SearchVector("index_title", weight="A", config=config)
-            + SearchVector("index_meta", weight="B", config=config)
-            + SearchVector("index_extra", weight="C", config=config)
-            + SearchVector("ocr_text", weight="D", config=config)
-        )
-        metadata_vector = (SearchVector("index_title", weight="A", config=config)
-            + SearchVector("index_meta", weight="B", config=config)
-            + SearchVector("index_extra", weight="C", config=config))
-        Document.objects.filter(pk=self.pk).update(search_vector=vector, metadata_search_vector=metadata_vector)
+        if self.pk is None:
+            self.build_index_blobs()
+            return
+
+        row = Document.objects.filter(pk=self.pk)
+        with transaction.atomic():
+            # Bulk reindexing can reach us with an earlier database snapshot.
+            # Read current metadata after locking the row shared with editors.
+            current = row.select_for_update(no_key=True).defer(
+                "ocr_text", "search_vector", "metadata_search_vector",
+            ).first()
+            if current is None:
+                return
+            current.build_index_blobs()
+            row.update(
+                index_title=current.index_title,
+                index_meta=current.index_meta,
+                index_extra=current.index_extra,
+            )
+            config = settings.SEARCH_CONFIG
+            metadata_vector = (
+                SearchVector("index_title", weight="A", config=config)
+                + SearchVector("index_meta", weight="B", config=config)
+                + SearchVector("index_extra", weight="C", config=config)
+            )
+            vector = metadata_vector + SearchVector("ocr_text", weight="D", config=config)
+            row.update(search_vector=vector, metadata_search_vector=metadata_vector)
+            self.index_title = current.index_title
+            self.index_meta = current.index_meta
+            self.index_extra = current.index_extra
 
     # -- helpers ----------------------------------------------------------
     @property

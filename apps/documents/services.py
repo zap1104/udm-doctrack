@@ -502,14 +502,21 @@ def _request_document_extraction(document: Document, *, user) -> dict:
 # ---------------------------------------------------------------------------
 # Archiving a completed tracking record
 # ---------------------------------------------------------------------------
-@locked_mutation
 def archive_tracking_record(record, *, user, tag_names=None, description="") -> Document:
-    """File a completed record and clean up new copies if filing rolls back."""
+    """File the completion observed by the caller."""
+    return _archive_tracking_record_locked(
+        record, user=user, expected_completed_at=record.completed_at,
+        tag_names=tag_names, description=description,
+    )
+
+
+@locked_mutation
+def _archive_tracking_record_locked(record, *, user, expected_completed_at, tag_names, description) -> Document:
     created_files = []
     try:
         return _archive_tracking_record(
-            record, user=user, tag_names=tag_names, description=description,
-            created_files=created_files,
+            record, user=user, expected_completed_at=expected_completed_at,
+            tag_names=tag_names, description=description, created_files=created_files,
         )
     except Exception:
         for storage, name in created_files:
@@ -520,7 +527,7 @@ def archive_tracking_record(record, *, user, tag_names=None, description="") -> 
         raise
 
 
-def _archive_tracking_record(record, *, user, tag_names, description, created_files) -> Document:
+def _archive_tracking_record(record, *, user, expected_completed_at, tag_names, description, created_files) -> Document:
     """Approve a finished DTS record into the repository, keeping its identity.
 
     This is the act that files the document, and it is what moves the record
@@ -540,6 +547,8 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
             "Only a completed record can be approved into the repository. "
             "Mark the document complete first."
         )
+    if record.completed_at != expected_completed_at:
+        raise ValidationError("The completion has changed. Reload the record before approving filing.")
     existing = getattr(record, "archived_document", None)
     if existing:
         return existing
@@ -669,7 +678,7 @@ def _archive_tracking_record(record, *, user, tag_names, description, created_fi
 def reindex_all(queryset=None, *, batch_size: int = 200) -> int:
     queryset = queryset if queryset is not None else Document.objects.all()
     count = 0
-    for document in queryset.prefetch_related("tags", "metadata_values__field").iterator(chunk_size=batch_size):
+    for document in queryset.iterator(chunk_size=batch_size):
         document.rebuild_index()
         count += 1
     return count

@@ -4,8 +4,8 @@ from __future__ import annotations
 import io
 import math
 import posixpath
-import zipfile
 
+from apps.core.office_archives import checked_office_archive
 from apps.core.utils import file_extension, normalise_text
 
 from .processing_contracts import Coverage, ExtractionPolicy, UnitBatch, UnitResult, WorkState
@@ -86,14 +86,9 @@ def _pdf(payload, policy):
 
 
 def _archive(payload, policy):
-    archive = zipfile.ZipFile(io.BytesIO(payload))
-    members = archive.infolist()
-    if (len(members) > policy.max_archive_members or len({member.filename for member in members}) != len(members)
-        or sum(member.file_size for member in members) > policy.max_archive_bytes
-        or any(member.flag_bits & 1 for member in members)):
-        archive.close()
-        raise ValueError("Office archive exceeds safe limits")
-    return archive
+    return checked_office_archive(io.BytesIO(payload), max_members=policy.max_archive_members,
+                                  max_uncompressed_bytes=policy.max_archive_bytes,
+                                  reject_duplicate_names=True)
 
 
 def _xml(archive, name, policy):

@@ -9,7 +9,7 @@ from django.db import close_old_connections, connection, connections
 
 from apps.accounts.models import User
 from apps.tracking import services
-from apps.tracking.models import RecordActivity, TrackingRecord
+from apps.tracking.models import RecordActivity, RoutingStep, TrackingRecord
 
 
 @pytest.mark.django_db(transaction=True)
@@ -82,3 +82,59 @@ def test_bulk_and_individual_receipts_by_same_user_do_not_deadlock(users, office
     step = record.routing_steps.get(batch=record.current_batch)
     assert step.received_at is not None
     assert step.received_by_id == actor_id
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("bulk", [False, True], ids=["individual", "bulk"])
+def test_receipt_does_not_confirm_a_new_batch_after_the_record_returns(users, offices, bulk):
+    record = services.create_draft_record(
+        user=users["med"], subject="Returned to the previous recipient", instructions="",
+    )
+    services.route_record(record, [offices["SUP"]], user=users["med"])
+    old_batch = record.current_batch
+    receipt_waiting = Event()
+    record_returned = Event()
+    actor_id = users["sup"].pk
+    record_id = record.pk
+
+    def confirm_original_transfer():
+        close_old_connections()
+
+        def wait_before_locking(execute, sql, params, many, context):
+            if not receipt_waiting.is_set() and "FOR NO KEY UPDATE" in sql and f'"{User._meta.db_table}"' in sql:
+                receipt_waiting.set()
+                assert record_returned.wait(10), "The record never returned to the receiving office."
+            return execute(sql, params, many, context)
+
+        try:
+            actor = User.objects.get(pk=actor_id)
+            observed = TrackingRecord.objects.get(pk=record_id)
+            assert observed.current_batch == old_batch
+            with connection.execute_wrapper(wait_before_locking):
+                with pytest.raises(ValidationError, match="routing batch has changed"):
+                    if bulk:
+                        services.bulk_confirm_receipts([observed], user=actor, note="Original transfer")
+                    else:
+                        services.confirm_receipt(observed, user=actor, note="Original transfer")
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        pending = workers.submit(confirm_original_transfer)
+        try:
+            assert receipt_waiting.wait(10), "The original receipt did not reach its first lock."
+            services.confirm_receipt(record, user=users["sup_admin"])
+            services.route_record(record, [offices["HR"]], user=users["sup_admin"], action=RoutingStep.Action.FORWARD)
+            services.confirm_receipt(record, user=users["hr"])
+            services.route_record(record, [offices["SUP"]], user=users["hr"], action=RoutingStep.Action.RETURN)
+        finally:
+            record_returned.set()
+        pending.result(timeout=20)
+
+    new_step = record.routing_steps.get(batch=old_batch + 2)
+    new_step.refresh_from_db()
+    assert new_step.received_at is None
+    assert not record.activities.filter(event=RecordActivity.Event.RECEIVED, batch=new_step.batch).exists()
+    services.confirm_receipt(record, user=users["sup"], note="Returned transfer")
+    new_step.refresh_from_db()
+    assert new_step.receipt_note == "Returned transfer"

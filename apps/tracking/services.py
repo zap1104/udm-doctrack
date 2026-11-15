@@ -496,13 +496,19 @@ def route_record(record, offices, *, user, instructions="", action=RoutingStep.A
     return steps
 
 
-@locked_mutation
-@requires_capability('tracking', 'receive')
 def confirm_receipt(record, *, user, note="") -> RoutingStep:
     """Explicit receipt. Server time only — never a value typed by the user."""
+    return _confirm_receipt(record, user=user, note=note, expected_batch=record.current_batch)
+
+
+@locked_mutation
+@requires_capability('tracking', 'receive')
+def _confirm_receipt(record, *, user, note, expected_batch) -> RoutingStep:
     refuse_viewers(user, "confirm receipt")
     if not user.office_id:
         raise PermissionDenied("Your account has no office, so it cannot receive documents.")
+    if record.current_batch != expected_batch:
+        raise ValidationError("The routing batch has changed. Reload the document before receiving it.")
     if record.status in COMPLETED_STATUSES or record.status == Status.DRAFT:
         raise ValidationError("Only a document currently awaiting receipt can be received.")
 
@@ -586,9 +592,10 @@ def confirm_receipt(record, *, user, note="") -> RoutingStep:
 @requires_capability('tracking', 'receive')
 def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
     """Confirm an explicit selection while preserving one receipt event per record."""
-    record_ids = [record.pk for record in records]
-    if not record_ids:
+    requested = [(record.pk, record.current_batch) for record in records]
+    if not requested:
         raise ValidationError("Select at least one document to receive.")
+    record_ids = {record_id for record_id, _ in requested}
     # Match locked_mutation's account-before-record order so a concurrent
     # individual receipt by the same user cannot deadlock with this batch.
     actor = active_writer(user)
@@ -596,9 +603,12 @@ def bulk_confirm_receipts(records, *, user, note="") -> list[RoutingStep]:
         record.pk: record
         for record in TrackingRecord.objects.select_for_update().filter(pk__in=record_ids).order_by("pk")
     }
-    if len(locked) != len(set(record_ids)):
+    if len(locked) != len(record_ids):
         raise ValidationError("One of the selected documents is no longer available.")
-    return [confirm_receipt(locked[record_id], user=actor, note=note) for record_id in record_ids]
+    return [
+        _confirm_receipt(locked[record_id], user=actor, note=note, expected_batch=batch)
+        for record_id, batch in requested
+    ]
 
 
 @locked_mutation
@@ -820,32 +830,39 @@ def reopen_record(record, *, user, reason="") -> TrackingRecord:
 def grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
     from django.db import connection
 
-    # Account administration uses this order too: global lock, actor, record,
-    # recipient. Never authorize a recipient cached before an office transfer.
+    from apps.accounts.models import User
+
+    # Account administration and sharing take the same global lock first.
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute('SELECT pg_advisory_xact_lock(%s)', [0x55444D414343])
-        return _grant_access(record, user=user, office=office, target_user=target_user, reason=reason)
+        has_user_recipient = target_user is not None
+        if has_user_recipient and office is None:
+            user = active_writer(user)
+            # The recipient's own record writes lock their account before the record.
+            target_user = User.objects.select_for_update(no_key=True).filter(pk=target_user.pk, is_active=True).first()
+        return _grant_access(
+            record, user=user, office=office, target_user=target_user,
+            has_user_recipient=has_user_recipient, reason=reason,
+        )
 
 
 @locked_mutation
 @requires_capability('tracking', 'share')
-def _grant_access(record, *, user, office=None, target_user=None, reason="") -> RecordAccessGrant:
-    from apps.accounts.models import Office, User
+def _grant_access(record, *, user, office, target_user, has_user_recipient, reason) -> RecordAccessGrant:
+    from apps.accounts.models import Office
 
     refuse_viewers(user, "share documents")
     if not record.can_user_grant_access(user):
         raise PermissionDenied("Only the originating or holding office can share this record.")
-    if (office is None) == (target_user is None):
+    if (office is not None) == has_user_recipient:
         raise ValidationError("Choose exactly one office or user to grant access to.")
     if office is not None:
         office = Office.objects.select_for_update(no_key=True).filter(pk=office.pk, is_active=True).first()
         if office is None:
             raise ValidationError('Choose an active internal office.')
-    if target_user is not None:
-        target_user = User.objects.select_for_update(no_key=True).filter(pk=target_user.pk, is_active=True).first()
-        if target_user is None:
-            raise ValidationError('Choose an active account.')
+    elif target_user is None:
+        raise ValidationError('Choose an active account.')
     if user.is_office_admin and not user.is_system_admin:
         if not user.office_id or (office is not None and office.pk != user.office_id):
             raise PermissionDenied("You can only manage access within your own office.")
@@ -971,8 +988,8 @@ SCOPE_PENDING_UPLOAD = "pending-upload"
 #:           spans pending receipt, received and in process
 #:   sent    is narrower than outgoing — drops a document the moment somebody
 #:           confirms it, where outgoing keeps what left the office
-#:   custody is *wider* than received — every record whose current_office is
-#:           this office, completed and filed ones included
+#:   custody is *wider* than received — the office recorded on the record or
+#:           any holder with a receipt in the current batch, regardless of stage
 #:
 #: Measured on the demo data, one office: inbox 9 against incoming 5, sent 15
 #: against outgoing 7. Anything pointed at an alias by mistake shows a
@@ -1593,7 +1610,10 @@ def apply_scope(records, scope, user, office=None):
     if scope == SCOPE_CUSTODY:
         if every_office:
             return records.filter(current_office__isnull=False)
-        return records.filter(current_office_id=office_id)
+        # The cached office covers drafts and the sender before the first
+        # receipt. After receipt it only records the last office to confirm.
+        confirmed = Exists(_current_batch_steps(to_office_id=office_id, received_at__isnull=False))
+        return records.filter(Q(current_office_id=office_id) | Q(confirmed))
     return records.filter(
         from_office,
         routing_steps__received_at__isnull=True,

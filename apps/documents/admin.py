@@ -69,6 +69,22 @@ class DocumentAdmin(RecordPolicyAdminMixin, admin.ModelAdmin):
     inlines = [DocumentFileInline, DocumentMetadataInline]
     actions = ["rebuild_search_index"]
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Django wraps the POST in a transaction. Lock the row when it first
+        # reads the edit form's instance, before an extraction worker can
+        # update fields that the form's eventual full save would overwrite.
+        request._lock_repository_admin_edit = request.method == "POST"
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        finally:
+            request._lock_repository_admin_edit = False
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if getattr(request, "_lock_repository_admin_edit", False):
+            return queryset.select_for_update(of=("self",), no_key=True)
+        return queryset
+
     def get_readonly_fields(self, request, obj=None):
         from apps.accounts.capabilities import area_for, capability_allowed
 

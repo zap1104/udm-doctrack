@@ -254,7 +254,7 @@ def test_share_recipient_is_locked_until_authorization_commits(users):
     from django.db import DatabaseError, close_old_connections, transaction
 
     from apps.accounts.models import User
-    from apps.accounts.sharing import _target
+    from apps.accounts.sharing import grant_read_access
 
     def try_edit_recipient():
         close_old_connections()
@@ -267,8 +267,9 @@ def test_share_recipient_is_locked_until_authorization_commits(users):
         finally:
             close_old_connections()
 
+    doc = document(users)
     with transaction.atomic():
-        _target(users['med_admin'], None, users['med'])
+        grant_read_access(doc, user=users['med_admin'], target_user=users['med'], reason='Recipient lock check')
         with ThreadPoolExecutor(max_workers=1) as pool:
             assert pool.submit(try_edit_recipient).result(timeout=10) == 'locked'
 

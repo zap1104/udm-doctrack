@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 
+from apps.core.office_archives import OfficeArchiveError, checked_office_archive
 from apps.core.utils import file_extension, validate_upload
 
 MIME_TYPES = {
@@ -35,6 +36,16 @@ def read_validated(item):
         raise ValidationError("This file exceeds the preview size limit. Download the original to view it.")
     validate_upload(ContentFile(data, name=item.original_name))
     return data
+
+
+def _preview_archive(stream):
+    try:
+        return checked_office_archive(
+            stream, max_members=settings.MAX_UPLOAD_ARCHIVE_MEMBERS,
+            max_uncompressed_bytes=settings.MAX_UPLOAD_UNCOMPRESSED_MB * 1024 * 1024,
+        )
+    except OfficeArchiveError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 class _NoDoctypeTreeBuilder(ET.TreeBuilder):
@@ -106,7 +117,7 @@ def sanitized_docx(data):
     """
     output = io.BytesIO()
     rendered_pixels = 0
-    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+    with _preview_archive(io.BytesIO(data)) as source, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
         allowed = set()
         for name in source.namelist():
             lower = name.lower()
@@ -116,10 +127,7 @@ def sanitized_docx(data):
                 if not any(part in lower for part in ("activex", "embeddings/", "vba", "customxml/")):
                     allowed.add(name)
         for name in allowed:
-            try:
-                payload = source.read(name)
-            except NotImplementedError as exc:
-                raise ValidationError("This document uses unsupported package compression.") from exc
+            payload = source.read(name)
             extension = file_extension(name)
             if extension in {"png", "jpg", "jpeg", "gif", "bmp"}:
                 rendered_pixels += image_pixels(payload, extension)
@@ -161,7 +169,10 @@ def tabular_preview(data, extension, worksheet=None):
 
         workbook = None
         try:
-            workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
+            stream = io.BytesIO(data)
+            with _preview_archive(stream):
+                pass
+            workbook = load_workbook(stream, read_only=True, data_only=True, keep_links=False)
             sheets = [sheet.title for sheet in workbook.worksheets]
             if not sheets:
                 raise ValidationError("This workbook has no worksheets to preview.")
@@ -180,8 +191,8 @@ def tabular_preview(data, extension, worksheet=None):
                 truncated |= any(value is not None for value in row[COL_LIMIT:])
                 truncated |= any(len(str(value)) > CELL_LIMIT for value in row[:COL_LIMIT] if value is not None)
                 rows.append([str(value)[:CELL_LIMIT] if value is not None else "" for value in row[:COL_LIMIT]])
-        except NotImplementedError as exc:
-            raise ValidationError("This workbook uses unsupported package compression.") from exc
+        except LookupError as exc:
+            raise ValidationError("This workbook contains a part that could not be read.") from exc
         finally:
             if workbook is not None:
                 workbook.close()

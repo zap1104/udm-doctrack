@@ -408,6 +408,7 @@ if ENABLE_AXES:
     # it started: retries (from any device) are still refused, but they stop
     # extending it, so the same countdown shows everywhere.
     AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+    AXES_HANDLER = "apps.accounts.axes_hooks.FixedLockoutDatabaseHandler"
     AXES_LOCKOUT_TEMPLATE = "accounts/lockout.html"
     # Redirects to accounts:lockout instead of rendering the template inline as
     # the body of the failed POST, so the page has a URL that can be reloaded

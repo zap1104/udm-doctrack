@@ -21,6 +21,7 @@ from django.utils.safestring import mark_safe
 
 from .middleware import get_current_request
 from .models import AuditLog
+from .office_archives import OfficeArchiveError, validate_office_archive_members
 
 _signer = TimestampSigner(salt="doctrack.download")
 
@@ -155,15 +156,14 @@ def validate_upload(uploaded_file) -> None:
         try:
             uploaded_file.seek(0)
             with zipfile.ZipFile(uploaded_file) as archive:
-                members = archive.infolist()
-                if (
-                    len(members) > settings.MAX_UPLOAD_ARCHIVE_MEMBERS
-                    or sum(member.file_size for member in members) > settings.MAX_UPLOAD_UNCOMPRESSED_MB * 1024 * 1024
-                    or any(member.flag_bits & 1 for member in members)
-                ):
-                    raise ValidationError("This Office file is encrypted or expands beyond the safe processing limit.")
+                validate_office_archive_members(
+                    archive, max_members=settings.MAX_UPLOAD_ARCHIVE_MEMBERS,
+                    max_uncompressed_bytes=settings.MAX_UPLOAD_UNCOMPRESSED_MB * 1024 * 1024,
+                )
                 names = set(archive.namelist())
                 valid = "[Content_Types].xml" in names and any(name.startswith(zip_types[extension]) for name in names)
+        except OfficeArchiveError as exc:
+            raise ValidationError(str(exc)) from exc
         except (OSError, zipfile.BadZipFile):
             valid = False
         finally:

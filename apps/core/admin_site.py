@@ -5,6 +5,12 @@ from django.contrib.admin.apps import AdminConfig
 
 
 class SystemAdminSite(AdminSite):
+    @property
+    def login_form(self):
+        from apps.accounts.forms import SystemAdminAuthenticationForm
+
+        return SystemAdminAuthenticationForm
+
     def admin_view(self, view, cacheable=False):
         from functools import wraps
 

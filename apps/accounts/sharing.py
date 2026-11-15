@@ -31,30 +31,27 @@ def _authorized(record, user):
         raise PermissionDenied('Only an authorized administrator or existing sharing authority may manage this record access.')
 
 
-def _target(user, office, target_user):
+@transaction.atomic
+def grant_read_access(record, *, user, office=None, target_user=None, reason=''):
     from .models import Office, User
 
-    if (office is None) == (target_user is None):
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(%s)', [0x55444D414343])
+    user = active_writer(user)
+    has_user_recipient = target_user is not None
+    if has_user_recipient and office is None:
+        # The recipient's own record writes lock their account before the record.
+        target_user = User.objects.select_for_update(no_key=True).filter(pk=target_user.pk, is_active=True).first()
+    record = type(record).objects.select_for_update().get(pk=record.pk)
+    _authorized(record, user)
+    if (office is not None) == has_user_recipient:
         raise ValidationError('Choose exactly one internal office or active user.')
     if office is not None:
         office = Office.objects.select_for_update(no_key=True).filter(pk=office.pk, is_active=True).first()
         if office is None or (not user.is_system_admin and office.pk != user.office_id):
             raise PermissionDenied('This office is not an allowed share recipient.')
-    else:
-        target_user = User.objects.select_for_update(no_key=True).filter(pk=target_user.pk, is_active=True).first()
-        if target_user is None or (not user.is_system_admin and not user.can_administer(target_user)):
-            raise PermissionDenied('This account is not an allowed share recipient.')
-    return office, target_user
-
-
-@transaction.atomic
-def grant_read_access(record, *, user, office=None, target_user=None, reason=''):
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT pg_advisory_xact_lock(%s)', [0x55444D414343])
-    user = active_writer(user)
-    record = type(record).objects.select_for_update().get(pk=record.pk)
-    _authorized(record, user)
-    office, target_user = _target(user, office, target_user)
+    elif target_user is None or (not user.is_system_admin and not user.can_administer(target_user)):
+        raise PermissionDenied('This account is not an allowed share recipient.')
     reason = str(reason or '').strip()
     if not reason or len(reason) > 255:
         raise ValidationError('Record a sharing reason of up to 255 characters.')

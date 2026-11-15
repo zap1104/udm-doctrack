@@ -1,12 +1,16 @@
 """Completion commits before optional approval; omission always means pending filing."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
 from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import close_old_connections, connections
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.documents import services as repository
 from apps.documents.models import Document
 from apps.tracking import external_services, services
 from apps.tracking.external_forms import ExternalCompleteForm
@@ -118,3 +122,49 @@ def test_viewer_cannot_complete_or_approve_via_checkbox(client, users, offices, 
     assert client.post(completion_url(record, external), {"archive_now": "on", "revision": getattr(record, "revision", "")}).status_code == 403
     record.refresh_from_db()
     assert record.status == Status.RECEIVED and not Document.objects.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("file_now", [False, True], ids=["approve", "file-now"])
+def test_internal_approval_does_not_file_a_replacement_completion(client, users, offices, monkeypatch, file_now):
+    record, approver = active_case(users, offices, external=False)
+    if not file_now:
+        services.complete_record(record, user=approver, note="First completion")
+    client.force_verified_login(approver)
+    approval_url = reverse("tracking:archive", args=[record.pk])
+    approval_waiting = Event()
+    completion_replaced = Event()
+    archive = repository.archive_tracking_record
+
+    def pause_approval(observed, **kwargs):
+        assert observed.completion_note == "First completion"
+        approval_waiting.set()
+        assert completion_replaced.wait(10), "The replacement completion never committed."
+        return archive(observed, **kwargs)
+
+    def submit_pending_approval():
+        close_old_connections()
+        try:
+            if file_now:
+                return client.post(completion_url(record, False), {"note": "First completion", "archive_now": "on"})
+            return client.post(approval_url)
+        finally:
+            connections.close_all()
+
+    with monkeypatch.context() as changes:
+        changes.setattr(repository, "archive_tracking_record", pause_approval)
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            pending = workers.submit(submit_pending_approval)
+            try:
+                assert approval_waiting.wait(10), "The first request never reached filing."
+                services.reopen_record(record, user=users["med"], reason="More work required")
+                services.complete_record(record, user=users["med"], note="Replacement completion")
+            finally:
+                completion_replaced.set()
+            assert pending.result(timeout=20).status_code == 302
+
+    record.refresh_from_db()
+    assert record.status == Status.COMPLETED_PENDING_UPLOAD
+    assert not Document.objects.filter(tracking_record=record).exists()
+    assert client.post(approval_url).status_code == 302
+    assert Document.objects.get(tracking_record=record).description == "Replacement completion"

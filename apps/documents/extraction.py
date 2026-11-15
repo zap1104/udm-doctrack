@@ -20,11 +20,13 @@ import logging
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlsplit
 
 from django.conf import settings
 
+from apps.core.office_archives import checked_office_archive
 from apps.core.security import redact_secrets
 from apps.core.utils import file_extension, normalise_text
 
@@ -43,6 +45,8 @@ class ExtractionResult:
     confidence: float | None = None
     status: str = "EMPTY"  # DONE | EMPTY | FAILED | SKIPPED
     notes: list[str] = field(default_factory=list)
+    used_external_ocr: bool = False
+    native_fallback: ExtractionResult | None = None
 
     @property
     def char_count(self) -> int:
@@ -52,6 +56,13 @@ class ExtractionResult:
 # ---------------------------------------------------------------------------
 # Stage 1 — text layer
 # ---------------------------------------------------------------------------
+def _check_office_input(file_obj):
+    with checked_office_archive(file_obj, max_members=settings.MAX_UPLOAD_ARCHIVE_MEMBERS,
+                                max_uncompressed_bytes=settings.MAX_UPLOAD_UNCOMPRESSED_MB * 1024 * 1024):
+        pass
+    file_obj.seek(0)
+
+
 def _extract_pdf(file_obj) -> ExtractionResult:
     try:
         from pypdf import PdfReader
@@ -92,7 +103,7 @@ def _extract_docx(file_obj) -> ExtractionResult:
         return ExtractionResult(status="SKIPPED", notes=["python-docx is not installed"])
 
     try:
-        file_obj.seek(0)
+        _check_office_input(file_obj)
         document = docx.Document(file_obj)
         parts = [paragraph.text for paragraph in document.paragraphs]
         for table in document.tables:
@@ -114,20 +125,20 @@ def _extract_xlsx(file_obj) -> ExtractionResult:
         return ExtractionResult(status="SKIPPED", notes=["openpyxl is not installed"])
 
     try:
-        file_obj.seek(0)
-        workbook = load_workbook(file_obj, read_only=True, data_only=True)
+        from .source_readers import _worksheet_extent
+
+        _check_office_input(file_obj)
+        workbook = load_workbook(file_obj, read_only=True, data_only=True, keep_links=False)
         parts = []
         cells = characters = 0
         limited = False
         try:
             for sheet in workbook.worksheets:
                 parts.append(sheet.title)
-                limited |= (sheet.max_row or 0) > settings.XLSX_MAX_ROWS or (sheet.max_column or 0) > settings.XLSX_MAX_COLUMNS
-                # Sheet dimensions are untrusted XML. Bound traversal even for
-                # a tiny file that advertises millions of empty cells.
-                for row in sheet.iter_rows(max_row=min(sheet.max_row or settings.XLSX_MAX_ROWS, settings.XLSX_MAX_ROWS),
-                                           max_col=min(sheet.max_column or settings.XLSX_MAX_COLUMNS, settings.XLSX_MAX_COLUMNS),
-                                           values_only=True):
+                actual_rows, actual_columns = _worksheet_extent(workbook._archive, sheet)
+                rows, columns = min(actual_rows, settings.XLSX_MAX_ROWS), min(actual_columns, settings.XLSX_MAX_COLUMNS)
+                limited |= actual_rows > rows or actual_columns > columns
+                for row in sheet.iter_rows(max_row=rows, max_col=columns, values_only=True):
                     cells += len(row)
                     if cells > settings.XLSX_MAX_CELLS:
                         limited = True
@@ -228,7 +239,13 @@ def _retryable_ocr_error(exc: Exception) -> bool:
     return isinstance(exc, (urllib.error.URLError, TimeoutError))
 
 
-def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> ExtractionResult:
+def _cancelled_ocr(notes):
+    return ExtractionResult(status="SKIPPED", notes=[*notes,
+        "External OCR dispatch was cancelled because current permissions or consent changed."])
+
+
+def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto",
+               authorize_dispatch: Callable[[], bool] | None = None) -> ExtractionResult:
     endpoint = urlsplit(settings.OCR_SPACE_ENDPOINT)
     if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:
         return ExtractionResult(status="FAILED", notes=["OCR.space requires an HTTPS endpoint without embedded credentials."])
@@ -268,6 +285,8 @@ def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
         retries = max(0, settings.OCR_PROVIDER_RETRIES)
         data = None
         for attempt in range(retries + 1):
+            if authorize_dispatch is not None and not authorize_dispatch():
+                return _cancelled_ocr(notes)
             request = urllib.request.Request(
                 settings.OCR_SPACE_ENDPOINT,
                 data=body,
@@ -289,7 +308,7 @@ def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
             raise ValueError("OCR.space returned no response")
         if data.get("IsErroredOnProcessing"):
             message = "; ".join(data.get("ErrorMessage") or ["OCR.space reported an error"])
-            return ExtractionResult(status="FAILED", engine="ocr.space", notes=notes + [message[:200]])
+            return ExtractionResult(status="FAILED", engine="ocr.space", notes=notes + [message[:200]], used_external_ocr=True)
 
         results = data.get("ParsedResults") or []
         text = normalise_text("\n".join(item.get("ParsedText", "") for item in results))
@@ -303,13 +322,15 @@ def _ocr_space(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
             confidence=confidence,
             status="DONE" if text else "EMPTY",
             notes=notes,
+            used_external_ocr=True,
         )
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         logger.warning("OCR.space call failed: %s", exc)
         return ExtractionResult(status="FAILED", engine="ocr.space", notes=["The OCR provider could not process this file. Contact the administrator."])
 
 
-def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> ExtractionResult:
+def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto",
+               authorize_dispatch: Callable[[], bool] | None = None) -> ExtractionResult:
     endpoint = settings.AZURE_DOCINT_ENDPOINT
     key = settings.AZURE_DOCINT_KEY
     if not (endpoint and key):
@@ -323,11 +344,15 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
 
     try:
         payload, _provider_filename, notes = _prepare_ocr_payload(file_obj, filename)
-        client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+        # Let the app retry loop recheck permission before each guarded send.
+        client_options = {"retry_total": 0} if authorize_dispatch is not None else {}
+        client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key), **client_options)
         retries = max(0, int(settings.OCR_PROVIDER_RETRIES))
         locale = {"eng": "en-US", "fil": "fil-PH"}.get(language_hint)
         result = None
         for attempt in range(retries + 1):
+            if authorize_dispatch is not None and not authorize_dispatch():
+                return _cancelled_ocr(notes)
             try:
                 options = {"locale": locale} if locale else {}
                 poller = client.begin_analyze_document("prebuilt-read", body=payload, **options)
@@ -364,6 +389,7 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
             confidence=confidence,
             status="DONE" if text else "EMPTY",
             notes=notes,
+            used_external_ocr=True,
         )
     except Exception as exc:  # pragma: no cover - depends on external service
         logger.warning("Azure Document Intelligence failed: %s", exc)
@@ -371,7 +397,8 @@ def _ocr_azure(file_obj, filename: str, *, language_hint: str = "auto") -> Extra
 
 
 def run_ocr(
-    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False
+    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False,
+    authorize_dispatch: Callable[[], bool] | None = None,
 ) -> ExtractionResult:
     backend = (settings.OCR_BACKEND or "auto").lower()
     if not allow_external_ocr:
@@ -382,17 +409,17 @@ def run_ocr(
     if backend == "none":
         return ExtractionResult(status="SKIPPED", notes=["OCR disabled by configuration"])
     if backend == "azure":
-        return _ocr_azure(file_obj, filename, language_hint=language_hint)
+        return _ocr_azure(file_obj, filename, language_hint=language_hint, authorize_dispatch=authorize_dispatch)
     if backend == "ocrspace":
-        return _ocr_space(file_obj, filename, language_hint=language_hint)
+        return _ocr_space(file_obj, filename, language_hint=language_hint, authorize_dispatch=authorize_dispatch)
     # auto: try whichever is configured, cheapest first
     result = None
     if settings.OCR_SPACE_API_KEY:
-        result = _ocr_space(file_obj, filename, language_hint=language_hint)
+        result = _ocr_space(file_obj, filename, language_hint=language_hint, authorize_dispatch=authorize_dispatch)
         if result.status == "DONE":
             return result
     if settings.AZURE_DOCINT_ENDPOINT and settings.AZURE_DOCINT_KEY:
-        return _ocr_azure(file_obj, filename, language_hint=language_hint)
+        return _ocr_azure(file_obj, filename, language_hint=language_hint, authorize_dispatch=authorize_dispatch)
     if result is not None:
         return result
     return ExtractionResult(status="SKIPPED", notes=["No OCR provider configured"])
@@ -402,14 +429,16 @@ def run_ocr(
 # Public entry point
 # ---------------------------------------------------------------------------
 def extract_document_text(
-    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False
+    file_obj, filename: str, *, language_hint: str = "auto", allow_external_ocr: bool = False,
+    authorize_dispatch: Callable[[], bool] | None = None,
 ) -> ExtractionResult:
     """Text layer first, OCR only if needed. Never raises."""
     extension = file_extension(filename)
     try:
         if extension in IMAGE_EXTENSIONS:
             result = run_ocr(
-                file_obj, filename, language_hint=language_hint, allow_external_ocr=allow_external_ocr
+                file_obj, filename, language_hint=language_hint, allow_external_ocr=allow_external_ocr,
+                authorize_dispatch=authorize_dispatch,
             )
             if result.status != "DONE" and allow_external_ocr:
                 result.notes.append("Image upload needs OCR; configure OCR_SPACE_API_KEY to enable it.")
@@ -420,14 +449,21 @@ def extract_document_text(
             return _clip(layer)
 
         ocr = run_ocr(
-            file_obj, filename, language_hint=language_hint, allow_external_ocr=allow_external_ocr
+            file_obj, filename, language_hint=language_hint, allow_external_ocr=allow_external_ocr,
+            authorize_dispatch=authorize_dispatch,
         )
         if ocr.status == "DONE":
             ocr.notes.append("Text layer was empty, so OCR was used.")
             ocr.pages = ocr.pages or layer.pages
+            if layer.status == "DONE" and layer.text:
+                ocr.native_fallback = _clip(layer)
             return _clip(ocr)
 
-        layer.notes.extend(ocr.notes)
+        if ocr.used_external_ocr:
+            layer = replace(layer, used_external_ocr=True, native_fallback=_clip(layer),
+                            notes=[*layer.notes, *ocr.notes])
+        else:
+            layer.notes.extend(ocr.notes)
         if layer.status == "EMPTY":
             if ocr.status in {"FAILED", "SKIPPED"}:
                 layer.status = ocr.status

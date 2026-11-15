@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 from openpyxl import Workbook
 
+from apps.documents.extraction import extract_text_layer
 from apps.documents.processing_contracts import ExtractionPolicy
 from apps.documents.source_readers import read_source_units
 
@@ -42,6 +43,16 @@ def test_actual_worksheet_cells_determine_complete_extraction(dimension):
     assert "L8: Final appendix evidence" in text
     assert batch.coverage == "complete"
     assert not batch.omitted_reasons
+
+
+def test_legacy_extraction_includes_cells_beyond_a_stale_dimension():
+    payload = workbook_with_dimension(b'<dimension ref="A1:A1"/>')
+
+    result = extract_text_layer(io.BytesIO(payload), "dimension-cache.xlsx")
+
+    assert result.status == "DONE"
+    assert "Final appendix evidence" in result.text
+    assert not result.notes
 
 
 @pytest.mark.parametrize("budget", ["rows", "columns", "cells"])

@@ -1,12 +1,15 @@
 """Durable actor-bound work survives queue gaps without stale or duplicate writes."""
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from importlib.util import find_spec
+from threading import Event
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connections
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -105,6 +108,48 @@ def test_stale_generation_does_not_publish_text(source, users):
     document.refresh_from_db()
     assert document.ocr_text == "Newer text"
     assert not run.units.exists()
+
+
+@pytest.mark.parametrize("replace", [False, True], ids=["append", "retry"])
+def test_queued_request_cannot_cross_a_newer_generation_while_waiting_for_row_lock(source, users, replace):
+    from apps.documents.tasks import extract_document_task
+
+    api = service()
+    document, root = source
+    actor = users["med"]
+    old_generation = document.extraction_generation
+    request_processing = api.request_processing
+    reached_request, newer_finished = Event(), Event()
+
+    def wait_at_handoff(*args, **kwargs):
+        reached_request.set()
+        assert newer_finished.wait(timeout=10)
+        return request_processing(*args, **kwargs)
+
+    def stale_request():
+        try:
+            return extract_document_task(document.pk, user_id=actor.pk, file_ids=None if replace else [root.pk],
+                                         replace=replace, generation=old_generation)
+        finally:
+            connections.close_all()
+
+    with patch.object(api, "request_processing", side_effect=wait_at_handoff), ThreadPoolExecutor(max_workers=1) as workers:
+        old_request = workers.submit(stale_request)
+        try:
+            assert reached_request.wait(timeout=10), "The queued job never passed its initial generation check."
+            fresh = request_processing(document, user=actor, replace=True)[0]
+            assert api.process_run(fresh.pk, expected_generation=fresh.generation)["status"] == "complete"
+            document.refresh_from_db()
+            expected = (document.extraction_generation, document.ocr_text, document.ocr_status, document.updated_at)
+        finally:
+            newer_finished.set()
+        outcome = old_request.result(timeout=15)
+
+    assert outcome["status"] == "SKIPPED"
+    document.refresh_from_db()
+    assert (document.extraction_generation, document.ocr_text, document.ocr_status, document.updated_at) == expected
+    assert list(ExtractionRun.objects.filter(document=document).values_list("pk", flat=True)) == [fresh.pk]
+    assert MetadataSuggestion.objects.filter(document=document).count() == 1
 
 
 def test_suggestion_records_real_engine_version(source, users):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -555,23 +556,21 @@ class RecordDetailView(RecoverableUploadMixin, AppLoginRequiredMixin, View):
         )
 
 
-#: Where the bulk-receipt form may send somebody afterwards. A list, not a free
-#: `next`: an unchecked one is an open redirect, and this form is posted from a
-#: page that already knows every destination it has.
-BULK_RECEIPT_RETURNS = {"dashboard": "core:dashboard", "tracking": "tracking:list"}
+#: Each receipt form can return only to its own route with that page's filters.
+BULK_RECEIPT_RETURNS = {
+    "dashboard": ("core:dashboard", {"office", "desk", "ring", "month", "turnaround_stage"}),
+    "tracking": ("tracking:list", {"office", "scope", "status", "offices", "owner", "q", "sort", "overdue", "page", "per_page"}),
+}
 
 
 def _bulk_receipt_return(request):
-    """Back where the form was submitted from, defaulting to Tracking.
-
-    It always went to the Tracking list, on success *and* on failure, so a
-    validation error from the dashboard's panel was reported on a page the user
-    had never submitted from and could not see their mistake on.
-    """
-    target = BULK_RECEIPT_RETURNS.get(request.POST.get("next", ""), "tracking:list")
-    if target == "core:dashboard":
-        return reverse(target)
-    return f"{reverse(target)}?scope=incoming"
+    """Return to the submitting queue so the reader can see the outcome."""
+    destination = BULK_RECEIPT_RETURNS.get(request.POST.get("next", ""))
+    if destination is None:
+        return core_filters.link(reverse("tracking:list"), scope=services.SCOPE_INCOMING)
+    route, allowed = destination
+    query = urlencode([(key, values) for key, values in request.GET.lists() if key in allowed], doseq=True)
+    return f"{reverse(route)}?{query}" if query else reverse(route)
 
 
 class BulkConfirmReceiptView(OfficeAssignedMixin, View):

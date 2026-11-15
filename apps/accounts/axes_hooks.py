@@ -23,8 +23,8 @@ Three things need to be true for that to work, and each one is a bug we hit:
    again, from this device or another one, kept showing a fresh full timer
    instead of counting down. ``AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT
    = False`` stops axes doing that, ``_record_lockout`` refuses to move
-   ``locked_until`` once it is set, and the countdown uses the attempt time
-   that Axes uses for enforcement.
+   ``locked_until`` once it is set. Both enforcement and the countdown use
+   that deadline, even when earlier failures from another device age out.
 
 Office IP addresses here are shared by many staff behind NAT, so a successful
 sign-in never clears the IP-side escalation — that would let one person's login
@@ -37,21 +37,24 @@ from datetime import timedelta
 from logging import getLogger
 from math import ceil
 
-from axes.attempts import get_user_attempts
+from axes.attempts import clean_expired_user_attempts, get_user_attempts
+from axes.handlers.database import AxesDatabaseHandler
 from axes.handlers.proxy import AxesProxyHandler
 from axes.helpers import (
     get_client_ip_address,
+    get_client_session_hash,
     get_client_username,
     get_cool_off,
     get_cool_off_iso8601,
     get_credentials,
     get_failure_limit,
 )
+from axes.models import AccessAttempt, AccessLog
 from axes.signals import user_locked_out
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
 from django.core.cache import cache
-from django.db import router, transaction
+from django.db import connections, router, transaction
 from django.db.models import Q
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
@@ -171,19 +174,110 @@ def get_progressive_cooloff() -> timedelta:
 
 
 def clear_escalation(username: str | None = None, ip_address: str | None = None) -> int:
-    """Forget the escalation for a username and/or IP. Returns rows removed."""
-    query = Q()
-    if username:
-        query |= Q(kind=LoginLockout.Kind.USERNAME, key=username)
-    if ip_address:
-        query |= Q(kind=LoginLockout.Kind.IP, key=ip_address)
-    if not query:
-        return 0
-    count, _ = LoginLockout.objects.filter(query).delete()
-    return count
+    """Forget lockout history while preserving an active username deadline."""
+    alias = router.db_for_write(LoginLockout)
+    with transaction.atomic(using=alias):
+        if username and _fixed_lockout_enabled():
+            _lock_username(alias, username)
+            if _fixed_username_deadline(username, get_cool_off(), timezone.now()) is not None:
+                username = None
+        query = Q()
+        if username:
+            query |= Q(kind=LoginLockout.Kind.USERNAME, key=username)
+        if ip_address:
+            query |= Q(kind=LoginLockout.Kind.IP, key=ip_address)
+        if not query:
+            return 0
+        count, _ = LoginLockout.objects.using(alias).filter(query).delete()
+        return count
 
 
-def _record_lockout(kind: str, key: str, attempt_time) -> None:
+def _fixed_lockout_enabled():
+    return (settings.AXES_LOCKOUT_PARAMETERS == ["username"]
+            and settings.AXES_COOLOFF_BASE_MINUTES == settings.AXES_COOLOFF_MAX_MINUTES)
+
+
+def _lock_username(alias, username):
+    with connections[alias].cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext('doctrack.lockout'), hashtext(%s))", [username])
+
+
+def _fixed_username_deadline(username, duration, attempt_time):
+    """Return a current policy deadline backed by an Axes attempt.
+
+    Keeping the attempt requirement preserves Axes' manual reset tools. Older
+    progressive rows are left intact and expire via the legacy Axes counts.
+    """
+    if not username or not _fixed_lockout_enabled() or not settings.AXES_LOCK_OUT_AT_FAILURE:
+        return None
+    row = (LoginLockout.objects.filter(kind=LoginLockout.Kind.USERNAME, key=username,
+                                       locked_until__gt=attempt_time)
+           .values_list("last_lockout_at", "locked_until").first())
+    if row and row[0] and row[1] - row[0] == duration:
+        if AccessAttempt.objects.filter(username=username, attempt_time=row[0]).exists():
+            return row[1]
+    return None
+
+
+class FixedLockoutDatabaseHandler(AxesDatabaseHandler):
+    """Freeze the username lock when the threshold is reached across devices."""
+
+    def is_locked(self, request, credentials=None):
+        if not _fixed_lockout_enabled():
+            return super().is_locked(request, credentials)
+        if not settings.AXES_LOCK_OUT_AT_FAILURE:
+            return False
+        return _seconds_remaining(request, credentials, get_cool_off(), get_failure_limit(request, credentials)) > 0
+
+    def user_login_failed(self, sender, credentials, request=None, **kwargs):
+        username = get_client_username(request, credentials) if request is not None else None
+        if not username or not _fixed_lockout_enabled() or not settings.AXES_LOCK_OUT_AT_FAILURE:
+            return super().user_login_failed(sender, credentials, request, **kwargs)
+
+        alias = router.db_for_write(LoginLockout)
+        with transaction.atomic(using=alias):
+            # Axes locks separate attempt rows per client. Serialize the
+            # threshold transition for this username even across devices.
+            _lock_username(alias, username)
+            request.axes_attempt_time = timezone.now()
+            if request.axes_locked_out or not self.is_allowed(request, credentials):
+                request.axes_locked_out = True
+                request.doctrack_lockout_retry = True
+            else:
+                # Axes' inclusive cutoff would reuse the old attempts on the
+                # exact expiry boundary, even though sign-in already reopened.
+                AccessAttempt.objects.using(alias).filter(
+                    username=username, attempt_time=request.axes_attempt_time - get_cool_off()
+                ).delete()
+            return super().user_login_failed(sender, credentials, request, **kwargs)
+
+    def user_logged_in(self, sender, request, user, **kwargs):
+        if not _fixed_lockout_enabled() or not settings.AXES_RESET_ON_SUCCESS:
+            return super().user_logged_in(sender, request, user, **kwargs)
+
+        username = user.get_username()
+        alias = router.db_for_write(LoginLockout)
+        with transaction.atomic(using=alias):
+            _lock_username(alias, username)
+            now = timezone.now()
+            if _fixed_username_deadline(username, get_cool_off(), now) is None:
+                return super().user_logged_in(sender, request, user, **kwargs)
+
+            # A password accepted before a later lockout may still finish OTP.
+            # Record its login without deleting the attempt that backs the lock.
+            clean_expired_user_attempts(now)
+            if not settings.AXES_DISABLE_ACCESS_LOG:
+                AccessLog.objects.create(
+                    username=username,
+                    ip_address=request.axes_ip_address,
+                    user_agent=request.axes_user_agent,
+                    http_accept=request.axes_http_accept,
+                    path_info=request.axes_path_info,
+                    session_hash=get_client_session_hash(request),
+                )
+
+
+def _record_lockout(kind: str, key: str, attempt_time, *, new_episode=False) -> None:
     """Advance the stage, but only when this is a genuinely new lockout.
 
     ``locked_until`` is set once, when a lockout begins, and then left alone.
@@ -202,10 +296,7 @@ def _record_lockout(kind: str, key: str, attempt_time) -> None:
     with transaction.atomic(using=router.db_for_write(LoginLockout)):
         row, _created = LoginLockout.objects.select_for_update().get_or_create(kind=kind, key=key)
 
-        still_locked = row.locked_until is not None and attempt_time < row.locked_until
-        if still_locked:
-            row.last_lockout_at = attempt_time
-            row.save(update_fields=["last_lockout_at", "updated_at"])
+        if not new_episode and row.locked_until is not None and attempt_time < row.locked_until:
             return
 
         if row.last_lockout_at is not None and row.last_lockout_at < _decay_cutoff():
@@ -223,8 +314,18 @@ def _record_lockout(kind: str, key: str, attempt_time) -> None:
 @receiver(user_locked_out, dispatch_uid="doctrack_lockout_escalate")
 def on_user_locked_out(sender, request, username, ip_address, **kwargs):
     attempt_time = getattr(request, "axes_attempt_time", None) or timezone.now()
-    if username:
-        _record_lockout(LoginLockout.Kind.USERNAME, username, attempt_time)
+    if username and not getattr(request, "doctrack_lockout_retry", False):
+        if _fixed_lockout_enabled():
+            # An AccessAttempt insert gets its own auto_now_add timestamp.
+            # Tie the episode to that actual row so an Axes reset cannot
+            # resurrect this deadline when the next failed attempt arrives.
+            threshold_time = (AccessAttempt.objects.filter(username=username, ip_address=ip_address,
+                                                           user_agent=request.axes_user_agent)
+                              .values_list("attempt_time", flat=True).first())
+            if threshold_time is not None:
+                _record_lockout(LoginLockout.Kind.USERNAME, username, threshold_time, new_episode=True)
+        else:
+            _record_lockout(LoginLockout.Kind.USERNAME, username, attempt_time)
     if ip_address:
         _record_lockout(LoginLockout.Kind.IP, ip_address, attempt_time)
 
@@ -246,7 +347,9 @@ def on_user_logged_in(sender, request, user, **kwargs):
 # ---------------------------------------------------------------------------
 def _seconds_remaining(request, credentials, cool_off, failure_limit) -> int:
     """Use the same expiry as Axes, including for locks created under an older policy."""
-    unlock_at = None
+    unlock_at = _fixed_username_deadline(get_client_username(request, credentials), cool_off, request.axes_attempt_time)
+    if unlock_at is not None:
+        return max(0, ceil((unlock_at - request.axes_attempt_time).total_seconds()))
     for attempts in get_user_attempts(request, credentials):
         failures_remaining = 0
         # Find when this group drops below the failure limit as its attempts expire.
@@ -260,7 +363,7 @@ def _seconds_remaining(request, credentials, cool_off, failure_limit) -> int:
                 break
     if unlock_at is None:
         return 0
-    return max(0, ceil((unlock_at - timezone.now()).total_seconds()))
+    return max(0, ceil((unlock_at - request.axes_attempt_time).total_seconds()))
 
 
 def lockout_response(request, credentials=None):

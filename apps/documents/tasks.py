@@ -13,7 +13,7 @@ from apps.accounts.models import User
 from apps.core.models import AuditLog, Notification, Tag
 from apps.core.utils import log_action, normalise_text
 
-from .extraction import extract_document_text
+from .extraction import ExtractionResult, extract_document_text
 from .models import DELETION_RECOVERY_DAYS, Document, DocumentFile, MetadataSuggestion, OcrStatus, Source
 from .suggestions import suggest_metadata
 
@@ -101,7 +101,9 @@ def extract_document_task(document_id: int, *, user_id=None, file_ids=None, repl
             actor = User.objects.filter(pk=user_id).first() if user_id is not None else None
             if user_id is not None and actor is None:
                 return _cancel_extraction(document, generation)
-            request_processing(document, user=actor, file_ids=file_ids, replace=replace)
+            runs = request_processing(document, user=actor, file_ids=file_ids, replace=replace, expected_generation=generation)
+            if runs is None:
+                return _superseded_extraction(document)
             if not settings.ENABLE_BACKGROUND_TASKS:
                 drive_local_processing(document.pk)
             document.refresh_from_db()
@@ -144,14 +146,15 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
             # Legacy direct appends also need a fence before provider I/O.
             generation = document.extraction_generation
         Document.objects.filter(pk=document.pk).update(ocr_status=OcrStatus.RUNNING, updated_at=timezone.now())
-    parts = []
-    engines = []
+    file_results = {}
     failures = []
-    notes = []
-    statuses = []
-    confidences = []
     pending_files = list(selected.order_by("created_at", "pk"))
     processed_file_ids = set()
+
+    def authorize_dispatch():
+        current = Document.objects.filter(pk=document_id, extraction_generation=generation, allow_external_ocr=True).first()
+        return current is not None and _extraction_actor(current, user_id)[1]
+
     # A full retry includes files added while a provider was processing. Bound
     # discovery so continuous uploads cannot keep one worker running forever.
     for pass_number in range(3):
@@ -176,6 +179,7 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                         document_file.original_name,
                         language_hint=document.ocr_language,
                         allow_external_ocr=document.allow_external_ocr,
+                        authorize_dispatch=authorize_dispatch,
                     )
                 finally:
                     document_file.file.close()
@@ -186,34 +190,8 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                 failures.append(f"{document_file.original_name}: file is missing from storage")
                 logger.warning("Extraction could not open %s: %s", document_file.pk, exc)
                 continue
-            # A document may be removed while a provider is processing the file.
-            # Serialize this write with review decisions and recheck fresh access.
-            with transaction.atomic():
-                if user_id is not None:
-                    User.objects.select_for_update().filter(pk=user_id).first()
-                document = Document.objects.select_for_update().get(pk=document.pk)
-                if generation is not None and document.extraction_generation != generation:
-                    return _superseded_extraction(document)
-                actor, allowed = _extraction_actor(document, user_id)
-                if not allowed:
-                    return _cancel_extraction(document, generation)
-                if result.status not in {OcrStatus.FAILED, OcrStatus.SKIPPED}:
-                    document_file.page_count = result.pages
-                    document_file.extracted_chars = result.char_count
-                    document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
-            engines.append(result.engine)
-            statuses.append(result.status)
-            notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
-            if result.confidence is not None:
-                confidences.append(result.confidence)
-            if result.text:
-                parts.append(result.text)
-            if result.status == OcrStatus.FAILED:
-                failures.extend(result.notes)
+            file_results[document_file.pk] = (document_file, result)
 
-        extracted = normalise_text("\n\n".join(parts))[:200000]
-        engine = ", ".join(dict.fromkeys(item for item in engines if item))[:32]
-        confidence = round(sum(confidences) / len(confidences), 4) if confidences else None
         with _extraction_finalization(document.pk, generation), transaction.atomic():
             # Match the actor-before-document lock order used by mutation services.
             # Demotion cannot race the final permission check and result write.
@@ -234,6 +212,30 @@ def _extract_document_task(document_id: int, *, user_id=None, file_ids=None, rep
                         # Continue only after this transaction releases its locks.
                         continue
                     failures.append("Attachments kept changing during extraction. Existing text was preserved; retry when uploads finish.")
+            # A provider can return while consent is being withdrawn, including
+            # while the worker reads a later file. Publish provider-derived data
+            # only after locking the same document row as the consent edit.
+            parts, engines, notes, statuses, confidences = [], [], [], [], []
+            for document_file, result in file_results.values():
+                if result.used_external_ocr and not document.allow_external_ocr:
+                    result = result.native_fallback or ExtractionResult(status=OcrStatus.SKIPPED)
+                    result.notes.append("External OCR consent changed before publication. Newly returned provider results were discarded.")
+                if result.status not in {OcrStatus.FAILED, OcrStatus.SKIPPED}:
+                    document_file.page_count = result.pages
+                    document_file.extracted_chars = result.char_count
+                    document_file.save(update_fields=["page_count", "extracted_chars", "updated_at"])
+                engines.append(result.engine)
+                statuses.append(result.status)
+                notes.extend(f"{document_file.original_name}: {note}" for note in result.notes)
+                if result.confidence is not None:
+                    confidences.append(result.confidence)
+                if result.text:
+                    parts.append(result.text)
+                if result.status == OcrStatus.FAILED:
+                    failures.extend(result.notes)
+            extracted = normalise_text("\n\n".join(parts))[:200000]
+            engine = ", ".join(dict.fromkeys(item for item in engines if item))[:32]
+            confidence = round(sum(confidences) / len(confidences), 4) if confidences else None
             incomplete = failures or any(item in {OcrStatus.FAILED, OcrStatus.SKIPPED} for item in statuses)
             if replace and incomplete and document.ocr_text:
                 # A failed retry must not erase the last usable search text.
