@@ -79,14 +79,15 @@ class EmailInvitationView(View):
     def get(self, request, pk, token):
         response = render(request, 'accounts/email_invitation.html', {'validlink': otp.invitation_valid(pk, token)})
         response['Cache-Control'] = 'private, no-store'
-        response['Referrer-Policy'] = 'no-referrer'
+        # no-referrer would turn the confirmation form's POST origin into null.
+        response['Referrer-Policy'] = 'same-origin'
         return response
 
     def post(self, request, pk, token):
         valid = otp.invitation_valid(pk, token, consume=True)
         response = render(request, 'accounts/email_invitation.html', {'validlink': False, 'confirmed': valid}, status=200 if valid else 400)
         response['Cache-Control'] = 'private, no-store'
-        response['Referrer-Policy'] = 'no-referrer'
+        response['Referrer-Policy'] = 'same-origin'
         return response
 
 

@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from django.core import mail
+from django.test import Client
 from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
@@ -155,22 +156,33 @@ def test_delivery_failure_never_authenticates(client, users, monkeypatch):
     assert '_auth_user_id' not in client.session
 
 
-def test_invitation_requires_post_and_does_not_sign_in(client, users, settings):
+def test_invitation_requires_post_and_does_not_sign_in(users, settings):
     from apps.accounts.otp import invitation
     settings.SITE_BASE_URL = 'https://testserver'
+    client = Client(enforce_csrf_checks=True)
     actor = users['med']
     actor.email = 'med@example.test'
     actor.save(update_fields=['email'])
     invitation(actor, reason='operator enrollment')
     path = re.search(r'https://testserver(/accounts/email/invitation/\S+)', mail.outbox[-1].body).group(1)
-    assert client.get(path).status_code == 200
+    page = client.get(path, secure=True)
+    assert page.status_code == 200
+    # A no-referrer policy makes browsers send a null origin on this form POST.
+    assert page['Referrer-Policy'] == 'same-origin'
+    assert page['Cache-Control'] == 'private, no-store'
+    form = {'csrfmiddlewaretoken': str(page.context['csrf_token'])}
+    assert client.post(path, form, secure=True, HTTP_ORIGIN='null').status_code == 403
+    assert client.post(path, secure=True, HTTP_ORIGIN=settings.SITE_BASE_URL).status_code == 403
     actor.refresh_from_db()
     assert not actor.email_is_verified
-    assert client.post(path).status_code == 200
+    confirmed = client.post(path, form, secure=True, HTTP_ORIGIN=settings.SITE_BASE_URL)
+    assert confirmed.status_code == 200
+    assert confirmed['Referrer-Policy'] == 'same-origin'
+    assert confirmed['Cache-Control'] == 'private, no-store'
     actor.refresh_from_db()
     assert actor.email_is_verified
     assert '_auth_user_id' not in client.session
-    assert client.post(path).status_code == 400
+    assert client.post(path, form, secure=True, HTTP_ORIGIN=settings.SITE_BASE_URL).status_code == 400
 
 
 def test_account_changes_invalidate_pending_code(client, users):
