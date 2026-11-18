@@ -1,9 +1,8 @@
 # Deploying DocTrack on Vercel
 
-Use the existing GitHub repository, `zap1104/udm-doctrack`, and the existing
-Vercel project, `binding-of-rae/udm-doctrack`. Do not create a second project to
-work around an access error. A plugin response of 403 requires resolving access
-to that workspace before it can inspect or change deployments.
+Use this guide if your team deploys DocTrack on Vercel. Configure the project
+in your approved workspace and follow the [operations guide](OPERATIONS.md)
+for production readiness and verification.
 
 ## Repository configuration
 

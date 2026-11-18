@@ -88,4 +88,4 @@ When background jobs are enabled, the existing schedule setup registers daily ma
 
 Schema rollout does not itself prune the original historical data. Disabling the enhancement or future maintenance cannot restore content already permanently retired. Preserve audit metadata when rolling back application code.
 
-See the [verification report](verification/file-lifecycle-2026-10-23.md) for tested behavior, known unrelated failures and checks that remain unperformed. ISO/IEC 25010:2023 is used as a quality framework, not a certification or a guarantee that every possible defect is absent.
+Verify upload recovery, version limits, preview permissions and filing with synthetic records in a disposable database before releasing file changes.

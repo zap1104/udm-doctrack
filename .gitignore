@@ -45,6 +45,24 @@ htmlcov/
 /.vercel/
 CLAUDE.md
 
+# --- Private project evidence and local reference material --------------
+/docs/verification/
+/docs/superpowers/
+/docs/assets/
+/docs/reference/
+/docs/private/
+/docs/*_2026-*.md
+/docs/*_2026-*.txt
+/docs/*_AUDIT.md
+/docs/AI_ROADMAP.md
+/docs/APPLYING_UPDATES.md
+/docs/BUGFIX_LOG.md
+/docs/DEFENSE_CHECKLIST.md
+/docs/DEMO_SCRIPT.md
+/docs/TEAM_CHECKLIST.md
+/docs/TURNAROUND_GRAPH_TESTING.md
+/docs/file-versions.md
+
 # --- Editors and OS ----------------------------------------------------
 .vscode/
 .idea/
