@@ -1,6 +1,6 @@
 # Document processing and topic tagging
 
-Implemented locally on `feature/documents-intelligence`. Source-unit extraction, chunk search, ML and automatic tags default off. See [verification evidence and limits](verification/document-intelligence-2026-10-22.md) before enabling them. No production model or live OCR quality is claimed.
+DocTrack can extract searchable text and present it alongside its source files and coverage information. Advanced source-unit extraction, chunk search, local topic inference and automatic tagging default off. Enable optional processing only after evaluating it on approved representative data.
 
 ## Native source readers
 

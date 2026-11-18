@@ -23,12 +23,10 @@ pg_dump --format=custom --file=udm-doctrack-$(date +%Y%m%d-%H%M).dump \
   --host=127.0.0.1 --port=5432 --username=udm --dbname=udm_doctrack
 ```
 
-For Render, copy the internal or external PostgreSQL connection string from the Render dashboard and pass it as `DATABASE_URL`; do not put it in shell history if the workstation is shared:
+For a hosted database, configure a libpq connection service and a protected password file on the authorized backup host. Use the provider's verified TLS settings. The example uses a service named `doctrack-backup`.
 
 ```bash
-read -s DATABASE_URL
-pg_dump --format=custom --file=udm-doctrack-$(date +%Y%m%d-%H%M).dump "$DATABASE_URL"
-unset DATABASE_URL
+PGSERVICE=doctrack-backup pg_dump --format=custom --file=udm-doctrack-$(date +%Y%m%d-%H%M).dump
 ```
 
 After the command, record the dump size, SHA-256 checksum, timestamp, database identifier, and the storage location. A successful exit code is necessary but not sufficient; the restore drill below is the proof that the file can be used.
@@ -47,7 +45,7 @@ First install Python, PostgreSQL, Git, and the project dependencies. Create an e
 
 ```bash
 createdb --host=127.0.0.1 --username=udm restored_doctrack
-pg_restore --clean --if-exists --no-owner \
+pg_restore --no-owner \
   --host=127.0.0.1 --port=5432 --username=udm \
   --dbname=restored_doctrack udm-doctrack-YYYYMMDD-HHMM.dump
 ```
@@ -57,7 +55,7 @@ Expected result: `pg_restore` exits with status 0. Warnings about ownership are 
 Copy or mount the matching object-store snapshot and set the restored environment to use it. Set the same `DJANGO_SECRET_KEY` if the restored system must accept previously issued links, then run migrations and initialize extensions:
 
 ```bash
-export DATABASE_URL='postgres://udm:password@127.0.0.1:5432/restored_doctrack'
+# Configure the private environment to point to restored_doctrack first.
 python manage.py migrate --noinput
 python manage.py init_db
 python manage.py check --deploy --fail-level ERROR

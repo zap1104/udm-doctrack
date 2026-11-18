@@ -1,224 +1,57 @@
 # UDM DocTrack
 
-**Records and Document Management System for the offices under the Office of the Vice President for Administration, Universidad de Manila.**
+UDM DocTrack is a records and document management system for the Office of the Vice President for Administration (OVPA) at Universidad de Manila. It tracks documents as they move between offices and keeps filed records searchable.
 
-Two halves, one system:
+## What the system does
 
-- **Document Tracking (DTS)** — where is this document right now, who has it, and since when.
-- **Document Management (DMS)** — once it is finished, file it so somebody can find it in three years.
+| Area | Workflow |
+| --- | --- |
+| **OVPA Tracking** | Create slips, endorse documents to one or more offices, confirm receipt, record work and follow custody, deadlines and turnaround. Completed work can be submitted for filing. |
+| **External offices** | Use a separate Tracking and Repository collection for UDM offices without DocTrack accounts. Authorized internal users record external actions and corrections. Internal recipients confirm their own receipts. |
+| **Repository** | File completed slips or upload and scan documents directly. Review document types, tags and other metadata. Approved repository removals have a 30-day recovery period before permanent cleanup. |
+| **Files** | Preserve original formats, preview supported files and upload revisions during Tracking. Each file retains up to five available versions, with audit information for older revisions. Filing locks file contents. |
+| **Search and document processing** | Search metadata and permitted extracted text by keyword, identifier or filter. Optional OCR handles eligible scans. Relevance scores indicate match strength. Staff can review suggested metadata and tags. |
+| **Dashboard and reports** | Review office-scoped queues, status and overdue counts, turnaround and repository activity. OVPA and External totals are separate. Filtered exports are available to authorized users. |
+| **Access and administration** | Sign in with a password and an emailed code. Administrators manage office roles, per-user restrictions and read sharing. File access, notifications and audit history follow record permissions. |
 
----
+## Get started
 
-## Get it running in five minutes
-
-You need **Python 3.10–3.14**, **PostgreSQL 14+**, and **Git**.
-
-```bash
-git clone https://github.com/<your-team>/udm-doctrack.git
-cd udm-doctrack
-
-# macOS / Linux
-bash scripts/start.sh
-
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File scripts\start.ps1
-```
-
-Then:
-
-```bash
-python manage.py runserver
-```
-
-Open <http://127.0.0.1:8000> and sign in:
-
-| Account | Password | What they see |
-|---|---|---|
-| `admin` | `DocTrack2026!` | Everything, plus Administration |
-| `records` | `DocTrack2026!` | Records office view |
-| `med.staff` | `DocTrack2026!` | A normal user with one document waiting |
-
-Stuck? Read **[docs/SETUP.md](docs/SETUP.md)** — it covers the errors people actually hit.
-
-**Email sign-in:** Mandatory email OTP now defaults on, including Django administration. Demo passwords alone cannot sign in until each account's registered email is verified. Follow [email enrollment, activation and recovery](docs/EMAIL_OTP_AND_PERMISSIONS.md) before using existing accounts. The same guide covers the User permissions and Record sharing tables. Temporary enrollment mode must remain private and is rejected by deployment checks.
-
----
-
-## Status
-
-The deployment-readiness branch adds background extraction through django-q2 with a safe synchronous fallback; bounded OCR retries, language hints, image normalization, confidence display, and a per-document external-provider opt-out; explicit bulk receipt; office-scoped notifications; optional SMTP password recovery; administrator-approved deletion review with 30-day recovery followed by permanent repository cleanup; search click-through analytics; `/healthz/`; deployment-blocking security checks; filtered report exports; pure-Python upload content sniffing; and deeper CI verification. Review [docs/OPERATIONS.md](docs/OPERATIONS.md) and [docs/ACCESSIBILITY_AUDIT.md](docs/ACCESSIBILITY_AUDIT.md) before deploying with real records.
-
-## What it does
-
-**External UDM offices**
-
-Office administrators can manage a separate External Tracking and External Repository collection for other UDM offices without DocTrack accounts. External steps are entered manually with correction history; participating internal offices confirm their own receipts. Existing OVPA records and totals remain separate. See [the External offices guide](docs/EXTERNAL_OFFICES.md) for the workflow, permissions and setup.
-
-**Tracking**
-- Automatic tracking numbers: `UDM-OVPA-MED-2026-08-0001` — unique, readable, never reused.
-- Routing to one or many offices, with instructions and a deadline.
-- **Deadlines come from an editable table.** Administrators set how many days an
-  office has to act, per office and document type, in Django admin under
-  *Routing SLAs*. A deadline may carry a time of day; left blank it means end of
-  day, as every deadline did before.
-- **Explicit receipt.** Sent is not received. Custody changes only when someone at the receiving office confirms the selected record or explicit bulk selection, and the server writes one timestamped history event per record.
-- Append-only history. Forwarding never overwrites an earlier step; nothing disappears.
-- Printable routing slip carrying the full movement history.
-
-**Documents**
-- Completed records remain in Tracking as **Completed - Pending Filing** until an authorized administrator approves them into the repository, including their attachments.
-- Text is read locally from digital PDFs, Word and Excel files. Scanned pages use OCR only when there is no text layer and the record permits an external provider; with background tasks enabled, the upload returns immediately and the repository shows a plain-language pending state.
-- The system proposes a title, type, office, date and tags. **A person reviews and corrects before anything is saved.**
-- Smart folders are saved views over metadata — one file, many folders, no duplicates on disk. Initial deletion review dates are computed from the main document type. An authorized administrator decides whether to keep a document or remove it from the repository. Approved removals can be restored for 30 days, after which their repository files and metadata are permanently deleted. Completed Tracking history, original Tracking attachments, and a minimal audit entry remain. See [docs/DELETION_REVIEW.md](docs/DELETION_REVIEW.md).
-
-**Search**
-- PostgreSQL full-text search with weighted fields, plus fuzzy matching for misspellings.
-- Every result shows a **relevance** percentage and *why* it matched; permission-checked click-through telemetry helps records staff tune search quality later.
-- The 75% minimum is a display filter you can move, not a claim about accuracy. See **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)**.
-
-**Control**
-- Accounts are created by administrators. There is no public registration anywhere.
-- Regular users see only what was routed to, originated by, assigned to, or explicitly shared with them.
-- Append-only audit log for sign-ins, routing, receipts, downloads and master-data edits, plus office-level notifications with per-user read state.
-
----
-
-## The stack
-
-| Layer | Choice | Why |
-|---|---|---|
-| Backend | Django 5.2 LTS | Supports Python 3.10–3.14, security updates to 2028 |
-| Database | PostgreSQL 14+ | Handles the full-text search too — no Elasticsearch to run |
-| Frontend | Django templates + Bootstrap 5 + HTMX | No build step, no npm, no React |
-| Files | Local disk, Cloudflare R2, or Azure Blob | Set `STORAGE_BACKEND` in `.env` |
-| OCR | OCR.space (free tier) | Azure Document Intelligence as an optional fallback |
-| Jobs | django-q2 | Uses the database as its queue — no Redis |
-| Security | django-axes, django-csp, Argon2, signed links | Lockouts, CSP headers, strong hashes, expiring downloads |
-
----
-
-## Repository layout
-
-```
-udm-doctrack/
-├── config/            Settings, root URLs, WSGI/ASGI
-├── apps/
-│   ├── core/          Dashboard, master data, audit log, shared utilities
-│   ├── accounts/      Offices, users, roles, sign-in
-│   ├── tracking/      Tracking records, routing, receipts   ← the DTS half
-│   ├── documents/     Archive, extraction, metadata         ← the DMS half
-│   └── search/        Relevance ranking
-├── templates/         All HTML, grouped by app
-├── static/            CSS, JS, images
-├── docs/              Setup, Git workflow, checklist, design notes
-├── scripts/           start.sh / start.ps1 (guided setup)
-└── tests/             The rules that must never break
-```
-
-**Where the important logic lives:**
-
-| Question | File |
-|---|---|
-| How is a tracking number generated? | `apps/tracking/services.py` |
-| Who can see this record? | `apps/tracking/models.py` → `visible_to()` |
-| How is relevance calculated? | `apps/search/services.py` |
-| How is metadata suggested? | `apps/documents/suggestions.py` |
-| How is text pulled from a file? | `apps/documents/extraction.py` |
-
-Rule of thumb: **views never change data directly.** They call `services.py`. That is why the history can be trusted.
-
----
-
-## Common commands
-
-```bash
-make run              # start the server
-make test             # run the tests
-make selfcheck        # exercise the whole workflow, then roll back
-make smoke            # request every page as each role, then roll back
-make templates        # lint the templates
-make fixlogin         # repair sign-in problems
-make migrations       # after changing a model
-make migrate          # apply migrations
-make seed             # reload demo data
-make reindex          # rebuild the search index
-make lint             # check code style
-```
-
-`selfcheck` and `smoke` answer different questions. `selfcheck` proves the
-*rules* hold — create, route, receive, forward, complete, archive, search.
-`smoke` proves the *pages* render, which is a separate failure: a template that
-reads a context key its view never sets breaks only when somebody opens it.
-Both run against the real database inside a transaction they roll back, so
-neither leaves anything behind.
-
-No `make` on Windows? Every command is just `python manage.py <thing>` (or
-`python scripts/<thing>.py`) — see the `Makefile`.
-
-### Node.js for JavaScript checks
-
-Node.js is used for JavaScript tests and optional browser-verification tools;
-the web application runs on Python/Django. Use the patched Node.js 24 LTS
-version recorded in [`.node-version`](.node-version), currently `24.22.1`.
-CI reads that same file through `actions/setup-node@v7`.
-
-Node.js 24.22.1 includes the fix for **CVE-2026-111497 (Node2Shell)**, a
-Brotli-decoder vulnerability. See the [official security advisory](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
-Keep this version file updated when newer Node.js 24 security releases become
-available. It selects the CI/tooling version; it does not replace Node binaries
-bundled inside an editor or managed hosting platform.
-
-Check the active version with `node --version`. On Windows, run the JavaScript
-suite from PowerShell:
+Use Python [3.12](.python-version), PostgreSQL 14 or later, and Git. Node.js is needed for JavaScript checks. See [`.node-version`](.node-version) for the CI version.
 
 ```powershell
-$jsTests = @(Get-ChildItem -LiteralPath tests/js -Filter *.cjs -File | Select-Object -ExpandProperty FullName)
-node --test @jsTests
+git clone https://github.com/zap1104/udm-doctrack.git
+Set-Location udm-doctrack
+.\scripts\start.ps1
 ```
 
-To preview an already configured Windows checkout without rerunning setup:
+Follow the [local setup guide](docs/SETUP.md) to configure a development database and create your own administrator account. For hosted use, configure a dedicated PostgreSQL database, private file storage and working email delivery. Keep deployments that use real institutional records under university access and privacy controls.
+
+## Documentation
+
+| Guide | Covers |
+| --- | --- |
+| [Setup](docs/SETUP.md) | Local environment, database and first sign-in |
+| [Operations](docs/OPERATIONS.md) | Deployment checks, private storage, background jobs, backups and recovery |
+| [Email OTP and permissions](docs/EMAIL_OTP_AND_PERMISSIONS.md) | Enrollment, account recovery, permission restrictions and sharing |
+| [External offices](docs/EXTERNAL_OFFICES.md) | External slips, custody, manual entries and filing |
+| [Files and versions](docs/file-lifecycle.md) | Saved uploads, previews, version history and repository file locks |
+| [Metadata and document types](docs/METADATA_GUIDE.md) | Cataloging and [multiple document types](docs/MULTIPLE_DOCUMENT_TYPES.md) |
+| [Search](docs/SEARCH_DESIGN.md) | Find records and interpret relevance |
+| [Document processing](docs/document-intelligence.md) | Text extraction, OCR, coverage and review |
+| [Turnaround](docs/TURNAROUND_TIME.md) | Working hours, receipt waits and report calculations |
+| [Deletion review](docs/DELETION_REVIEW.md) | Review, approval, recovery and cleanup |
+| [Git workflow](docs/GITHUB_GUIDE.md) | Working on a branch and submitting a pull request |
+
+## Development
+
+DocTrack uses Django, PostgreSQL, Bootstrap and HTMX. Django-Q schedules background work. The main application areas are in [`apps/`](apps/), with templates in [`templates/`](templates/), static assets in [`static/`](static/) and tests in [`tests/`](tests/).
+
+Run tests with a disposable PostgreSQL database and synthetic records.
 
 ```powershell
-.\scripts\start.ps1 -PreviewOnly -Port 8000
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
 ```
 
-Read-only checks of live numbers and filters, using the project's environment:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\audit_counts.py
-.\.venv\Scripts\python.exe scripts\audit_filters.py
-.\.venv\Scripts\python.exe scripts\audit_turnaround.py
-```
-
-These audits compare permission-scoped counts and record lists, filter choices,
-invalid selections, and preserved form selections. Sessions and request logs
-are rolled back. They complement the full test suite used before pushing.
-The turnaround audit also checks known intervals, short waits, repeated
-endorsements, zero working time, month boundaries, and invalid timestamps using
-temporary records that are rolled back. See [the turnaround calculation guide](docs/TURNAROUND_TIME.md).
-The [graph testing report](docs/TURNAROUND_GRAPH_TESTING.md) describes the
-calculation, interaction, permission, and responsive checks and their limits.
-
----
-
-## For the team
-
-- **[docs/SETUP.md](docs/SETUP.md)** — install it, including the errors people actually hit
-- **[docs/VERCEL.md](docs/VERCEL.md)** — Vercel settings, required services, and verification limits
-- **[docs/GITHUB_GUIDE.md](docs/GITHUB_GUIDE.md)** — how to push your work without breaking anyone else's
-- **[docs/TEAM_CHECKLIST.md](docs/TEAM_CHECKLIST.md)** — who does what, in order
-- **[docs/METADATA_GUIDE.md](docs/METADATA_GUIDE.md)** — why metadata decides whether search works
-- **[docs/SEARCH_DESIGN.md](docs/SEARCH_DESIGN.md)** — the relevance formula, written out
-- **[docs/document-intelligence.md](docs/document-intelligence.md)** — source coverage, topic tagging, review, recovery and rollout
-- **[docs/AI_ROADMAP.md](docs/AI_ROADMAP.md)** — implemented AI capabilities and remaining evidence requirements
-- **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — a ten-minute walkthrough for the defence
-- **[docs/APPLYING_UPDATES.md](docs/APPLYING_UPDATES.md)** — updating an existing checkout
-- **[docs/BUGFIX_LOG.md](docs/BUGFIX_LOG.md)** — every bug found and fixed, with the lesson
-
----
-
-## Status
-
-Working prototype. Optional version-bound extraction, source-chunk retrieval, approved aliases and executable local CPU topic models are implemented behind flags that default to off. Training requires explicit reviewed labels and eligibility for an office and collection. Other metadata suggestions remain rule-based. Authored tests verify execution, not production accuracy. Automatic tags stay disabled without qualified real-data evaluation. Follow the [rollout runbook](docs/document-intelligence.md) and [verification report](docs/verification/document-intelligence-2026-10-22.md) before enabling these features on original records.
-
-Never commit `.env`, real documents, or personal data. The `.gitignore` blocks all three, but check before you push.
+See the [security policy](SECURITY.md) for private reporting. Keep credentials, institutional records and detailed audit evidence outside the public repository.
