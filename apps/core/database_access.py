@@ -2,12 +2,20 @@
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import lru_cache
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, transaction
 
 _request_actor = ContextVar("doctrack_request_actor", default=None)
+
+
+@lru_cache(maxsize=1)
+def _protected_tables():
+    from .row_policies import predicates
+
+    return ["public." + table for table, *_ in predicates()]
 
 
 @contextmanager
@@ -19,12 +27,13 @@ def request_scope(actor_id):
             SELECT current_user = %s AND session_user = current_user
                 AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
                 AND NOT EXISTS (SELECT FROM pg_auth_members WHERE member = pg_roles.oid)
-                AND row_security_active('public.documents_document')
-                AND row_security_active('public.tracking_trackingrecord')
-                AND row_security_active('public.tracking_externaltrackingrecord')
+                AND NOT EXISTS (
+                    SELECT FROM unnest(%s::text[]) AS t(name)
+                    WHERE NOT pg_catalog.row_security_active(t.name::regclass)
+                )
             FROM pg_roles WHERE rolname = current_user
         """,
-            [settings.DOCTRACK_WEB_ROLE],
+            [settings.DOCTRACK_WEB_ROLE, _protected_tables()],
         )
         if cursor.fetchone() != (True,):
             raise ImproperlyConfigured(

@@ -183,3 +183,25 @@ def test_row_access_rechecked_on_each_http_request(web, client, users):
     with web():
         assert client.get(record.get_absolute_url()).status_code in (403, 404)
         assert client.get(reverse("core:healthz")).status_code in (200, 503)
+
+
+def test_runtime_fails_closed_if_a_file_table_loses_row_security(web, users):
+    with connection.cursor() as cur:
+        cur.execute("ALTER TABLE public.documents_documentfileversion DISABLE ROW LEVEL SECURITY")
+    with web(), pytest.raises(ImproperlyConfigured), request_scope(users["med"].pk):
+        pytest.fail("File history protection is missing")
+
+
+def test_recipient_can_confirm_but_cannot_change_a_slip_awaiting_receipt(web, users, offices):
+    from django.db import DatabaseError, transaction
+
+    source = users["med"]
+    recipient = users["sup"]
+    slip = services.create_draft_record(user=source, subject="Awaiting receipt", instructions="")
+    services.route_record(slip, [offices["SUP"]], user=source)
+    with web(), request_scope(recipient.pk):
+        with pytest.raises(DatabaseError), transaction.atomic():
+            TrackingRecord.objects.filter(pk=slip.pk).update(subject="Premature change")
+        assert TrackingRecord.objects.get(pk=slip.pk).subject == "Awaiting receipt"
+        services.confirm_receipt(slip, user=recipient)
+        assert slip.status == "RECEIVED"

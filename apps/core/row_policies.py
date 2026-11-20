@@ -100,6 +100,8 @@ def predicates():
             create = f"({create} OR doctrack_private.filing({table}))"
         # Sharing authority may lock the source slip without permission to edit its contents.
         lock = write_scope(table, table)
+        if table != "documents_document":
+            lock = f"({lock} OR {root_predicate(table, table, 'lock')})"
         if table == "tracking_trackingrecord":
             lock = f"({lock} OR {root_predicate(table, table, 'share')})"
         yield table, access, create, lock, write_scope(table, table), "false"

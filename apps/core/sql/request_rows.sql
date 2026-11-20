@@ -47,7 +47,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalo
               OR r.completed_by_id = u.id OR r.current_office_id = u.office_id
           ELSE r.status <> 'COMPLETED' AND EXISTS (
               SELECT FROM public.tracking_routingstep s WHERE s.record_id = r.id
-                AND s.batch = r.current_batch AND s.to_office_id = u.office_id)
+                AND s.batch = r.current_batch AND s.to_office_id = u.office_id
+                AND (operation = 'lock' OR s.received_at IS NOT NULL))
           END
     )
 $$;
@@ -69,6 +70,10 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalo
                         AND u.office_id IN (s.from_office_id,s.to_office_id)) OR
                 (u.role <> 'ADMIN' AND EXISTS (SELECT FROM public.tracking_externalrecordaccessgrant g
                       WHERE g.record_id = r.id AND (g.user_id = u.id OR g.office_id = u.office_id))))))
+          WHEN operation = 'write' AND EXISTS (
+              SELECT FROM (SELECT s.received_at FROM public.tracking_externalroutingstep s
+                WHERE s.record_id = r.id ORDER BY s.sequence DESC LIMIT 1) latest
+              WHERE latest.received_at IS NULL) THEN false
           ELSE (u.role = 'ADMIN' AND u.office_id = coalesce(
                  (SELECT d.office_id FROM public.documents_document d WHERE d.external_tracking_record_id = r.id),
                  r.current_office_id, (SELECT s.to_office_id FROM public.tracking_externalroutingstep s
