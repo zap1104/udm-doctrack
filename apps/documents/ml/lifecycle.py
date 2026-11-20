@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import Office
+from apps.core.database_access import on_commit
 from apps.core.utils import log_action
 
 from ..models import Collection, Document
@@ -62,7 +63,7 @@ def activate_model(model_id, *, user, mode):
     ).update(is_active=False, mode="retired")
     model.mode, model.is_active = mode, True
     model.save(update_fields=["mode", "is_active"])
-    transaction.on_commit(clear_model_cache)
+    on_commit(clear_model_cache)
     log_action(
         "UPDATE",
         f"Activated topic model {model.pk} in {mode} mode",
@@ -84,7 +85,7 @@ def rollback_model(*, user, office_id, collection, target_model_id=None):
     TagModel.objects.filter(office_id=office_id, collection=collection, is_active=True).update(
         is_active=False, mode="retired"
     )
-    transaction.on_commit(clear_model_cache)
+    on_commit(clear_model_cache)
     log_action(
         "UPDATE", "Disabled scoped topic model", actor=actor, extra={"office_id": office_id, "collection": collection}
     )

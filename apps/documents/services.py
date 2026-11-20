@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.capabilities import requires_capability
+from apps.core.database_access import on_commit
 from apps.core.models import AuditLog, MetadataFieldDefinition, Tag
 from apps.core.permissions import active_writer, locked_mutation
 from apps.core.storage import compensate_storage, create_stored_file
@@ -166,7 +167,7 @@ def _persist_upload(
     if extraction is None:
         _enqueue_extraction(document, user_id=user.pk, file_ids=None if settings.ENABLE_SOURCE_UNIT_EXTRACTION or defer_extraction else [document_file.pk])
         if defer_extraction and not settings.ENABLE_BACKGROUND_TASKS and not settings.ENABLE_SOURCE_UNIT_EXTRACTION:
-            transaction.on_commit(lambda: _extract_saved_upload(document.pk, user.pk), robust=True)
+            on_commit(lambda: _extract_saved_upload(document.pk, user.pk), robust=True)
         suggestion = Suggestion()
     else:
         suggestion = suggest_metadata(
@@ -213,7 +214,7 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False,
             raise PermissionDenied("The extraction requester no longer exists.")
         request_processing(document, user=actor, file_ids=file_ids, replace=replace)
         if not settings.ENABLE_BACKGROUND_TASKS:
-            transaction.on_commit(lambda: drive_local_processing(document.pk), robust=True)
+            on_commit(lambda: drive_local_processing(document.pk), robust=True)
         return
     if not settings.ENABLE_BACKGROUND_TASKS:
         return
@@ -243,7 +244,7 @@ def _enqueue_extraction(document, *, user_id=None, file_ids=None, replace=False,
                     )
                     current.save(update_fields=["ocr_status", "ocr_notes", "extraction_failed_generation", "updated_at"])
 
-    transaction.on_commit(submit, robust=True)
+    on_commit(submit, robust=True)
 
 
 def duplicate_of(uploaded_file, *, user=None, collection=Collection.OVPA) -> Document | None:

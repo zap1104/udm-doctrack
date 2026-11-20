@@ -5,9 +5,10 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.conf import settings
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+
+from apps.core.database_access import on_commit
 
 from .models import InferenceIntent, MetadataSuggestion
 from .processing_contracts import WorkState
@@ -31,7 +32,7 @@ def _enqueue(intent_id):
 def ensure_intent(run):
     intent, created = InferenceIntent.objects.get_or_create(run=run)
     if created:
-        transaction.on_commit(lambda: _enqueue(intent.pk), robust=True)
+        on_commit(lambda: _enqueue(intent.pk), robust=True)
     return intent
 
 

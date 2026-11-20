@@ -11,6 +11,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.core.database_access import on_commit
 
 from .ml.inference import TagDecision
 from .models import TagApplicationIntent
@@ -40,7 +41,7 @@ def request_application(suggestion):
         return None
     intent, created = TagApplicationIntent.objects.get_or_create(suggestion=suggestion)
     if created:
-        transaction.on_commit(lambda: _enqueue(intent.pk), robust=True)
+        on_commit(lambda: _enqueue(intent.pk), robust=True)
     return intent
 
 

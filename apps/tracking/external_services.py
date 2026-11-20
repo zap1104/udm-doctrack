@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.accounts.capabilities import requires_capability
 from apps.accounts.models import Office
+from apps.core.database_access import locked_row
 from apps.core.permissions import active_writer
 from apps.core.storage import compensate_storage, create_stored_file
 from apps.core.utils import checksum_of, log_action, validate_upload
@@ -102,9 +103,10 @@ def _mutation(function):
                 raise PermissionDenied("This external record is outside your office scope.")
             if expected_revision is None or str(expected_revision) != str(locked.revision):
                 raise ValidationError("This record changed. Reload it before trying again.")
-            result = function(locked, *args, user=actor, **kwargs)
-            locked.revision += 1
-            locked.save()
+            with locked_row(locked):
+                result = function(locked, *args, user=actor, **kwargs)
+                locked.revision += 1
+                locked.save()
             record.refresh_from_db()
             return record if result is None or result is locked else result
 

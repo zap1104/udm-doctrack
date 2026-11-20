@@ -35,6 +35,11 @@ def referenced_storage_key(identity, key, *, excluding=None, include_audit=False
     from apps.core.models import StagedUpload
     from apps.documents.models import DocumentFile, DocumentFileVersion
     from apps.tracking.models import Attachment, ExternalAttachment
+    # A cleanup worker must see every office's references before removing bytes.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_catalog.row_security_active('public.documents_documentfile'::regclass)")
+        if cursor.fetchone()[0]:
+            raise ValidationError("File cleanup requires the separate maintenance database connection.")
     excluding = excluding or {}
     roots = DocumentFile.objects.filter(file=key)
     versions = DocumentFileVersion.objects.filter(file=key)
