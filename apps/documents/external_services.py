@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.capabilities import requires_capability
+from apps.core.database_access import on_commit
 from apps.core.models import AuditLog, Notification
 from apps.core.notifications import notify_office, resolve_for_external_record
 from apps.core.permissions import active_writer
@@ -101,7 +102,7 @@ def archive_external_record(record, *, user, expected_revision, tag_names=None, 
                     _enqueue_extraction(document, user_id=actor.pk, file_ids=file_ids, replace=False, robust=True)
                 else:
                     # The case and document must exist before any extraction starts.
-                    transaction.on_commit(lambda: _extract_after_filing(document.pk, actor.pk, file_ids))
+                    on_commit(lambda: _extract_after_filing(document.pk, actor.pk, file_ids))
         record.refresh_from_db()
         return document
     except Exception:

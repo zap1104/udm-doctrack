@@ -19,6 +19,7 @@ from django.db.models.functions import Length
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.core.database_access import on_commit
 
 from .models import Document, ExtractionRun, ExtractionUnit
 from .ocr_provider import ocr_unit, prepare_unit_payload
@@ -152,7 +153,7 @@ def request_processing(document, *, user, file_ids=None, replace=False, expected
         elif not runs and not current.files.exists():
             current.ocr_status = "DONE" if current.ocr_text else "EMPTY"
         current.save(update_fields=["ocr_status", "extraction_generation", "updated_at"])
-        transaction.on_commit(lambda: _enqueue(identities), robust=True)
+        on_commit(lambda: _enqueue(identities), robust=True)
     document.refresh_from_db()
     return runs
 
@@ -296,7 +297,7 @@ def _publish(run, document, actor, *, next_state=None):
 
         ensure_intent(run)
     if next_state == WorkState.PENDING:
-        transaction.on_commit(lambda: _enqueue([(run.pk, run.generation)]), robust=True)
+        on_commit(lambda: _enqueue([(run.pk, run.generation)]), robust=True)
     return {"status": str(next_state), "document_id": document.pk, "characters": len(document.ocr_text)}
 
 
@@ -468,6 +469,6 @@ def recover_processing(*, limit: int, now=None, dry_run: bool=True) -> dict:
                 run.state, run.lease_token, run.lease_expires_at = WorkState.PENDING, "", None
                 run.next_attempt_at = None
                 run.save()
-                transaction.on_commit(lambda identity=(run.pk, run.generation): _enqueue([identity]), robust=True)
+                on_commit(lambda identity=(run.pk, run.generation): _enqueue([identity]), robust=True)
             ready.append(run.pk)
     return {"run_ids": ready, "count": len(ready), "dry_run": dry_run}

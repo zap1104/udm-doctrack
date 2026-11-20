@@ -177,6 +177,7 @@ MIDDLEWARE += [
     "apps.core.middleware.CurrentRequestMiddleware",
     "apps.core.middleware.OfficeScheduleMiddleware",
     "apps.accounts.otp_middleware.EmailOTPRequiredMiddleware",
+    "apps.core.database_access.RequestRowSecurityMiddleware",
     "apps.accounts.capability_middleware.CapabilityRequiredMiddleware",
     # After auth: reads request.user to pick the role's idle window.
     "apps.core.middleware.RoleIdleTimeoutMiddleware",
@@ -264,6 +265,7 @@ else:
 # backend, so no additional package is required.
 # ---------------------------------------------------------------------------
 CACHE_TABLE_NAME = "doctrack_cache"
+DOCTRACK_WEB_ROLE = env("DOCTRACK_WEB_ROLE", "")
 REDIS_URL = env("REDIS_URL")
 
 if REDIS_URL:

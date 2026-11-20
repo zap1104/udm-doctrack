@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from apps.accounts.models import Office
+from apps.core.database_access import on_commit
 from apps.core.models import DocumentType, MetadataFieldDefinition, Tag
 from apps.documents.models import Document
 
@@ -75,7 +76,7 @@ def save_masterdata_form(form):
 
         reindex_all(Document.objects.filter(pk__in=document_ids).order_by("pk"))
     if refresh_additions:
-        transaction.on_commit(lambda: _refresh_additional_documents(
+        on_commit(lambda: _refresh_additional_documents(
             type(saved), saved.pk, changed, frozenset(document_ids),
         ))
     return saved

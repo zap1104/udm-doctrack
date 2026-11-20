@@ -5,6 +5,8 @@ from functools import wraps
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
+from .database_access import locked_row
+
 
 def active_writer(user):
     """Reload permissions instead of trusting an account cached before suspension."""
@@ -32,7 +34,8 @@ def locked_mutation(function):
         with transaction.atomic():
             actor = active_writer(user)
             locked = type(record).objects.select_for_update().get(pk=record.pk)
-            result = function(locked, *args, user=actor, **kwargs)
+            with locked_row(locked):
+                result = function(locked, *args, user=actor, **kwargs)
             record.refresh_from_db()
             if hasattr(record, "_stage_office_id"):
                 # Query annotations describe a read snapshot. Keep an office's

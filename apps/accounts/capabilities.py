@@ -101,6 +101,7 @@ def requires_capability(area, action):
     def decorate(function):
         @wraps(function)
         def call(*args, **kwargs):
+            from apps.core.database_access import authorized_operation
             from apps.core.permissions import active_writer
 
             with transaction.atomic():
@@ -110,7 +111,8 @@ def requires_capability(area, action):
                     actual_area = 'external_repository'
                 require_capability(actor, actual_area, action)
                 kwargs['user'] = actor
-                return function(*args, **kwargs)
+                with authorized_operation(actual_area, action):
+                    return function(*args, **kwargs)
         return call
     return decorate
 
